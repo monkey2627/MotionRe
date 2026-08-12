@@ -1,0 +1,42 @@
+# 模型权重与数据文件
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.bin
+
+# 数据集目录
+data/
+datasets/
+checkpoints/
+output/
+outputs/
+results/
+logs/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# 虚拟环境
+.env
+venv/
+env/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Claude Code 工作目录
+.claude/
