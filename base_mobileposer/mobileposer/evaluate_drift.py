@@ -123,7 +123,9 @@ def lumbar_score(rot_avg: np.ndarray) -> float:
 # ---------------------------------------------------------------------------
 
 def load_long_sequences(amass_dir: Path, min_frames: int, max_seqs: int):
-    """Load full (unwindowed) sequences that are at least min_frames long."""
+    """Load full (unwindowed) sequences that are at least min_frames long.
+    max_seqs=0 means no limit (use all qualifying sequences).
+    """
     pt_files = sorted(amass_dir.glob('*.pt'))
     if not pt_files:
         raise FileNotFoundError(
@@ -131,6 +133,7 @@ def load_long_sequences(amass_dir: Path, min_frames: int, max_seqs: int):
             "Run: python -m mobileposer.process --dataset amass"
         )
 
+    unlimited = (max_seqs <= 0)
     seqs = []
     print(f"Scanning {len(pt_files)} AMASS files for sequences ≥ {min_frames} frames "
           f"({min_frames / datasets.fps:.0f}s) …")
@@ -150,9 +153,9 @@ def load_long_sequences(amass_dir: Path, min_frames: int, max_seqs: int):
                     'tran':   tran.float(),  # [T, 3]
                     'source': f"{fpath.stem}[{i}]",
                 })
-            if len(seqs) >= max_seqs:
+            if not unlimited and len(seqs) >= max_seqs:
                 break
-        if len(seqs) >= max_seqs:
+        if not unlimited and len(seqs) >= max_seqs:
             break
     print(f"  → {len(seqs)} qualifying sequences found.")
     return seqs
@@ -604,8 +607,8 @@ def main():
                              '(default: paths.processed_datasets from config)')
     parser.add_argument('--min_frames', type=int, default=1800,
                         help='Min sequence length in frames (default 1800 = 60s)')
-    parser.add_argument('--max_seqs', type=int, default=30,
-                        help='Max sequences to use per combo (default 30)')
+    parser.add_argument('--max_seqs', type=int, default=0,
+                        help='Max sequences to use (default 0 = all qualifying)')
     parser.add_argument('--max_seconds', type=int, default=120,
                         help='Time window for plots in seconds (default 120)')
     parser.add_argument('--compare_at', type=int, default=60,
