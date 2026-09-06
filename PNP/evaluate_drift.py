@@ -140,15 +140,13 @@ def eval_pnp(model, acc: torch.Tensor, ori: torch.Tensor,
 
     model.rnn_initialize()                 # reset stateful RNN
 
-    pose_pred = torch.zeros(T, 24, 3, 3, device=device)
-    tran_pred = torch.zeros(T, 3, device=device)
-
+    pose_list, tran_list = [], []
     for t in range(T):
-        pose_pred[t], tran_pred[t] = model.forward_frame(
-            acc_g[t], w[t], ori_d[t])
-
-    pose_pred = pose_pred.cpu()
-    tran_pred = tran_pred.cpu()
+        p, tr = model.forward_frame(acc_g[t], w[t], ori_d[t])
+        pose_list.append(p.detach().cpu())
+        tran_list.append(tr.detach().cpu())
+    pose_pred = torch.stack(pose_list)   # [T, 24, 3, 3] on CPU
+    tran_pred = torch.stack(tran_list)   # [T, 3] on CPU
 
     rot_err  = angle_between_rotmats(pose_pred, gt_pose)
     tran_err = (tran_pred - (gt_pose.new_zeros(T, 3))).norm(dim=-1)
@@ -354,17 +352,19 @@ def generate_video(seq, model, bodymodel, device, fps, out_dir,
     gt_pose, gt_tran = seq['pose'][:T], seq['tran'][:T]
     acc, ori = seq['acc'][:T], seq['ori'][:T]
 
-    rot_ml, _ = eval_pnp(model, acc, ori, gt_pose, device)
     model.rnn_initialize()
     g   = _GRAVITY.to(device)
     acc_g = (acc + g).to(device)
     ori_d = ori.to(device)
     w     = compute_angular_velocity(ori, fps).to(device)
-    pose_ml = torch.zeros(T, 24, 3, 3, device=device)
-    tran_ml = torch.zeros(T, 3, device=device)
+    pose_ml_list, tran_ml_list = [], []
     for t in range(T):
-        pose_ml[t], tran_ml[t] = model.forward_frame(acc_g[t], w[t], ori_d[t])
-    pose_ml = pose_ml.cpu(); tran_ml = tran_ml.cpu()
+        p, tr = model.forward_frame(acc_g[t], w[t], ori_d[t])
+        pose_ml_list.append(p.detach().cpu())
+        tran_ml_list.append(tr.detach().cpu())
+    pose_ml = torch.stack(pose_ml_list)
+    tran_ml = torch.stack(tran_ml_list)
+    rot_ml = angle_between_rotmats(pose_ml, gt_pose)
     pose_fk = fk_baseline(ori, FK_SENSOR_INDICES, bodymodel)[:T]
 
     with torch.no_grad():
