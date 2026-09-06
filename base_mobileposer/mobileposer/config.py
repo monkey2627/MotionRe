@@ -26,19 +26,18 @@ class finetune_hypers:
 class paths:
     """Relevant paths for MobilePoser. Change as necessary."""
     # base_mobileposer/ package root
+    # Local: code/base_mobileposer/  |  Server: /home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/
     root_dir = Path(__file__).resolve().parents[1]
-    # E:/dyh/MotionRecover/data/  (parents[3] = project root)
-    data_root = Path(__file__).resolve().parents[3] / "data"
     checkpoint = root_dir / "checkpoints"
     smpl_file = root_dir / "mobileposer/smpl/basicmodel_m.pkl"
     weights_file = root_dir / "checkpoints/weights.pth"
-    raw_amass = data_root / "raw/AMASS"
-    raw_dip = data_root / "raw/DIP_IMU"
-    raw_imuposer = data_root / "raw/IMUPoser"
-    eval_dir = data_root / "processed_datasets/eval"
-    processed_datasets = data_root / "processed_datasets"
-    raw_totalcapture_official = data_root / "raw/TotalCapture/raw"
-    calibrated_totalcapture = data_root / "raw/TotalCapture/IMU"
+    raw_amass = root_dir / "data/raw/AMASS"
+    raw_dip = root_dir / "data/raw/DIP_IMU"
+    raw_imuposer = root_dir / "data/raw/IMUPoser"
+    eval_dir = root_dir / "data/processed_datasets/eval"
+    processed_datasets = root_dir / "data/processed_datasets"
+    raw_totalcapture_official = root_dir / "data/raw/TotalCapture/raw"
+    calibrated_totalcapture = root_dir / "data/raw/TotalCapture/IMU"
 
 class model_config:
     """MobilePoser Model configurations."""
