@@ -416,7 +416,7 @@ def _draw_skel(ax, joints, color, title, lumbar_err=None):
 
 
 def generate_video(combo_name, combo_indices, seq, bodymodel,
-                   fps, out_dir, max_seconds=30, render_fps=10):
+                   fps, out_dir, max_seconds=30, render_fps=10, seq_idx=0):
     """
     Side-by-side skeleton video: GT (green) | SlimeVR/FK (blue).
     Orange bones = lumbar chain.  Requires ffmpeg on PATH.
@@ -450,9 +450,9 @@ def generate_video(combo_name, combo_indices, seq, bodymodel,
     for ax in axes:
         ax.set_facecolor('#111122')
 
-    video_path = os.path.join(out_dir, f'video_{combo_name}.mp4')
+    video_path = os.path.join(out_dir, f'video_slimevr_{combo_name}_{seq_idx:04d}.mp4')
     writer = FFMpegWriter(fps=render_fps,
-                          metadata={'title': f'slimevr-drift-{combo_name}'})
+                          metadata={'title': f'drift-slimevr-{combo_name}'})
     frames = list(range(0, T, stride))
     print(f"  {len(frames)} frames at {render_fps}fps -> {video_path}")
 
@@ -542,10 +542,6 @@ def main():
                         help='Time checkpoint (s) for bar/scatter plots (default 60)')
     parser.add_argument('--out_dir', default='drift_results',
                         help='Output directory (default: drift_results)')
-    parser.add_argument('--video', action='store_true',
-                        help='Generate skeleton comparison videos after evaluation')
-    parser.add_argument('--video_seq', type=int, default=0,
-                        help='Which sequence index to use for video (default 0)')
     parser.add_argument('--video_seconds', type=int, default=30,
                         help='Video length in seconds (default 30)')
     parser.add_argument('--video_fps', type=int, default=10,
@@ -607,22 +603,20 @@ def main():
     np.savez(np_path, **save_dict)
     print(f"\nRaw arrays saved: {np_path}")
 
-    if args.video:
-        vid_seq = sequences[min(args.video_seq, len(sequences) - 1)]
-        print(f"\nGenerating videos  seq={vid_seq['source']}  "
-              f"len={vid_seq['pose'].shape[0]/fps:.0f}s  "
-              f"render_fps={args.video_fps} ...")
+    print(f'\nGenerating videos for {len(sequences)} sequences ...')
+    for i, vid_seq in enumerate(sequences):
+        print(f"  [{i+1}/{len(sequences)}] seq={vid_seq['source']}")
         for combo_name, combo_indices in selected.items():
-            print(f"\n-- Video: {combo_name} --")
             try:
                 generate_video(
                     combo_name, combo_indices, vid_seq,
                     bodymodel, fps, args.out_dir,
                     max_seconds=args.video_seconds,
                     render_fps=args.video_fps,
+                    seq_idx=i,
                 )
             except Exception as e:
-                print(f"  Failed: {e}")
+                print(f'    Video failed ({combo_name}): {e}')
 
     print(f"\nAll outputs in:  {os.path.abspath(args.out_dir)}/")
 

@@ -450,6 +450,11 @@ def _draw_skel(ax, joints, color, title, lumbar_err=None):
                  fontsize=9, pad=3)
 
 
+def _canonical(combo: str) -> str:
+    """Canonical combo name for cross-method comparison: full_6s → 6s."""
+    return '6s' if combo == 'full_6s' else combo
+
+
 def generate_video_combo(combo_name, sensor_indices, seq,
                           imucoco, poser, body_model, vertex_coords, device,
                           fps, out_dir, max_seconds=30, render_fps=10, seq_idx=0):
@@ -497,8 +502,8 @@ def generate_video_combo(combo_name, sensor_indices, seq,
     for ax in axes:
         ax.set_facecolor('#111122')
 
-    vp = os.path.join(out_dir, f'video_{combo_name}_{seq_idx:04d}.mp4')
-    writer = FFMpegWriter(fps=render_fps, metadata={'title': f'drift-imucoco-{combo_name}'})
+    vp = os.path.join(out_dir, f'video_imucoco_{_canonical(combo_name)}_{seq_idx:04d}.mp4')
+    writer = FFMpegWriter(fps=render_fps, metadata={'title': f'drift-imucoco-{_canonical(combo_name)}'})
     print(f'  Writing {len(range(0, T, stride))} frames → {vp}')
     with writer.saving(fig, vp, dpi=100):
         for t in range(0, T, stride):

@@ -421,6 +421,11 @@ def _draw_skel(ax, joints, color, title, lumbar_err=None):
     ax.set_title(lbl, fontsize=9, pad=3)
 
 
+def _canonical(combo: str) -> str:
+    """Canonical combo name for cross-method comparison: h → hd."""
+    return '_'.join('hd' if p == 'h' else p for p in combo.split('_'))
+
+
 def generate_video(combo_name, combo_indices, seq, model, bodymodel, device,
                    fps, out_dir, max_seconds=30, render_fps=10, seq_idx=0):
     """
@@ -473,9 +478,9 @@ def generate_video(combo_name, combo_indices, seq, model, bodymodel, device,
     for ax in axes:
         ax.set_facecolor('#111122')
 
-    video_path = os.path.join(out_dir, f'video_{combo_name}_{seq_idx:04d}.mp4')
+    video_path = os.path.join(out_dir, f'video_mobileposer_{_canonical(combo_name)}_{seq_idx:04d}.mp4')
     writer = FFMpegWriter(fps=render_fps,
-                          metadata={'title': f'drift-{combo_name}'})
+                          metadata={'title': f'drift-mobileposer-{_canonical(combo_name)}'})
     frames = list(range(0, T, stride))
     print(f"  {len(frames)} frames at {render_fps}fps → {video_path}")
 
