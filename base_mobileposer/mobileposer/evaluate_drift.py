@@ -1,0 +1,554 @@
+"""
+Temporal rotation and translation drift evaluation — multi-combo, lumbar-first.
+
+Product focus: lumbar rehabilitation. Primary metrics are on lumbar/pelvic region.
+Compares all no-head sensor combos against FK baseline on long AMASS sequences.
+
+Run from code/base_mobileposer/:
+    # Quick smoke test (1 combo, 3 sequences, 30s)
+    python -m mobileposer.evaluate_drift --model checkpoints/weights.pth \
+        --combos rp --min_frames 900 --max_seqs 3 --max_seconds 30
+
+    # Full benchmark (all 6 no-head combos, 30 sequences, 120s)
+    python -m mobileposer.evaluate_drift --model checkpoints/weights.pth \
+        --combos all --min_frames 1800 --max_seqs 30
+"""
+
+import sys
+import os
+import argparse
+from pathlib import Path
+
+import numpy as np
+import torch
+import tqdm
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from mobileposer.config import amass, datasets, model_config, paths, joint_set
+import mobileposer.articulate as art
+from mobileposer.utils.model_utils import load_model
+
+
+# ---------------------------------------------------------------------------
+# Segment definitions  (腰部优先)
+# ---------------------------------------------------------------------------
+
+# PRIMARY: directly relevant to lumbar rehabilitation
+PRIMARY_SEGMENTS = {
+    '腰':   [3],       # Spine1  (joint 0 forced to identity by model → excluded)
+    '胸':   [6, 9],    # Spine2, Spine3
+    '大腿': [1, 2],    # L/R Hip  (pelvic-motion proxy, closest sensor location)
+}
+# SECONDARY: useful for full-body context
+SECONDARY_SEGMENTS = {
+    '小腿': [4, 5],    # L/R Knee
+    '大臂': [16, 17],  # L/R Shoulder (upper arm)
+    '手腕': [18, 19],  # L/R Elbow (forearm; sensor placement location)
+}
+SEGMENTS = {**PRIMARY_SEGMENTS, **SECONDARY_SEGMENTS}
+
+# "腰部综合分": mean error across all lumbar-relevant joints
+LUMBAR_JOINTS = [1, 2, 3, 6, 9]
+
+# Sensor index → SMPL joint index (from process.py ji_mask)
+SENSOR_TO_JOINT = [18, 19, 1, 2, 15, 0]
+
+# All combos without head sensor (index 4), from config.py amass.combos
+NO_HEAD_COMBOS = {k: v for k, v in amass.combos.items() if 4 not in v}
+
+# Color palette per combo (consistent across all plots)
+_PALETTE = ['#1565C0', '#C62828', '#2E7D32', '#F57F17', '#6A1B9A', '#00838F']
+COMBO_COLORS = {name: _PALETTE[i % len(_PALETTE)]
+                for i, name in enumerate(NO_HEAD_COMBOS)}
+
+SENSOR_COUNT_COLORS = {1: '#EF5350', 2: '#42A5F5'}
+
+
+# ---------------------------------------------------------------------------
+# Math helpers
+# ---------------------------------------------------------------------------
+
+def angle_between_rotmats(R1: torch.Tensor, R2: torch.Tensor) -> torch.Tensor:
+    """Angular error in degrees. R1, R2: [..., 3, 3] → [...]"""
+    R = R1.transpose(-1, -2) @ R2
+    trace = R[..., 0, 0] + R[..., 1, 1] + R[..., 2, 2]
+    cos = ((trace - 1.0) / 2.0).clamp(-1.0, 1.0)
+    return torch.rad2deg(torch.acos(cos))
+
+
+def moving_average(x: np.ndarray, window: int = 15) -> np.ndarray:
+    kernel = np.ones(window) / window
+    return np.convolve(x, kernel, mode='same')
+
+
+def lumbar_score(rot_avg: np.ndarray) -> float:
+    """Mean angular error over lumbar-relevant joints. rot_avg: [T, 24]"""
+    return float(rot_avg[:, LUMBAR_JOINTS].mean())
+
+
+# ---------------------------------------------------------------------------
+# Data loading
+# ---------------------------------------------------------------------------
+
+def load_long_sequences(amass_dir: Path, min_frames: int, max_seqs: int):
+    """Load full (unwindowed) sequences that are at least min_frames long."""
+    pt_files = sorted(amass_dir.glob('*.pt'))
+    if not pt_files:
+        raise FileNotFoundError(
+            f"No .pt files found in {amass_dir}.\n"
+            "Run: python -m mobileposer.process --dataset amass"
+        )
+
+    seqs = []
+    print(f"Scanning {len(pt_files)} AMASS files for sequences ≥ {min_frames} frames "
+          f"({min_frames / datasets.fps:.0f}s) …")
+    for fpath in pt_files:
+        try:
+            data = torch.load(fpath, map_location='cpu')
+        except Exception as e:
+            print(f"  Skip {fpath.name}: {e}")
+            continue
+        for i, (acc, ori, pose, tran) in enumerate(
+                zip(data['acc'], data['ori'], data['pose'], data['tran'])):
+            if pose.shape[0] >= min_frames:
+                seqs.append({
+                    'acc':    acc.float(),   # [T, 6, 3]
+                    'ori':    ori.float(),   # [T, 6, 3, 3]
+                    'pose':   pose.float(),  # [T, 24, 3, 3]  LOCAL rotmats
+                    'tran':   tran.float(),  # [T, 3]
+                    'source': f"{fpath.stem}[{i}]",
+                })
+            if len(seqs) >= max_seqs:
+                break
+        if len(seqs) >= max_seqs:
+            break
+    print(f"  → {len(seqs)} qualifying sequences found.")
+    return seqs
+
+
+# ---------------------------------------------------------------------------
+# IMU input preparation  (replicates data.py _process_combo_data)
+# ---------------------------------------------------------------------------
+
+def prepare_imu(acc: torch.Tensor, ori: torch.Tensor,
+                combo_indices: list) -> torch.Tensor:
+    """Build 60-D IMU input for MobilePoser. acc:[T,6,3] ori:[T,6,3,3] → [T,60]"""
+    acc5 = acc[:, :5] / amass.acc_scale
+    ori5 = ori[:, :5]
+    combo_acc = torch.zeros_like(acc5)
+    combo_ori = torch.zeros_like(ori5)
+    combo_acc[:, combo_indices] = acc5[:, combo_indices]
+    combo_ori[:, combo_indices] = ori5[:, combo_indices]
+    return torch.cat([combo_acc.flatten(1), combo_ori.flatten(1)], dim=1)
+
+
+# ---------------------------------------------------------------------------
+# FK baseline
+# ---------------------------------------------------------------------------
+
+def fk_baseline(ori: torch.Tensor, combo_indices: list,
+                bodymodel: art.model.ParametricModel) -> torch.Tensor:
+    """Full-body local pose from sensor orientations + parent propagation + IK.
+
+    ori: [T, 6, 3, 3].  Returns: [T, 24, 3, 3] local rotation matrices.
+    """
+    T = ori.shape[0]
+    parent = bodymodel.parent
+
+    sensor_joints = {SENSOR_TO_JOINT[5]}          # pelvis always included
+    for s in combo_indices:
+        if s != 4:
+            sensor_joints.add(SENSOR_TO_JOINT[s])
+
+    R_global = torch.eye(3).view(1, 1, 3, 3).expand(T, 24, -1, -1).clone()
+    R_global[:, SENSOR_TO_JOINT[5]] = ori[:, 5]   # pelvis
+    for s in combo_indices:
+        if s != 4:
+            R_global[:, SENSOR_TO_JOINT[s]] = ori[:, s]
+
+    # Propagate parent orientation to non-sensor joints
+    for j in range(1, 24):
+        if j not in sensor_joints:
+            R_global[:, j] = R_global[:, parent[j]]
+
+    return bodymodel.inverse_kinematics_R(
+        R_global.view(T, -1)).view(T, 24, 3, 3)
+
+
+# ---------------------------------------------------------------------------
+# Per-sequence evaluation
+# ---------------------------------------------------------------------------
+
+@torch.no_grad()
+def eval_mobileposer(model, imu_input, gt_pose, gt_tran, device):
+    """Returns rot_err [T,24] in degrees and tran_err [T] in metres."""
+    model.reset()
+    imu = imu_input.to(device).unsqueeze(0)
+    pose_pred, _, tran_pred, _ = model.forward_offline(imu, [imu.shape[1]])
+    pose_pred = pose_pred.cpu()
+    tran_pred = tran_pred.cpu()
+    T = gt_pose.shape[0]
+    rot_err  = angle_between_rotmats(pose_pred[:T], gt_pose)
+    tran_err = (tran_pred[:T] - (gt_tran - gt_tran[:1])).norm(dim=-1)
+    return rot_err, tran_err
+
+
+def eval_fk(ori, gt_pose, combo_indices, bodymodel):
+    """Returns rot_err [T,24] in degrees for the FK baseline."""
+    pose_fk = fk_baseline(ori, combo_indices, bodymodel)
+    T = gt_pose.shape[0]
+    return angle_between_rotmats(pose_fk[:T], gt_pose)
+
+
+# ---------------------------------------------------------------------------
+# Run evaluation for one combo
+# ---------------------------------------------------------------------------
+
+def evaluate_combo(combo_name, combo_indices, sequences, model,
+                   bodymodel, device, max_frames):
+    """Evaluate one combo over all sequences. Returns averaged error arrays."""
+    ml_rot_sum  = np.zeros((max_frames, 24))
+    ml_tran_sum = np.zeros(max_frames)
+    fk_rot_sum  = np.zeros((max_frames, 24))
+    count       = np.zeros(max_frames)
+
+    for seq in sequences:
+        T = min(seq['pose'].shape[0], max_frames)
+        gt_pose = seq['pose'][:T]
+        gt_tran = seq['tran'][:T]
+        acc     = seq['acc'][:T]
+        ori     = seq['ori'][:T]
+
+        imu = prepare_imu(acc, ori, combo_indices)
+        rot_ml, tran_ml = eval_mobileposer(model, imu, gt_pose, gt_tran, device)
+        rot_fk          = eval_fk(ori, gt_pose, combo_indices, bodymodel)
+
+        ml_rot_sum[:T]  += rot_ml.numpy()
+        ml_tran_sum[:T] += tran_ml.numpy()
+        fk_rot_sum[:T]  += rot_fk.numpy()
+        count[:T]       += 1.0
+
+    valid = count > 0
+    ml_rot_avg  = np.where(valid[:, None], ml_rot_sum  / np.maximum(count[:, None], 1), 0.0)
+    ml_tran_avg = np.where(valid,          ml_tran_sum / np.maximum(count, 1),          0.0)
+    fk_rot_avg  = np.where(valid[:, None], fk_rot_sum  / np.maximum(count[:, None], 1), 0.0)
+
+    return {
+        'rot':      ml_rot_avg,   # [T, 24]
+        'tran':     ml_tran_avg,  # [T]
+        'fk_rot':   fk_rot_avg,   # [T, 24]
+        'n_sensors': len(combo_indices),
+        'n_seqs':   int(count[0]),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Plotting
+# ---------------------------------------------------------------------------
+
+def plot_timeseries(all_results, max_frames, fps, out_dir):
+    """Figure 1: drift curves per body segment, one line per combo."""
+    t = np.arange(max_frames) / fps
+    max_sec = max_frames / fps
+
+    fig, axes = plt.subplots(2, 3, figsize=(16, 9), sharex=True)
+    axes = axes.flatten()
+
+    for ax_i, (seg_name, joint_idx) in enumerate(SEGMENTS.items()):
+        ax = axes[ax_i]
+        is_primary = seg_name in PRIMARY_SEGMENTS
+
+        for combo_name, res in all_results.items():
+            y = moving_average(res['rot'][:, joint_idx].mean(axis=1))
+            lw = 2.0 if is_primary else 1.2
+            ax.plot(t, y, label=f"{combo_name}({res['n_sensors']}个)",
+                    color=COMBO_COLORS[combo_name], linewidth=lw)
+
+        # FK baseline: average across all combos
+        fk_mean = np.mean([res['fk_rot'][:, joint_idx].mean(axis=1)
+                           for res in all_results.values()], axis=0)
+        ax.axhline(moving_average(fk_mean)[max_frames // 2],
+                   color='gray', linestyle='--', linewidth=1.2, label='FK baseline')
+
+        title = f"{'★ ' if is_primary else ''}{seg_name}"
+        ax.set_title(title, fontsize=12, fontweight='bold' if is_primary else 'normal')
+        ax.set_ylabel('角度误差 (°)', fontsize=9)
+        ax.set_xlabel('时间 (s)', fontsize=9)
+        ax.legend(fontsize=7, ncol=2)
+        ax.grid(True, alpha=0.3)
+        ax.set_xlim(0, max_sec)
+        ax.set_ylim(bottom=0)
+
+    fig.suptitle('各身体段旋转漂移  ★=腰部康复核心段（无头传感器）',
+                 fontsize=13, fontweight='bold')
+    plt.tight_layout()
+    path = os.path.join(out_dir, 'fig1_drift_timeseries.png')
+    plt.savefig(path, dpi=150)
+    plt.close()
+    print(f"Saved: {path}")
+
+
+def plot_combo_comparison(all_results, max_frames, fps, checkpoint_s, out_dir):
+    """Figure 2: grouped bar chart — all combos × all segments at checkpoint_s."""
+    fps_cp  = min(int(checkpoint_s * fps), max_frames - 1)
+    seg_names  = list(SEGMENTS.keys())
+    combo_names = list(all_results.keys())
+    n_combos   = len(combo_names)
+    n_segs     = len(seg_names)
+
+    x = np.arange(n_segs)
+    bar_w = 0.8 / n_combos
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+
+    for ci, (combo_name, res) in enumerate(all_results.items()):
+        vals = [res['rot'][fps_cp, joint_idx].mean()
+                for joint_idx in SEGMENTS.values()]
+        offset = (ci - n_combos / 2 + 0.5) * bar_w
+        ax.bar(x + offset, vals, bar_w,
+               label=f"{combo_name}({res['n_sensors']}个)",
+               color=COMBO_COLORS[combo_name], alpha=0.85)
+
+    # FK baseline horizontal lines per segment
+    for si, (seg_name, joint_idx) in enumerate(SEGMENTS.items()):
+        fk_val = np.mean([res['fk_rot'][fps_cp, joint_idx].mean()
+                          for res in all_results.values()])
+        ax.plot([si - 0.4, si + 0.4], [fk_val, fk_val],
+                color='black', linestyle='--', linewidth=1.5)
+
+    # Mark primary segments
+    for si, seg_name in enumerate(seg_names):
+        if seg_name in PRIMARY_SEGMENTS:
+            ax.axvspan(si - 0.45, si + 0.45, alpha=0.06, color='gold', zorder=0)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(
+        [f"★{s}" if s in PRIMARY_SEGMENTS else s for s in seg_names],
+        fontsize=11)
+    ax.set_ylabel('平均角度误差 (°)', fontsize=11)
+    ax.set_title(f'传感器组合误差对比（{checkpoint_s}s 时刻）  --  ★=腰部核心段  --  dashed=FK baseline',
+                 fontsize=11, fontweight='bold')
+    ax.legend(fontsize=9, loc='upper right')
+    ax.grid(True, axis='y', alpha=0.3)
+    ax.set_ylim(bottom=0)
+
+    plt.tight_layout()
+    path = os.path.join(out_dir, 'fig2_combo_comparison.png')
+    plt.savefig(path, dpi=150)
+    plt.close()
+    print(f"Saved: {path}")
+
+
+def plot_sensor_count(all_results, max_frames, fps, checkpoint_s, out_dir):
+    """Figure 3: lumbar score vs sensor count (scatter + mean±std)."""
+    fps_cp = min(int(checkpoint_s * fps), max_frames - 1)
+
+    by_count = {}
+    for combo_name, res in all_results.items():
+        n = res['n_sensors']
+        score = float(res['rot'][fps_cp, LUMBAR_JOINTS].mean())
+        by_count.setdefault(n, []).append((combo_name, score))
+
+    counts = sorted(by_count.keys())
+    fig, ax = plt.subplots(figsize=(7, 5))
+
+    for n in counts:
+        names, scores = zip(*by_count[n])
+        mu, sigma = np.mean(scores), np.std(scores)
+        color = SENSOR_COUNT_COLORS.get(n, 'gray')
+
+        jitter = np.random.uniform(-0.05, 0.05, len(scores))
+        ax.scatter([n + j for j in jitter], scores, color=color,
+                   alpha=0.7, s=60, zorder=3)
+        for xi, yi, lbl in zip([n + j for j in jitter], scores, names):
+            ax.annotate(lbl, (xi, yi), textcoords='offset points',
+                        xytext=(4, 2), fontsize=7, color=color)
+
+        ax.bar(n, mu, width=0.3, color=color, alpha=0.3, zorder=2)
+        ax.errorbar(n, mu, yerr=sigma, fmt='D', color=color,
+                    markersize=7, capsize=5, linewidth=2, zorder=4,
+                    label=f"{n}个传感器  均值={mu:.1f}°")
+
+    fk_lumbar = np.mean([res['fk_rot'][fps_cp, LUMBAR_JOINTS].mean()
+                         for res in all_results.values()])
+    ax.axhline(fk_lumbar, color='black', linestyle='--', linewidth=1.5,
+               label=f'FK baseline  {fk_lumbar:.1f}°')
+
+    ax.set_xticks(counts)
+    ax.set_xlabel('传感器数量', fontsize=12)
+    ax.set_ylabel('腰部综合误差 (°)', fontsize=12)
+    ax.set_title(f'传感器数量与腰部精度关系（{checkpoint_s}s）', fontsize=12, fontweight='bold')
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3)
+    ax.set_ylim(bottom=0)
+
+    plt.tight_layout()
+    path = os.path.join(out_dir, 'fig3_sensor_count_vs_lumbar.png')
+    plt.savefig(path, dpi=150)
+    plt.close()
+    print(f"Saved: {path}")
+
+
+def plot_translation(all_results, max_frames, fps, out_dir):
+    """Figure 4: translation drift per combo."""
+    t = np.arange(max_frames) / fps
+    max_sec = max_frames / fps
+    fig, ax = plt.subplots(figsize=(10, 5))
+    for combo_name, res in all_results.items():
+        y = moving_average(res['tran'])
+        ax.plot(t, y, label=f"{combo_name}({res['n_sensors']}个)",
+                color=COMBO_COLORS[combo_name], linewidth=1.8)
+    ax.set_title('全局位移漂移对比（无头传感器）', fontsize=13, fontweight='bold')
+    ax.set_ylabel('位置误差 (m)', fontsize=11)
+    ax.set_xlabel('时间 (s)', fontsize=11)
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3)
+    ax.set_xlim(0, max_sec)
+    ax.set_ylim(bottom=0)
+    plt.tight_layout()
+    path = os.path.join(out_dir, 'fig4_translation_drift.png')
+    plt.savefig(path, dpi=150)
+    plt.close()
+    print(f"Saved: {path}")
+
+
+# ---------------------------------------------------------------------------
+# Console summary table
+# ---------------------------------------------------------------------------
+
+def print_summary(all_results, max_frames, fps):
+    checkpoints = [30, 60, 90, int(max_frames / fps)]
+    checkpoints = sorted(set(cp for cp in checkpoints if cp <= max_frames / fps))
+
+    seg_names = list(SEGMENTS.keys())
+    primary_flag = ['★' if s in PRIMARY_SEGMENTS else ' ' for s in seg_names]
+    col_w = 7
+
+    header = f"{'组合':<10} {'传感器':>5} {'时间':>5}  "
+    header += ''.join(f"{f}{s:>{col_w-1}}" for f, s in zip(primary_flag, seg_names))
+    header += f"  {'腰部综合':>{col_w}}  {'位移(m)':>{col_w}}"
+    sep = '─' * len(header)
+
+    print(f"\n{sep}")
+    print(header)
+    print(sep)
+
+    for combo_name, res in all_results.items():
+        for cp in checkpoints:
+            frame = min(int(cp * fps), max_frames - 1)
+            row = f"{combo_name:<10} {res['n_sensors']:>5}个 {cp:>4}s  "
+            for joint_idx in SEGMENTS.values():
+                val = float(res['rot'][frame, joint_idx].mean())
+                row += f"  {val:>{col_w}.1f}"
+            lumbar = float(res['rot'][frame, LUMBAR_JOINTS].mean())
+            tran   = float(res['tran'][frame])
+            row += f"  {lumbar:>{col_w}.1f}  {tran:>{col_w}.3f}"
+            print(row)
+        print()
+
+    print(f"{'FK-base':<10} {'─':>5}  {'avg':>4}  ", end='')
+    for joint_idx in SEGMENTS.values():
+        fk_val = np.mean([res['fk_rot'][-1, joint_idx].mean()
+                          for res in all_results.values()])
+        print(f"  {fk_val:>{col_w}.1f}", end='')
+    fk_lumbar = np.mean([res['fk_rot'][-1, LUMBAR_JOINTS].mean()
+                         for res in all_results.values()])
+    print(f"  {fk_lumbar:>{col_w}.1f}  {'N/A':>{col_w}}")
+    print(sep)
+    print("★=腰部康复核心段  腰部综合=joints[1,2,3,6,9]均值  位移仅MobilePoser有")
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Multi-combo drift evaluation (lumbar-rehabilitation focus).')
+    parser.add_argument('--model', required=True,
+                        help='Path to MobilePoser weights (.pth or .ckpt)')
+    parser.add_argument('--combos', nargs='+', default=['all'],
+                        help='"all" or a subset, e.g.: --combos lp rp lw_rp rw_lp')
+    parser.add_argument('--amass_dir', default=None,
+                        help='Dir with processed AMASS .pt files '
+                             '(default: paths.processed_datasets from config)')
+    parser.add_argument('--min_frames', type=int, default=1800,
+                        help='Min sequence length in frames (default 1800 = 60s)')
+    parser.add_argument('--max_seqs', type=int, default=30,
+                        help='Max sequences to use per combo (default 30)')
+    parser.add_argument('--max_seconds', type=int, default=120,
+                        help='Time window for plots in seconds (default 120)')
+    parser.add_argument('--compare_at', type=int, default=60,
+                        help='Time checkpoint (s) for bar chart and sensor-count plot (default 60)')
+    parser.add_argument('--out_dir', default='drift_results',
+                        help='Output directory (default: drift_results)')
+    args = parser.parse_args()
+
+    if args.combos == ['all']:
+        selected = NO_HEAD_COMBOS
+    else:
+        invalid = [c for c in args.combos if c not in NO_HEAD_COMBOS]
+        if invalid:
+            raise ValueError(f"Unknown combo(s): {invalid}. "
+                             f"Valid no-head combos: {list(NO_HEAD_COMBOS)}")
+        selected = {k: NO_HEAD_COMBOS[k] for k in args.combos}
+
+    device     = model_config.device
+    fps        = datasets.fps
+    max_frames = args.max_seconds * fps
+    amass_dir  = Path(args.amass_dir) if args.amass_dir else paths.processed_datasets
+
+    print(f"Device      : {device}")
+    print(f"AMASS dir   : {amass_dir}")
+    print(f"Combos      : {list(selected.keys())}")
+    print(f"Min length  : {args.min_frames} frames ({args.min_frames/fps:.0f}s)")
+
+    print(f"\nLoading model: {args.model}")
+    model = load_model(args.model).to(device)
+    model.eval()
+
+    bodymodel = art.model.ParametricModel(str(paths.smpl_file))
+
+    sequences = load_long_sequences(amass_dir, args.min_frames, args.max_seqs)
+    if not sequences:
+        print("No sequences found. Adjust --min_frames or --amass_dir.")
+        return
+
+    os.makedirs(args.out_dir, exist_ok=True)
+
+    all_results = {}
+    for combo_name, combo_indices in selected.items():
+        print(f"\n── Evaluating combo: {combo_name}  "
+              f"sensors={combo_indices}  n={len(combo_indices)} ──")
+        all_results[combo_name] = evaluate_combo(
+            combo_name, combo_indices, sequences,
+            model, bodymodel, device, max_frames)
+
+    print("\nGenerating figures …")
+    plot_timeseries(all_results, max_frames, fps, args.out_dir)
+    plot_combo_comparison(all_results, max_frames, fps, args.compare_at, args.out_dir)
+    plot_sensor_count(all_results, max_frames, fps, args.compare_at, args.out_dir)
+    plot_translation(all_results, max_frames, fps, args.out_dir)
+
+    print_summary(all_results, max_frames, fps)
+
+    save_dict = {}
+    for combo_name, res in all_results.items():
+        save_dict[f'{combo_name}_rot']  = res['rot']
+        save_dict[f'{combo_name}_tran'] = res['tran']
+        save_dict[f'{combo_name}_fk']   = res['fk_rot']
+    save_dict['fps']    = fps
+    save_dict['combos'] = list(all_results.keys())
+    np_path = os.path.join(args.out_dir, 'drift_data.npz')
+    np.savez(np_path, **save_dict)
+    print(f"\nRaw arrays saved: {np_path}")
+    print(f"All outputs in:  {os.path.abspath(args.out_dir)}/")
+
+
+if __name__ == '__main__':
+    main()
