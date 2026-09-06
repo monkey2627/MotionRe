@@ -34,32 +34,14 @@ from models.dtp import Poser
 from utils import imu_config
 import path_config
 
-# ─── segment & joint definitions (identical to MobilePoser evaluate_drift) ─────
-PRIMARY_SEGMENTS = {
-    'Lumbar':   [3],
-    'Thoracic': [6, 9],
-    'Hip':      [1, 2],
-}
-SECONDARY_SEGMENTS = {
-    'Knee':     [4, 5],
-    'UpperArm': [16, 17],
-    'Forearm':  [18, 19],
-}
-SEGMENTS = {**PRIMARY_SEGMENTS, **SECONDARY_SEGMENTS}
-
-SEG_EN = {
-    'Lumbar':   'Lumbar(j3)',
-    'Thoracic': 'Thoracic(j6,9)',
-    'Hip':      'Hip(j1,2)',
-    'Knee':     'Knee(j4,5)',
-    'UpperArm': 'UpperArm(j16,17)',
-    'Forearm':  'Forearm(j18,19)',
-}
-
-LUMBAR_JOINTS = [1, 2, 3, 6, 9]
-
-# ─── sensor / placement constants ──────────────────────────────────────────────
-FPS = 30
+# ── Shared evaluation constants / utilities (identical across all methods) ────
+_CODE_DIR = Path(_SCRIPT_DIR).parent
+sys.path.insert(0, str(_CODE_DIR))
+from drift_eval_common import (
+    PRIMARY_SEGMENTS, SECONDARY_SEGMENTS, SEGMENTS, SEG_EN,
+    LUMBAR_JOINTS, FPS, SENSOR_TO_JOINT, DATA_PATH,
+    load_long_sequences, angle_between_rotmats, moving_average,
+)
 
 # Our AMASS sensor order: [L_wrist(0), R_wrist(1), L_hip(2), R_hip(3), Head(4), Pelvis(5)]
 # SMPL mesh vertex IDs for each sensor location (T-pose):
@@ -84,50 +66,7 @@ _PALETTE = ['#1565C0', '#C62828', '#2E7D32', '#F57F17', '#6A1B9A', '#00838F', '#
 COMBO_COLORS = {name: _PALETTE[i % len(_PALETTE)] for i, name in enumerate(COMBOS)}
 SENSOR_COUNT_COLORS = {1: '#EF5350', 2: '#42A5F5', 6: '#2E7D32'}
 
-DATA_PATH   = Path(_SCRIPT_DIR).parent / 'base_mobileposer' / 'data' / 'processed_datasets'
 RESULTS_DIR = Path(_SCRIPT_DIR) / 'drift_results'
-
-
-# ─── math helpers ──────────────────────────────────────────────────────────────
-
-def angle_between_rotmats(R1: torch.Tensor, R2: torch.Tensor) -> torch.Tensor:
-    """Angular error in degrees. R1, R2: [..., 3, 3]."""
-    R = R1.transpose(-1, -2) @ R2
-    trace = R[..., 0, 0] + R[..., 1, 1] + R[..., 2, 2]
-    return torch.rad2deg(torch.acos(((trace - 1.0) / 2.0).clamp(-1.0, 1.0)))
-
-
-def moving_average(x: np.ndarray, window: int = 15) -> np.ndarray:
-    return np.convolve(x, np.ones(window) / window, mode='same')
-
-
-# ─── data loading ──────────────────────────────────────────────────────────────
-
-def load_long_sequences(min_frames: int, max_seqs: int):
-    pt_files = sorted(DATA_PATH.glob('*.pt'))
-    if not pt_files:
-        raise FileNotFoundError(f'No .pt files in {DATA_PATH}')
-    unlimited = (max_seqs <= 0)
-    seqs = []
-    print(f'Scanning {len(pt_files)} AMASS files (>= {min_frames} frames) ...')
-    for fpath in pt_files:
-        try:
-            data = torch.load(fpath, map_location='cpu', weights_only=False)
-        except TypeError:
-            data = torch.load(fpath, map_location='cpu')
-        for i, (acc, ori, pose, tran) in enumerate(
-                zip(data['acc'], data['ori'], data['pose'], data['tran'])):
-            if pose.shape[0] >= min_frames:
-                seqs.append({
-                    'acc':  acc.float(),
-                    'ori':  ori.float(),
-                    'pose': pose.float(),
-                    'tran': tran.float(),
-                    'source': fpath.stem,
-                })
-                if not unlimited and len(seqs) >= max_seqs:
-                    return seqs
-    return seqs
 
 
 # ─── model loading ─────────────────────────────────────────────────────────────
@@ -520,8 +459,8 @@ def main():
     parser.add_argument('--min_frames',   type=int,   default=1800)
     parser.add_argument('--max_seqs',     type=int,   default=0,
                         help='Max sequences (0 = all qualifying)')
-    parser.add_argument('--max_seconds',  type=float, default=30.0)
-    parser.add_argument('--checkpoint_s', type=float, default=30.0)
+    parser.add_argument('--max_seconds',  type=float, default=120.0)
+    parser.add_argument('--checkpoint_s', type=float, default=60.0)
     parser.add_argument('--combos',       type=str,   default='all',
                         help='Comma-separated combo names or "all"')
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')

@@ -33,6 +33,13 @@ from mobileposer.config import amass, datasets, model_config, paths, joint_set
 import mobileposer.articulate as art
 from mobileposer.utils.model_utils import load_model
 
+# ── Shared evaluation constants / utilities (identical across all methods) ────
+_CODE_DIR = Path(__file__).resolve().parents[2]  # code/
+sys.path.insert(0, str(_CODE_DIR))
+from drift_eval_common import (
+    load_long_sequences, angle_between_rotmats, moving_average,
+)
+
 
 # ---------------------------------------------------------------------------
 # Segment definitions  (腰部优先)
@@ -97,68 +104,12 @@ SEG_EN = {
 
 
 # ---------------------------------------------------------------------------
-# Math helpers
+# Math helpers  (angle_between_rotmats, moving_average → drift_eval_common)
 # ---------------------------------------------------------------------------
-
-def angle_between_rotmats(R1: torch.Tensor, R2: torch.Tensor) -> torch.Tensor:
-    """Angular error in degrees. R1, R2: [..., 3, 3] → [...]"""
-    R = R1.transpose(-1, -2) @ R2
-    trace = R[..., 0, 0] + R[..., 1, 1] + R[..., 2, 2]
-    cos = ((trace - 1.0) / 2.0).clamp(-1.0, 1.0)
-    return torch.rad2deg(torch.acos(cos))
-
-
-def moving_average(x: np.ndarray, window: int = 15) -> np.ndarray:
-    kernel = np.ones(window) / window
-    return np.convolve(x, kernel, mode='same')
-
 
 def lumbar_score(rot_avg: np.ndarray) -> float:
     """Mean angular error over lumbar-relevant joints. rot_avg: [T, 24]"""
     return float(rot_avg[:, LUMBAR_JOINTS].mean())
-
-
-# ---------------------------------------------------------------------------
-# Data loading
-# ---------------------------------------------------------------------------
-
-def load_long_sequences(amass_dir: Path, min_frames: int, max_seqs: int):
-    """Load full (unwindowed) sequences that are at least min_frames long.
-    max_seqs=0 means no limit (use all qualifying sequences).
-    """
-    pt_files = sorted(amass_dir.glob('*.pt'))
-    if not pt_files:
-        raise FileNotFoundError(
-            f"No .pt files found in {amass_dir}.\n"
-            "Run: python -m mobileposer.process --dataset amass"
-        )
-
-    unlimited = (max_seqs <= 0)
-    seqs = []
-    print(f"Scanning {len(pt_files)} AMASS files for sequences ≥ {min_frames} frames "
-          f"({min_frames / datasets.fps:.0f}s) …")
-    for fpath in pt_files:
-        try:
-            data = torch.load(fpath, map_location='cpu')
-        except Exception as e:
-            print(f"  Skip {fpath.name}: {e}")
-            continue
-        for i, (acc, ori, pose, tran) in enumerate(
-                zip(data['acc'], data['ori'], data['pose'], data['tran'])):
-            if pose.shape[0] >= min_frames:
-                seqs.append({
-                    'acc':    acc.float(),   # [T, 6, 3]
-                    'ori':    ori.float(),   # [T, 6, 3, 3]
-                    'pose':   pose.float(),  # [T, 24, 3, 3]  LOCAL rotmats
-                    'tran':   tran.float(),  # [T, 3]
-                    'source': f"{fpath.stem}[{i}]",
-                })
-            if not unlimited and len(seqs) >= max_seqs:
-                break
-        if not unlimited and len(seqs) >= max_seqs:
-            break
-    print(f"  → {len(seqs)} qualifying sequences found.")
-    return seqs
 
 
 # ---------------------------------------------------------------------------
@@ -650,7 +601,7 @@ def main():
 
     bodymodel = art.model.ParametricModel(str(paths.smpl_file))
 
-    sequences = load_long_sequences(amass_dir, args.min_frames, args.max_seqs)
+    sequences = load_long_sequences(args.min_frames, args.max_seqs, amass_dir=amass_dir)
     if not sequences:
         print("No sequences found. Adjust --min_frames or --amass_dir.")
         return

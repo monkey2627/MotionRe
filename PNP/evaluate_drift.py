@@ -45,34 +45,14 @@ sys.path.insert(0, str(_SCRIPT_DIR))
 from net import PNP
 import articulate as art
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Shared constants  (identical across all evaluate_drift.py scripts)
-# ─────────────────────────────────────────────────────────────────────────────
-
-PRIMARY_SEGMENTS = {
-    'Lumbar':   [3],
-    'Thoracic': [6, 9],
-    'Hip':      [1, 2],
-}
-SECONDARY_SEGMENTS = {
-    'Knee':     [4, 5],
-    'UpperArm': [16, 17],
-    'Forearm':  [18, 19],
-}
-SEGMENTS     = {**PRIMARY_SEGMENTS, **SECONDARY_SEGMENTS}
-LUMBAR_JOINTS = [1, 2, 3, 6, 9]
-SENSOR_TO_JOINT = [18, 19, 1, 2, 15, 0]    # sensor idx → SMPL joint
-FPS          = 30
-
-SEG_EN = {
-    'Lumbar':   'Lumbar(j3)',
-    'Thoracic': 'Thoracic(j6,9)',
-    'Hip':      'Hip(j1,2)',
-    'Knee':     'Knee(j4,5)',
-    'UpperArm': 'UpperArm(j16,17)',
-    'Forearm':  'Forearm(j18,19)',
-}
+# ── Shared evaluation constants / utilities (identical across all methods) ────
+_CODE_DIR = _SCRIPT_DIR.parent
+sys.path.insert(0, str(_CODE_DIR))
+from drift_eval_common import (
+    PRIMARY_SEGMENTS, SECONDARY_SEGMENTS, SEGMENTS, SEG_EN,
+    LUMBAR_JOINTS, FPS, SENSOR_TO_JOINT, DATA_PATH,
+    load_long_sequences, angle_between_rotmats, moving_average,
+)
 
 SMPL_KINTREE = [
     (0,1),(0,2),(0,3),(1,4),(2,5),(4,7),(5,8),(7,10),(8,11),
@@ -88,19 +68,7 @@ FK_SENSOR_INDICES  = [0, 1, 2, 3, 5]       # no-head FK baseline
 _SMPL_FILE = str(_SCRIPT_DIR / 'models' / 'SMPL_male.pkl')
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Math helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
-def angle_between_rotmats(R1: torch.Tensor, R2: torch.Tensor) -> torch.Tensor:
-    R = R1.transpose(-1, -2) @ R2
-    trace = R[..., 0, 0] + R[..., 1, 1] + R[..., 2, 2]
-    return torch.rad2deg(torch.acos(((trace - 1.0) / 2.0).clamp(-1.0, 1.0)))
-
-
-def moving_average(x: np.ndarray, window: int = 15) -> np.ndarray:
-    return np.convolve(x, np.ones(window) / window, mode='same')
-
+# angle_between_rotmats, moving_average → imported from drift_eval_common
 
 def compute_angular_velocity(ori: torch.Tensor, fps: int = FPS) -> torch.Tensor:
     """Numerical differentiation: ω = vee(R^T · dR/dt).  ori: [T, 6, 3, 3]"""
@@ -123,35 +91,7 @@ def compute_angular_velocity(ori: torch.Tensor, fps: int = FPS) -> torch.Tensor:
     return w
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Data loading
-# ─────────────────────────────────────────────────────────────────────────────
-
-def load_long_sequences(amass_dir: Path, min_frames: int, max_seqs: int):
-    pt_files = sorted(amass_dir.glob('*.pt'))
-    if not pt_files:
-        raise FileNotFoundError(f"No .pt files in {amass_dir}")
-    unlimited = (max_seqs <= 0)
-    seqs = []
-    print(f"Scanning {len(pt_files)} files for sequences >= {min_frames} frames ...")
-    for fpath in pt_files:
-        try:
-            data = torch.load(fpath, map_location='cpu')
-        except Exception as e:
-            print(f"  Skip {fpath.name}: {e}")
-            continue
-        for i, (acc, ori, pose, tran) in enumerate(
-                zip(data['acc'], data['ori'], data['pose'], data['tran'])):
-            if pose.shape[0] >= min_frames:
-                seqs.append({'acc': acc.float(), 'ori': ori.float(),
-                             'pose': pose.float(), 'tran': tran.float(),
-                             'source': f"{fpath.stem}[{i}]"})
-            if not unlimited and len(seqs) >= max_seqs:
-                break
-        if not unlimited and len(seqs) >= max_seqs:
-            break
-    print(f"  -> {len(seqs)} qualifying sequences found.")
-    return seqs
+# load_long_sequences → imported from drift_eval_common
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -492,7 +432,7 @@ def main():
     print('=' * 62)
 
     os.makedirs(args.out_dir, exist_ok=True)
-    sequences = load_long_sequences(amass_dir, args.min_frames, args.max_seqs)
+    sequences = load_long_sequences(args.min_frames, args.max_seqs, amass_dir=amass_dir)
     if not sequences:
         print("No qualifying sequences. Adjust --min_frames or --amass_dir."); return
 

@@ -68,36 +68,14 @@ sys.path.insert(0, str(_BASE_MP))
 import mobileposer.articulate as art
 from mobileposer.config import datasets, paths
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Segment / joint definitions  (identical to MobilePoser evaluate_drift)
-# ─────────────────────────────────────────────────────────────────────────────
-
-PRIMARY_SEGMENTS = {
-    'Lumbar':  [3],       # Spine1
-    'Thoracic':[6, 9],    # Spine2, Spine3
-    'Hip':     [1, 2],    # L/R Hip
-}
-SECONDARY_SEGMENTS = {
-    'Knee':    [4, 5],
-    'UpperArm':[16, 17],
-    'Forearm': [18, 19],
-}
-SEGMENTS = {**PRIMARY_SEGMENTS, **SECONDARY_SEGMENTS}
-
-LUMBAR_JOINTS = [1, 2, 3, 6, 9]   # 腰部综合分
-
-# sensor index → SMPL joint
-SENSOR_TO_JOINT = [18, 19, 1, 2, 15, 0]
-
-SEG_EN = {
-    'Lumbar':   'Lumbar(j3)',
-    'Thoracic': 'Thoracic(j6,9)',
-    'Hip':      'Hip(j1,2)',
-    'Knee':     'Knee(j4,5)',
-    'UpperArm': 'UpperArm(j16,17)',
-    'Forearm':  'Forearm(j18,19)',
-}
+# ── Shared evaluation constants / utilities (identical across all methods) ────
+_CODE_DIR = _SCRIPT_DIR.parent
+sys.path.insert(0, str(_CODE_DIR))
+from drift_eval_common import (
+    PRIMARY_SEGMENTS, SECONDARY_SEGMENTS, SEGMENTS, SEG_EN,
+    LUMBAR_JOINTS, FPS, SENSOR_TO_JOINT, DATA_PATH,
+    load_long_sequences, angle_between_rotmats, moving_average,
+)
 
 # DIP-IMU: 6 fixed sensors (incl. head)
 DIP_SENSOR_INDICES = [0, 1, 2, 3, 4, 5]
@@ -113,58 +91,7 @@ SMPL_KINTREE = [
 _LUMBAR_BONES = {(0,3),(3,6),(6,9)}
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Math helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
-def angle_between_rotmats(R1: torch.Tensor, R2: torch.Tensor) -> torch.Tensor:
-    """Angular error in degrees.  R1, R2: [..., 3, 3] → [...]"""
-    R = R1.transpose(-1, -2) @ R2
-    trace = R[..., 0, 0] + R[..., 1, 1] + R[..., 2, 2]
-    cos = ((trace - 1.0) / 2.0).clamp(-1.0, 1.0)
-    return torch.rad2deg(torch.acos(cos))
-
-
-def moving_average(x: np.ndarray, window: int = 15) -> np.ndarray:
-    return np.convolve(x, np.ones(window) / window, mode='same')
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Data loading  (identical to MobilePoser evaluate_drift)
-# ─────────────────────────────────────────────────────────────────────────────
-
-def load_long_sequences(amass_dir: Path, min_frames: int, max_seqs: int):
-    """Load unwindowed AMASS sequences with at least min_frames frames."""
-    pt_files = sorted(amass_dir.glob('*.pt'))
-    if not pt_files:
-        raise FileNotFoundError(f"No .pt files found in {amass_dir}")
-
-    unlimited = (max_seqs <= 0)
-    seqs = []
-    print(f"Scanning {len(pt_files)} AMASS files for sequences >= {min_frames} frames "
-          f"({min_frames / datasets.fps:.0f}s) ...")
-    for fpath in pt_files:
-        try:
-            data = torch.load(fpath, map_location='cpu')
-        except Exception as e:
-            print(f"  Skip {fpath.name}: {e}")
-            continue
-        for i, (acc, ori, pose, tran) in enumerate(
-                zip(data['acc'], data['ori'], data['pose'], data['tran'])):
-            if pose.shape[0] >= min_frames:
-                seqs.append({
-                    'acc':    acc.float(),   # [T, 6, 3]
-                    'ori':    ori.float(),   # [T, 6, 3, 3]
-                    'pose':   pose.float(),  # [T, 24, 3, 3] local rotmats
-                    'tran':   tran.float(),  # [T, 3]
-                    'source': f"{fpath.stem}[{i}]",
-                })
-            if not unlimited and len(seqs) >= max_seqs:
-                break
-        if not unlimited and len(seqs) >= max_seqs:
-            break
-    print(f"  -> {len(seqs)} qualifying sequences found.")
-    return seqs
+# angle_between_rotmats, moving_average, load_long_sequences → imported from drift_eval_common
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -701,7 +628,7 @@ def main():
 
     os.makedirs(args.out_dir, exist_ok=True)
 
-    sequences = load_long_sequences(amass_dir, args.min_frames, args.max_seqs)
+    sequences = load_long_sequences(args.min_frames, args.max_seqs, amass_dir=amass_dir)
     if not sequences:
         print("No qualifying sequences found. Adjust --min_frames or --amass_dir.")
         return
