@@ -506,7 +506,7 @@ def _draw_skel(ax, joints, color, title, lumbar_err=None):
 
 
 def generate_video(seq, model, bodymodel, device_str,
-                   fps, out_dir, max_seconds=30, render_fps=10):
+                   fps, out_dir, max_seconds=30, render_fps=10, seq_idx=0):
     """Side-by-side video: GT (green) | DIP-IMU (blue) | FK (red)."""
     try:
         from matplotlib.animation import FFMpegWriter
@@ -552,7 +552,7 @@ def generate_video(seq, model, bodymodel, device_str,
     for ax in axes:
         ax.set_facecolor('#111122')
 
-    video_path = os.path.join(out_dir, 'video_dip_6s.mp4')
+    video_path = os.path.join(out_dir, f'video_dip_6s_{seq_idx:04d}.mp4')
     writer = FFMpegWriter(fps=render_fps, metadata={'title': 'drift-dip-6s'})
     frames = list(range(0, T, stride))
     print(f"  {len(frames)} frames at {render_fps}fps -> {video_path}")
@@ -597,10 +597,6 @@ def main():
                         help='Checkpoint time (s) for bar chart / scatter (default 60)')
     parser.add_argument('--out_dir', default='drift_results',
                         help='Output directory (default: drift_results)')
-    parser.add_argument('--video', action='store_true',
-                        help='Generate skeleton comparison video (requires ffmpeg)')
-    parser.add_argument('--video_seq', type=int, default=0,
-                        help='Sequence index to use for video (default 0)')
     parser.add_argument('--video_seconds', type=int, default=30,
                         help='Video length in seconds (default 30)')
     parser.add_argument('--video_fps', type=int, default=10,
@@ -662,17 +658,16 @@ def main():
              n_seqs=res['n_seqs'])
     print(f"\nRaw arrays saved: {npz_path}")
 
-    if args.video:
-        vid_seq = sequences[min(args.video_seq, len(sequences) - 1)]
-        print(f"\nGenerating video  seq={vid_seq['source']}  "
-              f"len={vid_seq['pose'].shape[0]/fps:.0f}s ...")
+    print(f'\nGenerating videos for {len(sequences)} sequences ...')
+    for i, vid_seq in enumerate(sequences):
+        print(f"  [{i+1}/{len(sequences)}] seq={vid_seq['source']}")
         try:
             generate_video(vid_seq, model, bodymodel, 'cpu',
                            fps, args.out_dir,
                            max_seconds=args.video_seconds,
-                           render_fps=args.video_fps)
+                           render_fps=args.video_fps, seq_idx=i)
         except Exception as e:
-            print(f"  Video generation failed: {e}")
+            print(f'    Video failed: {e}')
 
     sess.close()
     print(f"\nAll outputs in: {os.path.abspath(args.out_dir)}/")

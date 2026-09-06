@@ -286,7 +286,7 @@ def _draw_skel(ax, joints, color, title, lumbar_err=None):
 
 
 def generate_video(seq, net, bodymodel, device, fps, out_dir,
-                   max_seconds=30, render_fps=10):
+                   max_seconds=30, render_fps=10, seq_idx=0):
     """Side-by-side skeleton video: GT (green) | DynaIP (blue) | FK (red)."""
     try:
         from matplotlib.animation import FFMpegWriter
@@ -324,7 +324,7 @@ def generate_video(seq, net, bodymodel, device, fps, out_dir,
     for ax in axes:
         ax.set_facecolor('#111122')
 
-    vp = os.path.join(out_dir, 'video_dynaip.mp4')
+    vp = os.path.join(out_dir, f'video_dynaip_{seq_idx:04d}.mp4')
     writer = FFMpegWriter(fps=render_fps, metadata={'title': 'drift-dynaip'})
     print(f'  Writing {len(range(0, T, stride))} frames → {vp}')
     with writer.saving(fig, vp, dpi=100):
@@ -397,9 +397,6 @@ def main():
     parser.add_argument('--checkpoint_s', type=float, default=60.0,
                         help='Checkpoint time for bar charts')
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
-    parser.add_argument('--video',         action='store_true',
-                        help='Generate skeleton comparison video (requires ffmpeg)')
-    parser.add_argument('--video_seq',     type=int, default=0)
     parser.add_argument('--video_seconds', type=int, default=30)
     parser.add_argument('--video_fps',     type=int, default=10)
     args = parser.parse_args()
@@ -430,14 +427,14 @@ def main():
     print_summary(res, max_frames, FPS)
     save_npz(res, RESULTS_DIR / 'dynaip_drift_results.npz')
 
-    if args.video:
-        vid_seq = sequences[min(args.video_seq, len(sequences) - 1)]
-        print(f"\nGenerating video  seq={vid_seq['source']} ...")
+    print(f'\nGenerating videos for {len(sequences)} sequences ...')
+    for i, vid_seq in enumerate(sequences):
+        print(f"  [{i+1}/{len(sequences)}] seq={vid_seq['source']}")
         try:
             generate_video(vid_seq, net, bodymodel, device, FPS, out_dir,
-                           args.video_seconds, args.video_fps)
+                           args.video_seconds, args.video_fps, seq_idx=i)
         except Exception as e:
-            print(f'  Video failed: {e}')
+            print(f'    Video failed: {e}')
 
     print(f'\nAll outputs → {RESULTS_DIR}')
 

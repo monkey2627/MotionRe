@@ -343,7 +343,7 @@ def _draw_skel(ax, joints, color, title, lumbar_err=None):
 
 
 def generate_video(seq, model, bodymodel, device, fps, out_dir,
-                   max_seconds=30, render_fps=10):
+                   max_seconds=30, render_fps=10, seq_idx=0):
     try:
         from matplotlib.animation import FFMpegWriter
     except Exception as e:
@@ -379,7 +379,7 @@ def generate_video(seq, model, bodymodel, device, fps, out_dir,
     fig, axes = plt.subplots(1, 3, figsize=(12, 5))
     fig.patch.set_facecolor('#111122')
     for ax in axes: ax.set_facecolor('#111122')
-    vp = os.path.join(out_dir, 'video_pnp_6s.mp4')
+    vp = os.path.join(out_dir, f'video_pnp_6s_{seq_idx:04d}.mp4')
     writer = FFMpegWriter(fps=render_fps, metadata={'title': 'drift-pnp-6s'})
     print(f"  Writing {len(range(0,T,stride))} frames → {vp}")
     with writer.saving(fig, vp, dpi=100):
@@ -407,8 +407,6 @@ def main():
     parser.add_argument('--max_seconds', type=int, default=120)
     parser.add_argument('--compare_at', type=int, default=60)
     parser.add_argument('--out_dir', default='drift_results')
-    parser.add_argument('--video', action='store_true')
-    parser.add_argument('--video_seq',     type=int, default=0)
     parser.add_argument('--video_seconds', type=int, default=30)
     parser.add_argument('--video_fps',     type=int, default=10)
     args = parser.parse_args()
@@ -458,14 +456,14 @@ def main():
              pnp_6s_fk_rot=res['fk_rot'], fps=fps, combos=['pnp_6s'])
     print(f"\nAll outputs in: {os.path.abspath(args.out_dir)}/")
 
-    if args.video:
-        vid_seq = sequences[min(args.video_seq, len(sequences) - 1)]
-        print(f"\nGenerating video  seq={vid_seq['source']} ...")
+    print(f'\nGenerating videos for {len(sequences)} sequences ...')
+    for i, vid_seq in enumerate(sequences):
+        print(f"  [{i+1}/{len(sequences)}] seq={vid_seq['source']}")
         try:
             generate_video(vid_seq, model, bodymodel, device, fps, args.out_dir,
-                           args.video_seconds, args.video_fps)
+                           args.video_seconds, args.video_fps, seq_idx=i)
         except Exception as e:
-            print(f"  Video failed: {e}")
+            print(f'    Video failed: {e}')
 
 
 if __name__ == '__main__':

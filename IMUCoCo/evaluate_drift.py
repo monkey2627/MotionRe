@@ -452,7 +452,7 @@ def _draw_skel(ax, joints, color, title, lumbar_err=None):
 
 def generate_video_combo(combo_name, sensor_indices, seq,
                           imucoco, poser, body_model, vertex_coords, device,
-                          fps, out_dir, max_seconds=30, render_fps=10):
+                          fps, out_dir, max_seconds=30, render_fps=10, seq_idx=0):
     """Side-by-side skeleton video: GT (green) | IMUCoCo (blue) | FK (red)."""
     try:
         from matplotlib.animation import FFMpegWriter
@@ -497,7 +497,7 @@ def generate_video_combo(combo_name, sensor_indices, seq,
     for ax in axes:
         ax.set_facecolor('#111122')
 
-    vp = os.path.join(out_dir, f'video_{combo_name}.mp4')
+    vp = os.path.join(out_dir, f'video_{combo_name}_{seq_idx:04d}.mp4')
     writer = FFMpegWriter(fps=render_fps, metadata={'title': f'drift-imucoco-{combo_name}'})
     print(f'  Writing {len(range(0, T, stride))} frames → {vp}')
     with writer.saving(fig, vp, dpi=100):
@@ -577,13 +577,8 @@ def main():
     parser.add_argument('--combos',       type=str,   default='all',
                         help='Comma-separated combo names or "all"')
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
-    parser.add_argument('--video',         action='store_true',
-                        help='Generate skeleton comparison video (requires ffmpeg)')
-    parser.add_argument('--video_seq',     type=int, default=0)
     parser.add_argument('--video_seconds', type=int, default=30)
     parser.add_argument('--video_fps',     type=int, default=10)
-    parser.add_argument('--video_combo',   type=str, default='full_6s',
-                        help='Which combo to render for video (default: full_6s)')
     args = parser.parse_args()
 
     max_frames = int(args.max_seconds * FPS)
@@ -622,18 +617,17 @@ def main():
     print_summary(all_results, max_frames, FPS)
     save_npz(all_results, RESULTS_DIR / 'imucoco_drift_results.npz')
 
-    if args.video:
-        vid_seq    = sequences[min(args.video_seq, len(sequences) - 1)]
-        vc_name    = args.video_combo if args.video_combo in COMBOS else 'full_6s'
-        vc_indices = COMBOS[vc_name]['indices']
-        print(f"\nGenerating video  combo={vc_name}  seq={vid_seq['source']} ...")
-        try:
-            generate_video_combo(
-                vc_name, vc_indices, vid_seq,
-                imucoco, poser, body_model, vertex_coords, device,
-                FPS, out_dir, args.video_seconds, args.video_fps)
-        except Exception as e:
-            print(f'  Video failed: {e}')
+    print(f'\nGenerating videos for {len(sequences)} sequences × {len(active_combos)} combos ...')
+    for i, vid_seq in enumerate(sequences):
+        for combo_name, info in active_combos.items():
+            print(f"  [{i+1}/{len(sequences)}] combo={combo_name}  seq={vid_seq['source']}")
+            try:
+                generate_video_combo(
+                    combo_name, info['indices'], vid_seq,
+                    imucoco, poser, body_model, vertex_coords, device,
+                    FPS, out_dir, args.video_seconds, args.video_fps, seq_idx=i)
+            except Exception as e:
+                print(f'    Video failed: {e}')
 
     print(f'\nAll outputs → {RESULTS_DIR}')
 
