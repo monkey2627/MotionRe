@@ -18,9 +18,6 @@ outputs/
 results/
 logs/
 
-# 评测结果：保留 drift_results/ 下的 npz
-!drift_results/*.npz
-
 # Python 缓存
 __pycache__/
 *.pyc
