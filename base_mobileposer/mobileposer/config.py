@@ -144,7 +144,40 @@ class joint_set:
     lower_body_parent = [None, 0, 0, 1, 2, 3, 4, 5, 6]
 
 
-class sensor: 
+class eval_combos:
+    """Sensor combos for evaluation (superset of training combos).
+    Slots: 0=L-wrist, 1=R-wrist, 2=L-thigh, 3=R-thigh, 4=head.
+    These can be used with the pre-trained model via zero-masking; no re-training needed.
+    """
+    one_sensor = {
+        'lw': [0], 'rw': [1], 'lp': [2], 'rp': [3], 'h': [4],
+    }
+    two_sensor = {
+        'lw_rw': [0, 1], 'lw_lp': [0, 2], 'lw_rp': [0, 3],
+        'rw_lp': [1, 2], 'rw_rp': [1, 3], 'lp_rp': [2, 3],
+        'lw_h': [0, 4], 'rw_h': [1, 4], 'lp_h': [2, 4], 'rp_h': [3, 4],
+    }
+    three_sensor = {
+        'lw_rp_h': [0, 3, 4], 'rw_rp_h': [1, 3, 4],   # in training set
+        'lw_lp_h': [0, 2, 4], 'rw_lp_h': [1, 2, 4],   # in training set
+        'lw_rw_h': [0, 1, 4], 'lp_rp_h': [2, 3, 4],
+        'lw_rw_lp': [0, 1, 2], 'lw_rw_rp': [0, 1, 3],
+        'lw_lp_rp': [0, 2, 3], 'rw_lp_rp': [1, 2, 3],
+    }
+    four_sensor = {
+        'lw_rw_lp_rp': [0, 1, 2, 3],
+        'lw_rw_lp_h':  [0, 1, 2, 4],
+        'lw_rw_rp_h':  [0, 1, 3, 4],
+        'lw_lp_rp_h':  [0, 2, 3, 4],
+        'rw_lp_rp_h':  [1, 2, 3, 4],
+    }
+    five_sensor = {
+        'all': [0, 1, 2, 3, 4],
+    }
+    all_combos = {**one_sensor, **two_sensor, **three_sensor, **four_sensor, **five_sensor}
+
+
+class sensor:
     """Sensor parameters."""
     device_ids = {
         'Left_phone': 0,
