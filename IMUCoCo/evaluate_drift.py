@@ -68,6 +68,13 @@ SENSOR_COUNT_COLORS = {1: '#EF5350', 2: '#42A5F5', 6: '#2E7D32'}
 
 RESULTS_DIR = Path(_SCRIPT_DIR) / 'drift_results'
 
+SMPL_KINTREE = [
+    (0,1),(0,2),(0,3),(1,4),(2,5),(4,7),(5,8),(7,10),(8,11),
+    (3,6),(6,9),(9,12),(9,13),(9,14),(12,15),
+    (13,16),(14,17),(16,18),(17,19),(18,20),(19,21),(20,22),(21,23),
+]
+_LUMBAR_BONES = {(0,3),(3,6),(6,9)}
+
 
 # ─── model loading ─────────────────────────────────────────────────────────────
 
@@ -400,6 +407,112 @@ def plot_translation(all_results: dict, max_frames: int, fps: int, out_dir: str)
     print(f'Saved: {path}')
 
 
+# ─── video generation ──────────────────────────────────────────────────────────
+
+@torch.no_grad()
+def _infer_imucoco_poses(imucoco, poser, body_model, vertex_coords,
+                          acc, ori, gt_pose, gt_tran, sensor_indices, device):
+    """Like eval_imucoco but returns (pose_local [T,24,3,3], tran [T,3])."""
+    T = acc.shape[0]
+    vids   = [SENSOR_VERTEX_IDS[s] for s in sensor_indices]
+    coords = vertex_coords[vids]
+    imucoco.set_current_device_coordinates(coords)
+    imucoco.buffer_placement_codes_with_current_devices(parallel=False)
+
+    ori_sel = ori[:, sensor_indices]
+    r6d     = _rotmat_to_r6d(ori_sel)
+    imu9    = torch.cat([r6d, acc[:, sensor_indices]], dim=-1).unsqueeze(0).to(device)
+    feat_m  = imucoco.inference_time_forward_mesh(imu9)
+
+    first_local = gt_pose[0:1].cpu()
+    glb_0, _    = body_model.forward_kinematics(first_local, calc_mesh=False)
+    glb_init    = _rotmat_to_r6d(glb_0).to(device)
+    vel_init    = torch.zeros(1, 24, 3, device=device)
+
+    _, pose_local_pred, tran_out = poser.forward(
+        x=feat_m, v_init=vel_init, glb_init=glb_init,
+        seq_len=torch.tensor([T]), compute_tran='transpose')
+
+    return pose_local_pred[0].cpu(), tran_out.cpu()   # [T,24,3,3], [T,3]
+
+
+def _draw_skel(ax, joints, color, title, lumbar_err=None):
+    ax.cla()
+    j = joints - joints[0]
+    for (a, b) in SMPL_KINTREE:
+        is_lmb = (a, b) in _LUMBAR_BONES or (b, a) in _LUMBAR_BONES
+        c, lw  = ('#FF6F00', 3.5) if is_lmb else (color, 1.8)
+        ax.plot([j[a, 0], j[b, 0]], [j[a, 1], j[b, 1]], '-', color=c, lw=lw)
+    ax.scatter(j[:, 0], j[:, 1], c=color, s=18, zorder=5)
+    ax.set_xlim(-0.75, 0.75); ax.set_ylim(-0.25, 1.85)
+    ax.set_aspect('equal'); ax.axis('off')
+    ax.set_title(title + (f'\nlumbar: {lumbar_err:.1f}°' if lumbar_err is not None else ''),
+                 fontsize=9, pad=3)
+
+
+def generate_video_combo(combo_name, sensor_indices, seq,
+                          imucoco, poser, body_model, vertex_coords, device,
+                          fps, out_dir, max_seconds=30, render_fps=10):
+    """Side-by-side skeleton video: GT (green) | IMUCoCo (blue) | FK (red)."""
+    try:
+        from matplotlib.animation import FFMpegWriter
+    except Exception as e:
+        print(f'  Skipped (FFMpegWriter unavailable): {e}')
+        return
+
+    stride  = max(1, round(fps / render_fps))
+    T       = min(seq['pose'].shape[0], int(max_seconds * fps))
+    gt_pose = seq['pose'][:T]
+    gt_tran = seq['tran'][:T]
+    acc     = seq['acc'][:T]
+    ori     = seq['ori'][:T]
+
+    pose_pred, tran_pred = _infer_imucoco_poses(
+        imucoco, poser, body_model, vertex_coords,
+        acc, ori, gt_pose, gt_tran, sensor_indices, device)
+
+    # root-align predicted translation
+    tran_pred = tran_pred - tran_pred[0:1] + gt_tran[0:1]
+
+    # FK baseline local poses
+    pose_fk = torch.eye(3).unsqueeze(0).unsqueeze(0).expand(T, 24, -1, -1).clone()
+    root_ori = ori[:, 5]
+    for s_idx, j_idx in FK_SENSOR_MAP.items():
+        pose_fk[:, j_idx] = root_ori.transpose(-1, -2) @ ori[:, s_idx]
+
+    with torch.no_grad():
+        _, gt_j   = body_model.forward_kinematics(gt_pose,   tran=gt_tran)
+        _, pred_j = body_model.forward_kinematics(pose_pred, tran=tran_pred)
+        _, fk_j   = body_model.forward_kinematics(pose_fk,   tran=gt_tran)
+    gt_j, pred_j, fk_j = gt_j.cpu().numpy(), pred_j.cpu().numpy(), fk_j.cpu().numpy()
+
+    lumbar_pred = angle_between_rotmats(
+        pose_pred[:, LUMBAR_JOINTS], gt_pose[:, LUMBAR_JOINTS]).mean(-1).numpy()
+    lumbar_fk   = angle_between_rotmats(
+        pose_fk[:, LUMBAR_JOINTS], gt_pose[:, LUMBAR_JOINTS]).mean(-1).numpy()
+
+    n_sens = len(sensor_indices)
+    fig, axes = plt.subplots(1, 3, figsize=(12, 5))
+    fig.patch.set_facecolor('#111122')
+    for ax in axes:
+        ax.set_facecolor('#111122')
+
+    vp = os.path.join(out_dir, f'video_{combo_name}.mp4')
+    writer = FFMpegWriter(fps=render_fps, metadata={'title': f'drift-imucoco-{combo_name}'})
+    print(f'  Writing {len(range(0, T, stride))} frames → {vp}')
+    with writer.saving(fig, vp, dpi=100):
+        for t in range(0, T, stride):
+            _draw_skel(axes[0], gt_j[t],   '#43A047', 'Ground Truth')
+            _draw_skel(axes[1], pred_j[t], '#1E88E5',
+                       f'IMUCoCo {combo_name}({n_sens}s)', lumbar_pred[t])
+            _draw_skel(axes[2], fk_j[t],   '#E53935', 'FK baseline', lumbar_fk[t])
+            fig.suptitle(f't = {t/fps:.1f}s    orange = lumbar spine',
+                         color='white', fontsize=11)
+            writer.grab_frame()
+    plt.close(fig)
+    print(f'  Saved: {vp}')
+
+
 # ─── summary ───────────────────────────────────────────────────────────────────
 
 def print_summary(all_results: dict, max_frames: int, fps: int):
@@ -464,6 +577,13 @@ def main():
     parser.add_argument('--combos',       type=str,   default='all',
                         help='Comma-separated combo names or "all"')
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
+    parser.add_argument('--video',         action='store_true',
+                        help='Generate skeleton comparison video (requires ffmpeg)')
+    parser.add_argument('--video_seq',     type=int, default=0)
+    parser.add_argument('--video_seconds', type=int, default=30)
+    parser.add_argument('--video_fps',     type=int, default=10)
+    parser.add_argument('--video_combo',   type=str, default='full_6s',
+                        help='Which combo to render for video (default: full_6s)')
     args = parser.parse_args()
 
     max_frames = int(args.max_seconds * FPS)
@@ -501,6 +621,20 @@ def main():
 
     print_summary(all_results, max_frames, FPS)
     save_npz(all_results, RESULTS_DIR / 'imucoco_drift_results.npz')
+
+    if args.video:
+        vid_seq    = sequences[min(args.video_seq, len(sequences) - 1)]
+        vc_name    = args.video_combo if args.video_combo in COMBOS else 'full_6s'
+        vc_indices = COMBOS[vc_name]['indices']
+        print(f"\nGenerating video  combo={vc_name}  seq={vid_seq['source']} ...")
+        try:
+            generate_video_combo(
+                vc_name, vc_indices, vid_seq,
+                imucoco, poser, body_model, vertex_coords, device,
+                FPS, out_dir, args.video_seconds, args.video_fps)
+        except Exception as e:
+            print(f'  Video failed: {e}')
+
     print(f'\nAll outputs → {RESULTS_DIR}')
 
 
