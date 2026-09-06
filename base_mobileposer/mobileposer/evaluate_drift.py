@@ -68,6 +68,16 @@ COMBO_COLORS = {name: _PALETTE[i % len(_PALETTE)]
 
 SENSOR_COUNT_COLORS = {1: '#EF5350', 2: '#42A5F5'}
 
+# English labels for matplotlib plots (server has no CJK font)
+SEG_EN = {
+    '腰':   'Lumbar(j3)',
+    '胸':   'Thoracic(j6,9)',
+    '大腿': 'Hip(j1,2)',
+    '小腿': 'Knee(j4,5)',
+    '大臂': 'UpperArm(j16,17)',
+    '手腕': 'Forearm(j18,19)',
+}
+
 
 # ---------------------------------------------------------------------------
 # Math helpers
@@ -266,7 +276,7 @@ def plot_timeseries(all_results, max_frames, fps, out_dir):
         for combo_name, res in all_results.items():
             y = moving_average(res['rot'][:, joint_idx].mean(axis=1))
             lw = 2.0 if is_primary else 1.2
-            ax.plot(t, y, label=f"{combo_name}({res['n_sensors']}个)",
+            ax.plot(t, y, label=f"{combo_name}({res['n_sensors']}s)",
                     color=COMBO_COLORS[combo_name], linewidth=lw)
 
         # FK baseline: average across all combos
@@ -275,17 +285,18 @@ def plot_timeseries(all_results, max_frames, fps, out_dir):
         ax.axhline(moving_average(fk_mean)[max_frames // 2],
                    color='gray', linestyle='--', linewidth=1.2, label='FK baseline')
 
-        title = f"{'★ ' if is_primary else ''}{seg_name}"
-        ax.set_title(title, fontsize=12, fontweight='bold' if is_primary else 'normal')
-        ax.set_ylabel('角度误差 (°)', fontsize=9)
-        ax.set_xlabel('时间 (s)', fontsize=9)
+        prefix = '[*] ' if is_primary else ''
+        title = f"{prefix}{SEG_EN[seg_name]}"
+        ax.set_title(title, fontsize=11, fontweight='bold' if is_primary else 'normal')
+        ax.set_ylabel('Angle error (deg)', fontsize=9)
+        ax.set_xlabel('Time (s)', fontsize=9)
         ax.legend(fontsize=7, ncol=2)
         ax.grid(True, alpha=0.3)
         ax.set_xlim(0, max_sec)
         ax.set_ylim(bottom=0)
 
-    fig.suptitle('各身体段旋转漂移  ★=腰部康复核心段（无头传感器）',
-                 fontsize=13, fontweight='bold')
+    fig.suptitle('Rotation drift by body segment  [*]=lumbar-rehab primary  (no head sensor)',
+                 fontsize=12, fontweight='bold')
     plt.tight_layout()
     path = os.path.join(out_dir, 'fig1_drift_timeseries.png')
     plt.savefig(path, dpi=150)
@@ -311,7 +322,7 @@ def plot_combo_comparison(all_results, max_frames, fps, checkpoint_s, out_dir):
                 for joint_idx in SEGMENTS.values()]
         offset = (ci - n_combos / 2 + 0.5) * bar_w
         ax.bar(x + offset, vals, bar_w,
-               label=f"{combo_name}({res['n_sensors']}个)",
+               label=f"{combo_name}({res['n_sensors']}s)",
                color=COMBO_COLORS[combo_name], alpha=0.85)
 
     # FK baseline horizontal lines per segment
@@ -328,10 +339,10 @@ def plot_combo_comparison(all_results, max_frames, fps, checkpoint_s, out_dir):
 
     ax.set_xticks(x)
     ax.set_xticklabels(
-        [f"★{s}" if s in PRIMARY_SEGMENTS else s for s in seg_names],
-        fontsize=11)
-    ax.set_ylabel('平均角度误差 (°)', fontsize=11)
-    ax.set_title(f'传感器组合误差对比（{checkpoint_s}s 时刻）  --  ★=腰部核心段  --  dashed=FK baseline',
+        [f"[*]{SEG_EN[s]}" if s in PRIMARY_SEGMENTS else SEG_EN[s] for s in seg_names],
+        fontsize=9, rotation=10)
+    ax.set_ylabel('Mean angle error (deg)', fontsize=11)
+    ax.set_title(f'Combo error comparison at {checkpoint_s}s  --  [*]=lumbar primary  --  dashed=FK baseline',
                  fontsize=11, fontweight='bold')
     ax.legend(fontsize=9, loc='upper right')
     ax.grid(True, axis='y', alpha=0.3)
@@ -372,17 +383,17 @@ def plot_sensor_count(all_results, max_frames, fps, checkpoint_s, out_dir):
         ax.bar(n, mu, width=0.3, color=color, alpha=0.3, zorder=2)
         ax.errorbar(n, mu, yerr=sigma, fmt='D', color=color,
                     markersize=7, capsize=5, linewidth=2, zorder=4,
-                    label=f"{n}个传感器  均值={mu:.1f}°")
+                    label=f"{n} sensor(s)  mean={mu:.1f}deg")
 
     fk_lumbar = np.mean([res['fk_rot'][fps_cp, LUMBAR_JOINTS].mean()
                          for res in all_results.values()])
     ax.axhline(fk_lumbar, color='black', linestyle='--', linewidth=1.5,
-               label=f'FK baseline  {fk_lumbar:.1f}°')
+               label=f'FK baseline  {fk_lumbar:.1f}deg')
 
     ax.set_xticks(counts)
-    ax.set_xlabel('传感器数量', fontsize=12)
-    ax.set_ylabel('腰部综合误差 (°)', fontsize=12)
-    ax.set_title(f'传感器数量与腰部精度关系（{checkpoint_s}s）', fontsize=12, fontweight='bold')
+    ax.set_xlabel('Number of sensors', fontsize=12)
+    ax.set_ylabel('Lumbar error (deg)', fontsize=12)
+    ax.set_title(f'Sensor count vs lumbar accuracy at {checkpoint_s}s', fontsize=12, fontweight='bold')
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
     ax.set_ylim(bottom=0)
@@ -401,11 +412,11 @@ def plot_translation(all_results, max_frames, fps, out_dir):
     fig, ax = plt.subplots(figsize=(10, 5))
     for combo_name, res in all_results.items():
         y = moving_average(res['tran'])
-        ax.plot(t, y, label=f"{combo_name}({res['n_sensors']}个)",
+        ax.plot(t, y, label=f"{combo_name}({res['n_sensors']}s)",
                 color=COMBO_COLORS[combo_name], linewidth=1.8)
-    ax.set_title('全局位移漂移对比（无头传感器）', fontsize=13, fontweight='bold')
-    ax.set_ylabel('位置误差 (m)', fontsize=11)
-    ax.set_xlabel('时间 (s)', fontsize=11)
+    ax.set_title('Global translation drift (no head sensor)', fontsize=13, fontweight='bold')
+    ax.set_ylabel('Position error (m)', fontsize=11)
+    ax.set_xlabel('Time (s)', fontsize=11)
     ax.legend(fontsize=9)
     ax.grid(True, alpha=0.3)
     ax.set_xlim(0, max_sec)
