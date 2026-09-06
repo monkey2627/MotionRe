@@ -140,8 +140,8 @@ def eval_pnp(model, acc: torch.Tensor, ori: torch.Tensor,
 
     model.rnn_initialize()                 # reset stateful RNN
 
-    pose_pred = torch.zeros(T, 24, 3, 3)
-    tran_pred = torch.zeros(T, 3)
+    pose_pred = torch.zeros(T, 24, 3, 3, device=device)
+    tran_pred = torch.zeros(T, 3, device=device)
 
     for t in range(T):
         pose_pred[t], tran_pred[t] = model.forward_frame(
@@ -360,14 +360,16 @@ def generate_video(seq, model, bodymodel, device, fps, out_dir,
     acc_g = (acc + g).to(device)
     ori_d = ori.to(device)
     w     = compute_angular_velocity(ori, fps).to(device)
-    pose_ml = torch.zeros(T, 24, 3, 3); tran_ml = torch.zeros(T, 3)
+    pose_ml = torch.zeros(T, 24, 3, 3, device=device)
+    tran_ml = torch.zeros(T, 3, device=device)
     for t in range(T):
         pose_ml[t], tran_ml[t] = model.forward_frame(acc_g[t], w[t], ori_d[t])
+    pose_ml = pose_ml.cpu(); tran_ml = tran_ml.cpu()
     pose_fk = fk_baseline(ori, FK_SENSOR_INDICES, bodymodel)[:T]
 
     with torch.no_grad():
         _, gt_j  = bodymodel.forward_kinematics(gt_pose,  tran=gt_tran)
-        _, ml_j  = bodymodel.forward_kinematics(pose_ml.cpu(), tran=tran_ml)
+        _, ml_j  = bodymodel.forward_kinematics(pose_ml, tran=tran_ml)
         _, fk_j  = bodymodel.forward_kinematics(pose_fk,  tran=gt_tran)
     gt_j, ml_j, fk_j = gt_j.numpy(), ml_j.numpy(), fk_j.numpy()
 
