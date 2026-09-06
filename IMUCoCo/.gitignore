@@ -40,7 +40,9 @@ error.log
 # Data directories (users should set these up themselves)
 # raw/
 # parsed/
-
+PNP/RBDL-PIP/
+base_mobileposer/drift_results/
+*/drift_results/
 
 
 
