@@ -68,6 +68,23 @@ COMBO_COLORS = {name: _PALETTE[i % len(_PALETTE)]
 
 SENSOR_COUNT_COLORS = {1: '#EF5350', 2: '#42A5F5'}
 
+# SMPL kinematic tree — (parent, child) bone pairs
+SMPL_KINTREE = [
+    (0,1),(0,2),(0,3),       # pelvis → L/R hip, spine1
+    (1,4),(2,5),              # hip → knee
+    (4,7),(5,8),              # knee → ankle
+    (7,10),(8,11),            # ankle → foot
+    (3,6),(6,9),              # spine chain
+    (9,12),(9,13),(9,14),    # spine3 → neck / L-R collar
+    (12,15),                  # neck → head
+    (13,16),(14,17),          # collar → shoulder
+    (16,18),(17,19),          # shoulder → elbow
+    (18,20),(19,21),          # elbow → wrist
+    (20,22),(21,23),          # wrist → hand
+]
+# Lumbar spine bones — highlighted in orange
+_LUMBAR_BONES = {(0,3),(3,6),(6,9)}
+
 # English labels for matplotlib plots (server has no CJK font)
 SEG_EN = {
     '腰':   'Lumbar(j3)',
@@ -429,6 +446,103 @@ def plot_translation(all_results, max_frames, fps, out_dir):
 
 
 # ---------------------------------------------------------------------------
+# Video generation
+# ---------------------------------------------------------------------------
+
+def _draw_skel(ax, joints, color, title, lumbar_err=None):
+    """Front-view (X-Y) 2-D skeleton. joints: [24, 3] numpy, Y=up."""
+    ax.cla()
+    j = joints - joints[0]          # root-centred
+    for (a, b) in SMPL_KINTREE:
+        is_lumbar = (a, b) in _LUMBAR_BONES or (b, a) in _LUMBAR_BONES
+        c  = '#FF6F00' if is_lumbar else color
+        lw = 3.5      if is_lumbar else 1.8
+        ax.plot([j[a,0], j[b,0]], [j[a,1], j[b,1]], '-', color=c, lw=lw)
+    ax.scatter(j[:,0], j[:,1], c=color, s=18, zorder=5)
+    ax.set_xlim(-0.75, 0.75)
+    ax.set_ylim(-0.25, 1.85)
+    ax.set_aspect('equal')
+    ax.axis('off')
+    lbl = title + (f'\nlumbar: {lumbar_err:.1f}°' if lumbar_err is not None else '')
+    ax.set_title(lbl, fontsize=9, pad=3)
+
+
+def generate_video(combo_name, combo_indices, seq, model, bodymodel, device,
+                   fps, out_dir, max_seconds=30, render_fps=10):
+    """
+    Side-by-side skeleton video: GT (green) | MobilePoser (blue) | FK (red).
+    Orange bones = lumbar chain.  Requires ffmpeg on PATH.
+    """
+    try:
+        from matplotlib.animation import FFMpegWriter
+    except Exception as e:
+        print(f"  Skipped (FFMpegWriter unavailable): {e}")
+        return
+
+    stride  = max(1, round(fps / render_fps))
+    T       = min(seq['pose'].shape[0], int(max_seconds * fps))
+
+    gt_pose = seq['pose'][:T]          # [T, 24, 3, 3]
+    gt_tran = seq['tran'][:T]          # [T, 3]
+    acc     = seq['acc'][:T]
+    ori     = seq['ori'][:T]
+
+    # ── MobilePoser inference ──
+    model.reset()
+    with torch.no_grad():
+        imu_in = prepare_imu(acc, ori, combo_indices).to(device).unsqueeze(0)
+        pose_ml, _, tran_ml, _ = model.forward_offline(imu_in, [imu_in.shape[1]])
+    pose_ml = pose_ml.cpu()[:T]                          # [T, 24, 3, 3]
+    tran_ml = tran_ml.cpu()[:T] - tran_ml.cpu()[:1] + gt_tran[:1]
+
+    # ── FK baseline ──
+    pose_fk = fk_baseline(ori, combo_indices, bodymodel)[:T]
+
+    # ── Joint positions via forward kinematics ──
+    with torch.no_grad():
+        _, gt_joints = bodymodel.forward_kinematics(gt_pose,  tran=gt_tran)
+        _, ml_joints = bodymodel.forward_kinematics(pose_ml,  tran=tran_ml)
+        _, fk_joints = bodymodel.forward_kinematics(pose_fk,  tran=gt_tran)
+    gt_joints = gt_joints.cpu().numpy()   # [T, 24, 3]
+    ml_joints = ml_joints.cpu().numpy()
+    fk_joints = fk_joints.cpu().numpy()
+
+    # ── Per-frame lumbar error ──
+    lumbar_ml = angle_between_rotmats(
+        pose_ml[:, LUMBAR_JOINTS], gt_pose[:, LUMBAR_JOINTS]).mean(-1).numpy()
+    lumbar_fk = angle_between_rotmats(
+        pose_fk[:, LUMBAR_JOINTS], gt_pose[:, LUMBAR_JOINTS]).mean(-1).numpy()
+
+    # ── Render ──
+    fig, axes = plt.subplots(1, 3, figsize=(12, 5))
+    fig.patch.set_facecolor('#111122')
+    for ax in axes:
+        ax.set_facecolor('#111122')
+
+    video_path = os.path.join(out_dir, f'video_{combo_name}.mp4')
+    writer = FFMpegWriter(fps=render_fps,
+                          metadata={'title': f'drift-{combo_name}'})
+    frames = list(range(0, T, stride))
+    print(f"  {len(frames)} frames at {render_fps}fps → {video_path}")
+
+    with writer.saving(fig, video_path, dpi=100):
+        for t in frames:
+            _draw_skel(axes[0], gt_joints[t],  '#43A047', 'Ground Truth')
+            _draw_skel(axes[1], ml_joints[t],  '#1E88E5',
+                       f'MobilePoser ({combo_name})', lumbar_ml[t])
+            _draw_skel(axes[2], fk_joints[t],  '#E53935',
+                       'FK baseline',              lumbar_fk[t])
+            fig.suptitle(f't = {t/fps:.1f}s    orange = lumbar spine',
+                         color='white', fontsize=11)
+            writer.grab_frame()
+            if t % (fps * 10) == 0:
+                print(f"    {t/fps:.0f}s / {T/fps:.0f}s")
+
+    plt.close(fig)
+    print(f"  Saved: {video_path}")
+
+
+# ---------------------------------------------------------------------------
 # Console summary table
 # ---------------------------------------------------------------------------
 
@@ -498,6 +612,14 @@ def main():
                         help='Time checkpoint (s) for bar chart and sensor-count plot (default 60)')
     parser.add_argument('--out_dir', default='drift_results',
                         help='Output directory (default: drift_results)')
+    parser.add_argument('--video', action='store_true',
+                        help='Generate skeleton comparison videos after evaluation')
+    parser.add_argument('--video_seq', type=int, default=0,
+                        help='Which sequence index to use for video (default 0)')
+    parser.add_argument('--video_seconds', type=int, default=30,
+                        help='Video length in seconds (default 30)')
+    parser.add_argument('--video_fps', type=int, default=10,
+                        help='Render FPS for video (default 10; lower = faster)')
     args = parser.parse_args()
 
     if args.combos == ['all']:
@@ -558,7 +680,25 @@ def main():
     np_path = os.path.join(args.out_dir, 'drift_data.npz')
     np.savez(np_path, **save_dict)
     print(f"\nRaw arrays saved: {np_path}")
-    print(f"All outputs in:  {os.path.abspath(args.out_dir)}/")
+
+    if args.video:
+        vid_seq = sequences[min(args.video_seq, len(sequences) - 1)]
+        print(f"\nGenerating videos  seq={vid_seq['source']}  "
+              f"len={vid_seq['pose'].shape[0]/fps:.0f}s  "
+              f"render_fps={args.video_fps} …")
+        for combo_name, combo_indices in selected.items():
+            print(f"\n── Video: {combo_name} ──")
+            try:
+                generate_video(
+                    combo_name, combo_indices, vid_seq,
+                    model, bodymodel, device, fps, args.out_dir,
+                    max_seconds=args.video_seconds,
+                    render_fps=args.video_fps,
+                )
+            except Exception as e:
+                print(f"  Failed: {e}")
+
+    print(f"\nAll outputs in:  {os.path.abspath(args.out_dir)}/")
 
 
 if __name__ == '__main__':
