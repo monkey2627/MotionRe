@@ -1,0 +1,52 @@
+# Ignore Gradle project-specific cache directory
+.gradle
+
+# Syncthing ignore file
+.stignore
+
+# Ignore .idea
+.idea
+
+# Ignore .fleet
+.fleet
+
+# Ignore eclipse stuff
+.project
+.classpath
+.settings
+
+# VSCode stuff
+/.vscode/settings.json
+/.vscode/launch.json
+
+# Ignore eclipse stuff
+.project
+.classpath
+.settings
+
+# Node Stuff
+/node_modules
+.husky
+
+# kotlin stuff
+/.kotlin
+
+# ignore gradle build folder
+build/
+
+# created by clangd for index cache
+.cache/
+
+# direnv has been claimed for Nix usage
+.direnv/
+.devenv
+
+# Ignore Android local properties
+local.properties
+
+# Ignore temporary config
+vrconfig.yml.tmp
+
+
+# Nixos
+.bin/

@@ -1,0 +1,68 @@
+:root {
+  --toolbar-h: 120px;
+}
+
+.main-layout {
+  display: grid;
+  grid-template:
+    't t' var(--topbar-h)
+    'n c' calc(100% - var(--topbar-h))
+    / var(--navbar-w) calc(100% - var(--navbar-w));
+
+  &.full {
+    grid-template:
+      't t t' var(--topbar-h)
+      'n b s' var(--toolbar-h)
+      'n c s' calc(100% - var(--topbar-h) - var(--toolbar-h))
+      / var(--navbar-w) calc(100% - var(--navbar-w) - var(--right-section-w))
+      var(--right-section-w);
+  }
+
+  @screen nsm {
+    --right-section-w: 40%;
+  }
+
+  @screen sm {
+    --right-section-w: 36%;
+  }
+
+  @screen md {
+    --right-section-w: 30%;
+  }
+
+  @screen lg {
+    --right-section-w: 25%;
+  }
+
+  @screen xl {
+    --right-section-w: 22%;
+  }
+
+  @screen mobile {
+    --checklist-h: 30px;
+
+    &.checklist-ok {
+      --checklist-h: 0px;
+    }
+
+    &.full {
+      grid-template:
+        't' var(--topbar-h)
+        'l' var(--checklist-h)
+        'b' var(--toolbar-h)
+        'c' calc(
+          100% - var(--topbar-h) - var(--checklist-h) - var(--toolbar-h) - var(
+              --navbar-h
+            )
+        )
+        'n' calc(var(--navbar-h))
+        / 100%;
+    }
+
+    grid-template:
+      't' var(--topbar-h)
+      'c' calc(100% - var(--topbar-h) - var(--navbar-h))
+      'n' calc(var(--navbar-h))
+      / 100%;
+  }
+}

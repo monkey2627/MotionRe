@@ -1,0 +1,5 @@
+export default {
+  '**/*.{ts,tsx}': () => 'tsc -p tsconfig.json --noEmit',
+  '{electron,src}/**/*.{js,jsx,ts,tsx}': 'eslint --max-warnings=0 --no-warn-ignored --cache --fix',
+  '**/*.{js,jsx,ts,tsx,css,scss,md,json}': 'prettier --write',
+};
