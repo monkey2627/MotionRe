@@ -133,8 +133,7 @@ def eval_pnp(model, acc: torch.Tensor, ori: torch.Tensor,
     Returns: rot_err [T, 24] degrees, tran_err [T] metres
     """
     T   = gt_pose.shape[0]
-    g   = _GRAVITY.to(device)
-    acc_g = (acc + g).to(device)           # add gravity (real-IMU convention)
+    acc_g = (acc + _GRAVITY).to(device)    # add gravity (real-IMU convention)
     ori_d = ori.to(device)
     w     = compute_angular_velocity(ori, FPS).to(device)
 
@@ -353,8 +352,7 @@ def generate_video(seq, model, bodymodel, device, fps, out_dir,
     acc, ori = seq['acc'][:T], seq['ori'][:T]
 
     model.rnn_initialize()
-    g   = _GRAVITY.to(device)
-    acc_g = (acc + g).to(device)
+    acc_g = (acc + _GRAVITY).to(device)
     ori_d = ori.to(device)
     w     = compute_angular_velocity(ori, fps).to(device)
     pose_ml_list, tran_ml_list = [], []
