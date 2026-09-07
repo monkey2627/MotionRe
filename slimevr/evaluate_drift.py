@@ -198,28 +198,45 @@ def eval_slimevr(ori, gt_pose, combo_indices, bodymodel):
 # Run evaluation for one combo
 # ---------------------------------------------------------------------------
 
-def evaluate_combo(combo_name, combo_indices, sequences, bodymodel, max_frames):
+def evaluate_combo(combo_name, combo_indices, sequences, bodymodel, max_frames,
+                   out_dir):
     """Evaluate one combo over all sequences. Returns averaged error arrays."""
-    rot_sum = np.zeros((max_frames, 24))
-    count   = np.zeros(max_frames)
+    _CKPT = os.path.join(out_dir, f'.eval_ckpt_{combo_name}.npz')
 
-    for seq in tqdm.tqdm(sequences, desc=f"  {combo_name}", leave=False):
+    rot_sum   = np.zeros((max_frames, 24))
+    count     = np.zeros(max_frames)
+    start_idx = 0
+
+    if os.path.exists(_CKPT):
+        ck = np.load(_CKPT)
+        rot_sum   = ck['rot_sum']
+        count     = ck['count']
+        start_idx = int(ck['seqs_done'])
+        print(f"    [Resume] combo={combo_name}: {start_idx}/{len(sequences)} done")
+
+    for idx, seq in enumerate(tqdm.tqdm(sequences, desc=f"  {combo_name}", leave=False)):
+        if idx < start_idx:
+            continue
         T = min(seq['pose'].shape[0], max_frames)
         gt_pose = seq['pose'][:T]
         ori     = seq['ori'][:T]
 
         rot_err = eval_slimevr(ori, gt_pose, combo_indices, bodymodel)
-
         rot_sum[:T] += rot_err.numpy()
         count[:T]   += 1.0
+
+        np.savez(_CKPT, rot_sum=rot_sum, count=count, seqs_done=idx + 1)
+
+    if os.path.exists(_CKPT):
+        os.remove(_CKPT)
 
     valid = count > 0
     rot_avg = np.where(valid[:, None], rot_sum / np.maximum(count[:, None], 1), 0.0)
 
     return {
-        'rot':       rot_avg,            # [T, 24]
-        'tran':      np.zeros(max_frames),  # SlimeVR has no translation output
-        'fk_rot':    rot_avg,            # SlimeVR IS FK — identical by design
+        'rot':       rot_avg,
+        'tran':      np.zeros(max_frames),
+        'fk_rot':    rot_avg,
         'n_sensors': len(combo_indices),
         'n_seqs':    int(count[0]),
     }
@@ -583,7 +600,7 @@ def main():
         print(f"\n-- Evaluating combo: {combo_name}  "
               f"sensors={combo_indices}  n={len(combo_indices)} --")
         all_results[combo_name] = evaluate_combo(
-            combo_name, combo_indices, sequences, bodymodel, max_frames)
+            combo_name, combo_indices, sequences, bodymodel, max_frames, args.out_dir)
 
     print("\nGenerating figures ...")
     plot_timeseries(all_results, max_frames, fps, args.out_dir)

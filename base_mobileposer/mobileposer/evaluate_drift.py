@@ -191,28 +191,51 @@ def eval_fk(ori, gt_pose, combo_indices, bodymodel):
 # ---------------------------------------------------------------------------
 
 def evaluate_combo(combo_name, combo_indices, sequences, model,
-                   bodymodel, device, max_frames):
+                   bodymodel, device, max_frames, out_dir):
     """Evaluate one combo over all sequences. Returns averaged error arrays."""
+    _CKPT = os.path.join(out_dir, f'.eval_ckpt_{combo_name}.npz')
+
     ml_rot_sum  = np.zeros((max_frames, 24))
     ml_tran_sum = np.zeros(max_frames)
     fk_rot_sum  = np.zeros((max_frames, 24))
     count       = np.zeros(max_frames)
+    start_idx   = 0
 
-    for seq in sequences:
+    if os.path.exists(_CKPT):
+        ck = np.load(_CKPT)
+        ml_rot_sum  = ck['ml_rot_sum']
+        ml_tran_sum = ck['ml_tran_sum']
+        fk_rot_sum  = ck['fk_rot_sum']
+        count       = ck['count']
+        start_idx   = int(ck['seqs_done'])
+        print(f"    [Resume] combo={combo_name}: {start_idx}/{len(sequences)} done")
+
+    for idx, seq in enumerate(sequences):
+        if idx < start_idx:
+            continue
         T = min(seq['pose'].shape[0], max_frames)
         gt_pose = seq['pose'][:T]
         gt_tran = seq['tran'][:T]
         acc     = seq['acc'][:T]
         ori     = seq['ori'][:T]
 
-        imu = prepare_imu(acc, ori, combo_indices)
-        rot_ml, tran_ml = eval_mobileposer(model, imu, gt_pose, gt_tran, device)
-        rot_fk          = eval_fk(ori, gt_pose, combo_indices, bodymodel)
+        try:
+            imu = prepare_imu(acc, ori, combo_indices)
+            rot_ml, tran_ml = eval_mobileposer(model, imu, gt_pose, gt_tran, device)
+        except Exception as e:
+            print(f"  Warning: skipped {seq['source']} ({combo_name}) — {e}")
+        else:
+            rot_fk = eval_fk(ori, gt_pose, combo_indices, bodymodel)
+            ml_rot_sum[:T]  += rot_ml.numpy()
+            ml_tran_sum[:T] += tran_ml.numpy()
+            fk_rot_sum[:T]  += rot_fk.numpy()
+            count[:T]       += 1.0
 
-        ml_rot_sum[:T]  += rot_ml.numpy()
-        ml_tran_sum[:T] += tran_ml.numpy()
-        fk_rot_sum[:T]  += rot_fk.numpy()
-        count[:T]       += 1.0
+        np.savez(_CKPT, ml_rot_sum=ml_rot_sum, ml_tran_sum=ml_tran_sum,
+                 fk_rot_sum=fk_rot_sum, count=count, seqs_done=idx + 1)
+
+    if os.path.exists(_CKPT):
+        os.remove(_CKPT)
 
     valid = count > 0
     ml_rot_avg  = np.where(valid[:, None], ml_rot_sum  / np.maximum(count[:, None], 1), 0.0)
@@ -220,9 +243,9 @@ def evaluate_combo(combo_name, combo_indices, sequences, model,
     fk_rot_avg  = np.where(valid[:, None], fk_rot_sum  / np.maximum(count[:, None], 1), 0.0)
 
     return {
-        'rot':      ml_rot_avg,   # [T, 24]
-        'tran':     ml_tran_avg,  # [T]
-        'fk_rot':   fk_rot_avg,   # [T, 24]
+        'rot':      ml_rot_avg,
+        'tran':     ml_tran_avg,
+        'fk_rot':   fk_rot_avg,
         'n_sensors': len(combo_indices),
         'n_seqs':   int(count[0]),
     }
@@ -615,7 +638,7 @@ def main():
               f"sensors={combo_indices}  n={len(combo_indices)} ──")
         all_results[combo_name] = evaluate_combo(
             combo_name, combo_indices, sequences,
-            model, bodymodel, device, max_frames)
+            model, bodymodel, device, max_frames, args.out_dir)
 
     print("\nGenerating figures …")
     plot_timeseries(all_results, max_frames, fps, args.out_dir)

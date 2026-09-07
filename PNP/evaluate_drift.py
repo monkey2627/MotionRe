@@ -165,13 +165,28 @@ def eval_fk(ori, gt_pose, combo_indices, bodymodel):
 # Main evaluation loop
 # ─────────────────────────────────────────────────────────────────────────────
 
-def evaluate_all(sequences, model, bodymodel, device, max_frames: int) -> dict:
+def evaluate_all(sequences, model, bodymodel, device, max_frames: int,
+                 out_dir: str) -> dict:
+    _CKPT = os.path.join(out_dir, '.eval_ckpt_pnp.npz')
+
     rot_sum  = np.zeros((max_frames, 24))
     tran_sum = np.zeros(max_frames)
     fk_sum   = np.zeros((max_frames, 24))
     count    = np.zeros(max_frames)
+    start_idx = 0
 
-    for seq in tqdm.tqdm(sequences, desc='Evaluating'):
+    if os.path.exists(_CKPT):
+        ck = np.load(_CKPT)
+        rot_sum   = ck['rot_sum']
+        tran_sum  = ck['tran_sum']
+        fk_sum    = ck['fk_sum']
+        count     = ck['count']
+        start_idx = int(ck['seqs_done'])
+        print(f"  [Resume] checkpoint loaded: {start_idx}/{len(sequences)} sequences done.")
+
+    for idx, seq in enumerate(tqdm.tqdm(sequences, desc='Evaluating')):
+        if idx < start_idx:
+            continue
         T       = min(seq['pose'].shape[0], max_frames)
         gt_pose = seq['pose'][:T]
         acc     = seq['acc'][:T]
@@ -181,14 +196,18 @@ def evaluate_all(sequences, model, bodymodel, device, max_frames: int) -> dict:
             rot_ml, tran_ml = eval_pnp(model, acc, ori, gt_pose, device)
         except Exception as e:
             print(f"\n  Warning: skipped {seq['source']} — {e}")
-            continue
+        else:
+            rot_fk = eval_fk(ori, gt_pose, FK_SENSOR_INDICES, bodymodel)
+            rot_sum[:T]  += rot_ml.numpy()
+            tran_sum[:T] += tran_ml.numpy()
+            fk_sum[:T]   += rot_fk.numpy()
+            count[:T]    += 1.0
 
-        rot_fk = eval_fk(ori, gt_pose, FK_SENSOR_INDICES, bodymodel)
+        np.savez(_CKPT, rot_sum=rot_sum, tran_sum=tran_sum, fk_sum=fk_sum,
+                 count=count, seqs_done=idx + 1)
 
-        rot_sum[:T]  += rot_ml.numpy()
-        tran_sum[:T] += tran_ml.numpy()
-        fk_sum[:T]   += rot_fk.numpy()
-        count[:T]    += 1.0
+    if os.path.exists(_CKPT):
+        os.remove(_CKPT)
 
     valid      = count > 0
     safe_cnt   = np.maximum(count[:, None], 1)
@@ -440,7 +459,7 @@ def main():
     bodymodel = art.ParametricModel(_SMPL_FILE)
 
     print(f"\nRunning evaluation over {len(sequences)} sequences ...")
-    res = evaluate_all(sequences, model, bodymodel, device, max_frames)
+    res = evaluate_all(sequences, model, bodymodel, device, max_frames, args.out_dir)
     print(f"  Evaluated {res['n_seqs']} sequences.")
 
     print('\nGenerating figures ...')

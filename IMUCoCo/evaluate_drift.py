@@ -187,26 +187,44 @@ def eval_fk(ori: torch.Tensor, gt_pose: torch.Tensor) -> torch.Tensor:
 # ─── evaluation loop ───────────────────────────────────────────────────────────
 
 def evaluate_all(sequences, imucoco, poser, body_model, vertex_coords,
-                 active_combos: dict, max_frames: int, device: str) -> dict:
+                 active_combos: dict, max_frames: int, device: str,
+                 out_dir: str) -> dict:
     """Accumulate running-mean per-frame error for each combo."""
-    all_results = {}
-    for combo_name, info in active_combos.items():
-        all_results[combo_name] = {
-            'rot_sum':  np.zeros((max_frames, 24)),
-            'fk_sum':   np.zeros((max_frames, 24)),
-            'tran_sum': np.zeros(max_frames),
-            'count':    np.zeros(max_frames),
+    _CKPT = os.path.join(out_dir, '.eval_ckpt_imucoco.npz')
+
+    all_results = {
+        combo_name: {
+            'rot_sum':   np.zeros((max_frames, 24)),
+            'fk_sum':    np.zeros((max_frames, 24)),
+            'tran_sum':  np.zeros(max_frames),
+            'count':     np.zeros(max_frames),
             'n_sensors': info['n'],
         }
+        for combo_name, info in active_combos.items()
+    }
+    start_idx = 0
 
-    for seq in tqdm(sequences, desc='Sequences'):
+    if os.path.exists(_CKPT):
+        ck = np.load(_CKPT)
+        start_idx = int(ck['seqs_done'])
+        for combo_name in active_combos:
+            r = all_results[combo_name]
+            r['rot_sum']  = ck[f'{combo_name}_rot_sum']
+            r['fk_sum']   = ck[f'{combo_name}_fk_sum']
+            r['tran_sum'] = ck[f'{combo_name}_tran_sum']
+            r['count']    = ck[f'{combo_name}_count']
+        print(f"  [Resume] checkpoint loaded: {start_idx}/{len(sequences)} sequences done.")
+
+    for idx, seq in enumerate(tqdm(sequences, desc='Sequences')):
+        if idx < start_idx:
+            continue
         T       = min(seq['pose'].shape[0], max_frames)
         gt_pose = seq['pose'][:T]
         acc     = seq['acc'][:T]
         ori     = seq['ori'][:T]
         tran    = seq['tran'][:T]
 
-        fk_err = eval_fk(ori, gt_pose)   # [T, 24]
+        fk_err = eval_fk(ori, gt_pose)
 
         for combo_name, info in active_combos.items():
             try:
@@ -224,7 +242,17 @@ def evaluate_all(sequences, imucoco, poser, body_model, vertex_coords,
             r['tran_sum'][:T] += tran_err.numpy()
             r['count'][:T]    += 1.0
 
-    # Compute means
+        ck_data = {'seqs_done': idx + 1}
+        for combo_name, r in all_results.items():
+            ck_data[f'{combo_name}_rot_sum']  = r['rot_sum']
+            ck_data[f'{combo_name}_fk_sum']   = r['fk_sum']
+            ck_data[f'{combo_name}_tran_sum'] = r['tran_sum']
+            ck_data[f'{combo_name}_count']    = r['count']
+        np.savez(_CKPT, **ck_data)
+
+    if os.path.exists(_CKPT):
+        os.remove(_CKPT)
+
     final = {}
     for combo_name, r in all_results.items():
         valid  = r['count'] > 0
@@ -607,7 +635,7 @@ def main():
 
     all_results = evaluate_all(
         sequences, imucoco, poser, body_model, vertex_coords,
-        active_combos, max_frames, device,
+        active_combos, max_frames, device, out_dir,
     )
 
     n_seqs = next(iter(all_results.values()))['n_seqs']
