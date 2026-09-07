@@ -391,7 +391,7 @@ def main():
     parser = argparse.ArgumentParser(description='DynaIP drift benchmark')
     parser.add_argument('--model',       default='weights/DynaIP.pth')
     parser.add_argument('--min_frames',  type=int,   default=1800)
-    parser.add_argument('--max_seqs',    type=int,   default=0,
+    parser.add_argument('--max_seqs',    type=int,   default=10,
                         help='Max sequences (0 = all qualifying)')
     parser.add_argument('--max_seconds', type=float, default=120.0)
     parser.add_argument('--checkpoint_s', type=float, default=60.0,

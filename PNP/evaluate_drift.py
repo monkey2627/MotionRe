@@ -425,7 +425,7 @@ def main():
                         help='Ignored — PNP is a fixed 6-sensor method.')
     parser.add_argument('--amass_dir', default=None)
     parser.add_argument('--min_frames', type=int, default=1800)
-    parser.add_argument('--max_seqs',   type=int, default=0)
+    parser.add_argument('--max_seqs',   type=int, default=10)
     parser.add_argument('--max_seconds', type=int, default=120)
     parser.add_argument('--compare_at', type=int, default=60)
     parser.add_argument('--out_dir', default='drift_results')

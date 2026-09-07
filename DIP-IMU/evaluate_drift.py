@@ -595,7 +595,7 @@ def main():
                              '(default: ../base_mobileposer/data/processed_datasets)')
     parser.add_argument('--min_frames', type=int, default=1800,
                         help='Min sequence length in frames (default 1800 = 60s @ 30fps)')
-    parser.add_argument('--max_seqs', type=int, default=0,
+    parser.add_argument('--max_seqs', type=int, default=10,
                         help='Max sequences to use (0 = all qualifying)')
     parser.add_argument('--max_seconds', type=int, default=120,
                         help='Evaluation time window in seconds (default 120)')
