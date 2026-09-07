@@ -8,7 +8,10 @@
 *.h5
 *.hdf5
 *.bin
-
+# 所有子目录下 drift_results 系列输出文件夹
+**/*_drift_results/
+**/RBDL-PIP/
+**/drift_results/
 # 数据集目录
 data/
 datasets/
