@@ -166,7 +166,7 @@ def eval_fk(ori, gt_pose, combo_indices, bodymodel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def evaluate_all(sequences, model, bodymodel, device, max_frames: int,
-                 out_dir: str) -> dict:
+                 out_dir: str, seq_callback=None) -> dict:
     _CKPT = os.path.join(out_dir, '.eval_ckpt_pnp.npz')
 
     rot_sum  = np.zeros((max_frames, 24))
@@ -205,6 +205,9 @@ def evaluate_all(sequences, model, bodymodel, device, max_frames: int,
 
         np.savez(_CKPT, rot_sum=rot_sum, tran_sum=tran_sum, fk_sum=fk_sum,
                  count=count, seqs_done=idx + 1)
+
+        if seq_callback is not None:
+            seq_callback(idx, seq)
 
     if os.path.exists(_CKPT):
         os.remove(_CKPT)
@@ -460,8 +463,17 @@ def main():
     model = PNP().eval().to(device)
     bodymodel = art.ParametricModel(_SMPL_FILE)
 
+    def _video_cb(i, seq):
+        print(f"  [{i+1}/{len(sequences)}] video  seq={seq['source']}")
+        try:
+            generate_video(seq, model, bodymodel, device, fps, args.out_dir,
+                           args.video_seconds, args.video_fps, seq_idx=i)
+        except Exception as e:
+            print(f'    Video failed: {e}')
+
     print(f"\nRunning evaluation over {len(sequences)} sequences ...")
-    res = evaluate_all(sequences, model, bodymodel, device, max_frames, args.out_dir)
+    res = evaluate_all(sequences, model, bodymodel, device, max_frames, args.out_dir,
+                       seq_callback=_video_cb if not args.no_video else None)
     print(f"  Evaluated {res['n_seqs']} sequences.")
 
     print('\nGenerating figures ...')
@@ -476,16 +488,6 @@ def main():
              pnp_6s_rot=res['rot'], pnp_6s_tran=res['tran'],
              pnp_6s_fk_rot=res['fk_rot'], fps=fps, combos=['pnp_6s'])
     print(f"\nAll outputs in: {os.path.abspath(args.out_dir)}/")
-
-    if not args.no_video:
-        print(f'\nGenerating videos for {len(sequences)} sequences ...')
-        for i, vid_seq in enumerate(sequences):
-            print(f"  [{i+1}/{len(sequences)}] seq={vid_seq['source']}")
-            try:
-                generate_video(vid_seq, model, bodymodel, device, fps, args.out_dir,
-                               args.video_seconds, args.video_fps, seq_idx=i)
-            except Exception as e:
-                print(f'    Video failed: {e}')
 
 
 if __name__ == '__main__':
