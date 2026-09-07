@@ -37,7 +37,7 @@ from mobileposer.utils.model_utils import load_model
 _CODE_DIR = Path(__file__).resolve().parents[2]  # code/
 sys.path.insert(0, str(_CODE_DIR))
 from drift_eval_common import (
-    load_long_sequences, angle_between_rotmats, moving_average,
+    load_long_sequences, angle_between_rotmats, moving_average, add_imu_noise,
 )
 
 
@@ -600,6 +600,15 @@ def main():
                         help='Render FPS for video (default 10; lower = faster)')
     parser.add_argument('--no_video', action='store_true',
                         help='Skip video generation (metrics and figures only)')
+    parser.add_argument('--no_noise', action='store_true',
+                        help='Disable IMU noise simulation (use clean synthetic data). '
+                             'Without this flag noise is applied by default to expose '
+                             'the gap between synthetic and real-IMU conditions.')
+    parser.add_argument('--drift', type=float, default=0.5,
+                        help='Gyro random-walk rate °/√s (default 0.5 ≈ consumer MEMS). '
+                             '0.2=high-quality, 0.5=consumer, 1.5=low-cost')
+    parser.add_argument('--seed', type=int, default=42,
+                        help='RNG seed for reproducible noise (default 42)')
     args = parser.parse_args()
 
     if args.combos == ['all']:
@@ -631,6 +640,20 @@ def main():
     if not sequences:
         print("No sequences found. Adjust --min_frames or --amass_dir.")
         return
+
+    if not args.no_noise:
+        torch.manual_seed(args.seed)
+        print(f"\nApplying IMU noise  drift={args.drift}°/√s  noise=0.5°  acc=0.1m/s²"
+              f"  seed={args.seed}")
+        print(f"  Expected orientation drift std after 60s : "
+              f"{args.drift * (60 ** 0.5):.1f}°  |  after 120s : "
+              f"{args.drift * (120 ** 0.5):.1f}°")
+        for seq in sequences:
+            seq['ori'], seq['acc'] = add_imu_noise(
+                seq['ori'], seq['acc'], fps=fps,
+                drift_deg_per_sqrt_s=args.drift)
+    else:
+        print("\nIMU noise disabled (--no_noise).  Using clean synthetic data.")
 
     os.makedirs(args.out_dir, exist_ok=True)
 

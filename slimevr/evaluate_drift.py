@@ -30,12 +30,15 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-# Add base_mobileposer to path so we can reuse config, articulate, etc.
-_BASE = Path(__file__).resolve().parents[1] / 'base_mobileposer'
+# Add base_mobileposer and code/ to path
+_BASE     = Path(__file__).resolve().parents[1] / 'base_mobileposer'
+_CODE_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_BASE))
+sys.path.insert(0, str(_CODE_DIR))
 
 from mobileposer.config import amass, datasets, model_config, paths, joint_set
 import mobileposer.articulate as art
+from drift_eval_common import add_imu_noise
 
 
 # ---------------------------------------------------------------------------
@@ -565,6 +568,12 @@ def main():
                         help='Render FPS for video (default 10; lower = faster)')
     parser.add_argument('--no_video', action='store_true',
                         help='Skip video generation (metrics and figures only)')
+    parser.add_argument('--no_noise', action='store_true',
+                        help='Disable IMU noise simulation (use clean synthetic data)')
+    parser.add_argument('--drift', type=float, default=0.5,
+                        help='Gyro random-walk rate °/√s (default 0.5)')
+    parser.add_argument('--seed', type=int, default=42,
+                        help='RNG seed for reproducible noise (default 42)')
     args = parser.parse_args()
 
     if args.model is not None:
@@ -594,6 +603,19 @@ def main():
     if not sequences:
         print("No sequences found. Adjust --min_frames or --amass_dir.")
         return
+
+    if not args.no_noise:
+        torch.manual_seed(args.seed)
+        print(f"\nApplying IMU noise  drift={args.drift}°/√s  noise=0.5°  acc=0.1m/s²"
+              f"  seed={args.seed}")
+        print(f"  Expected drift std after 60s: {args.drift*(60**0.5):.1f}°"
+              f"  | after 120s: {args.drift*(120**0.5):.1f}°")
+        for seq in sequences:
+            seq['ori'], seq['acc'] = add_imu_noise(
+                seq['ori'], seq['acc'], fps=fps,
+                drift_deg_per_sqrt_s=args.drift)
+    else:
+        print("\nIMU noise disabled (--no_noise).  Using clean synthetic data.")
 
     os.makedirs(args.out_dir, exist_ok=True)
 

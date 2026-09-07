@@ -8,6 +8,7 @@ Import from each method's evaluate_drift.py:
         PRIMARY_SEGMENTS, SECONDARY_SEGMENTS, SEGMENTS, SEG_EN,
         LUMBAR_JOINTS, FPS, SENSOR_TO_JOINT, DATA_PATH,
         load_long_sequences, angle_between_rotmats, moving_average,
+        add_imu_noise,
     )
 
 All five methods (MobilePoser, DIP-IMU, PNP, DynaIP, IMUCoCo) import from here
@@ -129,6 +130,90 @@ def load_long_sequences(min_frames: int, max_seqs: int,
 
 
 # ─── shared math helpers ───────────────────────────────────────────────────────
+
+def _exp_so3_batch(omega: torch.Tensor) -> torch.Tensor:
+    """
+    Batch Rodrigues formula: [..., 3] → [..., 3, 3].
+    Maps axis-angle vectors to rotation matrices.
+    Near-zero vectors map to identity via the clamp trick (numerically stable).
+    """
+    shape = omega.shape[:-1]
+    theta = omega.norm(dim=-1, keepdim=True).clamp(min=1e-9)   # [..., 1]
+    k     = omega / theta                                        # [..., 3]
+
+    K = torch.zeros(*shape, 3, 3, dtype=omega.dtype)
+    K[..., 0, 1] = -k[..., 2];  K[..., 0, 2] =  k[..., 1]
+    K[..., 1, 0] =  k[..., 2];  K[..., 1, 2] = -k[..., 0]
+    K[..., 2, 0] = -k[..., 1];  K[..., 2, 1] =  k[..., 0]
+
+    sin_t = theta[..., None].sin()   # [..., 1, 1]
+    cos_t = theta[..., None].cos()
+    I     = torch.eye(3, dtype=omega.dtype).expand(*shape, 3, 3)
+    return I + sin_t * K + (1.0 - cos_t) * (K @ K)
+
+
+def add_imu_noise(ori: torch.Tensor, acc: torch.Tensor,
+                  fps: int = FPS,
+                  drift_deg_per_sqrt_s: float = 0.5,
+                  noise_deg: float = 0.5,
+                  acc_noise_ms2: float = 0.1) -> tuple:
+    """
+    Add realistic MEMS-IMU noise to synthesised orientation and acceleration.
+
+    Parameters
+    ----------
+    ori : [T, N, 3, 3]  global rotation matrices (all N sensor slots, incl. pelvis)
+    acc : [T, N, 3]     linear accelerations (m/s²)
+    fps : int           sample rate of the data
+    drift_deg_per_sqrt_s : float
+        Gyroscope random-walk coefficient (°/√s).
+        Governs how quickly orientation error accumulates over time.
+        Typical values:
+          0.2  → high-quality IMU (Xsens MTi)       ~2.2° std after 120 s
+          0.5  → decent consumer MEMS               ~5.5° std after 120 s  [default]
+          1.5  → cheap phone/watch MEMS             ~16°  std after 120 s
+    noise_deg : float
+        Per-frame i.i.d. orientation noise (°). Models vibration and read-out noise.
+    acc_noise_ms2 : float
+        Per-frame Gaussian acceleration noise (m/s²). Typical MEMS floor: 0.05–0.2.
+
+    Noise model
+    -----------
+    For each sensor independently:
+      R_out[t] = D[t] @ R_true[t] @ ΔR_noise[t]
+    where
+      D[t]         = D[t-1] @ exp_so3(ε_drift[t]),  ε_drift ~ N(0, σ_drift² I)
+      ΔR_noise[t]  = exp_so3(ε_noise[t]),            ε_noise ~ N(0, σ_noise² I)
+      σ_drift      = drift_deg_per_sqrt_s [rad/√s] / √fps  (per-frame random walk step)
+      σ_noise      = noise_deg [rad]
+
+    D[t] is a slowly-drifting rotation that mimics gyro integration error and grows
+    as √t.  ΔR_noise[t] is a fast-varying per-frame perturbation.
+    """
+    T, N = ori.shape[0], ori.shape[1]
+
+    sigma_drift = float(np.deg2rad(drift_deg_per_sqrt_s)) / float(np.sqrt(fps))
+    sigma_noise = float(np.deg2rad(noise_deg))
+
+    # Pre-generate all random increments at once for efficiency
+    drift_omegas = torch.randn(T, N, 3) * sigma_drift   # [T, N, 3]
+    noise_omegas = torch.randn(T, N, 3) * sigma_noise   # [T, N, 3]
+
+    # Convert to rotation matrices in batch: [T, N, 3, 3]
+    drift_Rs = _exp_so3_batch(drift_omegas)
+    noise_Rs = _exp_so3_batch(noise_omegas)
+
+    ori_out = ori.clone()
+    # Cumulative drift per sensor: [N, 3, 3], starts at identity
+    D = torch.eye(3).unsqueeze(0).repeat(N, 1, 1)
+
+    for t in range(T):
+        D = torch.bmm(D, drift_Rs[t])                           # update drift [N,3,3]
+        ori_out[t] = torch.bmm(torch.bmm(D, ori[t]), noise_Rs[t])  # apply
+
+    acc_out = acc + torch.randn_like(acc) * acc_noise_ms2
+    return ori_out, acc_out
+
 
 def angle_between_rotmats(R1: torch.Tensor, R2: torch.Tensor) -> torch.Tensor:
     """

@@ -51,7 +51,7 @@ sys.path.insert(0, str(_CODE_DIR))
 from drift_eval_common import (
     PRIMARY_SEGMENTS, SECONDARY_SEGMENTS, SEGMENTS, SEG_EN,
     LUMBAR_JOINTS, FPS, SENSOR_TO_JOINT, DATA_PATH,
-    load_long_sequences, angle_between_rotmats, moving_average,
+    load_long_sequences, angle_between_rotmats, moving_average, add_imu_noise,
 )
 
 SMPL_KINTREE = [
@@ -433,6 +433,12 @@ def main():
     parser.add_argument('--video_fps',     type=int, default=10)
     parser.add_argument('--no_video', action='store_true',
                         help='Skip video generation (metrics and figures only)')
+    parser.add_argument('--no_noise', action='store_true',
+                        help='Disable IMU noise simulation (use clean synthetic data)')
+    parser.add_argument('--drift', type=float, default=0.5,
+                        help='Gyro random-walk rate °/√s (default 0.5)')
+    parser.add_argument('--seed', type=int, default=42,
+                        help='RNG seed for reproducible noise (default 42)')
     args = parser.parse_args()
 
     fps        = FPS
@@ -457,6 +463,19 @@ def main():
     sequences = load_long_sequences(args.min_frames, args.max_seqs, amass_dir=amass_dir)
     if not sequences:
         print("No qualifying sequences. Adjust --min_frames or --amass_dir."); return
+
+    if not args.no_noise:
+        torch.manual_seed(args.seed)
+        print(f"\nApplying IMU noise  drift={args.drift}°/√s  noise=0.5°  acc=0.1m/s²"
+              f"  seed={args.seed}")
+        print(f"  Expected drift std after 60s: {args.drift*(60**0.5):.1f}°"
+              f"  | after 120s: {args.drift*(120**0.5):.1f}°")
+        for seq in sequences:
+            seq['ori'], seq['acc'] = add_imu_noise(
+                seq['ori'], seq['acc'], fps=fps,
+                drift_deg_per_sqrt_s=args.drift)
+    else:
+        print("\nIMU noise disabled (--no_noise).  Using clean synthetic data.")
 
     print('\nLoading PNP model ...')
     # PNP __init__ loads weights from data/weights/PNP/weights.pt automatically
