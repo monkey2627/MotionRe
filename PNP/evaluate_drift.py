@@ -428,6 +428,8 @@ def main():
     parser.add_argument('--out_dir', default='drift_results')
     parser.add_argument('--video_seconds', type=int, default=30)
     parser.add_argument('--video_fps',     type=int, default=10)
+    parser.add_argument('--no_video', action='store_true',
+                        help='Skip video generation (metrics and figures only)')
     args = parser.parse_args()
 
     fps        = FPS
@@ -475,14 +477,15 @@ def main():
              pnp_6s_fk_rot=res['fk_rot'], fps=fps, combos=['pnp_6s'])
     print(f"\nAll outputs in: {os.path.abspath(args.out_dir)}/")
 
-    print(f'\nGenerating videos for {len(sequences)} sequences ...')
-    for i, vid_seq in enumerate(sequences):
-        print(f"  [{i+1}/{len(sequences)}] seq={vid_seq['source']}")
-        try:
-            generate_video(vid_seq, model, bodymodel, device, fps, args.out_dir,
-                           args.video_seconds, args.video_fps, seq_idx=i)
-        except Exception as e:
-            print(f'    Video failed: {e}')
+    if not args.no_video:
+        print(f'\nGenerating videos for {len(sequences)} sequences ...')
+        for i, vid_seq in enumerate(sequences):
+            print(f"  [{i+1}/{len(sequences)}] seq={vid_seq['source']}")
+            try:
+                generate_video(vid_seq, model, bodymodel, device, fps, args.out_dir,
+                               args.video_seconds, args.video_fps, seq_idx=i)
+            except Exception as e:
+                print(f'    Video failed: {e}')
 
 
 if __name__ == '__main__':

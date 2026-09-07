@@ -612,6 +612,8 @@ def main():
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
     parser.add_argument('--video_seconds', type=int, default=30)
     parser.add_argument('--video_fps',     type=int, default=10)
+    parser.add_argument('--no_video', action='store_true',
+                        help='Skip video generation (metrics and figures only)')
     args = parser.parse_args()
 
     max_frames = int(args.max_seconds * FPS)
@@ -650,17 +652,18 @@ def main():
     print_summary(all_results, max_frames, FPS)
     save_npz(all_results, RESULTS_DIR / 'imucoco_drift_results.npz')
 
-    print(f'\nGenerating videos for {len(sequences)} sequences × {len(active_combos)} combos ...')
-    for i, vid_seq in enumerate(sequences):
-        for combo_name, info in active_combos.items():
-            print(f"  [{i+1}/{len(sequences)}] combo={combo_name}  seq={vid_seq['source']}")
-            try:
-                generate_video_combo(
-                    combo_name, info['indices'], vid_seq,
-                    imucoco, poser, body_model, vertex_coords, device,
-                    FPS, out_dir, args.video_seconds, args.video_fps, seq_idx=i)
-            except Exception as e:
-                print(f'    Video failed: {e}')
+    if not args.no_video:
+        print(f'\nGenerating videos for {len(sequences)} sequences × {len(active_combos)} combos ...')
+        for i, vid_seq in enumerate(sequences):
+            for combo_name, info in active_combos.items():
+                print(f"  [{i+1}/{len(sequences)}] combo={combo_name}  seq={vid_seq['source']}")
+                try:
+                    generate_video_combo(
+                        combo_name, info['indices'], vid_seq,
+                        imucoco, poser, body_model, vertex_coords, device,
+                        FPS, out_dir, args.video_seconds, args.video_fps, seq_idx=i)
+                except Exception as e:
+                    print(f'    Video failed: {e}')
 
     print(f'\nAll outputs → {RESULTS_DIR}')
 

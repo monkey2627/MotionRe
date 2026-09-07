@@ -563,6 +563,8 @@ def main():
                         help='Video length in seconds (default 30)')
     parser.add_argument('--video_fps', type=int, default=10,
                         help='Render FPS for video (default 10; lower = faster)')
+    parser.add_argument('--no_video', action='store_true',
+                        help='Skip video generation (metrics and figures only)')
     args = parser.parse_args()
 
     if args.model is not None:
@@ -620,20 +622,21 @@ def main():
     np.savez(np_path, **save_dict)
     print(f"\nRaw arrays saved: {np_path}")
 
-    print(f'\nGenerating videos for {len(sequences)} sequences ...')
-    for i, vid_seq in enumerate(sequences):
-        print(f"  [{i+1}/{len(sequences)}] seq={vid_seq['source']}")
-        for combo_name, combo_indices in selected.items():
-            try:
-                generate_video(
-                    combo_name, combo_indices, vid_seq,
-                    bodymodel, fps, args.out_dir,
-                    max_seconds=args.video_seconds,
-                    render_fps=args.video_fps,
-                    seq_idx=i,
-                )
-            except Exception as e:
-                print(f'    Video failed ({combo_name}): {e}')
+    if not args.no_video:
+        print(f'\nGenerating videos for {len(sequences)} sequences ...')
+        for i, vid_seq in enumerate(sequences):
+            print(f"  [{i+1}/{len(sequences)}] seq={vid_seq['source']}")
+            for combo_name, combo_indices in selected.items():
+                try:
+                    generate_video(
+                        combo_name, combo_indices, vid_seq,
+                        bodymodel, fps, args.out_dir,
+                        max_seconds=args.video_seconds,
+                        render_fps=args.video_fps,
+                        seq_idx=i,
+                    )
+                except Exception as e:
+                    print(f'    Video failed ({combo_name}): {e}')
 
     print(f"\nAll outputs in:  {os.path.abspath(args.out_dir)}/")
 
