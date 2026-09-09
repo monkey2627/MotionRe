@@ -399,12 +399,17 @@ def main():
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
     parser.add_argument('--video_seconds', type=int, default=30)
     parser.add_argument('--video_fps',     type=int, default=10)
+    parser.add_argument('--out_dir', default=str(RESULTS_DIR),
+                        help='Output directory (default: DynaIP/drift_results)')
+    parser.add_argument('--no_video', action='store_true',
+                        help='Skip video generation (metrics and figures only)')
     args = parser.parse_args()
 
     max_frames = int(args.max_seconds * FPS)
     device = args.device
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_dir = str(RESULTS_DIR)
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir_str = str(out_dir)
 
     print(f'Loading DynaIP weights from {args.model}')
     net = Poser().to(device)
@@ -419,24 +424,25 @@ def main():
     print(f'\nEvaluated {res["n_seqs"]} sequences ({max_frames / FPS:.0f}s each)')
 
     print('\nGenerating figures...')
-    plot_timeseries(res,     max_frames, FPS, out_dir)
-    plot_segment_bars(res,   max_frames, FPS, args.checkpoint_s, out_dir)
-    plot_lumbar_detail(res,  max_frames, FPS, args.checkpoint_s, out_dir)
-    plot_translation(res,    max_frames, FPS, out_dir)
+    plot_timeseries(res,     max_frames, FPS, out_dir_str)
+    plot_segment_bars(res,   max_frames, FPS, args.checkpoint_s, out_dir_str)
+    plot_lumbar_detail(res,  max_frames, FPS, args.checkpoint_s, out_dir_str)
+    plot_translation(res,    max_frames, FPS, out_dir_str)
 
     print_summary(res, max_frames, FPS)
-    save_npz(res, RESULTS_DIR / 'dynaip_drift_results.npz')
+    save_npz(res, out_dir / 'dynaip_drift_results.npz')
 
-    print(f'\nGenerating videos for {len(sequences)} sequences ...')
-    for i, vid_seq in enumerate(sequences):
-        print(f"  [{i+1}/{len(sequences)}] seq={vid_seq['source']}")
-        try:
-            generate_video(vid_seq, net, bodymodel, device, FPS, out_dir,
-                           args.video_seconds, args.video_fps, seq_idx=i)
-        except Exception as e:
-            print(f'    Video failed: {e}')
+    if not args.no_video:
+        print(f'\nGenerating videos for {len(sequences)} sequences ...')
+        for i, vid_seq in enumerate(sequences):
+            print(f"  [{i+1}/{len(sequences)}] seq={vid_seq['source']}")
+            try:
+                generate_video(vid_seq, net, bodymodel, device, FPS, out_dir_str,
+                               args.video_seconds, args.video_fps, seq_idx=i)
+            except Exception as e:
+                print(f'    Video failed: {e}')
 
-    print(f'\nAll outputs → {RESULTS_DIR}')
+    print(f'\nAll outputs: {out_dir}')
 
 
 if __name__ == '__main__':

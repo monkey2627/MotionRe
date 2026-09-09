@@ -614,6 +614,8 @@ def main():
     parser.add_argument('--video_fps',     type=int, default=10)
     parser.add_argument('--no_video', action='store_true',
                         help='Skip video generation (metrics and figures only)')
+    parser.add_argument('--out_dir', default=str(RESULTS_DIR),
+                        help='Output directory (default: IMUCoCo/drift_results)')
     parser.add_argument('--no_noise', action='store_true',
                         help='Disable IMU noise simulation (use clean synthetic data)')
     parser.add_argument('--drift', type=float, default=0.5,
@@ -624,8 +626,9 @@ def main():
 
     max_frames = int(args.max_seconds * FPS)
     device = args.device
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_dir = str(RESULTS_DIR)
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir_str = str(out_dir)
 
     if args.combos == 'all':
         active_combos = COMBOS
@@ -656,20 +659,20 @@ def main():
 
     all_results = evaluate_all(
         sequences, imucoco, poser, body_model, vertex_coords,
-        active_combos, max_frames, device, out_dir,
+        active_combos, max_frames, device, out_dir_str,
     )
 
     n_seqs = next(iter(all_results.values()))['n_seqs']
     print(f'\nEvaluated {n_seqs} sequences, {len(active_combos)} combos, {max_frames / FPS:.0f}s each')
 
     print('\nGenerating figures...')
-    plot_timeseries(all_results,      max_frames, FPS, out_dir)
-    plot_combo_comparison(all_results, max_frames, FPS, args.checkpoint_s, out_dir)
-    plot_sensor_count(all_results,    max_frames, FPS, args.checkpoint_s, out_dir)
-    plot_translation(all_results,     max_frames, FPS, out_dir)
+    plot_timeseries(all_results,      max_frames, FPS, out_dir_str)
+    plot_combo_comparison(all_results, max_frames, FPS, args.checkpoint_s, out_dir_str)
+    plot_sensor_count(all_results,    max_frames, FPS, args.checkpoint_s, out_dir_str)
+    plot_translation(all_results,     max_frames, FPS, out_dir_str)
 
     print_summary(all_results, max_frames, FPS)
-    save_npz(all_results, RESULTS_DIR / 'imucoco_drift_results.npz')
+    save_npz(all_results, out_dir / 'imucoco_drift_results.npz')
 
     if not args.no_video:
         print(f'\nGenerating videos for {len(sequences)} sequences × {len(active_combos)} combos ...')
@@ -680,11 +683,11 @@ def main():
                     generate_video_combo(
                         combo_name, info['indices'], vid_seq,
                         imucoco, poser, body_model, vertex_coords, device,
-                        FPS, out_dir, args.video_seconds, args.video_fps, seq_idx=i)
+                        FPS, out_dir_str, args.video_seconds, args.video_fps, seq_idx=i)
                 except Exception as e:
                     print(f'    Video failed: {e}')
 
-    print(f'\nAll outputs → {RESULTS_DIR}')
+    print(f'\nAll outputs: {out_dir}')
 
 
 if __name__ == '__main__':

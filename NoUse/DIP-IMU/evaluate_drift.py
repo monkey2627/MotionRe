@@ -607,6 +607,8 @@ def main():
                         help='Video length in seconds (default 30)')
     parser.add_argument('--video_fps', type=int, default=10,
                         help='Render FPS for video (default 10)')
+    parser.add_argument('--no_video', action='store_true',
+                        help='Skip video generation (metrics and figures only)')
     args = parser.parse_args()
 
     fps        = datasets.fps
@@ -677,16 +679,17 @@ def main():
              n_seqs=res['n_seqs'])
     print(f"\nRaw arrays saved: {npz_path}")
 
-    print(f'\nGenerating videos for {len(sequences)} sequences ...')
-    for i, vid_seq in enumerate(sequences):
-        print(f"  [{i+1}/{len(sequences)}] seq={vid_seq['source']}")
-        try:
-            generate_video(vid_seq, model, bodymodel, 'cpu',
-                           fps, args.out_dir,
-                           max_seconds=args.video_seconds,
-                           render_fps=args.video_fps, seq_idx=i)
-        except Exception as e:
-            print(f'    Video failed: {e}')
+    if not args.no_video:
+        print(f'\nGenerating videos for {len(sequences)} sequences ...')
+        for i, vid_seq in enumerate(sequences):
+            print(f"  [{i+1}/{len(sequences)}] seq={vid_seq['source']}")
+            try:
+                generate_video(vid_seq, model, bodymodel, 'cpu',
+                               fps, args.out_dir,
+                               max_seconds=args.video_seconds,
+                               render_fps=args.video_fps, seq_idx=i)
+            except Exception as e:
+                print(f'    Video failed: {e}')
 
     sess.close()
     print(f"\nAll outputs in: {os.path.abspath(args.out_dir)}/")
