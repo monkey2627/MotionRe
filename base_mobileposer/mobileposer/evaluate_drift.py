@@ -540,16 +540,17 @@ def generate_video(combo_name, combo_indices, seq, model, bodymodel, device,
     frames = list(range(0, T, stride))
     print(f"  {len(frames)} frames at {render_fps}fps → {video_path}")
 
+    shared_vl = (-view_limits[0], view_limits[0], -0.1, view_limits[1])
     with writer.saving(fig, video_path, dpi=100):
         for t in frames:
             _draw_skel(axes[0], gt_joints[t], '#43A047', 'Ground Truth',
-                       view_limits=(-view_limits[0], view_limits[0], -0.1, view_limits[1]), dimensions=(0, 1))
+                       view_limits=shared_vl, dimensions=(0, 1))
             _draw_skel(axes[1], ml_joints[t],  '#1E88E5',
                        f'MobilePoser ({combo_name})', lumbar_ml[t],
-                       (-view_limits[0], view_limits[0], -0.1, view_limits[1]), (2, 1))
+                       shared_vl, (0, 1))
             _draw_skel(axes[2], fk_joints[t],  '#E53935',
                        'FK baseline', lumbar_fk[t],
-                       (-view_limits[0], view_limits[0], -view_limits[0], view_limits[0]), (0, 2))
+                       shared_vl, (0, 1))
             source_label = str(seq.get('source', seq_idx))
             if len(source_label) > 42:
                 source_label = source_label[:39] + '...'
