@@ -509,13 +509,6 @@ def _draw_skel(ax, joints, color, title, lumbar_err=None):
 def generate_video(seq, model, bodymodel, device_str,
                    fps, out_dir, max_seconds=30, render_fps=10, seq_idx=0):
     """Side-by-side video: GT (green) | DIP-IMU (blue) | FK (red)."""
-    try:
-        from matplotlib.animation import FFMpegWriter
-    except Exception as e:
-        print(f"  Skipped (FFMpegWriter unavailable): {e}")
-        return
-
-    stride  = max(1, round(fps / render_fps))
     T       = min(seq['pose'].shape[0], int(max_seconds * fps))
     gt_pose = seq['pose'][:T]
     gt_tran = seq['tran'][:T]
@@ -548,29 +541,13 @@ def generate_video(seq, model, bodymodel, device_str,
     lumbar_fk  = angle_between_rotmats(
         pose_fk[:, LUMBAR_JOINTS], gt_pose[:, LUMBAR_JOINTS]).mean(-1).numpy()
 
-    fig, axes = plt.subplots(1, 3, figsize=(12, 5))
-    fig.patch.set_facecolor('#111122')
-    for ax in axes:
-        ax.set_facecolor('#111122')
-
-    video_path = os.path.join(out_dir, f'video_dip_imu_{seq.get("action", "all")}_{seq.get("source", seq_idx).replace("/", "_").replace("[", "_").replace("]", "")}.mp4')
-    writer = FFMpegWriter(fps=render_fps, metadata={'title': 'drift-dip-6s'})
-    frames = list(range(0, T, stride))
-    print(f"  {len(frames)} frames at {render_fps}fps -> {video_path}")
-
-    with writer.saving(fig, video_path, dpi=100):
-        for t in frames:
-            _draw_skel(axes[0], gt_joints[t],  '#43A047', 'Ground Truth')
-            _draw_skel(axes[1], dip_joints[t], '#1E88E5',
-                       'DIP-IMU (6 sensors)', lumbar_dip[t])
-            _draw_skel(axes[2], fk_joints[t],  '#E53935',
-                       'FK baseline (5 sensors)', lumbar_fk[t])
-            fig.suptitle(f't = {t/fps:.1f}s    orange = lumbar spine',
-                         color='white', fontsize=11)
-            writer.grab_frame()
-
-    plt.close(fig)
-    print(f"  Saved: {video_path}")
+    from benchmarks.video import render_comparison_video
+    return render_comparison_video(
+        gt_joints=gt_joints, method_joints=dip_joints, fk_joints=fk_joints,
+        method='DIP-IMU', combo='full_6s', sequence=seq, fps=fps,
+        out_dir=Path(out_dir), seq_idx=seq_idx, max_seconds=max_seconds,
+        render_fps=render_fps, method_errors=lumbar_dip, fk_errors=lumbar_fk,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

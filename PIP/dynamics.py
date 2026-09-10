@@ -5,7 +5,7 @@ import articulate as art
 from articulate.utils.bullet import *
 from articulate.utils.rbdl import *
 from utils import *
-from qpsolvers import solve_qp
+from qpsolvers import available_solvers, solve_qp
 from config import paths
 
 
@@ -219,12 +219,32 @@ class PhysicsOptimizer:
         P_ = art.math.block_diagonal_matrix_np([np.dot(As1.T, As1), np.dot(As2.T, As2), np.dot(As3.T, As3)])
         q_ = np.concatenate((-np.dot(As1.T, bs1), -np.dot(As2.T, bs2), -np.dot(As3.T, bs3)))
 
-        # fast solvers are less accurate/robust, and may fail
+        # Prefer the original fast solver when installed, but keep the
+        # benchmark runnable in environments that only provide cvxopt.
         init = self.last_x if len(self.last_x) == len(q_) else None
-        x = solve_qp(P_, q_, G_, h_, A_, b_, solver='quadprog', initvals=init)
+        x = None
+        errors = []
+        for solver in ('quadprog', 'cvxopt'):
+            if solver not in available_solvers:
+                continue
+            try:
+                candidate = solve_qp(
+                    P_, q_, G_, h_, A_, b_,
+                    solver=solver, initvals=init,
+                )
+            except Exception as exc:
+                errors.append(f'{solver}: {exc}')
+                continue
+            if candidate is not None and np.linalg.norm(candidate) <= 10000:
+                x = candidate
+                break
+            errors.append(f'{solver}: invalid QP solution')
 
-        if x is None or np.linalg.norm(x) > 10000:
-            x = solve_qp(P_, q_, G_, h_, A_, b_, solver='cvxopt', initvals=init)
+        if x is None:
+            detail = '; '.join(errors) or (
+                f'no supported QP solver; available={available_solvers}'
+            )
+            raise RuntimeError(f'PIP QP solve failed: {detail}')
 
         qddot = x[:self.model.qdot_size]
         GRF = x[self.model.qdot_size:-self.model.qdot_size]

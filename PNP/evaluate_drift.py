@@ -362,12 +362,6 @@ def _draw_skel(ax, joints, color, title, lumbar_err=None):
 
 def generate_video(seq, model, bodymodel, device, fps, out_dir,
                    max_seconds=30, render_fps=10, seq_idx=0):
-    try:
-        from matplotlib.animation import FFMpegWriter
-    except Exception as e:
-        print(f"  Skipped (FFMpegWriter): {e}"); return
-
-    stride = max(1, round(fps / render_fps))
     T      = min(seq['pose'].shape[0], int(max_seconds * fps))
     gt_pose, gt_tran = seq['pose'][:T], seq['tran'][:T]
     acc, ori = seq['acc'][:T], seq['ori'][:T]
@@ -397,21 +391,13 @@ def generate_video(seq, model, bodymodel, device, fps, out_dir,
     lumbar_fk = angle_between_rotmats(pose_fk[:, LUMBAR_JOINTS],
                                       gt_pose[:, LUMBAR_JOINTS]).mean(-1).numpy()
 
-    fig, axes = plt.subplots(1, 3, figsize=(12, 5))
-    fig.patch.set_facecolor('#111122')
-    for ax in axes: ax.set_facecolor('#111122')
-    vp = os.path.join(out_dir, f'video_pnp_{seq.get("action", "all")}_{seq.get("source", seq_idx).replace("/", "_").replace("[", "_").replace("]", "")}.mp4')
-    writer = FFMpegWriter(fps=render_fps, metadata={'title': 'drift-pnp-6s'})
-    print(f"  Writing {len(range(0,T,stride))} frames → {vp}")
-    with writer.saving(fig, vp, dpi=100):
-        for t in range(0, T, stride):
-            _draw_skel(axes[0], gt_j[t],  '#43A047', 'Ground Truth')
-            _draw_skel(axes[1], ml_j[t],  '#C62828', 'PNP (6 sensors)', lumbar_ml[t])
-            _draw_skel(axes[2], fk_j[t],  '#E53935', 'FK baseline', lumbar_fk[t])
-            fig.suptitle(f'PNP | {seq.get("action", "all")} | {seq.get("source", seq_idx)} | t = {t/fps:.1f}s',
-                         color='white', fontsize=16, fontweight='bold')
-            writer.grab_frame()
-    plt.close(fig); print(f"  Saved: {vp}")
+    from benchmarks.video import render_comparison_video
+    return render_comparison_video(
+        gt_joints=gt_j, method_joints=ml_j, fk_joints=fk_j,
+        method='PNP', combo='full_6s', sequence=seq, fps=fps,
+        out_dir=Path(out_dir), seq_idx=seq_idx, max_seconds=max_seconds,
+        render_fps=render_fps, method_errors=lumbar_ml, fk_errors=lumbar_fk,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

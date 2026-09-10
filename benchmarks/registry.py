@@ -122,14 +122,14 @@ def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
             "PIP",
             "pure-imu",
             "6 IMUs",
-            no_use / "PIP",
+            code / "PIP",
             ("dip", "drift", "native"),
             (
-                "code/NoUse/PIP/evaluate_bridge.py",
-                "code/NoUse/PIP/evaluate.py",
-                "code/NoUse/PIP/data/weights.pt",
-                "code/NoUse/PIP/data/dataset_work/DIP_IMU/test.pt",
-                "code/NoUse/PIP/models/SMPL_male.pkl",
+                "code/PIP/evaluate_bridge.py",
+                "code/PIP/evaluate.py",
+                "code/PIP/data/weights.pt",
+                "code/PIP/data/dataset_work/DIP_IMU/test.pt",
+                "code/PIP/models/SMPL_male.pkl",
             ),
             notes="Physics-aware six-sensor baseline; requires RBDL and prepared data.",
         ),
@@ -151,21 +151,21 @@ def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
             notes="Six-sensor physical/non-inertial baseline; local test data exists but weights are missing.",
         ),
         MethodSpec(
-            "tip",
+            "tip",#没预训练模型
             "TIP",
             "pure-imu-contact",
             "6 IMUs",
-            no_use / "TIP",
+            code / "TIP",
             ("native",),
             (
-                "code/NoUse/TIP/offline_testing_simple.py",
-                "code/NoUse/TIP/output/model-with-dip9and10.pt",
-                "code/NoUse/TIP/data/preprocessed_DIP_IMU_v0",
+                "code/TIP/offline_testing_simple.py",
+                "code/TIP/output/model-with-dip9and10.pt",
+                "code/TIP/data/preprocessed_DIP_IMU_v0",
             ),
             notes="Terrain and contact-aware six-sensor baseline; expected model-ready data is absent locally.",
         ),
         MethodSpec(
-            "dynaip",
+            "dynaip",#没预训练
             "DynaIP",
             "pure-imu-dynamics",
             "Sparse IMUs",
@@ -185,7 +185,7 @@ def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
             "TransPose",
             "pure-imu-realtime",
             "6 IMUs",
-            no_use / "TransPose",
+            code / "TransPose",
             ("dip", "drift", "native"),
             (
                 "code/NoUse/TransPose/evaluate_bridge.py",
@@ -549,18 +549,22 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
     if spec.name == "pip":
         output = _output_dir(options, spec.name, suite)
         if suite in {"dip", "drift"}:
+            min_frames = 1 if suite == "drift" and options.action_manifest else options.effective_min_frames
+            max_seqs = 0 if suite == "drift" and options.action_manifest else options.effective_max_seqs
             args = [
                 "evaluate_bridge.py", "--suite", suite,
                 "--model", model or "data/weights.pt",
-                "--min-frames", str(options.effective_min_frames),
+                "--min-frames", str(min_frames),
                 "--max-seconds", str(int(options.effective_max_seconds)),
                 "--out-dir", str(output),
             ]
             if suite == "drift":
-                args += ["--max-seqs", str(options.effective_max_seqs)]
+                args += ["--max-seqs", str(max_seqs)]
                 if options.action_manifest:
                     args += ["--action-manifest", str(options.action_manifest),
                              "--max-per-action", str(options.max_per_action)]
+            if not options.with_video:
+                args += ["--no-video"]
             plans.append(CommandPlan(spec.name, suite, suite, cwd, tuple([python] + args), output))
             return plans
         plans.append(CommandPlan(spec.name, suite, "native", cwd, (python, "evaluate.py"), output))
@@ -588,15 +592,22 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
     if spec.name == "transpose":
         output = _output_dir(options, spec.name, suite)
         if suite in {"dip", "drift"}:
+            min_frames = 1 if suite == "drift" and options.action_manifest else options.effective_min_frames
+            max_seqs = 0 if suite == "drift" and options.action_manifest else options.effective_max_seqs
             args = [
                 "evaluate_bridge.py", "--suite", suite,
                 "--model", model or "data/weights.pt",
-                "--min-frames", str(options.effective_min_frames),
+                "--min-frames", str(min_frames),
                 "--max-seconds", str(int(options.effective_max_seconds)),
                 "--out-dir", str(output),
             ]
             if suite == "drift":
-                args += ["--max-seqs", str(options.effective_max_seqs)]
+                args += ["--max-seqs", str(max_seqs)]
+                if options.action_manifest:
+                    args += ["--action-manifest", str(options.action_manifest),
+                             "--max-per-action", str(options.max_per_action)]
+            if not options.with_video:
+                args += ["--no-video"]
             args = _with_device(args, options.device)
             plans.append(CommandPlan(spec.name, suite, suite, cwd, tuple([python] + args), output))
             return plans

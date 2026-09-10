@@ -461,13 +461,6 @@ def generate_video(combo_name, combo_indices, seq, model, bodymodel, device,
     Side-by-side skeleton video: GT (green) | MobilePoser (blue) | FK (red).
     Orange bones = lumbar chain.  Requires ffmpeg on PATH.
     """
-    try:
-        from matplotlib.animation import FFMpegWriter
-    except Exception as e:
-        print(f"  Skipped (FFMpegWriter unavailable): {e}")
-        return
-
-    stride  = max(1, round(fps / render_fps))
     T       = min(seq['pose'].shape[0], int(max_seconds * fps))
 
     gt_pose = seq['pose'][:T]          # [T, 24, 3, 3]
@@ -486,85 +479,25 @@ def generate_video(combo_name, combo_indices, seq, model, bodymodel, device,
     # ── FK baseline ──
     pose_fk = fk_baseline(ori, combo_indices, bodymodel)[:T]
 
-    # ── Joint positions via forward kinematics ──
     with torch.no_grad():
         _, gt_joints = bodymodel.forward_kinematics(gt_pose,  tran=gt_tran)
         _, ml_joints = bodymodel.forward_kinematics(pose_ml,  tran=tran_ml)
         _, fk_joints = bodymodel.forward_kinematics(pose_fk,  tran=gt_tran)
-    gt_joints = gt_joints.cpu().numpy()   # [T, 24, 3]
-    ml_joints = ml_joints.cpu().numpy()
-    fk_joints = fk_joints.cpu().numpy()
-
-    # Derive one shared camera window from the whole sequence. The previous
-    # fixed portrait window clipped feet/legs or the torso for lying,
-    # crawling, and other non-upright motions. Root-centering matches the
-    # drawing logic, while shared limits keep the three panels comparable.
-    sampled = np.concatenate((gt_joints[::stride], ml_joints[::stride],
-                              fk_joints[::stride]), axis=0)
-    # Match render_amass.py: centre horizontal root drift, shift the floor to
-    # zero, then derive robust percentile camera extents for all projections.
-    all_joints = np.concatenate((gt_joints, ml_joints, fk_joints), axis=0)
-    all_joints[:, :, 0] -= np.median(all_joints[:, 0, 0])
-    all_joints[:, :, 2] -= np.median(all_joints[:, 0, 2])
-    all_joints[:, :, 1] -= np.percentile(all_joints[:, :, 1], 1.0)
-    horizontal_radius = max(1.2, float(np.percentile(np.abs(all_joints[:, :, [0, 2]]), 99.5)) + 0.15)
-    vertical_max = max(2.0, float(np.percentile(all_joints[:, :, 1], 99.5)) + 0.15)
-    gt_joints, ml_joints, fk_joints = np.split(all_joints, 3, axis=0)
-    view_limits = (horizontal_radius, vertical_max)
-
-    # ── Per-frame lumbar error ──
     lumbar_ml = angle_between_rotmats(
         pose_ml[:, LUMBAR_JOINTS], gt_pose[:, LUMBAR_JOINTS]).mean(-1).numpy()
     lumbar_fk = angle_between_rotmats(
         pose_fk[:, LUMBAR_JOINTS], gt_pose[:, LUMBAR_JOINTS]).mean(-1).numpy()
 
-    # ── Render ──
-    fig, axes = plt.subplots(1, 3, figsize=(12, 5))
-    fig.patch.set_facecolor('#111122')
-    fig.subplots_adjust(top=0.78, bottom=0.04, left=0.02, right=0.98, wspace=0.04)
-    for ax in axes:
-        ax.set_facecolor('#111122')
-
-    # Keep method, action and source in the filename so videos remain
-    # attributable when outputs from several methods are collected together.
-    def _safe(value):
-        return ''.join(ch if ch.isalnum() or ch in '._-' else '_' for ch in str(value))[:120]
-    action = _safe(seq.get('action', 'all'))
-    source = _safe(seq.get('source', f'seq{seq_idx:04d}'))
-    video_path = os.path.join(
-        out_dir,
-        f'video_mobileposer_{_canonical(combo_name)}_{action}_{source}_{seq_idx:04d}.mp4',
+    from benchmarks.video import render_comparison_video
+    return render_comparison_video(
+        gt_joints=gt_joints.cpu().numpy(),
+        method_joints=ml_joints.cpu().numpy(),
+        fk_joints=fk_joints.cpu().numpy(),
+        method='MobilePoser', combo=combo_name, sequence=seq,
+        fps=fps, out_dir=Path(out_dir), seq_idx=seq_idx,
+        max_seconds=max_seconds, render_fps=render_fps,
+        method_errors=lumbar_ml, fk_errors=lumbar_fk,
     )
-    writer = FFMpegWriter(fps=render_fps,
-                          metadata={'title': f'drift-mobileposer-{_canonical(combo_name)}'})
-    frames = list(range(0, T, stride))
-    print(f"  {len(frames)} frames at {render_fps}fps → {video_path}")
-
-    shared_vl = (-view_limits[0], view_limits[0], -0.1, view_limits[1])
-    with writer.saving(fig, video_path, dpi=100):
-        for t in frames:
-            _draw_skel(axes[0], gt_joints[t], '#43A047', 'Ground Truth',
-                       view_limits=shared_vl, dimensions=(0, 1))
-            _draw_skel(axes[1], ml_joints[t],  '#1E88E5',
-                       f'MobilePoser ({combo_name})', lumbar_ml[t],
-                       shared_vl, (0, 1))
-            _draw_skel(axes[2], fk_joints[t],  '#E53935',
-                       'FK baseline', lumbar_fk[t],
-                       shared_vl, (0, 1))
-            source_label = str(seq.get('source', seq_idx))
-            if len(source_label) > 42:
-                source_label = source_label[:39] + '...'
-            fig.suptitle(
-                f'MobilePoser | {seq.get("action", "all")} | '
-                f'{source_label} | t={t/fps:.1f}s',
-                y=0.96, color='white', fontsize=13, fontweight='bold',
-            )
-            writer.grab_frame()
-            if t % (fps * 10) == 0:
-                print(f"    {t/fps:.0f}s / {T/fps:.0f}s")
-
-    plt.close(fig)
-    print(f"  Saved: {video_path}")
 
 
 # ---------------------------------------------------------------------------

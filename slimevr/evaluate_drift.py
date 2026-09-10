@@ -461,13 +461,6 @@ def generate_video(combo_name, combo_indices, seq, bodymodel,
     Side-by-side skeleton video: GT (green) | SlimeVR/FK (blue).
     Orange bones = lumbar chain.  Requires ffmpeg on PATH.
     """
-    try:
-        from matplotlib.animation import FFMpegWriter
-    except Exception as e:
-        print(f"  Skipped (FFMpegWriter unavailable): {e}")
-        return
-
-    stride  = max(1, round(fps / render_fps))
     T       = min(seq['pose'].shape[0], int(max_seconds * fps))
 
     gt_pose = seq['pose'][:T]
@@ -485,30 +478,13 @@ def generate_video(combo_name, combo_indices, seq, bodymodel,
     lumbar_err = angle_between_rotmats(
         pose_pred[:, LUMBAR_JOINTS], gt_pose[:, LUMBAR_JOINTS]).mean(-1).numpy()
 
-    fig, axes = plt.subplots(1, 2, figsize=(8, 5))
-    fig.patch.set_facecolor('#111122')
-    for ax in axes:
-        ax.set_facecolor('#111122')
-
-    video_path = os.path.join(out_dir, f'video_slimevr_{combo_name}_{seq_idx:04d}.mp4')
-    writer = FFMpegWriter(fps=render_fps,
-                          metadata={'title': f'drift-slimevr-{combo_name}'})
-    frames = list(range(0, T, stride))
-    print(f"  {len(frames)} frames at {render_fps}fps -> {video_path}")
-
-    with writer.saving(fig, video_path, dpi=100):
-        for t in frames:
-            _draw_skel(axes[0], gt_joints[t],   '#43A047', 'Ground Truth')
-            _draw_skel(axes[1], pred_joints[t], '#1E88E5',
-                       f'SlimeVR ({combo_name})', lumbar_err[t])
-            fig.suptitle(f'SlimeVR | {seq.get("action", "all")} | {seq.get("source", seq_idx)} | t = {t/fps:.1f}s',
-                         color='white', fontsize=16, fontweight='bold')
-            writer.grab_frame()
-            if t % (fps * 10) == 0:
-                print(f"    {t/fps:.0f}s / {T/fps:.0f}s")
-
-    plt.close(fig)
-    print(f"  Saved: {video_path}")
+    from benchmarks.video import render_comparison_video
+    return render_comparison_video(
+        gt_joints=gt_joints, method_joints=pred_joints, fk_joints=pred_joints,
+        method='SlimeVR', combo=combo_name, sequence=seq, fps=fps,
+        out_dir=Path(out_dir), seq_idx=seq_idx, max_seconds=max_seconds,
+        render_fps=render_fps, method_errors=lumbar_err, fk_errors=lumbar_err,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -572,6 +548,10 @@ def main():
     parser.add_argument('--amass_dir', default=None,
                         help='Dir with processed AMASS .pt files '
                              '(default: paths.processed_datasets from config)')
+    parser.add_argument('--action_manifest', default=None,
+                        help='classification_manifest.csv for action-balanced sampling')
+    parser.add_argument('--max_per_action', type=int, default=100,
+                        help='Maximum sequences per action category')
     parser.add_argument('--min_frames', type=int, default=1800,
                         help='Min sequence length in frames (default 1800 = 60s)')
     parser.add_argument('--max_seqs', type=int, default=10,

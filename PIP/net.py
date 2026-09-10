@@ -1,3 +1,4 @@
+import torch
 from torch.nn.utils.rnn import *
 import articulate as art
 from articulate.utils.torch import *

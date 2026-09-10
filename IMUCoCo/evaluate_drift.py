@@ -488,13 +488,6 @@ def generate_video_combo(combo_name, sensor_indices, seq,
                           imucoco, poser, body_model, vertex_coords, device,
                           fps, out_dir, max_seconds=30, render_fps=10, seq_idx=0):
     """Side-by-side skeleton video: GT (green) | IMUCoCo (blue) | FK (red)."""
-    try:
-        from matplotlib.animation import FFMpegWriter
-    except Exception as e:
-        print(f'  Skipped (FFMpegWriter unavailable): {e}')
-        return
-
-    stride  = max(1, round(fps / render_fps))
     T       = min(seq['pose'].shape[0], int(max_seconds * fps))
     gt_pose = seq['pose'][:T]
     gt_tran = seq['tran'][:T]
@@ -525,26 +518,13 @@ def generate_video_combo(combo_name, sensor_indices, seq,
     lumbar_fk   = angle_between_rotmats(
         pose_fk[:, LUMBAR_JOINTS], gt_pose[:, LUMBAR_JOINTS]).mean(-1).numpy()
 
-    n_sens = len(sensor_indices)
-    fig, axes = plt.subplots(1, 3, figsize=(12, 5))
-    fig.patch.set_facecolor('#111122')
-    for ax in axes:
-        ax.set_facecolor('#111122')
-
-    vp = os.path.join(out_dir, f'video_imucoco_{seq.get("action", "all")}_{seq.get("source", seq_idx).replace("/", "_").replace("[", "_").replace("]", "")}.mp4')
-    writer = FFMpegWriter(fps=render_fps, metadata={'title': f'drift-imucoco-{_canonical(combo_name)}'})
-    print(f'  Writing {len(range(0, T, stride))} frames → {vp}')
-    with writer.saving(fig, vp, dpi=100):
-        for t in range(0, T, stride):
-            _draw_skel(axes[0], gt_j[t],   '#43A047', 'Ground Truth')
-            _draw_skel(axes[1], pred_j[t], '#1E88E5',
-                       f'IMUCoCo {combo_name}({n_sens}s)', lumbar_pred[t])
-            _draw_skel(axes[2], fk_j[t],   '#E53935', 'FK baseline', lumbar_fk[t])
-            fig.suptitle(f'IMUCoCo | {seq.get("action", "all")} | {seq.get("source", seq_idx)} | t = {t/fps:.1f}s',
-                         color='white', fontsize=16, fontweight='bold')
-            writer.grab_frame()
-    plt.close(fig)
-    print(f'  Saved: {vp}')
+    from benchmarks.video import render_comparison_video
+    return render_comparison_video(
+        gt_joints=gt_j, method_joints=pred_j, fk_joints=fk_j,
+        method='IMUCoCo', combo=combo_name, sequence=seq, fps=fps,
+        out_dir=Path(out_dir), seq_idx=seq_idx, max_seconds=max_seconds,
+        render_fps=render_fps, method_errors=lumbar_pred, fk_errors=lumbar_fk,
+    )
 
 
 # ─── summary ───────────────────────────────────────────────────────────────────
