@@ -66,12 +66,13 @@ LUMBAR_JOINTS = [1, 2, 3, 6, 9]
 SENSOR_TO_JOINT = [18, 19, 1, 2, 15, 0]
 
 # All combos without head sensor (index 4), from config.py amass.combos
-NO_HEAD_COMBOS = {k: v for k, v in amass.combos.items() if 4 not in v}
+# Native MobilePoser: all five wearable slots; pelvis remains the reference.
+FULL_COMBOS = {'full_5s': [0, 1, 2, 3, 4]}
 
 # Color palette per combo (consistent across all plots)
 _PALETTE = ['#1565C0', '#C62828', '#2E7D32', '#F57F17', '#6A1B9A', '#00838F']
 COMBO_COLORS = {name: _PALETTE[i % len(_PALETTE)]
-                for i, name in enumerate(NO_HEAD_COMBOS)}
+                for i, name in enumerate(FULL_COMBOS)}
 
 SENSOR_COUNT_COLORS = {1: '#EF5350', 2: '#42A5F5'}
 
@@ -246,6 +247,7 @@ def evaluate_combo(combo_name, combo_indices, sequences, model,
         'rot':      ml_rot_avg,
         'tran':     ml_tran_avg,
         'fk_rot':   fk_rot_avg,
+        'count':    count,
         'n_sensors': len(combo_indices),
         'n_seqs':   int(count[0]),
     }
@@ -612,13 +614,13 @@ def main():
     args = parser.parse_args()
 
     if args.combos == ['all']:
-        selected = NO_HEAD_COMBOS
+        selected = FULL_COMBOS
     else:
-        invalid = [c for c in args.combos if c not in NO_HEAD_COMBOS]
+        invalid = [c for c in args.combos if c not in FULL_COMBOS]
         if invalid:
             raise ValueError(f"Unknown combo(s): {invalid}. "
-                             f"Valid no-head combos: {list(NO_HEAD_COMBOS)}")
-        selected = {k: NO_HEAD_COMBOS[k] for k in args.combos}
+                             f"Valid native full combo: {list(FULL_COMBOS)}")
+        selected = {k: FULL_COMBOS[k] for k in args.combos}
 
     device     = model_config.device
     fps        = datasets.fps
@@ -683,6 +685,16 @@ def main():
     np_path = os.path.join(args.out_dir, 'drift_data.npz')
     np.savez(np_path, **save_dict)
     print(f"\nRaw arrays saved: {np_path}")
+
+    from pathlib import Path as _Path
+    import sys as _sys
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
+    from benchmarks.standard_results import write_standard_result
+    result = all_results['full_5s']
+    write_standard_result(
+        _Path(args.out_dir), 'mobileposer', 'drift', result['rot'], result['count'],
+        fps, 5, FULL_COMBOS['full_5s'], result['tran'],
+    )
 
     if not args.no_video:
         print(f'\nGenerating videos for {len(sequences)} sequences × {len(selected)} combos ...')

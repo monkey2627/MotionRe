@@ -61,11 +61,11 @@ LUMBAR_JOINTS = [1, 2, 3, 6, 9]
 
 SENSOR_TO_JOINT = [18, 19, 1, 2, 15, 0]
 
-NO_HEAD_COMBOS = {k: v for k, v in amass.combos.items() if 4 not in v}
+FULL_COMBOS = {'full_6s': [0, 1, 2, 3, 4]}
 
 _PALETTE = ['#1565C0', '#C62828', '#2E7D32', '#F57F17', '#6A1B9A', '#00838F']
 COMBO_COLORS = {name: _PALETTE[i % len(_PALETTE)]
-                for i, name in enumerate(NO_HEAD_COMBOS)}
+                for i, name in enumerate(FULL_COMBOS)}
 
 SENSOR_COUNT_COLORS = {1: '#EF5350', 2: '#42A5F5'}
 
@@ -238,8 +238,9 @@ def evaluate_combo(combo_name, combo_indices, sequences, bodymodel, max_frames,
 
     return {
         'rot':       rot_avg,
-        'tran':      np.zeros(max_frames),
+        'tran':      np.full(max_frames, np.nan),
         'fk_rot':    rot_avg,
+        'count':     count,
         'n_sensors': len(combo_indices),
         'n_seqs':    int(count[0]),
     }
@@ -580,13 +581,13 @@ def main():
         print("[INFO] --model argument is ignored for SlimeVR (no learned model).")
 
     if args.combos == ['all']:
-        selected = NO_HEAD_COMBOS
+        selected = FULL_COMBOS
     else:
-        invalid = [c for c in args.combos if c not in NO_HEAD_COMBOS]
+        invalid = [c for c in args.combos if c not in FULL_COMBOS]
         if invalid:
             raise ValueError(f"Unknown combo(s): {invalid}. "
-                             f"Valid no-head combos: {list(NO_HEAD_COMBOS)}")
-        selected = {k: NO_HEAD_COMBOS[k] for k in args.combos}
+                             f"Valid native full combo: {list(FULL_COMBOS)}")
+        selected = {k: FULL_COMBOS[k] for k in args.combos}
 
     fps        = datasets.fps
     max_frames = args.max_seconds * fps
@@ -643,6 +644,12 @@ def main():
     np_path = os.path.join(args.out_dir, 'drift_data.npz')
     np.savez(np_path, **save_dict)
     print(f"\nRaw arrays saved: {np_path}")
+    from benchmarks.standard_results import write_standard_result
+    result = all_results['full_6s']
+    write_standard_result(
+        Path(args.out_dir), 'slimevr', 'drift', result['rot'], result['count'], fps,
+        6, [0, 1, 2, 3, 4, 5], result['tran'],
+    )
 
     if not args.no_video:
         print(f'\nGenerating videos for {len(sequences)} sequences ...')

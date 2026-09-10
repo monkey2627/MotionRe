@@ -107,8 +107,9 @@ def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
             "pure-imu",
             "6 IMUs",
             no_use / "DIP-IMU",
-            ("drift",),
+            ("dip", "drift"),
             (
+                "code/NoUse/DIP-IMU/evaluate_dip.py",
                 "code/NoUse/DIP-IMU/evaluate_drift.py",
                 "code/NoUse/DIP-IMU/train_and_eval/models",
             ),
@@ -120,8 +121,9 @@ def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
             "pure-imu",
             "6 IMUs",
             no_use / "PIP",
-            ("native",),
+            ("dip", "drift", "native"),
             (
+                "code/NoUse/PIP/evaluate_bridge.py",
                 "code/NoUse/PIP/evaluate.py",
                 "code/NoUse/PIP/data/weights.pt",
                 "code/NoUse/PIP/data/dataset_work/DIP_IMU/test.pt",
@@ -166,8 +168,9 @@ def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
             "pure-imu-dynamics",
             "Sparse IMUs",
             no_use / "DynaIP",
-            ("drift",),
+            ("dip", "drift"),
             (
+                "code/NoUse/DynaIP/evaluate_dip.py",
                 "code/NoUse/DynaIP/evaluate_drift.py",
                 "code/NoUse/DynaIP/datasets/work",
                 "code/NoUse/DynaIP/smpl_models/smpl_male.pkl",
@@ -181,8 +184,9 @@ def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
             "pure-imu-realtime",
             "6 IMUs",
             no_use / "TransPose",
-            ("native",),
+            ("dip", "drift", "native"),
             (
+                "code/NoUse/TransPose/evaluate_bridge.py",
                 "code/NoUse/TransPose/evaluate.py",
                 "code/NoUse/TransPose/data/weights.pt",
                 "code/NoUse/TransPose/data/dataset_work/DIP_IMU/test.pt",
@@ -365,6 +369,17 @@ def missing_requirements(
         )
         return [str(path.relative_to(root)) for path in required if not path.exists()]
 
+    # These DIP adapters only need their evaluator and the checkpoint supplied
+    # by the caller.  Their drift-only asset lists include AMASS-specific
+    # resources and must not block real-DIP evaluation.
+    if spec.name in {"dynaip", "dip-imu"} and suite == "dip":
+        script = spec.working_dir / "evaluate_dip.py"
+        return [str(script.relative_to(root))] if not script.exists() else []
+
+    if spec.name in {"pip", "transpose"} and suite in {"dip", "drift"}:
+        script = spec.working_dir / "evaluate_bridge.py"
+        return [str(script.relative_to(root))] if not script.exists() else []
+
     missing = [path for path in spec.required_paths if not _path_exists(root, path)]
     for group in spec.required_any:
         if not any(_path_exists(root, path) for path in group):
@@ -432,7 +447,7 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
         supplied_path = Path(model)
         # A path supplied from the benchmark runner's repository root must
         # remain valid after the child process changes into a method directory.
-        if not supplied_path.is_absolute() and (options.root / supplied_path).exists():
+        if not supplied_path.is_absolute():
             model = str((options.root / supplied_path).resolve())
     plans: List[CommandPlan] = []
 
@@ -485,20 +500,24 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
     if spec.name == "dip-imu":
         output = _output_dir(options, spec.name, suite)
         model_path = model or "train_and_eval/models"
-        args = [
-            "evaluate_drift.py",
-            "--model",
-            model_path,
-            "--amass_dir",
-            "../base_mobileposer/data/processed_datasets",
-        ]
-        args += _common_drift_args(options, output)
-        plans.append(CommandPlan(spec.name, suite, "drift", cwd, tuple([python] + args), output))
+        if suite == "dip":
+            args = ["evaluate_dip.py", "--model", model_path]
+            args += _common_dip_args(options, output)
+            plan_name = "DIP-IMU"
+        else:
+            args = [
+                "evaluate_drift.py",
+                "--model",
+                model_path,
+                "--amass_dir",
+                "../base_mobileposer/data/processed_datasets",
+            ]
+            args += _common_drift_args(options, output)
+            plan_name = "drift"
+        plans.append(CommandPlan(spec.name, suite, plan_name, cwd, tuple([python] + args), output))
         return plans
 
     if spec.name == "dynaip":
-        if suite != "drift":
-            raise ValueError("DynaIP currently exposes only the drift adapter")
         output = _output_dir(options, spec.name, suite)
         if model:
             model_path = model
@@ -506,14 +525,28 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
             model_path = "weights/DynaIP.pth"
         else:
             model_path = "../../DynaIP/weights/DynaIP.pth"
-        args = ["evaluate_drift.py", "--model", model_path]
-        args += _common_drift_args(options, output)
+        script = "evaluate_dip.py" if suite == "dip" else "evaluate_drift.py"
+        args = [script, "--model", model_path]
+        args += _common_dip_args(options, output) if suite == "dip" else _common_drift_args(options, output)
         args = _with_device(args, options.device)
-        plans.append(CommandPlan(spec.name, suite, "drift", cwd, tuple([python] + args), output))
+        plan_name = "DIP-IMU" if suite == "dip" else "drift"
+        plans.append(CommandPlan(spec.name, suite, plan_name, cwd, tuple([python] + args), output))
         return plans
 
     if spec.name == "pip":
         output = _output_dir(options, spec.name, suite)
+        if suite in {"dip", "drift"}:
+            args = [
+                "evaluate_bridge.py", "--suite", suite,
+                "--model", model or "data/weights.pt",
+                "--min-frames", str(options.effective_min_frames),
+                "--max-seconds", str(int(options.effective_max_seconds)),
+                "--out-dir", str(output),
+            ]
+            if suite == "drift":
+                args += ["--max-seqs", str(options.effective_max_seqs)]
+            plans.append(CommandPlan(spec.name, suite, suite, cwd, tuple([python] + args), output))
+            return plans
         plans.append(CommandPlan(spec.name, suite, "native", cwd, (python, "evaluate.py"), output))
         return plans
 
@@ -538,6 +571,19 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
 
     if spec.name == "transpose":
         output = _output_dir(options, spec.name, suite)
+        if suite in {"dip", "drift"}:
+            args = [
+                "evaluate_bridge.py", "--suite", suite,
+                "--model", model or "data/weights.pt",
+                "--min-frames", str(options.effective_min_frames),
+                "--max-seconds", str(int(options.effective_max_seconds)),
+                "--out-dir", str(output),
+            ]
+            if suite == "drift":
+                args += ["--max-seqs", str(options.effective_max_seqs)]
+            args = _with_device(args, options.device)
+            plans.append(CommandPlan(spec.name, suite, suite, cwd, tuple([python] + args), output))
+            return plans
         plans.append(CommandPlan(spec.name, suite, "native", cwd, (python, "evaluate.py"), output))
         return plans
 

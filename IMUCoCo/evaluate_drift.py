@@ -262,6 +262,7 @@ def evaluate_all(sequences, imucoco, poser, body_model, vertex_coords,
             'rot':     np.where(valid[:, None], r['rot_sum']  / safe_c, 0.0),
             'fk_rot':  np.where(valid[:, None], r['fk_sum']   / safe_c, 0.0),
             'tran':    np.where(valid,          r['tran_sum'] / safe_1,  0.0),
+            'count':   r['count'],
             'n_sensors': r['n_sensors'],
             'n_seqs':  int(r['count'][0]) if r['count'][0] > 0 else 0,
         }
@@ -631,7 +632,7 @@ def main():
     out_dir_str = str(out_dir)
 
     if args.combos == 'all':
-        active_combos = COMBOS
+        active_combos = {'full_6s': COMBOS['full_6s']}
     else:
         keys = [k.strip() for k in args.combos.split(',')]
         active_combos = {k: COMBOS[k] for k in keys if k in COMBOS}
@@ -673,6 +674,12 @@ def main():
 
     print_summary(all_results, max_frames, FPS)
     save_npz(all_results, out_dir / 'imucoco_drift_results.npz')
+    from benchmarks.standard_results import write_standard_result
+    result = all_results['full_6s']
+    write_standard_result(
+        out_dir, 'imucoco', 'drift', result['rot'], result['count'], FPS,
+        6, [0, 1, 2, 3, 4, 5], result['tran'],
+    )
 
     if not args.no_video:
         print(f'\nGenerating videos for {len(sequences)} sequences × {len(active_combos)} combos ...')

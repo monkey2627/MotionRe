@@ -290,8 +290,9 @@ def evaluate_all(sequences, model, bodymodel, max_frames: int) -> dict:
 
     return {
         'rot':       dip_rot_avg,            # [T, 24]  DIP-IMU
-        'tran':      np.zeros(max_frames),   # no translation output
+        'tran':      np.full(max_frames, np.nan),  # no translation output
         'fk_rot':    fk_rot_avg,             # [T, 24]  FK baseline
+        'count':     count,
         'n_sensors': 6,
         'n_seqs':    int(count[0]) if count[0] > 0 else 0,
     }
@@ -677,6 +678,11 @@ def main():
              fps=fps,
              combos=['dip_6s'],
              n_seqs=res['n_seqs'])
+    from benchmarks.standard_results import write_standard_result
+    write_standard_result(
+        Path(args.out_dir), 'dip-imu', 'drift', res['rot'], res['count'], fps,
+        6, [0, 1, 2, 3, 4, 5], res['tran'],
+    )
     print(f"\nRaw arrays saved: {npz_path}")
 
     if not args.no_video:

@@ -126,7 +126,7 @@ _GRAVITY = torch.tensor([0., -9.8, 0.])   # world-frame gravity (SMPL Y-up)
 
 @torch.no_grad()
 def eval_pnp(model, acc: torch.Tensor, ori: torch.Tensor,
-             gt_pose: torch.Tensor, device) -> tuple:
+             gt_pose: torch.Tensor, gt_tran: torch.Tensor, device) -> tuple:
     """
     acc : [T, 6, 3]  linear acceleration (synthesised, no gravity)
     ori : [T, 6, 3, 3]  global rotation matrices
@@ -148,9 +148,7 @@ def eval_pnp(model, acc: torch.Tensor, ori: torch.Tensor,
     tran_pred = torch.stack(tran_list)   # [T, 3] on CPU
 
     rot_err  = angle_between_rotmats(pose_pred, gt_pose)
-    tran_err = (tran_pred - (gt_pose.new_zeros(T, 3))).norm(dim=-1)
-    # PNP's tran is absolute; align root to remove global offset
-    tran_err = (tran_pred - tran_pred[:1]).norm(dim=-1)
+    tran_err = ((tran_pred - tran_pred[:1]) - (gt_tran - gt_tran[:1])).norm(dim=-1)
 
     return rot_err, tran_err
 
@@ -189,11 +187,12 @@ def evaluate_all(sequences, model, bodymodel, device, max_frames: int,
             continue
         T       = min(seq['pose'].shape[0], max_frames)
         gt_pose = seq['pose'][:T]
+        gt_tran = seq['tran'][:T]
         acc     = seq['acc'][:T]
         ori     = seq['ori'][:T]
 
         try:
-            rot_ml, tran_ml = eval_pnp(model, acc, ori, gt_pose, device)
+            rot_ml, tran_ml = eval_pnp(model, acc, ori, gt_pose, gt_tran, device)
         except Exception as e:
             print(f"\n  Warning: skipped {seq['source']} — {e}")
         else:
@@ -218,7 +217,7 @@ def evaluate_all(sequences, model, bodymodel, device, max_frames: int,
     tran_avg   = np.where(valid,          tran_sum / np.maximum(count, 1), 0.0)
     fk_avg     = np.where(valid[:, None], fk_sum   / safe_cnt, 0.0)
 
-    return {'rot': rot_avg, 'tran': tran_avg, 'fk_rot': fk_avg,
+    return {'rot': rot_avg, 'tran': tran_avg, 'fk_rot': fk_avg, 'count': count,
             'n_sensors': 6, 'n_seqs': int(count[0]) if count[0] > 0 else 0}
 
 
@@ -506,6 +505,13 @@ def main():
     np.savez(os.path.join(args.out_dir, 'drift_data.npz'),
              pnp_6s_rot=res['rot'], pnp_6s_tran=res['tran'],
              pnp_6s_fk_rot=res['fk_rot'], fps=fps, combos=['pnp_6s'])
+    import sys as _sys
+    _sys.path.insert(0, str(_DIR.parent))
+    from benchmarks.standard_results import write_standard_result
+    write_standard_result(
+        Path(args.out_dir), 'pnp', 'drift', res['rot'], res['count'], fps,
+        6, [0, 1, 2, 3, 4, 5], res['tran'],
+    )
     print(f"\nAll outputs in: {os.path.abspath(args.out_dir)}/")
 
 

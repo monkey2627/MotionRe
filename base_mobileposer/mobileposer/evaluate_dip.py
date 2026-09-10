@@ -38,7 +38,9 @@ SEGS = {
     'Forearm(j18,19)':  [18, 19],
 }
 LUMBAR_JOINTS = [1, 2, 3, 6, 9]
-NO_HEAD_COMBOS = {k: v for k, v in amass.combos.items() if 4 not in v}
+# Native MobilePoser uses all five optional wearable slots.  The pelvis is a
+# reference/root signal in the processed data, not one of the model inputs.
+FULL_COMBOS = {'full_5s': [0, 1, 2, 3, 4]}
 
 DEFAULT_OUT = str(_CODE.parent / 'r' / 'dip_results')
 
@@ -103,6 +105,7 @@ def evaluate(sequences, model, device, combos, max_frames) -> dict:
         results[cname] = {
             'rot':    np.where(count[:, None] > 0, rot_sum  / c[:, None], 0.0),
             'tran':   np.where(count > 0,           tran_sum / c,           np.nan),
+            'count':  count,
             'n':      len(cidx),
             'n_seqs': int(count[0]),
         }
@@ -162,9 +165,18 @@ def main():
     model.eval()
 
     print(f'Running {len(sequences)} DIP-IMU sequences ...')
-    results = evaluate(sequences, model, args.device, NO_HEAD_COMBOS, max_frames)
+    results = evaluate(sequences, model, args.device, FULL_COMBOS, max_frames)
     print_summary(results, max_frames)
     save_npz(results, Path(args.out_dir), max_frames)
+    from pathlib import Path as _Path
+    import sys as _sys
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
+    from benchmarks.standard_results import write_standard_result
+    result = results['full_5s']
+    write_standard_result(
+        _Path(args.out_dir), 'mobileposer', 'dip', result['rot'], result['count'],
+        FPS, 5, FULL_COMBOS['full_5s'], result['tran'],
+    )
 
 
 if __name__ == '__main__':

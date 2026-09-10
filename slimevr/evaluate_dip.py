@@ -39,7 +39,9 @@ SEGS = {
     'Forearm(j18,19)':  [18, 19],
 }
 LUMBAR_JOINTS = [1, 2, 3, 6, 9]
-NO_HEAD_COMBOS = {k: v for k, v in amass.combos.items() if 4 not in v}
+# The pelvis is supplied implicitly by ``fk_predict``; five listed slots plus
+# pelvis are SlimeVR's native full six-sensor input.
+FULL_COMBOS = {'full_6s': [0, 1, 2, 3, 4]}
 
 DEFAULT_OUT = str(_CODE.parent / 'r' / 'dip_results')
 
@@ -94,7 +96,7 @@ def evaluate(sequences, bodymodel, combos, max_frames) -> dict:
             count[:T]   += 1
         c = np.maximum(count, 1)
         rot_avg = np.where(count[:, None] > 0, rot_sum / c[:, None], 0.0)
-        results[cname] = {'rot': rot_avg, 'n': len(cidx), 'n_seqs': int(count[0])}
+        results[cname] = {'rot': rot_avg, 'count': count, 'n': 6, 'n_seqs': int(count[0])}
     return results
 
 
@@ -145,9 +147,15 @@ def main():
 
     bodymodel = art.model.ParametricModel(str(paths.smpl_file))
     print(f'\nRunning SlimeVR FK on {len(sequences)} DIP-IMU sequences ...')
-    results = evaluate(sequences, bodymodel, NO_HEAD_COMBOS, max_frames)
+    results = evaluate(sequences, bodymodel, FULL_COMBOS, max_frames)
     print_summary(results, max_frames)
     save_npz(results, Path(args.out_dir), max_frames)
+    from benchmarks.standard_results import write_standard_result
+    result = results['full_6s']
+    write_standard_result(
+        Path(args.out_dir), 'slimevr', 'dip', result['rot'], result['count'], FPS,
+        6, [0, 1, 2, 3, 4, 5],
+    )
 
 
 if __name__ == '__main__':

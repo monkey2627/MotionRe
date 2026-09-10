@@ -123,7 +123,8 @@ def evaluate_all(sequences, net, max_frames: int, device: str) -> dict:
     return {
         'rot':       np.where(valid[:, None], rot_sum / safe_count, 0.0),
         'fk_rot':    np.where(valid[:, None], fk_sum  / safe_count, 0.0),
-        'tran':      np.zeros(max_frames),   # DynaIP has no translation output
+        'tran':      np.full(max_frames, np.nan),  # no translation output
+        'count':     count,
         'n_sensors': 6,
         'n_seqs':    int(count[0]) if count[0] > 0 else 0,
     }
@@ -431,6 +432,11 @@ def main():
 
     print_summary(res, max_frames, FPS)
     save_npz(res, out_dir / 'dynaip_drift_results.npz')
+    from benchmarks.standard_results import write_standard_result
+    write_standard_result(
+        out_dir, 'dynaip', 'drift', res['rot'], res['count'], FPS,
+        6, [0, 1, 2, 3, 4, 5], res['tran'],
+    )
 
     if not args.no_video:
         print(f'\nGenerating videos for {len(sequences)} sequences ...')

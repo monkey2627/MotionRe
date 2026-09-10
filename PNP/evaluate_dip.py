@@ -107,7 +107,7 @@ def run_one(model, acc, ori, gt_pose, gt_tran, device):
     tran_p = torch.stack(tran_list)   # [T, 3]
 
     rot_err  = angle_between_rotmats(pose_p, gt_pose).numpy()
-    tran_err = (tran_p - tran_p[:1]).norm(dim=-1).numpy()
+    tran_err = ((tran_p - tran_p[:1]) - (gt_tran - gt_tran[:1])).norm(dim=-1).numpy()
     return rot_err, tran_err
 
 
@@ -132,6 +132,7 @@ def evaluate(sequences, model, device, max_frames) -> dict:
     return {'6s': {
         'rot':    np.where(count[:, None] > 0, rot_sum  / c[:, None], 0.0),
         'tran':   np.where(count > 0,           tran_sum / c,           np.nan),
+        'count':  count,
         'n':      6,
         'n_seqs': int(count[0]),
     }}
@@ -193,6 +194,14 @@ def main():
     results = evaluate(sequences, model, args.device, max_frames)
     print_summary(results, max_frames)
     save_npz(results, Path(args.out_dir), max_frames)
+    import sys as _sys
+    _sys.path.insert(0, str(_DIR.parent))
+    from benchmarks.standard_results import write_standard_result
+    result = results['6s']
+    write_standard_result(
+        Path(args.out_dir), 'pnp', 'dip', result['rot'], result['count'],
+        FPS, 6, [0, 1, 2, 3, 4, 5], result['tran'],
+    )
 
 
 if __name__ == '__main__':

@@ -178,6 +178,7 @@ def evaluate(sequences, imucoco, poser, body_model, vc, combos, max_frames, devi
         results[cname] = {
             'rot':    np.where(count[:, None] > 0, rot_sum  / c[:, None], 0.0),
             'tran':   np.where(count > 0,           tran_sum / c,           np.nan),
+            'count':  count,
             'n':      len(cidx),
             'n_seqs': int(count[0]),
         }
@@ -235,9 +236,18 @@ def main():
     imucoco, poser, body_model, vc = load_models(args.device)
 
     print(f'Running {len(sequences)} DIP-IMU sequences ...')
-    results = evaluate(sequences, imucoco, poser, body_model, vc, COMBOS, max_frames, args.device)
+    results = evaluate(
+        sequences, imucoco, poser, body_model, vc,
+        {'full_6s': COMBOS['6s']}, max_frames, args.device,
+    )
     print_summary(results, max_frames)
     save_npz(results, Path(args.out_dir), max_frames)
+    from benchmarks.standard_results import write_standard_result
+    result = results['full_6s']
+    write_standard_result(
+        Path(args.out_dir), 'imucoco', 'dip', result['rot'], result['count'],
+        FPS, 6, [0, 1, 2, 3, 4, 5], result['tran'],
+    )
 
 
 if __name__ == '__main__':
