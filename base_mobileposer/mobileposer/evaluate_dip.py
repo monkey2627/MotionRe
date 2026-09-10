@@ -161,7 +161,7 @@ def main():
         print('No sequences found.'); return
 
     print(f'Loading MobilePoser from {args.model} ...')
-    model = load_model(args.model, device=args.device)
+    model = load_model(args.model).to(args.device)
     model.eval()
 
     print(f'Running {len(sequences)} DIP-IMU sequences ...')
