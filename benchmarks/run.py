@@ -49,6 +49,8 @@ def _options(args: argparse.Namespace, root: Path) -> BenchmarkOptions:
     action_manifest = (root / args.action_manifest).resolve() if args.action_manifest else None
     if action_manifest is None:
         candidates = (
+            root / "base_mobileposer/data/classification_manifest.csv",
+            root / "code/base_mobileposer/data/classification_manifest.csv",
             root / "base_mobileposer/data/rendered/AMASS_by_action/classification_manifest.csv",
             root / "code/base_mobileposer/data/rendered/AMASS_by_action/classification_manifest.csv",
         )

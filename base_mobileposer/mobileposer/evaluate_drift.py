@@ -503,7 +503,16 @@ def generate_video(combo_name, combo_indices, seq, model, bodymodel, device,
     for ax in axes:
         ax.set_facecolor('#111122')
 
-    video_path = os.path.join(out_dir, f'video_mobileposer_{_canonical(combo_name)}_{seq_idx:04d}.mp4')
+    # Keep method, action and source in the filename so videos remain
+    # attributable when outputs from several methods are collected together.
+    def _safe(value):
+        return ''.join(ch if ch.isalnum() or ch in '._-' else '_' for ch in str(value))[:120]
+    action = _safe(seq.get('action', 'all'))
+    source = _safe(seq.get('source', f'seq{seq_idx:04d}'))
+    video_path = os.path.join(
+        out_dir,
+        f'video_mobileposer_{_canonical(combo_name)}_{action}_{source}_{seq_idx:04d}.mp4',
+    )
     writer = FFMpegWriter(fps=render_fps,
                           metadata={'title': f'drift-mobileposer-{_canonical(combo_name)}'})
     frames = list(range(0, T, stride))
@@ -516,8 +525,11 @@ def generate_video(combo_name, combo_indices, seq, model, bodymodel, device,
                        f'MobilePoser ({combo_name})', lumbar_ml[t])
             _draw_skel(axes[2], fk_joints[t],  '#E53935',
                        'FK baseline',              lumbar_fk[t])
-            fig.suptitle(f'MobilePoser | {seq.get("action", "all")} | {seq.get("source", seq_idx)} | t = {t/fps:.1f}s',
-                         color='white', fontsize=16, fontweight='bold')
+            fig.suptitle(
+                f'MobilePoser | action={seq.get("action", "all")} | '
+                f'source={seq.get("source", seq_idx)} | t = {t/fps:.1f}s',
+                color='white', fontsize=21, fontweight='bold',
+            )
             writer.grab_frame()
             if t % (fps * 10) == 0:
                 print(f"    {t/fps:.0f}s / {T/fps:.0f}s")
@@ -635,11 +647,20 @@ def main():
     fps        = datasets.fps
     max_frames = args.max_seconds * fps
     amass_dir  = Path(args.amass_dir) if args.amass_dir else paths.processed_datasets
+    action_manifest = args.action_manifest
+    if action_manifest is None:
+        for candidate in (
+                paths.root_dir / 'data' / 'classification_manifest.csv',
+                paths.root_dir / 'data' / 'rendered' / 'AMASS_by_action' / 'classification_manifest.csv'):
+            if candidate.exists():
+                action_manifest = str(candidate)
+                break
 
     print(f"Device      : {device}")
     print(f"AMASS dir   : {amass_dir}")
     print(f"Combos      : {list(selected.keys())}")
     print(f"Min length  : {args.min_frames} frames ({args.min_frames/fps:.0f}s)")
+    print(f"Action list : {action_manifest or 'disabled'}")
 
     print(f"\nLoading model: {args.model}")
     model = load_model(args.model).to(device)
@@ -647,8 +668,8 @@ def main():
 
     bodymodel = art.model.ParametricModel(str(paths.smpl_file))
 
-    sequences = load_long_sequences(args.min_frames, 0 if args.action_manifest else args.max_seqs, amass_dir=amass_dir,
-                                    action_manifest=args.action_manifest,
+    sequences = load_long_sequences(args.min_frames, 0 if action_manifest else args.max_seqs, amass_dir=amass_dir,
+                                    action_manifest=action_manifest,
                                     max_per_action=args.max_per_action)
     if not sequences:
         print("No sequences found. Adjust --min_frames or --amass_dir.")

@@ -79,7 +79,14 @@ def _action_selection(manifest_path: Path, raw_amass: Path,
                 try:
                     relative = Path(source).resolve().relative_to(raw_amass.resolve())
                 except ValueError:
-                    continue
+                    # Manifests may have been generated on Windows and then
+                    # copied to the Linux server. Recover the AMASS-relative
+                    # suffix instead of requiring identical absolute roots.
+                    normalized = source.replace('\\', '/')
+                    marker = '/AMASS/'
+                    if marker not in normalized:
+                        continue
+                    relative = Path(normalized.split(marker, 1)[1])
                 grouped.setdefault(category, []).append((relative.parts[0], relative.as_posix()))
         for category, entries in grouped.items():
             for dataset, source in sorted(entries)[:max_per_action]:

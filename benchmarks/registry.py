@@ -417,11 +417,16 @@ def _common_dip_args(options: BenchmarkOptions, output_dir: Path) -> List[str]:
 
 
 def _common_drift_args(options: BenchmarkOptions, output_dir: Path) -> List[str]:
+    # Action-manifest evaluation is an explicit coverage benchmark: sequence
+    # length must not filter out short motions, and max_seqs must be unlimited
+    # so that each category can contribute up to max_per_action examples.
+    min_frames = 1 if options.action_manifest else options.effective_min_frames
+    max_seqs = 0 if options.action_manifest else options.effective_max_seqs
     args = [
         "--min_frames",
-        str(options.effective_min_frames),
+        str(min_frames),
         "--max_seqs",
-        str(options.effective_max_seqs),
+        str(max_seqs),
         "--max_seconds",
         str(int(options.effective_max_seconds)),
         "--out_dir",
@@ -430,7 +435,6 @@ def _common_drift_args(options: BenchmarkOptions, output_dir: Path) -> List[str]
     if options.action_manifest:
         args += ["--action_manifest", str(options.action_manifest),
                  "--max_per_action", str(options.max_per_action)]
-        args[args.index("--max_seqs") + 1] = "0"
     if not options.with_video:
         args += ["--no_video"]
     return args
@@ -454,7 +458,10 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
         # A path supplied from the benchmark runner's repository root must
         # remain valid after the child process changes into a method directory.
         if not supplied_path.is_absolute():
-            model = str((options.root / supplied_path).resolve())
+            candidates = (options.root / supplied_path,
+                          options.root / "code" / supplied_path)
+            model = str(next((path for path in candidates if path.exists()),
+                             candidates[0]).resolve())
     plans: List[CommandPlan] = []
 
     if spec.name == "mobileposer":
