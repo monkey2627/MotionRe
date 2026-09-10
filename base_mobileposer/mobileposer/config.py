@@ -32,6 +32,7 @@ class paths:
     smpl_file = root_dir / "mobileposer/smpl/basicmodel_m.pkl"
     weights_file = root_dir / "checkpoints/weights.pth"
     raw_amass = root_dir / "data/raw/AMASS"
+    amass_render_dir = root_dir / "data/rendered/AMASS"
     raw_dip = root_dir / "data/raw/DIP_IMU"
     raw_imuposer = root_dir / "data/raw/IMUPoser"
     eval_dir = root_dir / "data/processed_datasets/eval"

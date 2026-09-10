@@ -13,6 +13,28 @@ import numpy as np
 from . import math as M
 
 
+class _LegacyChumpyArray:
+    """Compatibility wrapper for Chumpy arrays in legacy SMPL pickles."""
+
+    def __array__(self, dtype=None, copy=None):
+        array = np.asarray(self.x, dtype=dtype)
+        return array.copy() if copy else array
+
+
+class _SMPLModelUnpickler(pickle.Unpickler):
+    """Load legacy SMPL pickles without importing the unmaintained Chumpy package."""
+
+    def find_class(self, module, name):
+        if module == 'chumpy.ch' and name == 'Ch':
+            return _LegacyChumpyArray
+        return super().find_class(module, name)
+
+
+def _load_smpl_model(official_model_file):
+    with open(official_model_file, 'rb') as f:
+        return _SMPLModelUnpickler(f, encoding='latin1').load()
+
+
 class ParametricModel:
     r"""
     SMPL/MANO/SMPLH parametric model.
@@ -25,8 +47,7 @@ class ParametricModel:
         :param use_pose_blendshape: Whether to use the pose blendshape.
         :param device: torch.device, cpu or cuda.
         """
-        with open(official_model_file, 'rb') as f:
-            data = pickle.load(f, encoding='latin1')
+        data = _load_smpl_model(official_model_file)
         self._J_regressor = torch.from_numpy(data['J_regressor'].toarray()).float().to(device)
         self._skinning_weights = torch.from_numpy(data['weights']).float().to(device)
         self._posedirs = torch.from_numpy(data['posedirs']).float().to(device)

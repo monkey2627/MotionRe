@@ -82,6 +82,41 @@ As an example, the following command will pre-process the DIP dataset.
 $ python process.py --dataset dip
 ```
 
+### Render AMASS for Motion Coverage Screening
+
+`render_amass.py` renders each selected raw AMASS `*_poses.npz` file into one
+MP4. The default output is a lightweight three-view SMPL skeleton video
+(front, side, and top), which is suitable for checking lying, crawling,
+floor-contact, and other unusual poses on a headless server. The output
+directory mirrors the AMASS directory structure and contains an incremental
+`_render_manifest.csv` is appended after each task, so progress survives an
+interruption. On the next run, completed tasks with an existing MP4 are
+skipped automatically and unfinished tasks are rendered again.
+
+Run from `code/base_mobileposer/`:
+
+```bash
+# First inspect likely lying/crawling motions.
+python -m mobileposer.render_amass --pattern "*lie*" "*crawl*" --limit 20
+
+# Render every raw AMASS sequence; completed tasks are skipped on reruns.
+python -m mobileposer.render_amass --workers 4
+
+# Render a specific dataset or preview only the first 20 seconds.
+python -m mobileposer.render_amass --datasets ACCAD --max-seconds 20
+
+# Ignore the manifest and scan all matched files again.
+python -m mobileposer.render_amass --no-resume
+```
+
+Useful options include `--overwrite`, `--target-fps 10`, `--camera global`,
+`--start N`, `--limit N`, `--no-resume`, and `--dry-run`. Use `--overwrite`
+when changing render settings and regenerating existing MP4 files. The renderer uses the SMPL model at
+`paths.smpl_file`, applies the same AMASS-to-MobilePoser coordinate transform
+as `process.py`, and uses the first 10 AMASS shape coefficients. It displays
+the 24-body-joint skeleton; finger articulation is intentionally omitted to
+keep large-scale action screening fast.
+
 ### 关于数据处理的说明（中文）
 
 #### 什么是 IMU 合成，为什么需要它？

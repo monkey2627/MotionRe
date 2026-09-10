@@ -8,6 +8,7 @@
 *.h5
 *.hdf5
 *.bin
+*.mp4
 # 所有子目录下 drift_results 系列输出文件夹
 **/*_drift_results/
 **/RBDL-PIP/
