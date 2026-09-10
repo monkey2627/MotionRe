@@ -553,7 +553,7 @@ def generate_video(seq, model, bodymodel, device_str,
     for ax in axes:
         ax.set_facecolor('#111122')
 
-    video_path = os.path.join(out_dir, f'video_dip_6s_{seq_idx:04d}.mp4')
+    video_path = os.path.join(out_dir, f'video_dip_imu_{seq.get("action", "all")}_{seq.get("source", seq_idx).replace("/", "_").replace("[", "_").replace("]", "")}.mp4')
     writer = FFMpegWriter(fps=render_fps, metadata={'title': 'drift-dip-6s'})
     frames = list(range(0, T, stride))
     print(f"  {len(frames)} frames at {render_fps}fps -> {video_path}")
@@ -594,6 +594,8 @@ def main():
     parser.add_argument('--amass_dir', default=None,
                         help='Dir with processed AMASS .pt files '
                              '(default: ../base_mobileposer/data/processed_datasets)')
+    parser.add_argument('--action_manifest', default=None)
+    parser.add_argument('--max_per_action', type=int, default=100)
     parser.add_argument('--min_frames', type=int, default=1800,
                         help='Min sequence length in frames (default 1800 = 60s @ 30fps)')
     parser.add_argument('--max_seqs', type=int, default=10,
@@ -633,7 +635,9 @@ def main():
 
     os.makedirs(args.out_dir, exist_ok=True)
 
-    sequences = load_long_sequences(args.min_frames, args.max_seqs, amass_dir=amass_dir)
+    sequences = load_long_sequences(args.min_frames, 0 if args.action_manifest else args.max_seqs, amass_dir=amass_dir,
+                                    action_manifest=args.action_manifest,
+                                    max_per_action=args.max_per_action)
     if not sequences:
         print("No qualifying sequences found. Adjust --min_frames or --amass_dir.")
         return

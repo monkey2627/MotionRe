@@ -531,7 +531,7 @@ def generate_video_combo(combo_name, sensor_indices, seq,
     for ax in axes:
         ax.set_facecolor('#111122')
 
-    vp = os.path.join(out_dir, f'video_imucoco_{_canonical(combo_name)}_{seq_idx:04d}.mp4')
+    vp = os.path.join(out_dir, f'video_imucoco_{seq.get("action", "all")}_{seq.get("source", seq_idx).replace("/", "_").replace("[", "_").replace("]", "")}.mp4')
     writer = FFMpegWriter(fps=render_fps, metadata={'title': f'drift-imucoco-{_canonical(combo_name)}'})
     print(f'  Writing {len(range(0, T, stride))} frames → {vp}')
     with writer.saving(fig, vp, dpi=100):
@@ -540,8 +540,8 @@ def generate_video_combo(combo_name, sensor_indices, seq,
             _draw_skel(axes[1], pred_j[t], '#1E88E5',
                        f'IMUCoCo {combo_name}({n_sens}s)', lumbar_pred[t])
             _draw_skel(axes[2], fk_j[t],   '#E53935', 'FK baseline', lumbar_fk[t])
-            fig.suptitle(f't = {t/fps:.1f}s    orange = lumbar spine',
-                         color='white', fontsize=11)
+            fig.suptitle(f'IMUCoCo | {seq.get("action", "all")} | {seq.get("source", seq_idx)} | t = {t/fps:.1f}s',
+                         color='white', fontsize=16, fontweight='bold')
             writer.grab_frame()
     plt.close(fig)
     print(f'  Saved: {vp}')
@@ -617,6 +617,8 @@ def main():
                         help='Skip video generation (metrics and figures only)')
     parser.add_argument('--out_dir', default=str(RESULTS_DIR),
                         help='Output directory (default: IMUCoCo/drift_results)')
+    parser.add_argument('--action_manifest', default=None)
+    parser.add_argument('--max_per_action', type=int, default=100)
     parser.add_argument('--no_noise', action='store_true',
                         help='Disable IMU noise simulation (use clean synthetic data)')
     parser.add_argument('--drift', type=float, default=0.5,
@@ -642,7 +644,9 @@ def main():
     print('Loading models...')
     imucoco, poser, body_model, vertex_coords = load_models(device)
 
-    sequences = load_long_sequences(args.min_frames, args.max_seqs)
+    sequences = load_long_sequences(args.min_frames, 0 if args.action_manifest else args.max_seqs,
+                                    action_manifest=args.action_manifest,
+                                    max_per_action=args.max_per_action)
     print(f'  {len(sequences)} sequences loaded')
 
     if not args.no_noise:

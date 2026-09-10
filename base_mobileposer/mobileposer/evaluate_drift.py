@@ -443,7 +443,7 @@ def _draw_skel(ax, joints, color, title, lumbar_err=None):
     ax.set_aspect('equal')
     ax.axis('off')
     lbl = title + (f'\nlumbar: {lumbar_err:.1f}°' if lumbar_err is not None else '')
-    ax.set_title(lbl, fontsize=9, pad=3)
+    ax.set_title(lbl, fontsize=14, color='white', pad=6, fontweight='bold')
 
 
 def _canonical(combo: str) -> str:
@@ -516,8 +516,8 @@ def generate_video(combo_name, combo_indices, seq, model, bodymodel, device,
                        f'MobilePoser ({combo_name})', lumbar_ml[t])
             _draw_skel(axes[2], fk_joints[t],  '#E53935',
                        'FK baseline',              lumbar_fk[t])
-            fig.suptitle(f't = {t/fps:.1f}s    orange = lumbar spine',
-                         color='white', fontsize=11)
+            fig.suptitle(f'MobilePoser | {seq.get("action", "all")} | {seq.get("source", seq_idx)} | t = {t/fps:.1f}s',
+                         color='white', fontsize=16, fontweight='bold')
             writer.grab_frame()
             if t % (fps * 10) == 0:
                 print(f"    {t/fps:.0f}s / {T/fps:.0f}s")
@@ -551,22 +551,29 @@ def print_summary(all_results, max_frames, fps):
         for cp in checkpoints:
             frame = min(int(cp * fps), max_frames - 1)
             row = f"{combo_name:<10} {res['n_sensors']:>5}个 {cp:>4}s  "
+            samples = int(res['count'][frame])
+            if samples == 0:
+                row += f"{'N/A':>{col_w}}" * (len(SEGMENTS) + 2)
+                row += "  (no sequence reaches this checkpoint)"
+                print(row)
+                continue
             for joint_idx in SEGMENTS.values():
                 val = float(res['rot'][frame, joint_idx].mean())
                 row += f"  {val:>{col_w}.1f}"
             lumbar = float(res['rot'][frame, LUMBAR_JOINTS].mean())
             tran   = float(res['tran'][frame])
-            row += f"  {lumbar:>{col_w}.1f}  {tran:>{col_w}.3f}"
+            row += f"  {lumbar:>{col_w}.1f}  {tran:>{col_w}.3f}  (n={samples})"
             print(row)
         print()
 
     print(f"{'FK-base':<10} {'─':>5}  {'avg':>4}  ", end='')
+    valid_frames = [np.flatnonzero(res['count'] > 0)[-1] for res in all_results.values()]
     for joint_idx in SEGMENTS.values():
-        fk_val = np.mean([res['fk_rot'][-1, joint_idx].mean()
-                          for res in all_results.values()])
+        fk_val = np.mean([res['fk_rot'][frame, joint_idx].mean()
+                          for res, frame in zip(all_results.values(), valid_frames)])
         print(f"  {fk_val:>{col_w}.1f}", end='')
-    fk_lumbar = np.mean([res['fk_rot'][-1, LUMBAR_JOINTS].mean()
-                         for res in all_results.values()])
+    fk_lumbar = np.mean([res['fk_rot'][frame, LUMBAR_JOINTS].mean()
+                         for res, frame in zip(all_results.values(), valid_frames)])
     print(f"  {fk_lumbar:>{col_w}.1f}  {'N/A':>{col_w}}")
     print(sep)
     print("★=腰部康复核心段  腰部综合=joints[1,2,3,6,9]均值  位移仅MobilePoser有")
@@ -586,6 +593,8 @@ def main():
     parser.add_argument('--amass_dir', default=None,
                         help='Dir with processed AMASS .pt files '
                              '(default: paths.processed_datasets from config)')
+    parser.add_argument('--action_manifest', default=None)
+    parser.add_argument('--max_per_action', type=int, default=100)
     parser.add_argument('--min_frames', type=int, default=1800,
                         help='Min sequence length in frames (default 1800 = 60s)')
     parser.add_argument('--max_seqs', type=int, default=10,
@@ -638,7 +647,9 @@ def main():
 
     bodymodel = art.model.ParametricModel(str(paths.smpl_file))
 
-    sequences = load_long_sequences(args.min_frames, args.max_seqs, amass_dir=amass_dir)
+    sequences = load_long_sequences(args.min_frames, 0 if args.action_manifest else args.max_seqs, amass_dir=amass_dir,
+                                    action_manifest=args.action_manifest,
+                                    max_per_action=args.max_per_action)
     if not sequences:
         print("No sequences found. Adjust --min_frames or --amass_dir.")
         return

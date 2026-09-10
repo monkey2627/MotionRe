@@ -46,6 +46,13 @@ def _options(args: argparse.Namespace, root: Path) -> BenchmarkOptions:
     out_root = Path(args.out_root)
     if not out_root.is_absolute():
         out_root = root / out_root
+    action_manifest = (root / args.action_manifest).resolve() if args.action_manifest else None
+    if action_manifest is None:
+        candidates = (
+            root / "base_mobileposer/data/rendered/AMASS_by_action/classification_manifest.csv",
+            root / "code/base_mobileposer/data/rendered/AMASS_by_action/classification_manifest.csv",
+        )
+        action_manifest = next((path for path in candidates if path.exists()), None)
     return BenchmarkOptions(
         root=root,
         out_root=out_root,
@@ -58,6 +65,8 @@ def _options(args: argparse.Namespace, root: Path) -> BenchmarkOptions:
         model=args.model,
         combos=_parse_combos(args.combos),
         with_video=args.with_video,
+        action_manifest=action_manifest,
+        max_per_action=args.max_per_action,
     )
 
 
@@ -155,6 +164,12 @@ def _add_run_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--combos", nargs="+", default=None)
     parser.add_argument("--out-root", default="benchmark_results")
     parser.add_argument("--with-video", action="store_true")
+    parser.add_argument("--no-video", dest="with_video", action="store_false",
+                        help="Disable per-sequence evaluation videos (videos are enabled by default).")
+    parser.set_defaults(with_video=True)
+    parser.add_argument("--action-manifest", default=None,
+                        help="classification_manifest.csv used for AMASS drift sampling")
+    parser.add_argument("--max-per-action", type=int, default=100)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--allow-missing", action="store_true")
 

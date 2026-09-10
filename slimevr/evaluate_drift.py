@@ -115,13 +115,20 @@ def moving_average(x: np.ndarray, window: int = 15) -> np.ndarray:
 # Data loading
 # ---------------------------------------------------------------------------
 
-def load_long_sequences(amass_dir: Path, min_frames: int, max_seqs: int):
+def load_long_sequences(amass_dir: Path, min_frames: int, max_seqs: int,
+                        action_manifest=None, max_per_action=100):
     """Load full (unwindowed) sequences that are at least min_frames long."""
     pt_files = sorted(amass_dir.glob('*.pt'))
     if not pt_files:
         raise FileNotFoundError(f"No .pt files found in {amass_dir}.")
 
     unlimited = (max_seqs <= 0)
+    action_map = None
+    if action_manifest:
+        from drift_eval_common import _action_selection
+        raw_root = amass_dir.parent.parent / 'data' / 'raw' / 'AMASS'
+        action_map = _action_selection(Path(action_manifest), raw_root, max_per_action)
+        min_frames = 1
     seqs = []
     print(f"Scanning {len(pt_files)} AMASS files for sequences >= {min_frames} frames "
           f"({min_frames / datasets.fps:.0f}s) ...")
@@ -131,8 +138,19 @@ def load_long_sequences(amass_dir: Path, min_frames: int, max_seqs: int):
         except Exception as e:
             print(f"  Skip {fpath.name}: {e}")
             continue
+        raw_candidates = sorted((raw_root / fpath.stem).rglob('*_poses.npz')) if action_map is not None else []
+        allowed = action_map.get(fpath.stem, set()) if action_map is not None else set()
         for i, (acc, ori, pose, tran) in enumerate(
                 zip(data['acc'], data['ori'], data['pose'], data['tran'])):
+            action = 'all'
+            if action_map is not None:
+                if i >= len(raw_candidates):
+                    continue
+                raw_rel = raw_candidates[i].relative_to(raw_root).as_posix()
+                actions = [category for category, source in allowed if source == raw_rel]
+                if not actions:
+                    continue
+                action = actions[0]
             if pose.shape[0] >= min_frames:
                 seqs.append({
                     'acc':    acc.float(),
@@ -140,6 +158,7 @@ def load_long_sequences(amass_dir: Path, min_frames: int, max_seqs: int):
                     'pose':   pose.float(),
                     'tran':   tran.float(),
                     'source': f"{fpath.stem}[{i}]",
+                    'action': action,
                 })
             if not unlimited and len(seqs) >= max_seqs:
                 break
@@ -433,7 +452,7 @@ def _draw_skel(ax, joints, color, title, lumbar_err=None):
     ax.set_aspect('equal')
     ax.axis('off')
     lbl = title + (f'\nlumbar: {lumbar_err:.1f}deg' if lumbar_err is not None else '')
-    ax.set_title(lbl, fontsize=9, pad=3)
+    ax.set_title(lbl, fontsize=14, color='white', pad=6, fontweight='bold')
 
 
 def generate_video(combo_name, combo_indices, seq, bodymodel,
@@ -482,8 +501,8 @@ def generate_video(combo_name, combo_indices, seq, bodymodel,
             _draw_skel(axes[0], gt_joints[t],   '#43A047', 'Ground Truth')
             _draw_skel(axes[1], pred_joints[t], '#1E88E5',
                        f'SlimeVR ({combo_name})', lumbar_err[t])
-            fig.suptitle(f't = {t/fps:.1f}s    orange = lumbar spine',
-                         color='white', fontsize=11)
+            fig.suptitle(f'SlimeVR | {seq.get("action", "all")} | {seq.get("source", seq_idx)} | t = {t/fps:.1f}s',
+                         color='white', fontsize=16, fontweight='bold')
             writer.grab_frame()
             if t % (fps * 10) == 0:
                 print(f"    {t/fps:.0f}s / {T/fps:.0f}s")
@@ -600,7 +619,10 @@ def main():
 
     bodymodel = art.model.ParametricModel(str(paths.smpl_file))
 
-    sequences = load_long_sequences(amass_dir, args.min_frames, args.max_seqs)
+    sequences = load_long_sequences(
+        amass_dir, args.min_frames, 0 if args.action_manifest else args.max_seqs,
+        action_manifest=args.action_manifest, max_per_action=args.max_per_action,
+    )
     if not sequences:
         print("No sequences found. Adjust --min_frames or --amass_dir.")
         return

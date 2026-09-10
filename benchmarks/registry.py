@@ -32,6 +32,8 @@ class BenchmarkOptions:
     model: Optional[str] = None
     combos: Tuple[str, ...] = ("all",)
     with_video: bool = False
+    action_manifest: Optional[Path] = None
+    max_per_action: int = 100
 
     @property
     def effective_min_frames(self) -> int:
@@ -425,9 +427,13 @@ def _common_drift_args(options: BenchmarkOptions, output_dir: Path) -> List[str]
         "--out_dir",
         str(output_dir),
     ]
-    if options.with_video:
-        return args
-    return args + ["--no_video"]
+    if options.action_manifest:
+        args += ["--action_manifest", str(options.action_manifest),
+                 "--max_per_action", str(options.max_per_action)]
+        args[args.index("--max_seqs") + 1] = "0"
+    if not options.with_video:
+        args += ["--no_video"]
+    return args
 
 
 def _with_device(args: List[str], device: Optional[str]) -> List[str]:
@@ -545,6 +551,9 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
             ]
             if suite == "drift":
                 args += ["--max-seqs", str(options.effective_max_seqs)]
+                if options.action_manifest:
+                    args += ["--action-manifest", str(options.action_manifest),
+                             "--max-per-action", str(options.max_per_action)]
             plans.append(CommandPlan(spec.name, suite, suite, cwd, tuple([python] + args), output))
             return plans
         plans.append(CommandPlan(spec.name, suite, "native", cwd, (python, "evaluate.py"), output))

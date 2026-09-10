@@ -357,7 +357,7 @@ def _draw_skel(ax, joints, color, title, lumbar_err=None):
     ax.set_xlim(-0.75, 0.75); ax.set_ylim(-0.25, 1.85)
     ax.set_aspect('equal'); ax.axis('off')
     ax.set_title(title + (f'\nlumbar: {lumbar_err:.1f}°' if lumbar_err else ''),
-                 fontsize=9, pad=3)
+                 fontsize=14, color='white', pad=6, fontweight='bold')
 
 
 def generate_video(seq, model, bodymodel, device, fps, out_dir,
@@ -400,7 +400,7 @@ def generate_video(seq, model, bodymodel, device, fps, out_dir,
     fig, axes = plt.subplots(1, 3, figsize=(12, 5))
     fig.patch.set_facecolor('#111122')
     for ax in axes: ax.set_facecolor('#111122')
-    vp = os.path.join(out_dir, f'video_pnp_6s_{seq_idx:04d}.mp4')
+    vp = os.path.join(out_dir, f'video_pnp_{seq.get("action", "all")}_{seq.get("source", seq_idx).replace("/", "_").replace("[", "_").replace("]", "")}.mp4')
     writer = FFMpegWriter(fps=render_fps, metadata={'title': 'drift-pnp-6s'})
     print(f"  Writing {len(range(0,T,stride))} frames → {vp}")
     with writer.saving(fig, vp, dpi=100):
@@ -408,8 +408,8 @@ def generate_video(seq, model, bodymodel, device, fps, out_dir,
             _draw_skel(axes[0], gt_j[t],  '#43A047', 'Ground Truth')
             _draw_skel(axes[1], ml_j[t],  '#C62828', 'PNP (6 sensors)', lumbar_ml[t])
             _draw_skel(axes[2], fk_j[t],  '#E53935', 'FK baseline', lumbar_fk[t])
-            fig.suptitle(f't = {t/fps:.1f}s    orange = lumbar spine',
-                         color='white', fontsize=11)
+            fig.suptitle(f'PNP | {seq.get("action", "all")} | {seq.get("source", seq_idx)} | t = {t/fps:.1f}s',
+                         color='white', fontsize=16, fontweight='bold')
             writer.grab_frame()
     plt.close(fig); print(f"  Saved: {vp}")
 
@@ -423,6 +423,8 @@ def main():
     parser.add_argument('--combos', nargs='+', default=['all'],
                         help='Ignored — PNP is a fixed 6-sensor method.')
     parser.add_argument('--amass_dir', default=None)
+    parser.add_argument('--action_manifest', default=None)
+    parser.add_argument('--max_per_action', type=int, default=100)
     parser.add_argument('--min_frames', type=int, default=1800)
     parser.add_argument('--max_seqs',   type=int, default=10)
     parser.add_argument('--max_seconds', type=int, default=120)
@@ -459,7 +461,9 @@ def main():
     print('=' * 62)
 
     os.makedirs(args.out_dir, exist_ok=True)
-    sequences = load_long_sequences(args.min_frames, args.max_seqs, amass_dir=amass_dir)
+    sequences = load_long_sequences(args.min_frames, 0 if args.action_manifest else args.max_seqs, amass_dir=amass_dir,
+                                    action_manifest=args.action_manifest,
+                                    max_per_action=args.max_per_action)
     if not sequences:
         print("No qualifying sequences. Adjust --min_frames or --amass_dir."); return
 

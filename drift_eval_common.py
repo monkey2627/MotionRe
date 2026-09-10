@@ -19,6 +19,7 @@ to guarantee that:
 """
 
 from pathlib import Path
+import csv
 import numpy as np
 import torch
 
@@ -65,8 +66,32 @@ LUMBAR_JOINTS = [1, 2, 3, 6, 9]
 
 # ─── canonical sequence loader ─────────────────────────────────────────────────
 
+def _action_selection(manifest_path: Path, raw_amass: Path,
+                      max_per_action: int) -> dict:
+    selected = {}
+    with manifest_path.open('r', newline='', encoding='utf-8-sig') as handle:
+        rows = csv.DictReader(handle)
+        grouped = {}
+        for row in rows:
+            category = (row.get('category') or 'other').strip()
+            source = (row.get('raw_motion') or '').strip()
+            if source:
+                try:
+                    relative = Path(source).resolve().relative_to(raw_amass.resolve())
+                except ValueError:
+                    continue
+                grouped.setdefault(category, []).append((relative.parts[0], relative.as_posix()))
+        for category, entries in grouped.items():
+            for dataset, source in sorted(entries)[:max_per_action]:
+                selected.setdefault(dataset, set()).add((category, source))
+    return selected
+
+
 def load_long_sequences(min_frames: int, max_seqs: int,
-                        amass_dir: Path = None) -> list:
+                        amass_dir: Path = None,
+                        action_manifest: Path = None,
+                        raw_amass: Path = None,
+                        max_per_action: int = 100) -> list:
     """
     Load unwindowed AMASS sequences that are at least min_frames long.
 
@@ -96,10 +121,17 @@ def load_long_sequences(min_frames: int, max_seqs: int,
         )
 
     unlimited = (max_seqs <= 0)
+    action_map = None
+    raw_root = raw_amass
+    if action_manifest:
+        raw_root = raw_root or dir_.parent.parent / 'data' / 'raw' / 'AMASS'
+        action_map = _action_selection(Path(action_manifest), Path(raw_root), max_per_action)
     seqs: list = []
     print(f'Scanning {len(pt_files)} AMASS files '
           f'(min {min_frames} frames = {min_frames / FPS:.0f}s) ...')
 
+    if action_map is not None:
+        min_frames = 1
     for fpath in pt_files:
         try:
             try:
@@ -110,8 +142,22 @@ def load_long_sequences(min_frames: int, max_seqs: int,
             print(f'  Skip {fpath.name}: {e}')
             continue
 
+        raw_candidates = []
+        allowed = set()
+        if action_map is not None:
+            raw_candidates = sorted((Path(raw_root) / fpath.stem).rglob('*_poses.npz'))
+            allowed = action_map.get(fpath.stem, set())
         for i, (acc, ori, pose, tran) in enumerate(
                 zip(data['acc'], data['ori'], data['pose'], data['tran'])):
+            action = 'all'
+            if action_map is not None:
+                if i >= len(raw_candidates):
+                    continue
+                raw_rel = raw_candidates[i].relative_to(Path(raw_root)).as_posix()
+                actions = [category for category, source in allowed if source == raw_rel]
+                if not actions:
+                    continue
+                action = actions[0]
             if pose.shape[0] >= min_frames:
                 seqs.append({
                     'acc':    acc.float(),    # [T, 6, 3]
@@ -119,6 +165,7 @@ def load_long_sequences(min_frames: int, max_seqs: int,
                     'pose':   pose.float(),   # [T, 24, 3, 3]  LOCAL rotation matrices
                     'tran':   tran.float(),   # [T, 3]
                     'source': f'{fpath.stem}[{i}]',
+                    'action': action,
                 })
             if not unlimited and len(seqs) >= max_seqs:
                 break

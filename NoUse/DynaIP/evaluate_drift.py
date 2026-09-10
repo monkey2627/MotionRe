@@ -325,7 +325,7 @@ def generate_video(seq, net, bodymodel, device, fps, out_dir,
     for ax in axes:
         ax.set_facecolor('#111122')
 
-    vp = os.path.join(out_dir, f'video_dynaip_{seq_idx:04d}.mp4')
+        vp = os.path.join(out_dir, f'video_dynaip_{seq.get("action", "all")}_{seq.get("source", seq_idx).replace("/", "_").replace("[", "_").replace("]", "")}.mp4')
     writer = FFMpegWriter(fps=render_fps, metadata={'title': 'drift-dynaip'})
     print(f'  Writing {len(range(0, T, stride))} frames → {vp}')
     with writer.saving(fig, vp, dpi=100):
@@ -402,6 +402,8 @@ def main():
     parser.add_argument('--video_fps',     type=int, default=10)
     parser.add_argument('--out_dir', default=str(RESULTS_DIR),
                         help='Output directory (default: DynaIP/drift_results)')
+    parser.add_argument('--action_manifest', default=None)
+    parser.add_argument('--max_per_action', type=int, default=100)
     parser.add_argument('--no_video', action='store_true',
                         help='Skip video generation (metrics and figures only)')
     args = parser.parse_args()
@@ -418,7 +420,9 @@ def main():
     net.eval()
     bodymodel = art.ParametricModel(cfg.smpl_m)
 
-    sequences = load_long_sequences(args.min_frames, args.max_seqs)
+    sequences = load_long_sequences(args.min_frames, 0 if args.action_manifest else args.max_seqs,
+                                    action_manifest=args.action_manifest,
+                                    max_per_action=args.max_per_action)
     print(f'  {len(sequences)} sequences loaded')
 
     res = evaluate_all(sequences, net, max_frames, device)
