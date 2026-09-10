@@ -428,18 +428,22 @@ def plot_translation(all_results, max_frames, fps, out_dir):
 # Video generation
 # ---------------------------------------------------------------------------
 
-def _draw_skel(ax, joints, color, title, lumbar_err=None):
-    """Front-view (X-Y) 2-D skeleton. joints: [24, 3] numpy, Y=up."""
+def _draw_skel(ax, joints, color, title, lumbar_err=None, view_limits=None,
+               dimensions=(0, 1)):
+    """Render one projection of the full SMPL skeleton."""
     ax.cla()
-    j = joints - joints[0]          # root-centred
+    j = joints
+    x_dim, y_dim = dimensions
     for (a, b) in SMPL_KINTREE:
         is_lumbar = (a, b) in _LUMBAR_BONES or (b, a) in _LUMBAR_BONES
         c  = '#FF6F00' if is_lumbar else color
         lw = 3.5      if is_lumbar else 1.8
-        ax.plot([j[a,0], j[b,0]], [j[a,1], j[b,1]], '-', color=c, lw=lw)
-    ax.scatter(j[:,0], j[:,1], c=color, s=18, zorder=5)
-    ax.set_xlim(-0.75, 0.75)
-    ax.set_ylim(-0.25, 1.85)
+        ax.plot([j[a, x_dim], j[b, x_dim]], [j[a, y_dim], j[b, y_dim]], '-', color=c, lw=lw)
+    ax.scatter(j[:, x_dim], j[:, y_dim], c=color, s=18, zorder=5)
+    if view_limits is None:
+        view_limits = (-1.2, 1.2, -0.1, 2.0)
+    ax.set_xlim(view_limits[0], view_limits[1])
+    ax.set_ylim(view_limits[2], view_limits[3])
     ax.set_aspect('equal')
     ax.axis('off')
     lbl = title + (f'\nlumbar: {lumbar_err:.1f}°' if lumbar_err is not None else '')
@@ -491,6 +495,23 @@ def generate_video(combo_name, combo_indices, seq, model, bodymodel, device,
     ml_joints = ml_joints.cpu().numpy()
     fk_joints = fk_joints.cpu().numpy()
 
+    # Derive one shared camera window from the whole sequence. The previous
+    # fixed portrait window clipped feet/legs or the torso for lying,
+    # crawling, and other non-upright motions. Root-centering matches the
+    # drawing logic, while shared limits keep the three panels comparable.
+    sampled = np.concatenate((gt_joints[::stride], ml_joints[::stride],
+                              fk_joints[::stride]), axis=0)
+    # Match render_amass.py: centre horizontal root drift, shift the floor to
+    # zero, then derive robust percentile camera extents for all projections.
+    all_joints = np.concatenate((gt_joints, ml_joints, fk_joints), axis=0)
+    all_joints[:, :, 0] -= np.median(all_joints[:, 0, 0])
+    all_joints[:, :, 2] -= np.median(all_joints[:, 0, 2])
+    all_joints[:, :, 1] -= np.percentile(all_joints[:, :, 1], 1.0)
+    horizontal_radius = max(1.2, float(np.percentile(np.abs(all_joints[:, :, [0, 2]]), 99.5)) + 0.15)
+    vertical_max = max(2.0, float(np.percentile(all_joints[:, :, 1], 99.5)) + 0.15)
+    gt_joints, ml_joints, fk_joints = np.split(all_joints, 3, axis=0)
+    view_limits = (horizontal_radius, vertical_max)
+
     # ── Per-frame lumbar error ──
     lumbar_ml = angle_between_rotmats(
         pose_ml[:, LUMBAR_JOINTS], gt_pose[:, LUMBAR_JOINTS]).mean(-1).numpy()
@@ -521,11 +542,14 @@ def generate_video(combo_name, combo_indices, seq, model, bodymodel, device,
 
     with writer.saving(fig, video_path, dpi=100):
         for t in frames:
-            _draw_skel(axes[0], gt_joints[t],  '#43A047', 'Ground Truth')
+            _draw_skel(axes[0], gt_joints[t], '#43A047', 'Ground Truth',
+                       view_limits=(-view_limits[0], view_limits[0], -0.1, view_limits[1]), dimensions=(0, 1))
             _draw_skel(axes[1], ml_joints[t],  '#1E88E5',
-                       f'MobilePoser ({combo_name})', lumbar_ml[t])
+                       f'MobilePoser ({combo_name})', lumbar_ml[t],
+                       (-view_limits[0], view_limits[0], -0.1, view_limits[1]), (2, 1))
             _draw_skel(axes[2], fk_joints[t],  '#E53935',
-                       'FK baseline',              lumbar_fk[t])
+                       'FK baseline', lumbar_fk[t],
+                       (-view_limits[0], view_limits[0], -view_limits[0], view_limits[0]), (0, 2))
             source_label = str(seq.get('source', seq_idx))
             if len(source_label) > 42:
                 source_label = source_label[:39] + '...'
