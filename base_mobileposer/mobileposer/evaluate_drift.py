@@ -443,7 +443,7 @@ def _draw_skel(ax, joints, color, title, lumbar_err=None):
     ax.set_aspect('equal')
     ax.axis('off')
     lbl = title + (f'\nlumbar: {lumbar_err:.1f}°' if lumbar_err is not None else '')
-    ax.set_title(lbl, fontsize=14, color='white', pad=6, fontweight='bold')
+    ax.set_title(lbl, fontsize=10, color='white', pad=2, fontweight='bold')
 
 
 def _canonical(combo: str) -> str:
@@ -500,6 +500,7 @@ def generate_video(combo_name, combo_indices, seq, model, bodymodel, device,
     # ── Render ──
     fig, axes = plt.subplots(1, 3, figsize=(12, 5))
     fig.patch.set_facecolor('#111122')
+    fig.subplots_adjust(top=0.78, bottom=0.04, left=0.02, right=0.98, wspace=0.04)
     for ax in axes:
         ax.set_facecolor('#111122')
 
@@ -525,10 +526,13 @@ def generate_video(combo_name, combo_indices, seq, model, bodymodel, device,
                        f'MobilePoser ({combo_name})', lumbar_ml[t])
             _draw_skel(axes[2], fk_joints[t],  '#E53935',
                        'FK baseline',              lumbar_fk[t])
+            source_label = str(seq.get('source', seq_idx))
+            if len(source_label) > 42:
+                source_label = source_label[:39] + '...'
             fig.suptitle(
-                f'MobilePoser | action={seq.get("action", "all")} | '
-                f'source={seq.get("source", seq_idx)} | t = {t/fps:.1f}s',
-                color='white', fontsize=21, fontweight='bold',
+                f'MobilePoser | {seq.get("action", "all")} | '
+                f'{source_label} | t={t/fps:.1f}s',
+                y=0.96, color='white', fontsize=13, fontweight='bold',
             )
             writer.grab_frame()
             if t % (fps * 10) == 0:
