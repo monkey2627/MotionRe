@@ -16,7 +16,17 @@ except ImportError:
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    script_path = Path(__file__).resolve()
+    # Local checkout: MotionRecover/code/benchmarks/run.py.
+    # Research server: MotionRe/benchmarks/run.py.
+    candidates = (script_path.parents[1], script_path.parents[2])
+    for candidate in candidates:
+        if (candidate / "code" / "base_mobileposer").is_dir():
+            return candidate
+    for candidate in candidates:
+        if (candidate / "base_mobileposer").is_dir():
+            return candidate
+    return script_path.parents[2]
 
 
 def _relative(path: Path, root: Path) -> str:
@@ -120,7 +130,7 @@ def _run_plan(plan: CommandPlan, root: Path, dry_run: bool) -> int:
 
 
 def _run_method(spec: MethodSpec, suite: str, options: BenchmarkOptions, dry_run: bool, allow_missing: bool) -> int:
-    missing = missing_requirements(spec, options.root)
+    missing = missing_requirements(spec, options.root, suite=suite)
     if missing and not allow_missing:
         print(f"[{spec.name}] blocked; run doctor for missing prerequisites")
         for item in missing:

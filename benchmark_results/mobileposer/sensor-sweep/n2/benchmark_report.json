@@ -1,0 +1,23 @@
+{
+  "method": "mobileposer",
+  "suite": "sensor-sweep",
+  "plan": "2-sensor",
+  "cwd": "base_mobileposer",
+  "command": [
+    "E:\\SoftWare\\Conda\\python.exe",
+    "-m",
+    "mobileposer.infer_mobileposer",
+    "--model",
+    "code/base_mobileposer/checkpoints/weights.pth",
+    "--n-sensors",
+    "2",
+    "--max-seq",
+    "1",
+    "--output-dir",
+    "E:\\dyh\\MotionRecover\\code\\benchmark_results\\mobileposer\\sensor-sweep\\n2"
+  ],
+  "started_at": "2026-09-10T13:02:34.785220+00:00",
+  "status": "dry-run",
+  "return_code": null,
+  "finished_at": "2026-09-10T13:02:34.785257+00:00"
+}

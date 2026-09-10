@@ -69,7 +69,10 @@ class CommandPlan:
 
 
 def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
-    code = root / "code"
+    # Support both repository layouts used by this project:
+    # local: ``MotionRecover/code/base_mobileposer``;
+    # server: ``MotionRe/base_mobileposer``.
+    code = root / "code" if (root / "code" / "base_mobileposer").is_dir() else root
     base = code / "base_mobileposer"
     no_use = code / "NoUse"
 
@@ -81,12 +84,7 @@ def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
             "1-5 IMUs",
             base,
             ("dip", "drift", "sensor-sweep"),
-            (
-                "code/base_mobileposer/checkpoints/weights.pth",
-                "code/base_mobileposer/data/processed_datasets/eval/dip_test.pt",
-                "code/base_mobileposer/mobileposer/evaluate_dip.py",
-                "code/base_mobileposer/mobileposer/evaluate_drift.py",
-            ),
+            (),
             notes="Primary sensor-count and mobile-inference baseline.",
         ),
         MethodSpec(
@@ -342,10 +340,34 @@ def get_spec(specs: Iterable[MethodSpec], name: str) -> MethodSpec:
     raise KeyError(name)
 
 
-def missing_requirements(spec: MethodSpec, root: Path) -> List[str]:
-    missing = [path for path in spec.required_paths if not (root / path).exists()]
+def _path_exists(root: Path, path: str) -> bool:
+    """Check both the local ``code/`` and flat server repository layouts."""
+    candidate = root / path
+    if candidate.exists():
+        return True
+    if path.startswith("code/"):
+        return (root / path[len("code/"):]).exists()
+    return False
+
+
+def missing_requirements(
+    spec: MethodSpec,
+    root: Path,
+    suite: Optional[str] = None,
+) -> List[str]:
+    if spec.name == "mobileposer" and suite == "sensor-sweep":
+        base = root / "code" / "base_mobileposer"
+        if not base.is_dir():
+            base = root / "base_mobileposer"
+        required = (
+            base / "checkpoints/weights.pth",
+            base / "mobileposer/infer_mobileposer.py",
+        )
+        return [str(path.relative_to(root)) for path in required if not path.exists()]
+
+    missing = [path for path in spec.required_paths if not _path_exists(root, path)]
     for group in spec.required_any:
-        if not any((root / path).exists() for path in group):
+        if not any(_path_exists(root, path) for path in group):
             missing.append("one of: " + ", ".join(group))
     return missing
 
@@ -406,6 +428,12 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
     cwd = spec.working_dir
     python = sys.executable
     model = options.model
+    if model:
+        supplied_path = Path(model)
+        # A path supplied from the benchmark runner's repository root must
+        # remain valid after the child process changes into a method directory.
+        if not supplied_path.is_absolute() and (options.root / supplied_path).exists():
+            model = str((options.root / supplied_path).resolve())
     plans: List[CommandPlan] = []
 
     if spec.name == "mobileposer":
