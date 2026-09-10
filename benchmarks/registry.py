@@ -200,17 +200,16 @@ def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
             "GlobalPose",
             "pure-imu-global",
             "6 IMUs",
-            no_use / "GlobalPose",
+            code / "GlobalPose",
             ("native",),
             (
-                "code/NoUse/GlobalPose/test.py",
-                "code/NoUse/GlobalPose/data/weights.pt",
-                "code/NoUse/GlobalPose/data/test_datasets/dipimu.pt",
+                "code/GlobalPose/test.py",
+                "code/GlobalPose/data/weights.pt",
             ),
             notes="Physics-based global motion baseline; official local environment is Windows/Python 3.8.",
         ),
         MethodSpec(
-            "imuposer",
+            "imuposer",#，没给预训练
             "IMUPoser",
             "mobile-device",
             "Phone/watch/earbud IMUs",
@@ -238,7 +237,7 @@ def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
             notes="Flexible-placement baseline; code is present but checkpoints and datasets are external.",
         ),
         MethodSpec(
-            "wheelposer",
+            "wheelposer",#用pip环境
             "WheelPoser",
             "non-ergonomic",
             "4 IMUs",
