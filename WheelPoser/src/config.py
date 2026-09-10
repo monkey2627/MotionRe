@@ -25,7 +25,7 @@ class paths:
     raw_wheelposer_dir = 'src/data/dataset_raw/WheelPoser'  # raw WheelPoser dataset path
 
     example_dir = 'data/example'                    # example IMU measurements
-    smpl_file = 'src/smpl/models/basicmodel_m_lbs_10_207_0_v1.0.0.pkl'              # official SMPL model path
+    smpl_file = 'src/smpl/models/SMPL_male.pkl'              # official SMPL model path
     weights_file = 'data/weights.pt'                # network weight file
     physics_model_file = 'src/physics/physics.urdf'      # physics body model path
     plane_file = 'src/physics/plane.urdf'                # (for debug) path to plane.urdf    Please put plane.obj next to it.
