@@ -1,0 +1,58 @@
+"""Summarise detailed per-sequence benchmark outputs into action-level CSV/JSON."""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+from pathlib import Path
+from typing import Optional, Sequence
+
+try:
+    from .detailed_results import MANDATORY_ACTIONS, action_summary
+except ImportError:
+    from detailed_results import MANDATORY_ACTIONS, action_summary
+
+
+def read_records(path: Path):
+    with path.open(encoding="utf-8") as handle:
+        return [json.loads(line) for line in handle if line.strip()]
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description="Summarise detailed IMU benchmark results by action.")
+    parser.add_argument("--results-root", type=Path, default=Path("benchmark_results"))
+    parser.add_argument("--output", type=Path, default=None)
+    args = parser.parse_args(argv)
+    rows = []
+    for index in sorted(args.results_root.rglob("detailed_metrics.jsonl")):
+        manifest = json.loads(index.with_name("detailed_metrics_manifest.json").read_text(encoding="utf-8"))
+        report_path = index.with_name("benchmark_report.json")
+        run_status = "unknown"
+        if report_path.exists():
+            run_status = json.loads(report_path.read_text(encoding="utf-8")).get("status", "unknown")
+        records = read_records(index)
+        configurations = sorted({record.get("configuration") for record in records}, key=lambda value: str(value))
+        for configuration in configurations:
+            subset = [record for record in records if record.get("configuration") == configuration]
+            for row in action_summary(subset, MANDATORY_ACTIONS):
+                rows.append({"method": manifest["method"], "suite": manifest["suite"],
+                             "run_status": run_status,
+                             "eligible_for_ranking": run_status == "passed",
+                             "configuration": configuration, **row})
+    if not rows:
+        raise SystemExit("No detailed_metrics.jsonl files found. Re-run evaluators with the detailed result contract.")
+    output = args.output or args.results_root / "detailed_action_summary.csv"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fields = list(rows[0])
+    with output.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+    output.with_suffix(".json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
+    print("Wrote {} action rows to {}".format(len(rows), output))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

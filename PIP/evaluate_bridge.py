@@ -42,6 +42,7 @@ sys.path.insert(0, str(_BASE))
 
 from benchmarks.bridge_data import load_dip_sequences
 from benchmarks.standard_results import write_standard_result
+from benchmarks.detailed_results import write_sequence_result, write_detailed_index
 from benchmarks.video import render_comparison_video
 from drift_eval_common import angle_between_rotmats, load_long_sequences
 import mobileposer.articulate as art
@@ -72,6 +73,7 @@ def evaluate(sequences, model, max_frames: int, out_dir: Path = None):
     translation_sum = np.zeros(max_frames, dtype=np.float64)
     count = np.zeros(max_frames, dtype=np.int64)
     start_idx = 0
+    records = []
 
     if _CKPT and os.path.exists(_CKPT):
         ck = np.load(_CKPT)
@@ -96,14 +98,24 @@ def evaluate(sequences, model, max_frames: int, out_dir: Path = None):
         except Exception as exc:
             source = _field(sequence, "source") if not isinstance(sequence, dict) else sequence.get("source", "unknown")
             print(f"\n  skip {source}: {type(exc).__name__}: {exc}")
+            records.append(write_sequence_result(
+                out_dir, idx, source, sequence.get("action", "other") if isinstance(sequence, dict) else "other",
+                None, None, FPS, failure_reason="{}: {}".format(type(exc).__name__, exc),
+                configuration="full_6s"))
         else:
-            rotation_sum[:length] += angle_between_rotmats(
+            rotation_error = angle_between_rotmats(
                 pose_pred.cpu(), pose[:length]
             ).numpy()
-            translation_sum[:length] += (tran_pred.cpu() - (
+            translation_error = (tran_pred.cpu() - (
                 tran[:length] - tran[:1]
             )).norm(dim=-1).numpy()
+            rotation_sum[:length] += rotation_error
+            translation_sum[:length] += translation_error
             count[:length] += 1
+            source = _field(sequence, "source") if not isinstance(sequence, dict) else sequence.get("source", "unknown")
+            records.append(write_sequence_result(
+                out_dir, idx, source, sequence.get("action", "other") if isinstance(sequence, dict) else "other",
+                rotation_error, translation_error, FPS, configuration="full_6s"))
         if _CKPT:
             np.savez(_CKPT, rotation_sum=rotation_sum, translation_sum=translation_sum,
                      count=count, seqs_done=idx + 1)
@@ -116,7 +128,7 @@ def evaluate(sequences, model, max_frames: int, out_dir: Path = None):
     translation = np.full(max_frames, np.nan)
     rotation[valid] = rotation_sum[valid] / count[valid, None]
     translation[valid] = translation_sum[valid] / count[valid]
-    return rotation, translation, count
+    return rotation, translation, count, records
 
 
 def main() -> int:
@@ -148,13 +160,14 @@ def main() -> int:
         raise RuntimeError("No eligible sequences found")
     model = _load_model(args.model)
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    rotation, translation, count = evaluate(sequences, model, max_frames, out_dir=args.out_dir)
+    rotation, translation, count, records = evaluate(sequences, model, max_frames, out_dir=args.out_dir)
     output = args.out_dir / "pip_{}.npz".format(args.suite)
     np.savez_compressed(output, rotation=rotation, translation=translation, count=count, fps=FPS)
     write_standard_result(
         args.out_dir, "pip", args.suite, rotation, count, FPS, 6,
         [0, 1, 2, 3, 4, 5], translation,
     )
+    write_detailed_index(args.out_dir, "pip", args.suite, FPS, records)
     if not args.no_video:
         bodymodel = art.model.ParametricModel(str(paths.smpl_file))
         for index, sequence in enumerate(sequences):

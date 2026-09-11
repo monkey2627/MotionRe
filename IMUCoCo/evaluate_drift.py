@@ -42,6 +42,7 @@ from drift_eval_common import (
     LUMBAR_JOINTS, FPS, SENSOR_TO_JOINT, DATA_PATH,
     load_long_sequences, angle_between_rotmats, moving_average, add_imu_noise,
 )
+from benchmarks.detailed_results import write_sequence_result, write_detailed_index
 
 # Our AMASS sensor order: [L_wrist(0), R_wrist(1), L_hip(2), R_hip(3), Head(4), Pelvis(5)]
 # SMPL mesh vertex IDs for each sensor location (T-pose):
@@ -203,6 +204,7 @@ def evaluate_all(sequences, imucoco, poser, body_model, vertex_coords,
         for combo_name, info in active_combos.items()
     }
     start_idx = 0
+    records = {combo_name: [] for combo_name in active_combos}
 
     if os.path.exists(_CKPT):
         ck = np.load(_CKPT)
@@ -234,6 +236,10 @@ def evaluate_all(sequences, imucoco, poser, body_model, vertex_coords,
                 )
             except Exception as e:
                 print(f'\n  Warning: {combo_name} seq {seq["source"]} — {e}')
+                records[combo_name].append(write_sequence_result(
+                    Path(out_dir), idx, seq['source'], seq.get('action', 'other'), None, None,
+                    FPS, failure_reason='{}: {}'.format(type(e).__name__, e),
+                    configuration=combo_name))
                 continue
 
             r = all_results[combo_name]
@@ -241,6 +247,9 @@ def evaluate_all(sequences, imucoco, poser, body_model, vertex_coords,
             r['fk_sum'][:T]   += fk_err.numpy()
             r['tran_sum'][:T] += tran_err.numpy()
             r['count'][:T]    += 1.0
+            records[combo_name].append(write_sequence_result(
+                Path(out_dir), idx, seq['source'], seq.get('action', 'other'),
+                rot_err.numpy(), tran_err.numpy(), FPS, configuration=combo_name))
 
         ck_data = {'seqs_done': idx + 1}
         for combo_name, r in all_results.items():
@@ -265,6 +274,7 @@ def evaluate_all(sequences, imucoco, poser, body_model, vertex_coords,
             'count':   r['count'],
             'n_sensors': r['n_sensors'],
             'n_seqs':  int(r['count'][0]) if r['count'][0] > 0 else 0,
+            'records': records[combo_name],
         }
     return final
 
@@ -664,6 +674,8 @@ def main():
         out_dir, 'imucoco', 'drift', result['rot'], result['count'], FPS,
         6, [0, 1, 2, 3, 4, 5], result['tran'],
     )
+    write_detailed_index(out_dir, 'imucoco', 'drift', FPS,
+                         [record for result in all_results.values() for record in result['records']])
 
     if not args.no_video:
         print(f'\nGenerating videos for {len(sequences)} sequences × {len(active_combos)} combos ...')

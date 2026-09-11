@@ -67,7 +67,19 @@ SENSOR_TO_JOINT = [18, 19, 1, 2, 15, 0]
 
 # All combos without head sensor (index 4), from config.py amass.combos
 # Native MobilePoser: all five wearable slots; pelvis remains the reference.
-FULL_COMBOS = {'full_5s': [0, 1, 2, 3, 4]}
+# The model has five wearable input slots.  Pelvis orientation is always a
+# reference signal, so ``full_6s`` means five learned inputs plus that reference.
+FULL_COMBOS = {
+    'full_4s': [0, 1, 2],
+    'full_5s': [0, 1, 2, 3],
+    'full_6s': [0, 1, 2, 3, 4],
+}
+PHYSICAL_SENSOR_COUNTS = {'full_4s': 4, 'full_5s': 5, 'full_6s': 6}
+PHYSICAL_SENSOR_SLOTS = {
+    'full_4s': [0, 1, 2, 5],
+    'full_5s': [0, 1, 2, 3, 5],
+    'full_6s': [0, 1, 2, 3, 4, 5],
+}
 
 # Color palette per combo (consistent across all plots)
 _PALETTE = ['#1565C0', '#C62828', '#2E7D32', '#F57F17', '#6A1B9A', '#00838F']
@@ -177,7 +189,7 @@ def eval_mobileposer(model, imu_input, gt_pose, gt_tran, device):
     T = gt_pose.shape[0]
     rot_err  = angle_between_rotmats(pose_pred[:T], gt_pose)
     tran_err = (tran_pred[:T] - (gt_tran - gt_tran[:1])).norm(dim=-1)
-    return rot_err, tran_err
+    return rot_err, tran_err, pose_pred[:T], tran_pred[:T]
 
 
 def eval_fk(ori, gt_pose, combo_indices, bodymodel):
@@ -201,6 +213,7 @@ def evaluate_combo(combo_name, combo_indices, sequences, model,
     fk_rot_sum  = np.zeros((max_frames, 24))
     count       = np.zeros(max_frames)
     start_idx   = 0
+    records = []
 
     if os.path.exists(_CKPT):
         ck = np.load(_CKPT)
@@ -222,15 +235,30 @@ def evaluate_combo(combo_name, combo_indices, sequences, model,
 
         try:
             imu = prepare_imu(acc, ori, combo_indices)
-            rot_ml, tran_ml = eval_mobileposer(model, imu, gt_pose, gt_tran, device)
+            rot_ml, tran_ml, pose_pred, tran_pred = eval_mobileposer(
+                model, imu, gt_pose, gt_tran, device)
         except Exception as e:
             print(f"  Warning: skipped {seq['source']} ({combo_name}) — {e}")
+            from benchmarks.detailed_results import write_sequence_result
+            records.append(write_sequence_result(
+                Path(out_dir), idx, seq['source'], seq.get('action', 'other'), None,
+                None, datasets.fps, failure_reason=str(e), configuration=combo_name))
         else:
             rot_fk = eval_fk(ori, gt_pose, combo_indices, bodymodel)
             ml_rot_sum[:T]  += rot_ml.numpy()
             ml_tran_sum[:T] += tran_ml.numpy()
             fk_rot_sum[:T]  += rot_fk.numpy()
             count[:T]       += 1.0
+            from benchmarks.detailed_results import write_sequence_result
+            pred_tran_absolute = tran_pred - tran_pred[:1] + gt_tran[:1]
+            with torch.no_grad():
+                _, pred_joints = bodymodel.forward_kinematics(pose_pred, tran=pred_tran_absolute)
+                _, target_joints = bodymodel.forward_kinematics(gt_pose, tran=gt_tran)
+            records.append(write_sequence_result(
+                Path(out_dir), idx, seq['source'], seq.get('action', 'other'),
+                rot_ml.numpy(), tran_ml.numpy(), datasets.fps,
+                predicted_joints=pred_joints.numpy(), target_joints=target_joints.numpy(),
+                configuration=combo_name))
 
         np.savez(_CKPT, ml_rot_sum=ml_rot_sum, ml_tran_sum=ml_tran_sum,
                  fk_rot_sum=fk_rot_sum, count=count, seqs_done=idx + 1)
@@ -248,8 +276,10 @@ def evaluate_combo(combo_name, combo_indices, sequences, model,
         'tran':     ml_tran_avg,
         'fk_rot':   fk_rot_avg,
         'count':    count,
-        'n_sensors': len(combo_indices),
+        'n_sensors': PHYSICAL_SENSOR_COUNTS[combo_name],
+        'physical_sensor_count': PHYSICAL_SENSOR_COUNTS[combo_name],
         'n_seqs':   int(count[0]),
+        'records': records,
     }
 
 
@@ -594,6 +624,8 @@ def main():
                              '0.2=high-quality, 0.5=consumer, 1.5=low-cost')
     parser.add_argument('--seed', type=int, default=42,
                         help='RNG seed for reproducible noise (default 42)')
+    parser.add_argument('--device', default=None,
+                        help='Torch device override, for example cpu or cuda:0')
     args = parser.parse_args()
 
     if args.combos == ['all']:
@@ -605,7 +637,7 @@ def main():
                              f"Valid native full combo: {list(FULL_COMBOS)}")
         selected = {k: FULL_COMBOS[k] for k in args.combos}
 
-    device     = model_config.device
+    device     = args.device or model_config.device
     fps        = datasets.fps
     max_frames = args.max_seconds * fps
     amass_dir  = Path(args.amass_dir) if args.amass_dir else paths.processed_datasets
@@ -684,11 +716,16 @@ def main():
     import sys as _sys
     _sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
     from benchmarks.standard_results import write_standard_result
-    result = all_results['full_5s']
+    primary_combo = 'full_6s' if 'full_6s' in all_results else next(iter(all_results))
+    result = all_results[primary_combo]
     write_standard_result(
         _Path(args.out_dir), 'mobileposer', 'drift', result['rot'], result['count'],
-        fps, 5, FULL_COMBOS['full_5s'], result['tran'],
+        fps, PHYSICAL_SENSOR_COUNTS[primary_combo],
+        PHYSICAL_SENSOR_SLOTS[primary_combo], result['tran'],
     )
+    from benchmarks.detailed_results import write_detailed_index
+    detailed_records = [record for res in all_results.values() for record in res['records']]
+    write_detailed_index(_Path(args.out_dir), 'mobileposer', 'drift', fps, detailed_records)
 
     if not args.no_video:
         print(f'\nGenerating videos for {len(sequences)} sequences × {len(selected)} combos ...')

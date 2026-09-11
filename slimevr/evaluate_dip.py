@@ -27,6 +27,7 @@ sys.path.insert(0, str(_CODE))
 from mobileposer.config import amass, datasets, paths
 import mobileposer.articulate as art
 from drift_eval_common import angle_between_rotmats, LUMBAR_JOINTS, SENSOR_TO_JOINT
+from benchmarks.detailed_results import write_sequence_result, write_detailed_index
 
 FPS = int(datasets.fps)
 
@@ -52,10 +53,11 @@ def load_dip(min_frames: int) -> list:
     p = paths.processed_datasets / 'eval' / 'dip_test.pt'
     data = torch.load(str(p), map_location='cpu')
     seqs = []
-    for acc, ori, pose, tran in zip(data['acc'], data['ori'], data['pose'], data['tran']):
+    for index, (acc, ori, pose, tran) in enumerate(zip(data['acc'], data['ori'], data['pose'], data['tran'])):
         if pose.shape[0] >= min_frames:
             seqs.append({'acc': acc.float(), 'ori': ori.float(),
-                         'pose': pose.float(), 'tran': tran.float()})
+                         'pose': pose.float(), 'tran': tran.float(),
+                         'source': 'dip_test[{}]'.format(index), 'action': 'dip'})
     print(f'DIP-IMU test: {len(seqs)}/{len(data["pose"])} seqs >= {min_frames} frames')
     return seqs
 
@@ -90,6 +92,7 @@ def _evaluate_combo(cname, cidx, sequences, bodymodel, max_frames, out_dir):
     rot_sum  = np.zeros((max_frames, 24))
     count    = np.zeros(max_frames)
     start_idx = 0
+    records = []
 
     if os.path.exists(_CKPT):
         ck = np.load(_CKPT)
@@ -102,10 +105,18 @@ def _evaluate_combo(cname, cidx, sequences, bodymodel, max_frames, out_dir):
         if idx < start_idx:
             continue
         T = min(seq['pose'].shape[0], max_frames)
-        pred = fk_predict(seq['ori'][:T], cidx, bodymodel)
-        err  = angle_between_rotmats(pred, seq['pose'][:T]).numpy()
-        rot_sum[:T] += err
-        count[:T]   += 1
+        try:
+            pred = fk_predict(seq['ori'][:T], cidx, bodymodel)
+            err  = angle_between_rotmats(pred, seq['pose'][:T]).numpy()
+            rot_sum[:T] += err
+            count[:T]   += 1
+            records.append(write_sequence_result(
+                Path(out_dir), idx, seq['source'], seq['action'], err, None, FPS,
+                configuration=cname))
+        except Exception as exc:
+            records.append(write_sequence_result(
+                Path(out_dir), idx, seq['source'], seq['action'], None, None, FPS,
+                failure_reason='{}: {}'.format(type(exc).__name__, exc), configuration=cname))
         np.savez(_CKPT, rot_sum=rot_sum, count=count, seqs_done=idx + 1)
 
     if os.path.exists(_CKPT):
@@ -113,7 +124,7 @@ def _evaluate_combo(cname, cidx, sequences, bodymodel, max_frames, out_dir):
 
     c = np.maximum(count, 1)
     rot_avg = np.where(count[:, None] > 0, rot_sum / c[:, None], 0.0)
-    return {'rot': rot_avg, 'count': count, 'n': 6, 'n_seqs': int(count[0])}
+    return {'rot': rot_avg, 'count': count, 'n': 6, 'n_seqs': int(count[0]), 'records': records}
 
 
 def evaluate(sequences, bodymodel, combos, max_frames, out_dir=DEFAULT_OUT) -> dict:
@@ -181,6 +192,8 @@ def main():
         Path(args.out_dir), 'slimevr', 'dip', result['rot'], result['count'], FPS,
         6, [0, 1, 2, 3, 4, 5],
     )
+    write_detailed_index(Path(args.out_dir), 'slimevr', 'dip', FPS,
+                         [record for result in results.values() for record in result['records']])
 
 
 if __name__ == '__main__':

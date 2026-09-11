@@ -53,6 +53,7 @@ from drift_eval_common import (
     LUMBAR_JOINTS, FPS, SENSOR_TO_JOINT, DATA_PATH,
     load_long_sequences, angle_between_rotmats, moving_average, add_imu_noise,
 )
+from benchmarks.detailed_results import write_sequence_result, write_detailed_index
 
 SMPL_KINTREE = [
     (0,1),(0,2),(0,3),(1,4),(2,5),(4,7),(5,8),(7,10),(8,11),
@@ -172,6 +173,7 @@ def evaluate_all(sequences, model, bodymodel, device, max_frames: int,
     fk_sum   = np.zeros((max_frames, 24))
     count    = np.zeros(max_frames)
     start_idx = 0
+    records = []
 
     if os.path.exists(_CKPT):
         ck = np.load(_CKPT)
@@ -195,12 +197,18 @@ def evaluate_all(sequences, model, bodymodel, device, max_frames: int,
             rot_ml, tran_ml = eval_pnp(model, acc, ori, gt_pose, gt_tran, device)
         except Exception as e:
             print(f"\n  Warning: skipped {seq['source']} — {e}")
+            records.append(write_sequence_result(
+                Path(out_dir), idx, seq['source'], seq.get('action', 'other'), None, None,
+                FPS, failure_reason='{}: {}'.format(type(e).__name__, e), configuration='pnp_6s'))
         else:
             rot_fk = eval_fk(ori, gt_pose, FK_SENSOR_INDICES, bodymodel)
             rot_sum[:T]  += rot_ml.numpy()
             tran_sum[:T] += tran_ml.numpy()
             fk_sum[:T]   += rot_fk.numpy()
             count[:T]    += 1.0
+            records.append(write_sequence_result(
+                Path(out_dir), idx, seq['source'], seq.get('action', 'other'),
+                rot_ml.numpy(), tran_ml.numpy(), FPS, configuration='pnp_6s'))
 
         np.savez(_CKPT, rot_sum=rot_sum, tran_sum=tran_sum, fk_sum=fk_sum,
                  count=count, seqs_done=idx + 1)
@@ -218,7 +226,8 @@ def evaluate_all(sequences, model, bodymodel, device, max_frames: int,
     fk_avg     = np.where(valid[:, None], fk_sum   / safe_cnt, 0.0)
 
     return {'rot': rot_avg, 'tran': tran_avg, 'fk_rot': fk_avg, 'count': count,
-            'n_sensors': 6, 'n_seqs': int(count[0]) if count[0] > 0 else 0}
+            'n_sensors': 6, 'n_seqs': int(count[0]) if count[0] > 0 else 0,
+            'records': records}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -502,6 +511,7 @@ def main():
         Path(args.out_dir), 'pnp', 'drift', res['rot'], res['count'], fps,
         6, [0, 1, 2, 3, 4, 5], res['tran'],
     )
+    write_detailed_index(Path(args.out_dir), 'pnp', 'drift', fps, res['records'])
     print(f"\nAll outputs in: {os.path.abspath(args.out_dir)}/")
 
 

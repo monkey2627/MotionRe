@@ -34,6 +34,7 @@ sys.path.insert(0, str(_CODE / 'base_mobileposer'))
 from mobileposer.config import datasets, paths
 
 from drift_eval_common import angle_between_rotmats, LUMBAR_JOINTS
+from benchmarks.detailed_results import write_sequence_result, write_detailed_index
 
 FPS = int(datasets.fps)
 
@@ -69,10 +70,11 @@ def load_dip(min_frames: int) -> list:
     p = paths.processed_datasets / 'eval' / 'dip_test.pt'
     data = torch.load(str(p), map_location='cpu')
     seqs = []
-    for acc, ori, pose, tran in zip(data['acc'], data['ori'], data['pose'], data['tran']):
+    for index, (acc, ori, pose, tran) in enumerate(zip(data['acc'], data['ori'], data['pose'], data['tran'])):
         if pose.shape[0] >= min_frames:
             seqs.append({'acc': acc.float(), 'ori': ori.float(),
-                         'pose': pose.float(), 'tran': tran.float()})
+                         'pose': pose.float(), 'tran': tran.float(),
+                         'source': 'dip_test[{}]'.format(index), 'action': 'dip'})
     print(f'DIP-IMU test: {len(seqs)}/{len(data["pose"])} seqs >= {min_frames} frames')
     return seqs
 
@@ -164,6 +166,7 @@ def _evaluate_combo(cname, cidx, sequences, imucoco, poser, body_model, vc,
     tran_sum = np.zeros(max_frames)
     count    = np.zeros(max_frames)
     start_idx = 0
+    records = []
 
     if os.path.exists(_CKPT):
         ck = np.load(_CKPT)
@@ -188,6 +191,13 @@ def _evaluate_combo(cname, cidx, sequences, imucoco, poser, body_model, vc,
             count[:T]    += 1
         except Exception as e:
             print(f'    skip ({cname}): {e}')
+            records.append(write_sequence_result(
+                Path(out_dir), idx, seq['source'], seq['action'], None, None, FPS,
+                failure_reason='{}: {}'.format(type(e).__name__, e), configuration=cname))
+        else:
+            records.append(write_sequence_result(
+                Path(out_dir), idx, seq['source'], seq['action'], err_r, err_t, FPS,
+                configuration=cname))
         np.savez(_CKPT, rot_sum=rot_sum, tran_sum=tran_sum, count=count, seqs_done=idx + 1)
 
     if os.path.exists(_CKPT):
@@ -199,7 +209,7 @@ def _evaluate_combo(cname, cidx, sequences, imucoco, poser, body_model, vc,
         'tran':   np.where(count > 0,           tran_sum / c,           np.nan),
         'count':  count,
         'n':      len(cidx),
-        'n_seqs': int(count[0]),
+        'n_seqs': int(count[0]), 'records': records,
     }
 
 
@@ -280,6 +290,8 @@ def main():
         Path(args.out_dir), 'imucoco', 'dip', result['rot'], result['count'],
         FPS, 6, [0, 1, 2, 3, 4, 5], result['tran'],
     )
+    write_detailed_index(Path(args.out_dir), 'imucoco', 'dip', FPS,
+                         [record for result in results.values() for record in result['records']])
 
     if not args.no_video:
         from benchmarks.video import render_comparison_video

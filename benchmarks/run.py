@@ -120,12 +120,20 @@ def _run_plan(plan: CommandPlan, root: Path, dry_run: bool) -> int:
         payload["status"] = "dry-run"
         payload["return_code"] = None
         payload["finished_at"] = datetime.now(timezone.utc).isoformat()
-        _write_report(plan, root, payload)
+        # A dry run must not overwrite a passed report in a real result folder.
+        print("  dry-run: no report written")
         return 0
 
     started = time.monotonic()
+    stdout_path = plan.output_dir / "stdout.log"
+    stderr_path = plan.output_dir / "stderr.log"
     try:
-        completed = subprocess.run(command, cwd=plan.cwd, check=False)
+        # Keep complete child output beside the metric files.  This is vital for
+        # distinguishing an evaluator failure from a poor numerical result.
+        with stdout_path.open("w", encoding="utf-8") as stdout, \
+                stderr_path.open("w", encoding="utf-8") as stderr:
+            completed = subprocess.run(command, cwd=plan.cwd, check=False,
+                                       stdout=stdout, stderr=stderr, text=True)
         return_code = completed.returncode
         result_status = "passed" if return_code == 0 else "failed"
     except OSError as exc:
@@ -134,6 +142,11 @@ def _run_plan(plan: CommandPlan, root: Path, dry_run: bool) -> int:
         payload["error"] = str(exc)
     payload["status"] = result_status
     payload["return_code"] = return_code
+    payload["stdout_log"] = stdout_path.name
+    payload["stderr_log"] = stderr_path.name
+    if result_status != "passed":
+        payload["failure_reason"] = "Evaluator exited with return code {}. See {}.".format(
+            return_code, stderr_path.name)
     payload["duration_seconds"] = round(time.monotonic() - started, 3)
     payload["finished_at"] = datetime.now(timezone.utc).isoformat()
     _write_report(plan, root, payload)

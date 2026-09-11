@@ -40,7 +40,19 @@ SEGS = {
 LUMBAR_JOINTS = [1, 2, 3, 6, 9]
 # Native MobilePoser uses all five optional wearable slots.  The pelvis is a
 # reference/root signal in the processed data, not one of the model inputs.
-FULL_COMBOS = {'full_5s': [0, 1, 2, 3, 4]}
+FULL_COMBOS = {
+    # Physical count includes the pelvis reference (slot 5), which is not a
+    # learned input: 4/5/6 physical IMUs map to 3/4/5 model slots.
+    'full_4s': [0, 1, 2],
+    'full_5s': [0, 1, 2, 3],
+    'full_6s': [0, 1, 2, 3, 4],
+}
+PHYSICAL_SENSOR_COUNTS = {'full_4s': 4, 'full_5s': 5, 'full_6s': 6}
+PHYSICAL_SENSOR_SLOTS = {
+    'full_4s': [0, 1, 2, 5],
+    'full_5s': [0, 1, 2, 3, 5],
+    'full_6s': [0, 1, 2, 3, 4, 5],
+}
 
 DEFAULT_OUT = str(_CODE.parent / 'r' / 'dip_results')
 
@@ -51,10 +63,11 @@ def load_dip(min_frames: int) -> list:
     p = paths.processed_datasets / 'eval' / 'dip_test.pt'
     data = torch.load(str(p), map_location='cpu')
     seqs = []
-    for acc, ori, pose, tran in zip(data['acc'], data['ori'], data['pose'], data['tran']):
+    for index, (acc, ori, pose, tran) in enumerate(zip(data['acc'], data['ori'], data['pose'], data['tran'])):
         if pose.shape[0] >= min_frames:
             seqs.append({'acc': acc.float(), 'ori': ori.float(),
-                         'pose': pose.float(), 'tran': tran.float()})
+                         'pose': pose.float(), 'tran': tran.float(),
+                         'source': 'dip_test[{}]'.format(index), 'action': 'dip'})
     print(f'DIP-IMU test: {len(seqs)}/{len(data["pose"])} seqs >= {min_frames} frames')
     return seqs
 
@@ -93,6 +106,7 @@ def _evaluate_combo(cname, cidx, sequences, model, device, max_frames, out_dir):
     tran_sum = np.zeros(max_frames)
     count    = np.zeros(max_frames)
     start_idx = 0
+    records = []
 
     if os.path.exists(_CKPT):
         ck = np.load(_CKPT)
@@ -114,6 +128,15 @@ def _evaluate_combo(cname, cidx, sequences, model, device, max_frames, out_dir):
             count[:T]    += 1
         except Exception as e:
             print(f'    skip ({cname}): {e}')
+            from benchmarks.detailed_results import write_sequence_result
+            records.append(write_sequence_result(
+                Path(out_dir), idx, seq['source'], seq['action'], None, None, FPS,
+                failure_reason=str(e), configuration=cname))
+        else:
+            from benchmarks.detailed_results import write_sequence_result
+            records.append(write_sequence_result(
+                Path(out_dir), idx, seq['source'], seq['action'], err_r, err_t, FPS,
+                configuration=cname))
         np.savez(_CKPT, rot_sum=rot_sum, tran_sum=tran_sum, count=count, seqs_done=idx + 1)
 
     if os.path.exists(_CKPT):
@@ -124,8 +147,9 @@ def _evaluate_combo(cname, cidx, sequences, model, device, max_frames, out_dir):
         'rot':    np.where(count[:, None] > 0, rot_sum  / c[:, None], 0.0),
         'tran':   np.where(count > 0,           tran_sum / c,           np.nan),
         'count':  count,
-        'n':      len(cidx),
+        'n':      PHYSICAL_SENSOR_COUNTS[cname],
         'n_seqs': int(count[0]),
+        'records': records,
     }
 
 
@@ -180,6 +204,8 @@ def main():
     p.add_argument('--max_seconds',  type=int, default=60)
     p.add_argument('--device',       default='cuda' if torch.cuda.is_available() else 'cpu')
     p.add_argument('--out_dir',      default=DEFAULT_OUT)
+    p.add_argument('--combos', nargs='+', default=['full_6s'],
+                   help='all or a subset of: {}'.format(', '.join(FULL_COMBOS)))
     p.add_argument('--no_video',     action='store_true')
     p.add_argument('--video_seconds', type=int, default=30)
     p.add_argument('--video_fps',    type=int, default=10)
@@ -195,18 +221,30 @@ def main():
     model.eval()
 
     print(f'Running {len(sequences)} DIP-IMU sequences ...')
-    results = evaluate(sequences, model, args.device, FULL_COMBOS, max_frames, out_dir=args.out_dir)
+    if args.combos == ['all']:
+        selected = FULL_COMBOS
+    else:
+        invalid = [combo for combo in args.combos if combo not in FULL_COMBOS]
+        if invalid:
+            p.error('Unknown combo(s): {}'.format(', '.join(invalid)))
+        selected = {combo: FULL_COMBOS[combo] for combo in args.combos}
+    results = evaluate(sequences, model, args.device, selected, max_frames, out_dir=args.out_dir)
     print_summary(results, max_frames)
     save_npz(results, Path(args.out_dir), max_frames)
     from pathlib import Path as _Path
     import sys as _sys
     _sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
     from benchmarks.standard_results import write_standard_result
-    result = results['full_5s']
+    primary_combo = 'full_6s' if 'full_6s' in results else next(iter(results))
+    result = results[primary_combo]
     write_standard_result(
         _Path(args.out_dir), 'mobileposer', 'dip', result['rot'], result['count'],
-        FPS, 5, FULL_COMBOS['full_5s'], result['tran'],
+        FPS, PHYSICAL_SENSOR_COUNTS[primary_combo],
+        PHYSICAL_SENSOR_SLOTS[primary_combo], result['tran'],
     )
+    from benchmarks.detailed_results import write_detailed_index
+    detailed_records = [record for res in results.values() for record in res['records']]
+    write_detailed_index(_Path(args.out_dir), 'mobileposer', 'dip', FPS, detailed_records)
 
     if not args.no_video:
         from benchmarks.video import render_comparison_video

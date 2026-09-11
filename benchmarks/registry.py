@@ -478,22 +478,31 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
             args = ["-m", "mobileposer.evaluate_drift", "--model", model]
             args += ["--combos"] + list(options.combos)
             args += _common_drift_args(options, output)
+            args = _with_device(args, options.device)
             plans.append(CommandPlan(spec.name, suite, "drift", cwd, tuple([python] + args), output))
         else:
-            for count in range(1, 6):
+            # MobilePoser's processed convention always retains the pelvis as
+            # a reference IMU.  These are physical device counts, not tensor
+            # width changes: 4/5 wearable configurations plus full 6 IMUs.
+            for count in (4, 5, 6):
                 output = _output_dir(options, spec.name, suite, f"n{count}")
                 args = [
                     "-m",
-                    "mobileposer.infer_mobileposer",
+                    "mobileposer.evaluate_dip",
                     "--model",
                     model,
-                    "--n-sensors",
-                    str(count),
-                    "--max-seq",
-                    str(options.effective_max_seq),
-                    "--output-dir",
+                    "--combos",
+                    "full_{}s".format(count),
+                    "--min_frames",
+                    str(options.effective_min_frames),
+                    "--max_seconds",
+                    str(int(options.effective_max_seconds)),
+                    "--out_dir",
                     str(output),
                 ]
+                args = _with_device(args, options.device)
+                if not options.with_video:
+                    args += ["--no_video"]
                 plans.append(CommandPlan(spec.name, suite, f"{count}-sensor", cwd, tuple([python] + args), output))
         return plans
 
@@ -545,6 +554,8 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
         args = [script, "--model", model_path]
         args += _common_dip_args(options, output) if suite == "dip" else _common_drift_args(options, output)
         args = _with_device(args, options.device)
+        if not options.with_video:
+            args += ["--no_video"]
         plan_name = "DIP-IMU" if suite == "dip" else "drift"
         plans.append(CommandPlan(spec.name, suite, plan_name, cwd, tuple([python] + args), output))
         return plans

@@ -55,6 +55,7 @@ sys.path.insert(0, str(_BASE))
 
 from benchmarks.bridge_data import load_dip_sequences, load_amass_sequences
 from benchmarks.standard_results import write_standard_result
+from benchmarks.detailed_results import write_sequence_result, write_detailed_index
 from drift_eval_common import angle_between_rotmats, load_long_sequences
 
 FPS = 30
@@ -219,6 +220,7 @@ def evaluate(sequences, model, device: torch.device, max_frames: int,
     rot_sum = np.zeros((max_frames, 24), dtype=np.float64)
     count   = np.zeros(max_frames, dtype=np.int64)
     start_idx = 0
+    records = []
 
     if os.path.exists(_CKPT):
         ck = np.load(_CKPT)
@@ -234,13 +236,21 @@ def evaluate(sequences, model, device: torch.device, max_frames: int,
         acc  = _field(seq, "acc")
         ori  = _field(seq, "ori")
         T = min(len(pose), max_frames)
+        source = _field(seq, "source") if not isinstance(seq, dict) else seq.get("source", "unknown")
         try:
             rot_err = _run_seq(model, acc[:T], ori[:T], pose[:T], device)
             rot_sum[:T] += rot_err
             count[:T]   += 1
         except Exception as exc:
-            src = _field(seq, "source") if not isinstance(seq, dict) else seq.get("source", "?")
-            print(f"\n  skip {src}: {type(exc).__name__}: {exc}")
+            print(f"\n  skip {source}: {type(exc).__name__}: {exc}")
+            records.append(write_sequence_result(
+                out_dir, idx, source, seq.get("action", "other") if isinstance(seq, dict) else "other",
+                None, None, FPS, failure_reason="{}: {}".format(type(exc).__name__, exc),
+                configuration="full_4s"))
+        else:
+            records.append(write_sequence_result(
+                out_dir, idx, source, seq.get("action", "other") if isinstance(seq, dict) else "other",
+                rot_err, None, FPS, configuration="full_4s"))
         np.savez(_CKPT, rot_sum=rot_sum, count=count, seqs_done=idx + 1)
 
     if os.path.exists(_CKPT):
@@ -249,7 +259,7 @@ def evaluate(sequences, model, device: torch.device, max_frames: int,
     valid = count > 0
     rotation = np.full_like(rot_sum, np.nan)
     rotation[valid] = rot_sum[valid] / count[valid, None]
-    return rotation, count
+    return rotation, count, records
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -303,7 +313,7 @@ def main() -> int:
     if not sequences:
         raise RuntimeError("No eligible sequences found")
 
-    rotation, count = evaluate(sequences, model, device, max_frames, args.out_dir)
+    rotation, count, records = evaluate(sequences, model, device, max_frames, args.out_dir)
 
     output = args.out_dir / f"wheelposer_{args.suite}.npz"
     np.savez_compressed(output, rotation=rotation, count=count, fps=FPS)
@@ -312,6 +322,7 @@ def main() -> int:
         rotation, count, FPS,
         sensor_count=4, sensor_slots=_BRIDGE_SLOTS,
     )
+    write_detailed_index(args.out_dir, "wheelposer", args.suite, FPS, records)
 
     if not args.no_video:
         import mobileposer.articulate as art

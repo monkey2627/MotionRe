@@ -39,6 +39,7 @@ sys.path.insert(0, str(_CODE_DIR))
 from mobileposer.config import amass, datasets, model_config, paths, joint_set
 import mobileposer.articulate as art
 from drift_eval_common import add_imu_noise
+from benchmarks.detailed_results import write_sequence_result, write_detailed_index
 
 
 # ---------------------------------------------------------------------------
@@ -228,6 +229,7 @@ def evaluate_combo(combo_name, combo_indices, sequences, bodymodel, max_frames,
     rot_sum   = np.zeros((max_frames, 24))
     count     = np.zeros(max_frames)
     start_idx = 0
+    records = []
 
     if os.path.exists(_CKPT):
         ck = np.load(_CKPT)
@@ -243,9 +245,18 @@ def evaluate_combo(combo_name, combo_indices, sequences, bodymodel, max_frames,
         gt_pose = seq['pose'][:T]
         ori     = seq['ori'][:T]
 
-        rot_err = eval_slimevr(ori, gt_pose, combo_indices, bodymodel)
-        rot_sum[:T] += rot_err.numpy()
-        count[:T]   += 1.0
+        try:
+            rot_err = eval_slimevr(ori, gt_pose, combo_indices, bodymodel)
+            rot_sum[:T] += rot_err.numpy()
+            count[:T]   += 1.0
+            records.append(write_sequence_result(
+                Path(out_dir), idx, seq['source'], seq.get('action', 'other'),
+                rot_err.numpy(), None, datasets.fps, configuration=combo_name))
+        except Exception as exc:
+            records.append(write_sequence_result(
+                Path(out_dir), idx, seq['source'], seq.get('action', 'other'), None, None,
+                datasets.fps, failure_reason='{}: {}'.format(type(exc).__name__, exc),
+                configuration=combo_name))
 
         np.savez(_CKPT, rot_sum=rot_sum, count=count, seqs_done=idx + 1)
 
@@ -262,6 +273,7 @@ def evaluate_combo(combo_name, combo_indices, sequences, bodymodel, max_frames,
         'count':     count,
         'n_sensors': len(combo_indices),
         'n_seqs':    int(count[0]),
+        'records':   records,
     }
 
 
@@ -652,6 +664,8 @@ def main():
         Path(args.out_dir), 'slimevr', 'drift', result['rot'], result['count'], fps,
         6, [0, 1, 2, 3, 4, 5], result['tran'],
     )
+    write_detailed_index(Path(args.out_dir), 'slimevr', 'drift', fps,
+                         [record for result in all_results.values() for record in result['records']])
 
     if not args.no_video:
         print(f'\nGenerating videos for {len(sequences)} sequences ...')

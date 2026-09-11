@@ -52,6 +52,7 @@ sys.path.insert(0, str(_BASE))
 
 from benchmarks.bridge_data import load_dip_sequences, load_amass_sequences
 from benchmarks.standard_results import write_standard_result
+from benchmarks.detailed_results import write_sequence_result, write_detailed_index
 from drift_eval_common import angle_between_rotmats, load_long_sequences
 
 FPS = 30
@@ -182,6 +183,7 @@ def evaluate_bridge(sequences, model, device, max_frames: int, out_dir: Path):
     rot_sum = np.zeros((max_frames, 24), dtype=np.float64)
     count   = np.zeros(max_frames, dtype=np.int64)
     start_idx = 0
+    records = []
 
     if os.path.exists(_CKPT):
         ck = np.load(_CKPT)
@@ -197,13 +199,20 @@ def evaluate_bridge(sequences, model, device, max_frames: int, out_dir: Path):
         acc  = _field(seq, "acc")
         ori  = _field(seq, "ori")
         T = min(len(pose), max_frames)
+        source = _field(seq, "source") if not isinstance(seq, dict) else seq.get("source", "unknown")
         try:
             rot_err = _run_bridge_seq(model, acc[:T], ori[:T], pose[:T], device)
             rot_sum[:T] += rot_err
             count[:T]   += 1
+            records.append(write_sequence_result(
+                out_dir, idx, source, seq.get("action", "other") if isinstance(seq, dict) else "other",
+                rot_err, None, FPS, configuration="full_6s"))
         except Exception as exc:
-            src = _field(seq, "source") if not isinstance(seq, dict) else seq.get("source", "?")
-            print(f"\n  skip {src}: {type(exc).__name__}: {exc}")
+            print(f"\n  skip {source}: {type(exc).__name__}: {exc}")
+            records.append(write_sequence_result(
+                out_dir, idx, source, seq.get("action", "other") if isinstance(seq, dict) else "other",
+                None, None, FPS, failure_reason="{}: {}".format(type(exc).__name__, exc),
+                configuration="full_6s"))
         np.savez(_CKPT, rot_sum=rot_sum, count=count, seqs_done=idx + 1)
 
     if os.path.exists(_CKPT):
@@ -212,7 +221,7 @@ def evaluate_bridge(sequences, model, device, max_frames: int, out_dir: Path):
     valid = count > 0
     rotation = np.full_like(rot_sum, np.nan)
     rotation[valid] = rot_sum[valid] / count[valid, None]
-    return rotation, count
+    return rotation, count, records
 
 
 # ── evaluation loop (native GlobalPose DIP format) ───────────────────────────
@@ -225,6 +234,7 @@ def evaluate_native_dip(data, model, device, max_frames: int, out_dir: Path):
     rot_sum = np.zeros((max_frames, 24), dtype=np.float64)
     count   = np.zeros(max_frames, dtype=np.int64)
     start_idx = 0
+    records = []
 
     if os.path.exists(_CKPT):
         ck = np.load(_CKPT)
@@ -239,6 +249,7 @@ def evaluate_native_dip(data, model, device, max_frames: int, out_dir: Path):
             continue
         pose = art.math.axis_angle_to_rotation_matrix(data["pose"][idx]).view(-1, 24, 3, 3)
         T = min(pose.shape[0], max_frames)
+        source = "dip_native[{}]".format(idx)
         try:
             rot_err = _run_native_seq(
                 model,
@@ -252,8 +263,13 @@ def evaluate_native_dip(data, model, device, max_frames: int, out_dir: Path):
             )
             rot_sum[:T] += rot_err
             count[:T]   += 1
+            records.append(write_sequence_result(
+                out_dir, idx, source, "dip", rot_err, None, FPS, configuration="full_6s"))
         except Exception as exc:
             print(f"\n  skip seq {idx}: {type(exc).__name__}: {exc}")
+            records.append(write_sequence_result(
+                out_dir, idx, source, "dip", None, None, FPS,
+                failure_reason="{}: {}".format(type(exc).__name__, exc), configuration="full_6s"))
         np.savez(_CKPT, rot_sum=rot_sum, count=count, seqs_done=idx + 1)
 
     if os.path.exists(_CKPT):
@@ -262,7 +278,7 @@ def evaluate_native_dip(data, model, device, max_frames: int, out_dir: Path):
     valid = count > 0
     rotation = np.full_like(rot_sum, np.nan)
     rotation[valid] = rot_sum[valid] / count[valid, None]
-    return rotation, count
+    return rotation, count, records
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -302,7 +318,7 @@ def main() -> int:
         native_data, has_native = _load_native_dip(args.model.parent)
         if has_native:
             print("Using native GlobalPose DIP-IMU test data.")
-            rotation, count = evaluate_native_dip(
+            rotation, count, records = evaluate_native_dip(
                 native_data, model, device, max_frames, args.out_dir
             )
         else:
@@ -312,7 +328,7 @@ def main() -> int:
             )
             if not sequences:
                 raise RuntimeError("No eligible DIP sequences found")
-            rotation, count = evaluate_bridge(
+            rotation, count, records = evaluate_bridge(
                 sequences, model, device, max_frames, args.out_dir
             )
     else:
@@ -325,7 +341,7 @@ def main() -> int:
         )
         if not sequences:
             raise RuntimeError("No eligible AMASS sequences found")
-        rotation, count = evaluate_bridge(
+        rotation, count, records = evaluate_bridge(
             sequences, model, device, max_frames, args.out_dir
         )
 
@@ -337,6 +353,7 @@ def main() -> int:
         args.out_dir, "globalpose", args.suite,
         rotation, count, FPS, 6, [0, 1, 2, 3, 4, 5],
     )
+    write_detailed_index(args.out_dir, "globalpose", args.suite, FPS, records)
 
     # Video generation only for bridge-format sequences (not native DIP)
     _video_seqs = locals().get("sequences", None)

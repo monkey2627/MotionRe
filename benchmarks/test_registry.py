@@ -29,8 +29,9 @@ class RegistryTests(unittest.TestCase):
         spec = next(spec for spec in self.specs if spec.name == "mobileposer")
         options = BenchmarkOptions(self.root, self.root / "benchmark_results", smoke=True)
         plans = build_plans(spec, "sensor-sweep", options)
-        self.assertEqual(len(plans), 5)
-        self.assertEqual([plan.name for plan in plans], ["1-sensor", "2-sensor", "3-sensor", "4-sensor", "5-sensor"])
+        self.assertEqual(len(plans), 3)
+        self.assertEqual([plan.name for plan in plans], ["4-sensor", "5-sensor", "6-sensor"])
+        self.assertTrue(all(any("evaluate_dip" in argument for argument in plan.argv) for plan in plans))
 
     def test_external_methods_are_not_marked_ready(self):
         for spec in self.specs:
@@ -43,6 +44,7 @@ class RegistryTests(unittest.TestCase):
             self.root / "benchmark_results",
             smoke=True,
             device="cpu",
+            with_video=False,
         )
 
         dynaip = next(spec for spec in self.specs if spec.name == "dynaip")

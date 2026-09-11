@@ -28,7 +28,12 @@ def _read_result(path: Path) -> dict:
         "all_rotation_deg": float(np.nanmean(rotation[valid][:, JOINT_GROUPS["all"]])),
         "lumbar_rotation_deg": float(np.nanmean(rotation[valid][:, JOINT_GROUPS["lumbar"]])),
         "translation_m": "",
+        "run_status": "unknown",
     }
+    report_path = path.with_name("benchmark_report.json")
+    if report_path.exists():
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        row["run_status"] = report.get("status", "unknown")
     if np.isfinite(translation[valid]).any():
         row["translation_m"] = "{:.6f}".format(float(np.nanmean(translation[valid])))
     return row
@@ -51,7 +56,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     output = args.output or args.results_root / "{}_summary.csv".format(args.suite)
     output.parent.mkdir(parents=True, exist_ok=True)
     fields = (
-        "method", "suite", "sensor_count", "evaluated_frames",
+        "method", "suite", "run_status", "sensor_count", "evaluated_frames",
         "all_rotation_deg", "lumbar_rotation_deg", "translation_m",
     )
     with output.open("w", newline="", encoding="utf-8") as handle:
