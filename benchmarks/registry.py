@@ -201,12 +201,12 @@ def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
             "pure-imu-global",
             "6 IMUs",
             code / "GlobalPose",
-            ("native",),
+            ("dip", "drift", "native"),
             (
-                "code/GlobalPose/test.py",
+                "code/GlobalPose/evaluate_bridge.py",
                 "code/GlobalPose/data/weights.pt",
             ),
-            notes="Physics-based global motion baseline; official local environment is Windows/Python 3.8.",
+            notes="Physics-based global motion baseline; bridge evaluator supports dip/drift suites.",
         ),
         MethodSpec(
             "imuposer",#，没给预训练
@@ -241,13 +241,13 @@ def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
             "WheelPoser",
             "non-ergonomic",
             "4 IMUs",
-            no_use / "WheelPoser",
-            ("native",),
+            code    / "WheelPoser",
+            ("dip", "drift"),
             (
-                "code/NoUse/WheelPoser/README.md",
-                "code/NoUse/WheelPoser/checkpoints",
+                "code/WheelPoser/evaluate_bridge.py",
+                "code/WheelPoser/checkpoints",
             ),
-            notes="Wheelchair-user and seated-motion stress test; requires external dataset/checkpoints.",
+            notes="Wheelchair-user upper-body baseline (4 sensors); bridge evaluator supports dip/drift suites.",
         ),
         MethodSpec(
             "uip",
@@ -377,7 +377,7 @@ def missing_requirements(
         script = spec.working_dir / "evaluate_dip.py"
         return [str(script.relative_to(root))] if not script.exists() else []
 
-    if spec.name in {"pip", "transpose"} and suite in {"dip", "drift"}:
+    if spec.name in {"pip", "transpose", "globalpose", "wheelposer"} and suite in {"dip", "drift"}:
         script = spec.working_dir / "evaluate_bridge.py"
         return [str(script.relative_to(root))] if not script.exists() else []
 
@@ -470,6 +470,8 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
             args = ["-m", "mobileposer.evaluate_dip", "--model", model]
             args += _common_dip_args(options, output)
             args = _with_device(args, options.device)
+            if not options.with_video:
+                args += ["--no_video"]
             plans.append(CommandPlan(spec.name, suite, "DIP-IMU", cwd, tuple([python] + args), output))
         elif suite == "drift":
             output = _output_dir(options, spec.name, suite)
@@ -506,6 +508,8 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
             args += ["--combos"] + list(options.combos)
         if spec.name not in {"slimevr", "pnp"}:
             args = _with_device(args, options.device)
+        if suite == "dip" and not options.with_video:
+            args += ["--no_video"]
         plans.append(CommandPlan(spec.name, suite, script, cwd, tuple([python] + args), output))
         return plans
 
@@ -615,16 +619,45 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
 
     if spec.name == "globalpose":
         output = _output_dir(options, spec.name, suite)
+        if suite in {"dip", "drift"}:
+            min_frames = 1 if suite == "drift" and options.action_manifest else options.effective_min_frames
+            max_seqs = 0 if suite == "drift" and options.action_manifest else options.effective_max_seqs
+            args = [
+                "evaluate_bridge.py", "--suite", suite,
+                "--model", model or "data/weights.pt",
+                "--min-frames", str(min_frames),
+                "--max-seconds", str(int(options.effective_max_seconds)),
+                "--out-dir", str(output),
+            ]
+            if suite == "drift":
+                args += ["--max-seqs", str(max_seqs)]
+                if options.action_manifest:
+                    args += ["--action-manifest", str(options.action_manifest),
+                             "--max-per-action", str(options.max_per_action)]
+            args = _with_device(args, options.device)
+            plans.append(CommandPlan(spec.name, suite, suite, cwd, tuple([python] + args), output))
+            return plans
         plans.append(CommandPlan(spec.name, suite, "native", cwd, (python, "test.py"), output))
         return plans
 
     if spec.name == "wheelposer":
         output = _output_dir(options, spec.name, suite)
-        script = (
-            "scripts/2. Experiments/2.2 WheelPoser_3_Stage/"
-            "2.2.2 Offline Evaluation/2.2.2.1 Evaluate_WheelPoser_Leave14.py"
-        )
-        plans.append(CommandPlan(spec.name, suite, "leave14", cwd, (python, script), output))
+        min_frames = 1 if suite == "drift" and options.action_manifest else options.effective_min_frames
+        max_seqs = 0 if suite == "drift" and options.action_manifest else options.effective_max_seqs
+        args = [
+            "evaluate_bridge.py", "--suite", suite,
+            "--checkpoint-dir", model or "checkpoints",
+            "--min-frames", str(min_frames),
+            "--max-seconds", str(int(options.effective_max_seconds)),
+            "--out-dir", str(output),
+        ]
+        if suite == "drift":
+            args += ["--max-seqs", str(max_seqs)]
+            if options.action_manifest:
+                args += ["--action-manifest", str(options.action_manifest),
+                         "--max-per-action", str(options.max_per_action)]
+        args = _with_device(args, options.device)
+        plans.append(CommandPlan(spec.name, suite, suite, cwd, tuple([python] + args), output))
         return plans
 
     if spec.name == "uip":

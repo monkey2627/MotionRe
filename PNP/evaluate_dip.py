@@ -191,10 +191,13 @@ def save_npz(results, out_dir: Path, max_frames):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--min_frames',  type=int, default=300)
-    p.add_argument('--max_seconds', type=int, default=60)
-    p.add_argument('--device',      default='cuda' if torch.cuda.is_available() else 'cpu')
-    p.add_argument('--out_dir',     default=DEFAULT_OUT)
+    p.add_argument('--min_frames',    type=int, default=300)
+    p.add_argument('--max_seconds',   type=int, default=60)
+    p.add_argument('--device',        default='cuda' if torch.cuda.is_available() else 'cpu')
+    p.add_argument('--out_dir',       default=DEFAULT_OUT)
+    p.add_argument('--no_video',      action='store_true')
+    p.add_argument('--video_seconds', type=int, default=30)
+    p.add_argument('--video_fps',     type=int, default=10)
     args = p.parse_args()
 
     max_frames = args.max_seconds * FPS
@@ -222,6 +225,47 @@ def main():
         Path(args.out_dir), 'pnp', 'dip', result['rot'], result['count'],
         FPS, 6, [0, 1, 2, 3, 4, 5], result['tran'],
     )
+
+    if not args.no_video:
+        from benchmarks.video import render_comparison_video
+        from drift_eval_common import SENSOR_TO_JOINT
+        bodymodel = art.model.ParametricModel(str(_SMPL))
+        for index, seq in enumerate(sequences):
+            length = min(seq['pose'].shape[0], args.video_seconds * FPS)
+            acc_g = (seq['acc'][:length] + _GRAVITY).to(args.device)
+            ori_d = seq['ori'][:length].to(args.device)
+            w     = angular_velocity(seq['ori'][:length]).to(args.device)
+            try:
+                model.rnn_initialize()
+                pose_list, tran_list = [], []
+                with torch.no_grad():
+                    for t in range(length):
+                        p_t, tr_t = model.forward_frame(acc_g[t], w[t], ori_d[t])
+                        pose_list.append(p_t.detach().cpu())
+                        tran_list.append(tr_t.detach().cpu())
+                pose_pred = torch.stack(pose_list)
+                tran_pred = torch.stack(tran_list)
+            except Exception as exc:
+                print(f'\n  skip video seq {index}: {exc}')
+                continue
+            pose_fk = torch.eye(3).view(1, 1, 3, 3).expand(length, 24, 3, 3).clone()
+            root_ori = seq['ori'][:length, 5]
+            for s, j in enumerate(SENSOR_TO_JOINT):
+                pose_fk[:, j] = root_ori.transpose(-1, -2) @ seq['ori'][:length, s]
+            tran_pred = tran_pred - tran_pred[:1] + seq['tran'][:1]
+            with torch.no_grad():
+                _, gt_joints   = bodymodel.forward_kinematics(seq['pose'][:length], tran=seq['tran'][:length])
+                _, pred_joints = bodymodel.forward_kinematics(pose_pred, tran=tran_pred)
+                _, fk_joints   = bodymodel.forward_kinematics(pose_fk,   tran=seq['tran'][:length])
+            errors    = angle_between_rotmats(pose_pred, seq['pose'][:length])[:, LUMBAR_JOINTS].mean(-1).numpy()
+            fk_errors = angle_between_rotmats(pose_fk,   seq['pose'][:length])[:, LUMBAR_JOINTS].mean(-1).numpy()
+            render_comparison_video(
+                gt_joints=gt_joints.numpy(), method_joints=pred_joints.numpy(),
+                fk_joints=fk_joints.numpy(), method='PNP', combo='6s',
+                sequence=seq, fps=FPS, out_dir=Path(args.out_dir),
+                seq_idx=index, max_seconds=args.video_seconds,
+                render_fps=args.video_fps, method_errors=errors, fk_errors=fk_errors,
+            )
 
 
 if __name__ == '__main__':

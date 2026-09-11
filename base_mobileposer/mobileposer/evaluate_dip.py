@@ -175,11 +175,14 @@ def save_npz(results, out_dir: Path, max_frames):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--model',       required=True, help='Path to weights.pth')
-    p.add_argument('--min_frames',  type=int, default=300)
-    p.add_argument('--max_seconds', type=int, default=60)
-    p.add_argument('--device',      default='cuda' if torch.cuda.is_available() else 'cpu')
-    p.add_argument('--out_dir',     default=DEFAULT_OUT)
+    p.add_argument('--model',        required=True, help='Path to weights.pth')
+    p.add_argument('--min_frames',   type=int, default=300)
+    p.add_argument('--max_seconds',  type=int, default=60)
+    p.add_argument('--device',       default='cuda' if torch.cuda.is_available() else 'cpu')
+    p.add_argument('--out_dir',      default=DEFAULT_OUT)
+    p.add_argument('--no_video',     action='store_true')
+    p.add_argument('--video_seconds', type=int, default=30)
+    p.add_argument('--video_fps',    type=int, default=10)
     args = p.parse_args()
 
     max_frames = args.max_seconds * FPS
@@ -204,6 +207,41 @@ def main():
         _Path(args.out_dir), 'mobileposer', 'dip', result['rot'], result['count'],
         FPS, 5, FULL_COMBOS['full_5s'], result['tran'],
     )
+
+    if not args.no_video:
+        from benchmarks.video import render_comparison_video
+        bodymodel = art.model.ParametricModel(str(paths.smpl_file))
+        for index, seq in enumerate(sequences):
+            length = min(len(seq['pose']), args.video_seconds * FPS)
+            imu = prepare_imu(seq['acc'][:length], seq['ori'][:length], FULL_COMBOS['full_5s'])
+            try:
+                with torch.no_grad():
+                    model.reset()
+                    imu_d = imu.to(args.device).unsqueeze(0)
+                    pose_p, _, tran_p, _ = model.forward_offline(imu_d, [imu_d.shape[1]])
+                pose_pred = pose_p.cpu()[:length]
+                tran_pred = tran_p.cpu()[:length]
+            except Exception as exc:
+                print(f'\n  skip video seq {index}: {exc}')
+                continue
+            pose_fk = torch.eye(3).view(1, 1, 3, 3).expand(length, 24, 3, 3).clone()
+            root_ori = seq['ori'][:length, 5]
+            for s, j in enumerate(SENSOR_TO_JOINT):
+                pose_fk[:, j] = root_ori.transpose(-1, -2) @ seq['ori'][:length, s]
+            tran_pred = tran_pred - tran_pred[:1] + seq['tran'][:1]
+            with torch.no_grad():
+                _, gt_joints   = bodymodel.forward_kinematics(seq['pose'][:length], tran=seq['tran'][:length])
+                _, pred_joints = bodymodel.forward_kinematics(pose_pred, tran=tran_pred)
+                _, fk_joints   = bodymodel.forward_kinematics(pose_fk,   tran=seq['tran'][:length])
+            errors    = angle_between_rotmats(pose_pred, seq['pose'][:length])[:, LUMBAR_JOINTS].mean(-1).numpy()
+            fk_errors = angle_between_rotmats(pose_fk,   seq['pose'][:length])[:, LUMBAR_JOINTS].mean(-1).numpy()
+            render_comparison_video(
+                gt_joints=gt_joints.numpy(), method_joints=pred_joints.numpy(),
+                fk_joints=fk_joints.numpy(), method='MobilePoser', combo='full_5s',
+                sequence=seq, fps=FPS, out_dir=_Path(args.out_dir),
+                seq_idx=index, max_seconds=args.video_seconds,
+                render_fps=args.video_fps, method_errors=errors, fk_errors=fk_errors,
+            )
 
 
 if __name__ == '__main__':

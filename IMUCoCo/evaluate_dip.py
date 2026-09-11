@@ -253,6 +253,7 @@ def main():
     p.add_argument('--max_seconds', type=int, default=60)
     p.add_argument('--device',      default='cuda' if torch.cuda.is_available() else 'cpu')
     p.add_argument('--out_dir',     default=DEFAULT_OUT)
+    p.add_argument('--no_video',    action='store_true')
     args = p.parse_args()
 
     max_frames = args.max_seconds * FPS

@@ -150,7 +150,7 @@ def main() -> int:
         args.out_dir, "transpose", args.suite, rotation, count, FPS, 6,
         [0, 1, 2, 3, 4, 5], translation,
     )
-    if not args.no_video and args.suite == "drift":
+    if not args.no_video:
         bodymodel = art.model.ParametricModel(str(paths.smpl_file))
         for index, sequence in enumerate(sequences):
             pose = _field(sequence, "pose")

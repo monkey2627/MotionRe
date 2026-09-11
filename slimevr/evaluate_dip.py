@@ -162,6 +162,7 @@ def main():
     p.add_argument('--min_frames', type=int, default=300, help='Min seq length (frames)')
     p.add_argument('--max_seconds', type=int, default=60,  help='Evaluation window (s)')
     p.add_argument('--out_dir', default=DEFAULT_OUT)
+    p.add_argument('--no_video', action='store_true')
     args = p.parse_args()
 
     max_frames = args.max_seconds * FPS
