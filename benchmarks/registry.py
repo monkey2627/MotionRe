@@ -635,6 +635,8 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
                     args += ["--action-manifest", str(options.action_manifest),
                              "--max-per-action", str(options.max_per_action)]
             args = _with_device(args, options.device)
+            if not options.with_video:
+                args += ["--no-video"]
             plans.append(CommandPlan(spec.name, suite, suite, cwd, tuple([python] + args), output))
             return plans
         plans.append(CommandPlan(spec.name, suite, "native", cwd, (python, "test.py"), output))
@@ -657,6 +659,8 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
                 args += ["--action-manifest", str(options.action_manifest),
                          "--max-per-action", str(options.max_per_action)]
         args = _with_device(args, options.device)
+        if not options.with_video:
+            args += ["--no-video"]
         plans.append(CommandPlan(spec.name, suite, suite, cwd, tuple([python] + args), output))
         return plans
 

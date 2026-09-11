@@ -274,6 +274,9 @@ def main() -> int:
     parser.add_argument("--device",
                         default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--no-video", dest="no_video", action="store_true")
+    parser.add_argument("--video-seconds", type=int, default=30)
+    parser.add_argument("--video-fps", type=int, default=10)
     args = parser.parse_args()
 
     max_frames = args.max_seconds * FPS
@@ -309,6 +312,46 @@ def main() -> int:
         rotation, count, FPS,
         sensor_count=4, sensor_slots=_BRIDGE_SLOTS,
     )
+
+    if not args.no_video:
+        import mobileposer.articulate as art
+        from mobileposer.config import paths as mp_paths
+        from benchmarks.video import render_comparison_video
+        _WP_FK_MAP = {0: 18, 1: 19, 4: 15, 5: 0}  # bridge slot → SMPL joint
+        bodymodel = art.model.ParametricModel(str(mp_paths.smpl_file))
+        for index, seq in enumerate(sequences):
+            pose = _field(seq, "pose")
+            acc  = _field(seq, "acc")
+            ori  = _field(seq, "ori")
+            tran = _field(seq, "tran")
+            length = min(len(pose), args.video_seconds * FPS)
+            try:
+                imu_input = _prepare_imu(acc[:length], ori[:length]).to(device)
+                with torch.no_grad():
+                    pred_pose = model.forward_offline(imu_input)  # [T, 24, 3, 3]
+            except Exception as exc:
+                src = _field(seq, "source") if not isinstance(seq, dict) else seq.get("source", "?")
+                print(f"\n  skip video {src}: {type(exc).__name__}: {exc}")
+                continue
+            pose_fk  = torch.eye(3).view(1, 1, 3, 3).expand(length, 24, 3, 3).clone()
+            root_ori = ori[:length, 5]
+            for slot, joint in _WP_FK_MAP.items():
+                pose_fk[:, joint] = root_ori.transpose(-1, -2) @ ori[:length, slot]
+            tran_seq = tran[:length]
+            with torch.no_grad():
+                _, gt_j   = bodymodel.forward_kinematics(pose[:length],      tran=tran_seq)
+                _, pred_j = bodymodel.forward_kinematics(pred_pose[:length],  tran=tran_seq)
+                _, fk_j   = bodymodel.forward_kinematics(pose_fk,             tran=tran_seq)
+            errors    = angle_between_rotmats(pred_pose[:length], pose[:length])[:, _UPPER_BODY].mean(-1).numpy()
+            fk_errors = angle_between_rotmats(pose_fk,            pose[:length])[:, _UPPER_BODY].mean(-1).numpy()
+            render_comparison_video(
+                gt_joints=gt_j.numpy(), method_joints=pred_j.numpy(),
+                fk_joints=fk_j.numpy(), method="WheelPoser", combo="4s",
+                sequence=seq, fps=FPS, out_dir=args.out_dir,
+                seq_idx=index, max_seconds=args.video_seconds,
+                render_fps=args.video_fps, method_errors=errors, fk_errors=fk_errors,
+            )
+
     print(f"Saved: {output}")
     return 0
 

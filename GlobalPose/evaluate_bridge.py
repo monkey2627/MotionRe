@@ -284,6 +284,9 @@ def main() -> int:
     parser.add_argument("--device",
                         default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--no-video", dest="no_video", action="store_true")
+    parser.add_argument("--video-seconds", type=int, default=30)
+    parser.add_argument("--video-fps", type=int, default=10)
     args = parser.parse_args()
 
     max_frames = args.max_seconds * FPS
@@ -334,6 +337,53 @@ def main() -> int:
         args.out_dir, "globalpose", args.suite,
         rotation, count, FPS, 6, [0, 1, 2, 3, 4, 5],
     )
+
+    # Video generation only for bridge-format sequences (not native DIP)
+    _video_seqs = locals().get("sequences", None)
+    if not args.no_video and _video_seqs:
+        import mobileposer.articulate as art
+        from mobileposer.config import paths as mp_paths
+        from benchmarks.video import render_comparison_video
+        _GP_FK_MAP = {0: 18, 1: 19, 2: 1, 3: 2, 4: 15, 5: 0}
+        bodymodel = art.model.ParametricModel(str(mp_paths.smpl_file))
+        for index, seq in enumerate(_video_seqs):
+            pose = _field(seq, "pose")
+            acc  = _field(seq, "acc")
+            ori  = _field(seq, "ori")
+            tran = _field(seq, "tran")
+            length = min(len(pose), args.video_seconds * FPS)
+            aM, wM, RMB = _to_globalpose_inputs(acc[:length], ori[:length])
+            try:
+                model.rnn_initialize(pose[:1].to(device))
+                pose_list = []
+                with torch.no_grad():
+                    for t in range(length):
+                        p, _ = model.forward_frame(aM[t].to(device), wM[t].to(device), RMB[t].to(device))
+                        pose_list.append(p.detach().cpu())
+                pose_pred = torch.stack(pose_list)
+            except Exception as exc:
+                src = _field(seq, "source") if not isinstance(seq, dict) else seq.get("source", "?")
+                print(f"\n  skip video {src}: {type(exc).__name__}: {exc}")
+                continue
+            pose_fk  = torch.eye(3).view(1, 1, 3, 3).expand(length, 24, 3, 3).clone()
+            root_ori = ori[:length, 5]
+            for slot, joint in _GP_FK_MAP.items():
+                pose_fk[:, joint] = root_ori.transpose(-1, -2) @ ori[:length, slot]
+            tran_seq = tran[:length]
+            with torch.no_grad():
+                _, gt_j   = bodymodel.forward_kinematics(pose[:length],     tran=tran_seq)
+                _, pred_j = bodymodel.forward_kinematics(pose_pred,          tran=tran_seq)
+                _, fk_j   = bodymodel.forward_kinematics(pose_fk,            tran=tran_seq)
+            errors    = angle_between_rotmats(pose_pred, pose[:length])[:, [1,2,3,6,9]].mean(-1).numpy()
+            fk_errors = angle_between_rotmats(pose_fk,  pose[:length])[:, [1,2,3,6,9]].mean(-1).numpy()
+            render_comparison_video(
+                gt_joints=gt_j.numpy(), method_joints=pred_j.numpy(),
+                fk_joints=fk_j.numpy(), method="GlobalPose", combo="full_6s",
+                sequence=seq, fps=FPS, out_dir=args.out_dir,
+                seq_idx=index, max_seconds=args.video_seconds,
+                render_fps=args.video_fps, method_errors=errors, fk_errors=fk_errors,
+            )
+
     print(f"Saved: {output}")
     return 0
 

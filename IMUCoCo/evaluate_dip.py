@@ -249,11 +249,13 @@ def save_npz(results, out_dir: Path, max_frames):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--min_frames',  type=int, default=300)
-    p.add_argument('--max_seconds', type=int, default=60)
-    p.add_argument('--device',      default='cuda' if torch.cuda.is_available() else 'cpu')
-    p.add_argument('--out_dir',     default=DEFAULT_OUT)
-    p.add_argument('--no_video',    action='store_true')
+    p.add_argument('--min_frames',    type=int, default=300)
+    p.add_argument('--max_seconds',   type=int, default=60)
+    p.add_argument('--device',        default='cuda' if torch.cuda.is_available() else 'cpu')
+    p.add_argument('--out_dir',       default=DEFAULT_OUT)
+    p.add_argument('--no_video',      action='store_true')
+    p.add_argument('--video_seconds', type=int, default=30)
+    p.add_argument('--video_fps',     type=int, default=10)
     args = p.parse_args()
 
     max_frames = args.max_seconds * FPS
@@ -278,6 +280,54 @@ def main():
         Path(args.out_dir), 'imucoco', 'dip', result['rot'], result['count'],
         FPS, 6, [0, 1, 2, 3, 4, 5], result['tran'],
     )
+
+    if not args.no_video:
+        from benchmarks.video import render_comparison_video
+        _FK_MAP = {0: 18, 1: 19, 2: 1, 3: 2, 5: 0}
+        cidx_6s = COMBOS['6s']
+        device  = args.device
+        for index, seq in enumerate(sequences):
+            T        = min(seq['pose'].shape[0], args.video_seconds * FPS)
+            gt_pose  = seq['pose'][:T]
+            gt_tran  = seq['tran'][:T]
+            acc      = seq['acc'][:T]
+            ori      = seq['ori'][:T]
+            try:
+                vids   = [SENSOR_VERTEX_IDS[s] for s in cidx_6s]
+                coords = vc[vids]
+                imucoco.set_current_device_coordinates(coords)
+                imucoco.buffer_placement_codes_with_current_devices(parallel=False)
+                imu9   = torch.cat([_r6d(ori[:, cidx_6s]), acc[:, cidx_6s]], -1).unsqueeze(0).to(device)
+                with torch.no_grad():
+                    feat_m    = imucoco.inference_time_forward_mesh(imu9)
+                    glb_0, _  = body_model.forward_kinematics(gt_pose[:1], calc_mesh=False)
+                    glb_init  = _r6d(glb_0).to(device)
+                    _, pose_p, tran_p = poser.forward(
+                        x=feat_m, v_init=torch.zeros(1, 24, 3, device=device),
+                        glb_init=glb_init, seq_len=torch.tensor([T]),
+                        compute_tran='transpose')
+                pose_pred = pose_p[0].cpu()
+                tran_pred = tran_p.cpu() - tran_p.cpu()[:1] + gt_tran[:1]
+            except Exception as exc:
+                print(f'\n  skip video seq {index}: {exc}')
+                continue
+            pose_fk  = torch.eye(3).unsqueeze(0).unsqueeze(0).expand(T, 24, -1, -1).clone()
+            root_ori = ori[:, 5]
+            for s_idx, j_idx in _FK_MAP.items():
+                pose_fk[:, j_idx] = root_ori.transpose(-1, -2) @ ori[:, s_idx]
+            with torch.no_grad():
+                _, gt_j   = body_model.forward_kinematics(gt_pose,   tran=gt_tran)
+                _, pred_j = body_model.forward_kinematics(pose_pred, tran=tran_pred)
+                _, fk_j   = body_model.forward_kinematics(pose_fk,   tran=gt_tran)
+            errors    = angle_between_rotmats(pose_pred[:, LUMBAR_JOINTS], gt_pose[:, LUMBAR_JOINTS]).mean(-1).numpy()
+            fk_errors = angle_between_rotmats(pose_fk[:, LUMBAR_JOINTS],   gt_pose[:, LUMBAR_JOINTS]).mean(-1).numpy()
+            render_comparison_video(
+                gt_joints=gt_j.cpu().numpy(), method_joints=pred_j.cpu().numpy(),
+                fk_joints=fk_j.cpu().numpy(), method='IMUCoCo', combo='full_6s',
+                sequence=seq, fps=FPS, out_dir=Path(args.out_dir),
+                seq_idx=index, max_seconds=args.video_seconds,
+                render_fps=args.video_fps, method_errors=errors, fk_errors=fk_errors,
+            )
 
 
 if __name__ == '__main__':
