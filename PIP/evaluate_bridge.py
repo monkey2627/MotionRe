@@ -65,11 +65,25 @@ def _load_model(weights: Path):
 
 
 @torch.no_grad()
-def evaluate(sequences, model, max_frames: int):
+def evaluate(sequences, model, max_frames: int, out_dir: Path = None):
+    _CKPT = str(out_dir / ".eval_ckpt_pip.npz") if out_dir else None
+
     rotation_sum = np.zeros((max_frames, 24), dtype=np.float64)
     translation_sum = np.zeros(max_frames, dtype=np.float64)
     count = np.zeros(max_frames, dtype=np.int64)
-    for sequence in tqdm(sequences, desc="PIP"):
+    start_idx = 0
+
+    if _CKPT and os.path.exists(_CKPT):
+        ck = np.load(_CKPT)
+        rotation_sum    = ck["rotation_sum"]
+        translation_sum = ck["translation_sum"]
+        count           = ck["count"]
+        start_idx       = int(ck["seqs_done"])
+        print(f"  [Resume] PIP: {start_idx}/{len(sequences)} seqs done")
+
+    for idx, sequence in enumerate(tqdm(sequences, desc="PIP")):
+        if idx < start_idx:
+            continue
         pose = _field(sequence, "pose")
         acc = _field(sequence, "acc")
         ori = _field(sequence, "ori")
@@ -82,14 +96,21 @@ def evaluate(sequences, model, max_frames: int):
         except Exception as exc:
             source = _field(sequence, "source") if not isinstance(sequence, dict) else sequence.get("source", "unknown")
             print(f"\n  skip {source}: {type(exc).__name__}: {exc}")
-            continue
-        rotation_sum[:length] += angle_between_rotmats(
-            pose_pred.cpu(), pose[:length]
-        ).numpy()
-        translation_sum[:length] += (tran_pred.cpu() - (
-            tran[:length] - tran[:1]
-        )).norm(dim=-1).numpy()
-        count[:length] += 1
+        else:
+            rotation_sum[:length] += angle_between_rotmats(
+                pose_pred.cpu(), pose[:length]
+            ).numpy()
+            translation_sum[:length] += (tran_pred.cpu() - (
+                tran[:length] - tran[:1]
+            )).norm(dim=-1).numpy()
+            count[:length] += 1
+        if _CKPT:
+            np.savez(_CKPT, rotation_sum=rotation_sum, translation_sum=translation_sum,
+                     count=count, seqs_done=idx + 1)
+
+    if _CKPT and os.path.exists(_CKPT):
+        os.remove(_CKPT)
+
     valid = count > 0
     rotation = np.full_like(rotation_sum, np.nan)
     translation = np.full(max_frames, np.nan)
@@ -126,8 +147,8 @@ def main() -> int:
     if not sequences:
         raise RuntimeError("No eligible sequences found")
     model = _load_model(args.model)
-    rotation, translation, count = evaluate(sequences, model, max_frames)
     args.out_dir.mkdir(parents=True, exist_ok=True)
+    rotation, translation, count = evaluate(sequences, model, max_frames, out_dir=args.out_dir)
     output = args.out_dir / "pip_{}.npz".format(args.suite)
     np.savez_compressed(output, rotation=rotation, translation=translation, count=count, fps=FPS)
     write_standard_result(

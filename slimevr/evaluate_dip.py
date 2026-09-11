@@ -83,21 +83,45 @@ def fk_predict(ori: torch.Tensor, combo_indices: list, bodymodel) -> torch.Tenso
 
 # ── evaluation loop ───────────────────────────────────────────────────────────
 
-def evaluate(sequences, bodymodel, combos, max_frames) -> dict:
-    results = {}
-    for cname, cidx in combos.items():
-        rot_sum = np.zeros((max_frames, 24))
-        count   = np.zeros(max_frames)
-        for seq in tqdm.tqdm(sequences, desc=f'  {cname}', leave=False):
-            T = min(seq['pose'].shape[0], max_frames)
-            pred = fk_predict(seq['ori'][:T], cidx, bodymodel)
-            err  = angle_between_rotmats(pred, seq['pose'][:T]).numpy()
-            rot_sum[:T] += err
-            count[:T]   += 1
-        c = np.maximum(count, 1)
-        rot_avg = np.where(count[:, None] > 0, rot_sum / c[:, None], 0.0)
-        results[cname] = {'rot': rot_avg, 'count': count, 'n': 6, 'n_seqs': int(count[0])}
-    return results
+def _evaluate_combo(cname, cidx, sequences, bodymodel, max_frames, out_dir):
+    """Evaluate one combo with per-sequence checkpointing for resume support."""
+    _CKPT = os.path.join(out_dir, f'.eval_ckpt_{cname}.npz')
+
+    rot_sum  = np.zeros((max_frames, 24))
+    count    = np.zeros(max_frames)
+    start_idx = 0
+
+    if os.path.exists(_CKPT):
+        ck = np.load(_CKPT)
+        rot_sum   = ck['rot_sum']
+        count     = ck['count']
+        start_idx = int(ck['seqs_done'])
+        print(f'  [Resume] {cname}: {start_idx}/{len(sequences)} seqs done')
+
+    for idx, seq in enumerate(tqdm.tqdm(sequences, desc=f'  {cname}', leave=False)):
+        if idx < start_idx:
+            continue
+        T = min(seq['pose'].shape[0], max_frames)
+        pred = fk_predict(seq['ori'][:T], cidx, bodymodel)
+        err  = angle_between_rotmats(pred, seq['pose'][:T]).numpy()
+        rot_sum[:T] += err
+        count[:T]   += 1
+        np.savez(_CKPT, rot_sum=rot_sum, count=count, seqs_done=idx + 1)
+
+    if os.path.exists(_CKPT):
+        os.remove(_CKPT)
+
+    c = np.maximum(count, 1)
+    rot_avg = np.where(count[:, None] > 0, rot_sum / c[:, None], 0.0)
+    return {'rot': rot_avg, 'count': count, 'n': 6, 'n_seqs': int(count[0])}
+
+
+def evaluate(sequences, bodymodel, combos, max_frames, out_dir=DEFAULT_OUT) -> dict:
+    os.makedirs(out_dir, exist_ok=True)
+    return {
+        cname: _evaluate_combo(cname, cidx, sequences, bodymodel, max_frames, out_dir)
+        for cname, cidx in combos.items()
+    }
 
 
 # ── output ────────────────────────────────────────────────────────────────────
@@ -147,7 +171,7 @@ def main():
 
     bodymodel = art.model.ParametricModel(str(paths.smpl_file))
     print(f'\nRunning SlimeVR FK on {len(sequences)} DIP-IMU sequences ...')
-    results = evaluate(sequences, bodymodel, FULL_COMBOS, max_frames)
+    results = evaluate(sequences, bodymodel, FULL_COMBOS, max_frames, out_dir=args.out_dir)
     print_summary(results, max_frames)
     save_npz(results, Path(args.out_dir), max_frames)
     from benchmarks.standard_results import write_standard_result

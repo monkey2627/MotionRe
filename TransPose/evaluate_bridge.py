@@ -60,13 +60,27 @@ def _load_model(weights: Path, device: torch.device):
 
 
 @torch.no_grad()
-def evaluate(sequences, model, device: torch.device, max_frames: int):
+def evaluate(sequences, model, device: torch.device, max_frames: int, out_dir: Path = None):
     from utils import normalize_and_concat
+
+    _CKPT = str(out_dir / ".eval_ckpt_transpose.npz") if out_dir else None
 
     rotation_sum = np.zeros((max_frames, 24), dtype=np.float64)
     translation_sum = np.zeros(max_frames, dtype=np.float64)
     count = np.zeros(max_frames, dtype=np.int64)
-    for sequence in tqdm(sequences, desc="TransPose"):
+    start_idx = 0
+
+    if _CKPT and os.path.exists(_CKPT):
+        ck = np.load(_CKPT)
+        rotation_sum    = ck["rotation_sum"]
+        translation_sum = ck["translation_sum"]
+        count           = ck["count"]
+        start_idx       = int(ck["seqs_done"])
+        print(f"  [Resume] TransPose: {start_idx}/{len(sequences)} seqs done")
+
+    for idx, sequence in enumerate(tqdm(sequences, desc="TransPose")):
+        if idx < start_idx:
+            continue
         pose = _field(sequence, "pose")
         acc = _field(sequence, "acc")
         ori = _field(sequence, "ori")
@@ -83,6 +97,13 @@ def evaluate(sequences, model, device: torch.device, max_frames: int):
             tran[:length] - tran[:1]
         )).norm(dim=-1).numpy()
         count[:length] += 1
+        if _CKPT:
+            np.savez(_CKPT, rotation_sum=rotation_sum, translation_sum=translation_sum,
+                     count=count, seqs_done=idx + 1)
+
+    if _CKPT and os.path.exists(_CKPT):
+        os.remove(_CKPT)
+
     valid = count > 0
     rotation = np.full_like(rotation_sum, np.nan)
     translation = np.full(max_frames, np.nan)
@@ -121,8 +142,8 @@ def main() -> int:
         raise RuntimeError("No eligible sequences found")
     device = torch.device(args.device)
     model = _load_model(args.model, device)
-    rotation, translation, count = evaluate(sequences, model, device, max_frames)
     args.out_dir.mkdir(parents=True, exist_ok=True)
+    rotation, translation, count = evaluate(sequences, model, device, max_frames, out_dir=args.out_dir)
     output = args.out_dir / "transpose_{}.npz".format(args.suite)
     np.savez_compressed(output, rotation=rotation, translation=translation, count=count, fps=FPS)
     write_standard_result(

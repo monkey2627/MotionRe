@@ -155,34 +155,62 @@ def run_one(imucoco, poser, body_model, vc, acc, ori, gt_pose, gt_tran, cidx, de
 
 # ── evaluation loop ───────────────────────────────────────────────────────────
 
-def evaluate(sequences, imucoco, poser, body_model, vc, combos, max_frames, device) -> dict:
-    results = {}
-    for cname, cidx in combos.items():
-        rot_sum  = np.zeros((max_frames, 24))
-        tran_sum = np.zeros(max_frames)
-        count    = np.zeros(max_frames)
-        for seq in tqdm.tqdm(sequences, desc=f'  {cname}', leave=False):
-            T = min(seq['pose'].shape[0], max_frames)
-            try:
-                err_r, err_t = run_one(
-                    imucoco, poser, body_model, vc,
-                    seq['acc'][:T], seq['ori'][:T],
-                    seq['pose'][:T], seq['tran'][:T],
-                    cidx, device)
-                rot_sum[:T]  += err_r
-                tran_sum[:T] += err_t
-                count[:T]    += 1
-            except Exception as e:
-                print(f'    skip ({cname}): {e}')
-        c = np.maximum(count, 1)
-        results[cname] = {
-            'rot':    np.where(count[:, None] > 0, rot_sum  / c[:, None], 0.0),
-            'tran':   np.where(count > 0,           tran_sum / c,           np.nan),
-            'count':  count,
-            'n':      len(cidx),
-            'n_seqs': int(count[0]),
-        }
-    return results
+def _evaluate_combo(cname, cidx, sequences, imucoco, poser, body_model, vc,
+                    max_frames, device, out_dir):
+    """Evaluate one combo with per-sequence checkpointing for resume support."""
+    _CKPT = os.path.join(out_dir, f'.eval_ckpt_{cname}.npz')
+
+    rot_sum  = np.zeros((max_frames, 24))
+    tran_sum = np.zeros(max_frames)
+    count    = np.zeros(max_frames)
+    start_idx = 0
+
+    if os.path.exists(_CKPT):
+        ck = np.load(_CKPT)
+        rot_sum   = ck['rot_sum']
+        tran_sum  = ck['tran_sum']
+        count     = ck['count']
+        start_idx = int(ck['seqs_done'])
+        print(f'  [Resume] {cname}: {start_idx}/{len(sequences)} seqs done')
+
+    for idx, seq in enumerate(tqdm.tqdm(sequences, desc=f'  {cname}', leave=False)):
+        if idx < start_idx:
+            continue
+        T = min(seq['pose'].shape[0], max_frames)
+        try:
+            err_r, err_t = run_one(
+                imucoco, poser, body_model, vc,
+                seq['acc'][:T], seq['ori'][:T],
+                seq['pose'][:T], seq['tran'][:T],
+                cidx, device)
+            rot_sum[:T]  += err_r
+            tran_sum[:T] += err_t
+            count[:T]    += 1
+        except Exception as e:
+            print(f'    skip ({cname}): {e}')
+        np.savez(_CKPT, rot_sum=rot_sum, tran_sum=tran_sum, count=count, seqs_done=idx + 1)
+
+    if os.path.exists(_CKPT):
+        os.remove(_CKPT)
+
+    c = np.maximum(count, 1)
+    return {
+        'rot':    np.where(count[:, None] > 0, rot_sum  / c[:, None], 0.0),
+        'tran':   np.where(count > 0,           tran_sum / c,           np.nan),
+        'count':  count,
+        'n':      len(cidx),
+        'n_seqs': int(count[0]),
+    }
+
+
+def evaluate(sequences, imucoco, poser, body_model, vc, combos, max_frames, device,
+             out_dir=DEFAULT_OUT) -> dict:
+    os.makedirs(out_dir, exist_ok=True)
+    return {
+        cname: _evaluate_combo(cname, cidx, sequences, imucoco, poser, body_model,
+                               vc, max_frames, device, out_dir)
+        for cname, cidx in combos.items()
+    }
 
 
 # ── output ────────────────────────────────────────────────────────────────────
@@ -239,6 +267,7 @@ def main():
     results = evaluate(
         sequences, imucoco, poser, body_model, vc,
         {'full_6s': COMBOS['6s']}, max_frames, args.device,
+        out_dir=args.out_dir,
     )
     print_summary(results, max_frames)
     save_npz(results, Path(args.out_dir), max_frames)

@@ -113,11 +113,26 @@ def run_one(model, acc, ori, gt_pose, gt_tran, device):
 
 # ── evaluation loop ───────────────────────────────────────────────────────────
 
-def evaluate(sequences, model, device, max_frames) -> dict:
+def evaluate(sequences, model, device, max_frames, out_dir=DEFAULT_OUT) -> dict:
+    _CKPT = os.path.join(out_dir, '.eval_ckpt_pnp_dip.npz')
+    os.makedirs(out_dir, exist_ok=True)
+
     rot_sum  = np.zeros((max_frames, 24))
     tran_sum = np.zeros(max_frames)
     count    = np.zeros(max_frames)
-    for seq in tqdm.tqdm(sequences, desc='  PNP/6s'):
+    start_idx = 0
+
+    if os.path.exists(_CKPT):
+        ck = np.load(_CKPT)
+        rot_sum   = ck['rot_sum']
+        tran_sum  = ck['tran_sum']
+        count     = ck['count']
+        start_idx = int(ck['seqs_done'])
+        print(f'  [Resume] PNP/DIP: {start_idx}/{len(sequences)} seqs done')
+
+    for idx, seq in enumerate(tqdm.tqdm(sequences, desc='  PNP/6s')):
+        if idx < start_idx:
+            continue
         T = min(seq['pose'].shape[0], max_frames)
         try:
             err_r, err_t = run_one(
@@ -128,6 +143,11 @@ def evaluate(sequences, model, device, max_frames) -> dict:
             count[:T]    += 1
         except Exception as e:
             print(f'    skip: {e}')
+        np.savez(_CKPT, rot_sum=rot_sum, tran_sum=tran_sum, count=count, seqs_done=idx + 1)
+
+    if os.path.exists(_CKPT):
+        os.remove(_CKPT)
+
     c = np.maximum(count, 1)
     return {'6s': {
         'rot':    np.where(count[:, None] > 0, rot_sum  / c[:, None], 0.0),
@@ -191,7 +211,7 @@ def main():
     print(f'  Loaded: {weights_path}')
 
     print(f'Running {len(sequences)} DIP-IMU sequences ...')
-    results = evaluate(sequences, model, args.device, max_frames)
+    results = evaluate(sequences, model, args.device, max_frames, out_dir=args.out_dir)
     print_summary(results, max_frames)
     save_npz(results, Path(args.out_dir), max_frames)
     import sys as _sys
