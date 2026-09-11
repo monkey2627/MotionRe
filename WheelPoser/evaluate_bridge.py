@@ -14,9 +14,9 @@ Output: 16 upper-body joints (joint_set.upper_body).
 Lower-body joints are zeroed (identity rotation) for standard_results.
 
 Run from code/WheelPoser/:
-    python evaluate_bridge.py --suite dip  --checkpoint-dir checkpoints/3_Stage_500 \
+    python evaluate_bridge.py --suite dip  --checkpoint-dir checkpoints \
         --out-dir /path/to/results
-    python evaluate_bridge.py --suite drift --checkpoint-dir checkpoints/3_Stage_500 \
+    python evaluate_bridge.py --suite drift --checkpoint-dir checkpoints \
         --out-dir /path/to/results
 """
 
@@ -102,7 +102,7 @@ def _load_model(ckpt_dir: Path, leave: str, device: torch.device):
         Three_Stage_Global_WheelPoser,
     )
 
-    experiment = "3_Stage_500"
+    experiment = "TransPose_Style_500"
     stage_names = [
         f"IMU2Leaf_WheelPoser_AMASS",
         f"Leaf2Full_WheelPoser_AMASS",
@@ -119,11 +119,11 @@ def _load_model(ckpt_dir: Path, leave: str, device: torch.device):
     amass_ckpts = _get_checkpoints(experiment, stage_names, leave, ckpt_root)
     fine_ckpts  = _get_checkpoints(experiment, fine_names,  leave, ckpt_root)
 
-    def _cfg(joints_set, exp_setup=None, **kw):
+    def _cfg(model_name, exp_setup=None, **kw):
         return Config(
-            experiment=experiment, model="bridge_eval",
+            experiment=experiment, model=model_name,
             project_root_dir=str(_DIR),
-            joints_set=joints_set,
+            joints_set=joint_set.WheelPoser,
             pred_joints_set=joint_set.upper_body,
             normalize=True, r6d=True, loss_type="mse",
             use_joint_loss=False, mkdir=False,
@@ -132,26 +132,29 @@ def _load_model(ckpt_dir: Path, leave: str, device: torch.device):
             **kw,
         )
 
-    amass_i2l = get_model(_cfg(joint_set.WheelPoser)).load_from_checkpoint(
-        amass_ckpts[stage_names[0]], config=_cfg(joint_set.WheelPoser))
-    amass_l2f = get_model(_cfg(joint_set.WheelPoser)).load_from_checkpoint(
-        amass_ckpts[stage_names[1]], config=_cfg(joint_set.WheelPoser))
-    amass_f2p = get_model(_cfg(joint_set.WheelPoser)).load_from_checkpoint(
-        amass_ckpts[stage_names[2]], config=_cfg(joint_set.WheelPoser))
+    amass_i2l = get_model(_cfg(stage_names[0])).load_from_checkpoint(
+        amass_ckpts[stage_names[0]], config=_cfg(stage_names[0]))
+    amass_l2f = get_model(_cfg(stage_names[1])).load_from_checkpoint(
+        amass_ckpts[stage_names[1]], config=_cfg(stage_names[1]))
+    amass_f2p = get_model(_cfg(stage_names[2])).load_from_checkpoint(
+        amass_ckpts[stage_names[2]], config=_cfg(stage_names[2]))
 
-    fine_cfg = _cfg(joint_set.WheelPoser, exp_setup=f"leave_{leave}_out", upsample_copies=7)
-    fine_i2l = get_model(fine_cfg, pretrained=amass_i2l).load_from_checkpoint(
-        fine_ckpts[fine_names[0]], config=fine_cfg, pretrained_model=amass_i2l)
-    fine_l2f = get_model(fine_cfg, pretrained=amass_l2f).load_from_checkpoint(
-        fine_ckpts[fine_names[1]], config=fine_cfg, pretrained_model=amass_l2f)
-    fine_f2p = get_model(fine_cfg, pretrained=amass_f2p).load_from_checkpoint(
-        fine_ckpts[fine_names[2]], config=fine_cfg, pretrained_model=amass_f2p)
+    fine_cfg_i2l = _cfg(fine_names[0], exp_setup=f"leave_{leave}_out", upsample_copies=7)
+    fine_cfg_l2f = _cfg(fine_names[1], exp_setup=f"leave_{leave}_out", upsample_copies=7)
+    fine_cfg_f2p = _cfg(fine_names[2], exp_setup=f"leave_{leave}_out", upsample_copies=7)
+
+    fine_i2l = get_model(fine_cfg_i2l, pretrained=amass_i2l).load_from_checkpoint(
+        fine_ckpts[fine_names[0]], config=fine_cfg_i2l, pretrained_model=amass_i2l)
+    fine_l2f = get_model(fine_cfg_l2f, pretrained=amass_l2f).load_from_checkpoint(
+        fine_ckpts[fine_names[1]], config=fine_cfg_l2f, pretrained_model=amass_l2f)
+    fine_f2p = get_model(fine_cfg_f2p, pretrained=amass_f2p).load_from_checkpoint(
+        fine_ckpts[fine_names[2]], config=fine_cfg_f2p, pretrained_model=amass_f2p)
 
     for m in (amass_i2l, amass_l2f, amass_f2p, fine_i2l, fine_l2f, fine_f2p):
         m.eval()
 
     wheelposer = Three_Stage_Global_WheelPoser(
-        config=fine_cfg,
+        config=fine_cfg_f2p,
         imu2leaf=fine_i2l,
         leaf2full=fine_l2f,
         full2pose=fine_f2p,

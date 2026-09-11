@@ -31,7 +31,7 @@ class BenchmarkOptions:
     device: Optional[str] = None
     model: Optional[str] = None
     combos: Tuple[str, ...] = ("all",)
-    with_video: bool = False
+    with_video: bool = True
     action_manifest: Optional[Path] = None
     max_per_action: int = 100
 
