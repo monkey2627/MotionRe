@@ -1,125 +1,246 @@
 # 多方法 IMU 人体姿态重建基准分析报告
 
-## 1. 执行摘要
+**数据根目录**：`benchmark_results/`  
+**报告依据**：`standard_metrics.json`、`detailed_metrics.jsonl`、
+`detailed_metrics_manifest.json`、`benchmark_report.json` 以及保存的
+`stdout.log`/`stderr.log`。  
+**更新时间**：2026-09-12
 
-本报告分析 `benchmark_results/` 中已经完成的基准结果，覆盖 8 种方法：GlobalPose、IMUCoCo、MobilePoser、PIP、PNP、SliMeVR、TransPose 和 WheelPoser。结果包含 DIP-IMU 常规评测（2,799 帧，30 FPS）以及基于 AMASS 动作清单的 drift 评测（3,600 帧，30 FPS，最长 120 秒）。
+## 1. 结论摘要
 
-主要结论如下：
+本轮覆盖 GlobalPose、IMUCoCo、MobilePoser、PIP、PNP、SliMeVR、TransPose
+和 WheelPoser 八种方法。DIP 统一结果包含 2,799 个有效帧；AMASS drift
+使用 618 个序列、最长 120 s 的 3,600 帧时间窗。结果已经可以用于工程诊断，
+但不能把所有标准指标直接放进论文排名：
 
-1. **DIP-IMU 旋转精度**：TransPose 最低（19.58°），PIP 次之（20.04°）；MobilePoser 仅使用 5 个传感器，误差 20.62°，与两种 6 传感器方法接近。
-2. **DIP-IMU 腰部相关关节**：PIP（6.69°）和 TransPose（6.10°）最好，MobilePoser 为 8.20°，明显优于 PNP（16.29°）和 WheelPoser（24.09°）。
-3. **AMASS drift 旋转稳定性**：PIP 最好（13.27°），TransPose（19.35°）和 MobilePoser（20.07°）随后。MobilePoser 在 5 传感器条件下保持了与 6 传感器 TransPose 相近的全身旋转误差。
-4. **平移漂移是 MobilePoser 的主要短板**：DIP 平移误差 2.266 m，drift 为 12.766 m，均显著高于 PIP（0.322 m/1.005 m）和 TransPose（0.568 m/1.421 m）。因此 MobilePoser 当前更适合作为低传感器姿态旋转基线，不能直接宣称具备可靠的全局位移跟踪能力。
-5. **异常动作覆盖尚未形成公平的逐动作比较**：现有标准结果是跨动作平均值；视频数量表明多数方法生成了 618 个 drift 视频，WheelPoser 也显示 11 类动作，但报告中没有统一的按动作误差 JSON，因此不能据此断言某个方法在 lying、crawling 或 transitions 上最鲁棒。
-6. **任务完成性必须纳入结论**：GlobalPose、PIP 和 PNP 的 drift benchmark_report 标记为失败；其目录中残留的 `standard_metrics.json` 不能与完整成功运行的方法等价解读。失败原因需在服务器日志中进一步定位。
+1. **DIP 旋转精度**：TransPose 为 19.58°，MobilePoser 六物理 IMU 配置为
+   20.62°；MobilePoser 五物理 IMU 配置为 21.03°，只比 TransPose 高 1.45°。
+   PIP 的残留均值为 20.04°，但有 1/6 序列 QP 失败，必须标记为未完成。
+2. **drift 旋转精度**：PIP 的残留均值最低（13.27°），但 104/618 序列失败；
+   在完整运行的方法中，TransPose（19.35°）和 MobilePoser 六物理 IMU
+   （20.07°）最好。MobilePoser 的 4/5/6 传感器曲线都已生成且逐序列零失败。
+3. **根平移是 MobilePoser 的主要短板**：DIP 为 2.266 m，drift 为
+   12.766 m；TransPose 分别为 0.568 m 和 1.421 m。姿态角度接近不代表全局
+   位移可靠，行走、起身、躺下和接触动作应单独报告平移误差。
+4. **PIP 失败不是随机的单个异常**：drift 的失败原因统一为
+   `RuntimeError: PIP QP solve failed: cvxopt: invalid QP solution`，在
+   interaction、running、jumping 等动作中较集中。其成功序列均值只能作为
+   诊断参考，不能与零失败方法作无条件优劣结论。
+5. **PNP drift 实际跑完序列但没有完成收尾**：618 个序列和图表已经写出，
+   但 evaluator 在写标准/详细结果前因 `_DIR` 未定义退出。代码已修复，必须重跑
+   才能得到可审计的 PNP `standard_metrics.json` 和逐序列 JSONL。
+6. **移动端证据仍不完整**：当前没有参数量、FP16/INT8 文件大小、CPU 单帧
+   延迟、峰值 RAM 或能耗记录，因此目前只能讨论精度和端到端运行时间，不能宣称
+   已满足移动端部署指标。
 
-## 2. 评测定义与数据完整性
+## 2. 完整性门禁
 
-### 2.1 指标
+逐序列清单中，`record_count` 是尝试的序列数，`failed_sequences` 是有明确
+失败原因的记录。`benchmark_report.json` 缺失或状态非 `passed` 时，结果不具备
+论文排名资格；即使进程返回 0，只要逐序列有失败，也必须标为“未完成”。
 
-- `mean_rotation_deg/all`：24 个 SMPL 关节的平均旋转角误差，单位为度，越低越好。
-- `lumbar`：关节索引 3、6、9 的平均误差，用于观察躯干/腰部姿态。
-- `hips`、`knees`、`upper_arms`、`forearms`：对应关节组平均误差。
-- `mean_translation_m`：初始根节点对齐后的逐帧根平移欧氏误差，单位为米，越低越好。缺失值表示该方法未提供可比较的平移结果。
-- 所有标准结果均以 `standard_metrics.json` 和 `standard_metrics.npz` 为准；视频仅用于定性检查。
-
-### 2.2 样本规模
-
-| 套件 | 有效帧数 | 采样率 | 解释 |
+| 方法 | DIP 状态（失败/记录） | drift 状态（失败/记录） | 排名资格 |
 |---|---:|---:|---|
-| DIP | 2,799 | 30 FPS | 统一的 DIP-IMU 测试片段 |
-| drift | 3,600 | 30 FPS | AMASS 动作清单抽样，约 120 秒上限 |
+| GlobalPose | passed（0/6） | passed（0/618） | DIP、drift 均可 |
+| IMUCoCo | passed（0/6） | passed（0/618） | DIP、drift 均可 |
+| MobilePoser | passed（0/6） | **缺少 benchmark_report**（0/1,854，三配置） | DIP 可；drift 未完成 |
+| PIP | passed（**1**/6） | passed（**104**/618） | DIP、drift 均未完成 |
+| PNP | passed（0/6） | **failed（收尾 NameError）** | DIP 可；drift 未完成 |
+| SliMeVR | passed（0/6） | passed（0/618） | DIP、drift 均可 |
+| TransPose | passed（0/6） | passed（0/618） | DIP、drift 均可 |
+| WheelPoser | passed（0/6） | passed（0/618） | DIP、drift 均可 |
 
-drift 与 DIP 不是同一批样本，因此不能把 drift 数值简单视为 DIP 数值的时间退化曲线。drift 结果更适合衡量长时序和动作覆盖下的稳定性。
+drift 的五个强制动作在每个完整序列清单中均有相同覆盖：`crawling` 13、
+`interaction` 100、`lying` 5、`sports` 12、`transitions` 92。其余序列属于
+`standing`、`walking`、`running`、`jumping`、`sitting`、`dancing` 等动作。
 
-## 3. DIP-IMU 结果
+## 3. 指标定义和注意事项
 
-| 方法 | 传感器数 | 全身旋转 (°) | 腰部 (°) | 髋部 (°) | 膝部 (°) | 上臂 (°) | 前臂 (°) | 平移 (m) |
+- `mean_rotation_deg.all`：24 个 SMPL 关节的平均角误差，单位为度，越低越好。
+- `lumbar`：joints 3、6、9 的平均值；动作清单中的腰部统计还可在 JSON/CSV
+  中查看 Lumbar5 相关结果。
+- `mean_translation_m`：根节点对齐后的逐帧欧氏误差均值，单位为米；不是单帧
+  延迟，也不是最终位置误差。
+- 逐序列结果另外保存 `translation_rmse_m`、每秒漂移率、终点误差、有效帧数和
+  失败原因。均值/P90 是在成功序列上计算的，必须结合 `failure_rate` 阅读。
+- `contact_foot_sliding_m_per_s` 是基于 GT 近地面帧的运动学代理，不是力传感器
+  接触标签。当前只有 MobilePoser drift 传出了预测/目标关节轨迹并计算该字段。
+
+## 4. DIP-IMU 标准结果
+
+下表的传感器数是**物理 IMU 数**。MobilePoser 同时列出学习输入槽数；其他方法
+按各自 evaluator 的 `sensor_count` 记录。PIP 行带 †，表示虽有标准 JSON，逐序列
+仍有失败。
+
+| 方法 | 物理/学习输入 | 全身旋转 (°) | 腰部 (°) | 髋部 (°) | 膝部 (°) | 上臂 (°) | 前臂 (°) | 平移 (m) |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| TransPose | 6 | **19.58** | **6.10** | 11.04 | 44.57 | **22.81** | **34.37** | 0.568 |
-| PIP | 6 | 20.04 | 6.69 | **16.70** | 38.26 | 26.70 | 37.58 | **0.322** |
-| MobilePoser | **5** | 20.62 | 8.20 | 18.37 | **13.46** | 33.34 | 46.34 | 2.266 |
-| SliMeVR | 6 | 26.61 | 8.83 | 2.71 | 45.18 | 57.49 | 78.78 | N/A |
-| GlobalPose | 6 | 27.29 | 9.91 | 37.11 | 69.94 | 31.29 | 49.33 | N/A |
-| PNP | 6 | 27.74 | 16.29 | 21.40 | 45.14 | 34.13 | 51.17 | 1.664 |
-| IMUCoCo | 6 | 34.15 | 11.91 | 39.64 | 24.54 | 72.19 | 70.84 | 0.754 |
-| WheelPoser | **4** | 34.95 | 24.09 | 30.48 | 45.18 | 51.48 | 79.62 | N/A |
+| TransPose | 6 / 6 | **19.58** | **6.10** | 11.04 | 44.57 | **22.81** | **34.37** | 0.568 |
+| PIP† | 6 / 6 | 20.04 | 6.69 | **16.70** | 38.26 | 26.70 | 37.58 | **0.322** |
+| MobilePoser（6s） | 6 / 5 | 20.62 | 8.20 | 18.37 | **13.46** | 33.34 | 46.34 | 2.266 |
+| SliMeVR | 6 / 6 | 26.61 | 8.83 | 2.71 | 45.18 | 57.49 | 78.78 | N/A |
+| GlobalPose | 6 / 6 | 27.29 | 9.91 | 37.11 | 69.94 | 31.29 | 49.33 | N/A |
+| PNP | 6 / 6 | 27.74 | 16.29 | 21.40 | 45.14 | 34.13 | 51.17 | 1.664 |
+| IMUCoCo | 6 / 6 | 34.15 | 11.91 | 39.64 | 24.54 | 72.19 | 70.84 | 0.754 |
+| WheelPoser | 4 / 4 | 34.95 | 24.09 | 30.48 | 45.18 | 51.48 | 79.62 | N/A |
 
-### 3.1 精度排序与传感器效率
+TransPose 与 PIP 的整体角误差差 0.46°，但 PIP 的 QP 失败使这个差值不能当作
+严格排名。MobilePoser 六物理 IMU 的膝部误差最低；上肢远端仍明显高于 TransPose。
+WheelPoser 的四传感器结果适合其专用场景，不能直接解释为一般人体动作的强基线。
 
-TransPose 和 PIP 的全身旋转误差几乎相同，差值仅 0.46°。PIP 的平移误差最低，说明其根运动估计在该 DIP 设置下更稳定。MobilePoser 比 TransPose 高 1.04°、比 PIP 高 0.58°，但减少了一个传感器，体现出较好的精度/传感器折中。以全身旋转误差计算，MobilePoser 每个传感器对应约 4.12°，TransPose 约 3.26°；这只是描述性指标，不能替代模型复杂度或功耗评测。
+### 4.1 MobilePoser 4/5/6 传感器 sweep
 
-MobilePoser 在膝部误差（13.46°）上显著领先其他方法，表明下肢局部姿态恢复较强；但上臂和前臂误差仍高于 TransPose/PIP，说明减少头部或上肢观测后，远端上肢存在更强的不确定性。WheelPoser 的 4 传感器结果在全身、腰部和上肢均明显落后，符合其面向轮椅用户上半身场景的专用定位，不宜作为一般人体动作的直接竞争基线。
+MobilePoser 的骨盆是固定参考槽位，物理计数和网络输入必须分开写：
 
-## 4. AMASS drift 结果
+- 4 IMU：学习槽 `[0,1,2]` + 骨盆 slot 5；网络仍为 60-D。
+- 5 IMU：学习槽 `[0,1,2,3]` + 骨盆 slot 5；网络仍为 60-D。
+- 6 IMU：学习槽 `[0,1,2,3,4]` + 骨盆 slot 5；网络仍为 60-D。
 
-| 方法 | 传感器数 | 全身旋转 (°) | 腰部 (°) | 平移 (m) | benchmark 状态 |
+因此不能把 `full_6s` 宣称为“六输入网络”。
+
+| 配置 | 物理/学习 IMU | 全身旋转 (°) | 腰部 (°) | 膝部 (°) | 上臂 (°) | 前臂 (°) | 平移 (m) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| full_4s | 4 / 3 | 21.38 | 8.88 | 15.34 | 34.21 | 47.40 | 2.250 |
+| full_5s | 5 / 4 | 21.03 | 8.75 | 14.15 | 33.74 | 47.01 | **2.240** |
+| full_6s | 6 / 5 | **20.62** | **8.20** | **13.46** | **33.34** | **46.34** | 2.266 |
+
+从 4 到 5 个物理 IMU，整体旋转误差下降 0.35°；从 5 到 6 个再下降 0.41°。
+平移没有单调改善，5 IMU 的 2.240 m 反而略低于 6 IMU，差值只有 0.026 m，
+应通过重复种子和更多动作确认，而不能解读为传感器越少越好。
+
+## 5. AMASS drift 标准结果
+
+| 方法 | 物理 IMU | 全身旋转 (°) | 腰部 (°) | 平移 (m) | 状态 |
 |---|---:|---:|---:|---:|---|
-| PIP | 6 | **13.27** | **5.67** | **1.005** | 失败标记，结果需复核 |
-| TransPose | 6 | 19.35 | 8.48 | 1.421 | passed |
-| MobilePoser | **5** | 20.07 | 10.38 | **12.766** | passed |
-| GlobalPose | 6 | 21.94 | 9.66 | N/A | 失败标记，结果需复核 |
+| PIP† | 6 | 13.27 | 5.67 | **1.005** | 104/618 失败，未完成 |
+| TransPose | 6 | **19.35** | **8.48** | 1.421 | passed |
+| MobilePoser（6s）‡ | 6（5 学习槽） | 20.07 | 10.38 | 12.766 | 缺少 report，未完成 |
+| GlobalPose | 6 | 21.94 | 9.66 | N/A | passed |
 | SliMeVR | 6 | 27.94 | 11.44 | N/A | passed |
-| WheelPoser | **4** | 33.58 | 22.23 | N/A | passed |
+| WheelPoser | 4 | 33.58 | 22.23 | N/A | passed |
 | IMUCoCo | 6 | 33.61 | 11.77 | 1.942 | passed |
-| PNP | 6 | N/A | N/A | N/A | 失败，运行中断 |
+| PNP | 6 | N/A | N/A | N/A | 收尾失败，未完成 |
 
-### 4.1 长时序稳定性
+† PIP 的数值来自成功序列的残留聚合，不得作为完整方法排名。‡ MobilePoser 的
+数值来自直接 evaluator 输出，三种配置各 618 条详细记录，但目录没有 runner
+生成的 `benchmark_report.json`，所以完整性门禁仍不通过。
 
-在成功生成标准结果的方法中，PIP 的旋转误差最低，TransPose 与 MobilePoser 接近。MobilePoser 的全身误差从 DIP 的 20.62° 变为 drift 的 20.07°，但这不是性能改善的证据，因为两套件样本不同。更可靠的观察是：在 AMASS 长时序集合上，5 传感器 MobilePoser 没有出现明显的全身旋转崩溃。
+## 6. 强制动作类别：均值、P90 和失败率
 
-平移方面，MobilePoser drift 的 12.766 m 约为 TransPose 的 9 倍、PIP 的 12.7 倍。这是一个实质性问题：姿态角度看起来可接受，并不意味着角色在世界坐标中的行走、起身、躺下或接触地面位置正确。后续研究应将根平移、接触约束和速度积分误差作为独立优化目标。
+下面是 `full_6s`（MobilePoser 为物理 6/学习 5 槽）的全身旋转角误差，格式为
+“均值 / P90；失败率”。PIP 的均值/P90 仅对成功序列计算。完整的腰部、根平移和
+所有配置数据见 `benchmark_results/detailed_action_summary.csv`。
 
-### 4.2 动作覆盖
+| 方法 | lying（5） | crawling（13） | transitions（92） | interaction（100） | sports（12） |
+|---|---:|---:|---:|---:|---:|
+| GlobalPose | 17.42 / 22.91；0% | 20.28 / 24.44；0% | 19.10 / 26.72；0% | 18.58 / 22.09；0% | 16.84 / 18.92；0% |
+| IMUCoCo | 38.68 / 43.05；0% | 40.71 / 44.94；0% | 27.96 / 37.05；0% | 25.67 / 31.19；0% | 23.57 / 29.03；0% |
+| MobilePoser | 21.81 / 26.97；0% | 22.40 / 29.56；0% | 16.04 / 22.68；0% | 17.10 / 20.84；0% | 16.01 / 17.29；0% |
+| PIP† | 13.77 / 14.25；20.0% | 22.59 / 25.49；15.4% | 17.69 / 24.42；4.3% | 14.51 / 18.48；19.0% | 13.70 / 15.67；16.7% |
+| SliMeVR | 20.37 / 22.17；0% | 25.92 / 27.40；0% | 25.23 / 30.13；0% | 23.68 / 26.62；0% | 24.17 / 25.46；0% |
+| TransPose | **12.86 / 13.41；0%** | **20.04 / 22.55；0%** | 16.18 / 22.38；0% | **15.30 / 18.62；0%** | **14.78 / 17.00；0%** |
+| WheelPoser | 29.86 / 31.52；0% | 34.35 / 38.41；0% | 32.82 / 37.06；0% | 34.27 / 36.51；0% | 31.85 / 33.84；0% |
 
-drift 输出目录包含 AMASS 动作视频，动作标签体系包括 standing、walking、running、jumping、sitting、lying、crawling、dancing、interaction、sports 和 transitions。当前 `standard_metrics.json` 只给出全局平均，无法回答以下关键问题：
+动作层面的结论比全局均值更清楚：TransPose 在五个强制类别均保持较低角误差；
+MobilePoser 在 transitions、interaction 和 sports 接近 TransPose，但 crawling
+和 lying 的 P90 更高；IMUCoCo 在 crawling/lying 明显变差；WheelPoser 在所有
+类别都偏高。PIP 的成功序列数值很低，但 interaction 失败率 19%、lying 20%，
+因此不能只看其均值。
 
-- lying、crawling 等非直立动作是否造成腰部误差显著上升；
-- transitions 是否引起根平移突变或姿态时序延迟；
-- interaction、sports 等快速上肢动作是否扩大前臂误差；
-- 各方法是否实际处理了相同数量的每类动作。
+### 6.1 根平移和接触代理
 
-因此，本轮报告只将动作清单视为覆盖范围证据，不把视频数量当作精度指标。
+对有平移输出的方法，逐动作均值如下（RMSE / 每秒漂移率 / 终点误差，单位分别为
+m、m/s、m）：
 
-## 5. 运行成本与可部署性
+| 方法 | lying | crawling | transitions | interaction | sports |
+|---|---:|---:|---:|---:|---:|
+| MobilePoser | 0.684 / 0.132 / 0.755 | 1.372 / 0.159 / 2.099 | 1.130 / 0.339 / 1.854 | 0.540 / 0.032 / 0.874 | 1.113 / 0.065 / 1.731 |
+| TransPose | 0.708 / 0.132 / 0.752 | 1.166 / 0.089 / 1.462 | 1.945 / 0.680 / 3.162 | 0.448 / 0.007 / 0.322 | 0.352 / 0.009 / 0.380 |
+| IMUCoCo | 0.478 / 0.047 / 0.501 | 1.597 / 0.120 / 1.979 | 2.154 / 0.749 / 3.558 | 0.496 / 0.013 / 0.455 | 0.593 / 0.027 / 0.841 |
+| PIP† | 0.231 / 0.062 / 0.395 | 1.469 / 0.122 / 1.843 | 2.288 / 0.820 / 3.696 | 0.511 / 0.003 / 0.164 | 0.252 / -0.001 / 0.079 |
 
-`duration_seconds` 是端到端 benchmark 运行时间，包含数据读取、模型推理、可视化和视频写出，不能直接当作单帧延迟。仍可做如下工程观察：
+MobilePoser full_6s 的接触脚滑移代理为：lying 0.136、crawling 0.267、
+transitions 0.295、interaction 0.100、sports 0.149 m/s（均值）；对应 P90 为
+0.264、0.323、0.495、0.170、0.195 m/s。GlobalPose、IMUCoCo、PIP、PNP、
+SliMeVR、TransPose 和 WheelPoser 当前没有把预测/目标关节轨迹传给统一接触指标，
+所以其接触脚滑移必须写 N/A，不能填入 0。
 
-| 方法 | DIP 时间 (s) | drift 时间 (s) | 备注 |
-|---|---:|---:|---|
-| MobilePoser | 157.7 | 7,497.7 | 5 传感器，运行成功 |
-| TransPose | 157.6 | 10,490.0 | 运行成功 |
-| WheelPoser | 162.3 | 7,504.7 | 4 传感器，运行成功 |
-| IMUCoCo | 175.9 | 9,046.5 | 运行成功 |
-| PIP | 1,072.6 | 失败 | DIP 端到端耗时较高 |
-| PNP | 967.1 | 失败 | drift 长时间后中断 |
-| GlobalPose | 773.8 | 失败 | drift 启动后快速失败 |
-| SliMeVR | 1.3 | 8,895.4 | DIP 时间可能主要是轻量/非视频路径，不宜与神经网络直接比较 |
+## 7. MobilePoser drift 4/5/6 传感器曲线
 
-这些时间受硬件、批大小、视频渲染和 I/O 影响。要验证“移动端轻量化”，还必须补充参数量、峰值内存、单帧 CPU/GPU 延迟、功耗和模型文件大小。
+下表来自 `benchmark_results/mobileposer/drift/drift_data.npz` 的逐时间平均曲线，
+不是逐动作标准表。根误差是该时刻的平均欧氏误差；“全程均值”对应标准 JSON 的
+旋转/平移聚合。
 
-## 6. 研究判断
+| 配置（物理/学习） | 30 s 旋转/根误差 | 60 s 旋转/根误差 | 90 s 旋转/根误差 | 120 s 旋转/根误差 | 全程旋转均值 | 全程根误差均值 | 终点根误差 | 线性漂移率 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| full_4s（4/3） | 18.72° / 2.477 m | 23.16° / 11.326 m | 25.92° / 17.468 m | 20.13° / 20.934 m | 20.68° | 10.003 m | 20.934 m | 0.202 m/s |
+| full_5s（5/4） | 18.56° / 2.543 m | 23.32° / 13.603 m | 25.93° / 23.549 m | 20.47° / 26.832 m | 20.41° | 12.727 m | 26.832 m | 0.275 m/s |
+| full_6s（6/5） | **17.85° / 2.499 m** | **23.04° / 14.318 m** | **25.66° / 23.181 m** | 20.91° / 26.431 m | **20.07°** | 12.766 m | **26.431 m** | 0.274 m/s |
 
-围绕“少于六个 IMU、移动端推理、非人体工学动作可靠性”的研究目标，当前证据支持以下判断：
+三个配置的旋转曲线相近，但根平移随时间快速累积；4 IMU 在 120 s 的终点根误差
+较低，不足以证明其长期更稳定，因为这是一次固定噪声种子和动作抽样。应增加
+重复种子、短时 RMSE、接触约束和起身/躺下终点误差。
 
-- **可行性**：5 传感器 MobilePoser 在 DIP 和 AMASS drift 上保持约 20° 的全身旋转误差，证明减少到 5 个传感器具有可行性。
-- **尚未解决的问题**：MobilePoser 平移漂移过大；上肢远端误差仍高；动作类别级鲁棒性尚未量化。
-- **基线选择**：PIP/TransPose 是旋转精度基线，MobilePoser 是低传感器基线，WheelPoser 是 4 传感器专用场景基线。SliMeVR、GlobalPose、IMUCoCo 和 PNP 的适用域或失败状态应在表格中明确标注，不能只按平均角度排名。
-- **研究风险**：当前 drift 失败任务使方法间的可比性不完整；若直接据此宣称某方法全面优越，会夸大结论。
+## 8. 运行成本和移动端缺口
 
-## 7. 建议的下一轮实验
+`duration_seconds` 是端到端进程时间，包含数据读取、模型推理、视频和图表 I/O，
+不是 CPU 单帧延迟。当前 runner 记录如下：
 
-1. 对所有方法统一保存按动作、按序列的 `rotation_deg`、`translation_m`、有效帧数和失败原因。
-2. 对 MobilePoser 至少比较 4、5、6 传感器组合，并报告腰部、膝部、上肢和根平移的变化曲线。
-3. 将 lying、crawling、transitions、interaction 和 sports 设为强制报告类别，给出均值、P90 和失败率。
-4. 单独评测根平移：短时 RMSE、每秒漂移率、接触脚滑移和起身/躺下终点误差。
-5. 增加移动端指标：参数量、FP16/INT8 模型大小、CPU 单帧延迟、峰值 RAM 和能耗。
-6. 重新运行 GlobalPose、PIP、PNP 的 drift 任务并保留完整 stderr/stdout；在失败任务补齐前，最终论文表格应标记为“未完成”，而不是填入残留指标。
+| 方法/套件 | 时间 |
+|---|---:|
+| GlobalPose DIP / drift | 723.6 s / 21,865.6 s |
+| IMUCoCo DIP / drift | 293.0 s / 12,706.4 s |
+| MobilePoser DIP | 265.1 s |
+| MobilePoser sweep 4/5/6 | 291.8 s / 258.4 s / 248.1 s |
+| PIP DIP / drift | 5,110.5 s / 24,937.2 s |
+| PNP DIP / drift | 1,267.7 s / 26,597.8 s（收尾失败） |
+| SliMeVR DIP / drift | 8.1 s / 12,035.1 s |
+| TransPose DIP / drift | 359.1 s / 16,495.4 s |
+| WheelPoser DIP / drift | 294.6 s / 13,309.1 s |
 
-## 8. 可复现文件
+这些时间不能支持移动端结论。下一轮必须在同一 CPU、同一 batch 和相同输入长度
+下记录参数量、FP16/INT8 文件大小、预热后 CPU 单帧延迟、峰值 RAM 和能耗，并
+单独排除视频渲染时间。
+
+## 9. 当前可复现文件和下一步
 
 - 标准指标：`benchmark_results/<method>/<suite>/standard_metrics.json`
-- 原始数组：`benchmark_results/<method>/<suite>/standard_metrics.npz`
-- 运行状态与命令：`benchmark_results/<method>/<suite>/benchmark_report.json`
-- 动作分类清单：`code/base_mobileposer/data/classification_manifest.csv`
+- 逐序列结果：`benchmark_results/<method>/<suite>/detailed_metrics.jsonl`
+- 详细数组：对应目录的 `detailed_metrics/sequence_*.npz`
+- 动作汇总：`benchmark_results/detailed_action_summary.csv` 和同名 JSON
+- 运行命令、状态和日志：各目录的 `benchmark_report.json`、`stdout.log`、`stderr.log`
+- 动作清单：`code/base_mobileposer/data/classification_manifest.csv`
 
+重建汇总并执行门禁：
+
+```bash
+python code/benchmarks/summarize_detailed.py --results-root benchmark_results
+python code/benchmarks/validate_results.py --results-root benchmark_results
+```
+
+当前门禁预期为四项未完成：MobilePoser drift 缺少 report、PIP DIP 有 1 个失败
+序列、PIP drift 有 104 个失败序列、PNP drift 进程失败。修复后的 PNP evaluator
+位于 `code/PNP/evaluate_drift.py`，重跑后再执行上述两条命令；在门禁全绿前，论文
+表格应保留“未完成”，不得用残留聚合指标补齐。
+
+服务器上只需重跑以下未完成任务（从 `~/dyh/motion/MotionRe` 执行；
+`--no-video` 只关闭视频，不改变指标）：
+
+```bash
+python benchmarks/run.py run --method mobileposer --suite drift \
+  --model base_mobileposer/checkpoints/weights.pth \
+  --combos full_4s full_5s full_6s \
+  --action-manifest base_mobileposer/data/classification_manifest.csv \
+  --max-per-action 100 --no-video
+
+python benchmarks/run.py run --method pip --suite dip \
+  --model PIP/data/weights.pt --no-video
+
+python benchmarks/run.py run --method pip --suite drift \
+  --model PIP/data/weights.pt \
+  --action-manifest base_mobileposer/data/classification_manifest.csv \
+  --max-per-action 100 --no-video
+
+python benchmarks/run.py run --method pnp --suite drift \
+  --action-manifest base_mobileposer/data/classification_manifest.csv \
+  --max-per-action 100 --no-video
+```

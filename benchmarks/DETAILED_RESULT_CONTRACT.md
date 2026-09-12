@@ -3,7 +3,12 @@
 Every evaluator used for a final comparison must write the legacy
 `standard_metrics.json` and the detailed contract below.  A method with a
 non-`passed` `benchmark_report.json` is **incomplete**, even when stale metric
-files remain in its output directory.
+files remain in its output directory. A process-level `passed` report is also
+incomplete when the detailed manifest contains one or more failed sequence
+records; recovered sequence failures must not be hidden by aggregate metrics.
+A detailed manifest without a corresponding `benchmark_report.json` is also
+incomplete because the command, exit status, and log provenance cannot be
+verified.
 
 ## Required files
 
@@ -26,6 +31,10 @@ plus slot `5`; 6 IMUs = `[0,1,2,3,4]` plus slot `5`.  The network input remains
 Use `python benchmarks/summarize_detailed.py --results-root benchmark_results`
 after a server run.  Its output has mean, P90, and failure-rate rows per method,
 configuration, and action.
+
+`summarize_standard.py` applies the same manifest/report gate and emits
+`eligible_for_ranking` plus `failed_sequences_total`; do not sort its rows before
+filtering on that flag.
 
 Before building a paper table, run
 `python benchmarks/validate_results.py --results-root benchmark_results`.

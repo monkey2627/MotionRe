@@ -505,7 +505,10 @@ def main():
              pnp_6s_rot=res['rot'], pnp_6s_tran=res['tran'],
              pnp_6s_fk_rot=res['fk_rot'], fps=fps, combos=['pnp_6s'])
     import sys as _sys
-    _sys.path.insert(0, str(_DIR.parent))
+    # The evaluator defines its repository roots as ``_SCRIPT_DIR`` and
+    # ``_CODE_DIR``.  Use the latter here so post-processing can complete
+    # after the expensive sequence loop.
+    _sys.path.insert(0, str(_CODE_DIR))
     from benchmarks.standard_results import write_standard_result
     write_standard_result(
         Path(args.out_dir), 'pnp', 'drift', res['rot'], res['count'], fps,

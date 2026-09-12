@@ -32,13 +32,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if report_path.exists():
             run_status = json.loads(report_path.read_text(encoding="utf-8")).get("status", "unknown")
         records = read_records(index)
+        # A process can exit successfully after recovering individual sequence
+        # failures.  Such a run is useful for diagnostics, but must not be
+        # treated as a complete paper-table result.
+        failed_sequences = sum(record.get("status") != "passed" for record in records)
+        eligible_for_ranking = run_status == "passed" and failed_sequences == 0
         configurations = sorted({record.get("configuration") for record in records}, key=lambda value: str(value))
         for configuration in configurations:
             subset = [record for record in records if record.get("configuration") == configuration]
             for row in action_summary(subset, MANDATORY_ACTIONS):
                 rows.append({"method": manifest["method"], "suite": manifest["suite"],
                              "run_status": run_status,
-                             "eligible_for_ranking": run_status == "passed",
+                             "eligible_for_ranking": eligible_for_ranking,
+                             "failed_sequences_total": failed_sequences,
                              "configuration": configuration, **row})
     if not rows:
         raise SystemExit("No detailed_metrics.jsonl files found. Re-run evaluators with the detailed result contract.")
