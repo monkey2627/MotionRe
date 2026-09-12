@@ -237,19 +237,6 @@ def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
             notes="Flexible-placement baseline; code is present but checkpoints and datasets are external.",
         ),
         MethodSpec(
-            "wheelposer",#用pip环境
-            "WheelPoser",
-            "non-ergonomic",
-            "4 IMUs",
-            code    / "WheelPoser",
-            ("dip", "drift"),
-            (
-                "code/WheelPoser/evaluate_bridge.py",
-                "code/WheelPoser/checkpoints",
-            ),
-            notes="Wheelchair-user upper-body baseline (4 sensors); bridge evaluator supports dip/drift suites.",
-        ),
-        MethodSpec(
             "uip",
             "Ultra Inertial Poser",
             "extra-sensing",
@@ -377,7 +364,7 @@ def missing_requirements(
         script = spec.working_dir / "evaluate_dip.py"
         return [str(script.relative_to(root))] if not script.exists() else []
 
-    if spec.name in {"pip", "transpose", "globalpose", "wheelposer"} and suite in {"dip", "drift"}:
+    if spec.name in {"pip", "transpose", "globalpose"} and suite in {"dip", "drift"}:
         script = spec.working_dir / "evaluate_bridge.py"
         return [str(script.relative_to(root))] if not script.exists() else []
 
@@ -651,28 +638,6 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
             plans.append(CommandPlan(spec.name, suite, suite, cwd, tuple([python] + args), output))
             return plans
         plans.append(CommandPlan(spec.name, suite, "native", cwd, (python, "test.py"), output))
-        return plans
-
-    if spec.name == "wheelposer":
-        output = _output_dir(options, spec.name, suite)
-        min_frames = 1 if suite == "drift" and options.action_manifest else options.effective_min_frames
-        max_seqs = 0 if suite == "drift" and options.action_manifest else options.effective_max_seqs
-        args = [
-            "evaluate_bridge.py", "--suite", suite,
-            "--checkpoint-dir", model or "checkpoints",
-            "--min-frames", str(min_frames),
-            "--max-seconds", str(int(options.effective_max_seconds)),
-            "--out-dir", str(output),
-        ]
-        if suite == "drift":
-            args += ["--max-seqs", str(max_seqs)]
-            if options.action_manifest:
-                args += ["--action-manifest", str(options.action_manifest),
-                         "--max-per-action", str(options.max_per_action)]
-        args = _with_device(args, options.device)
-        if not options.with_video:
-            args += ["--no-video"]
-        plans.append(CommandPlan(spec.name, suite, suite, cwd, tuple([python] + args), output))
         return plans
 
     if spec.name == "uip":

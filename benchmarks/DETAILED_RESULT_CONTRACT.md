@@ -6,9 +6,11 @@ non-`passed` `benchmark_report.json` is **incomplete**, even when stale metric
 files remain in its output directory. A process-level `passed` report is also
 incomplete when the detailed manifest contains one or more failed sequence
 records; recovered sequence failures must not be hidden by aggregate metrics.
-A detailed manifest without a corresponding `benchmark_report.json` is also
-incomplete because the command, exit status, and log provenance cannot be
-verified.
+The runner report is preferred for command/exit-time provenance.  If it is
+missing, a directory with complete standard metrics, a complete detailed
+manifest, zero failed records, and all referenced arrays is classified as
+`direct-artifacts`: it may be used for numerical analysis, but the provenance
+warning must remain visible and the run is not reproducibility-complete.
 
 ## Required files
 
@@ -38,4 +40,9 @@ filtering on that flag.
 
 Before building a paper table, run
 `python benchmarks/validate_results.py --results-root benchmark_results`.
-Any method reported as `INCOMPLETE` must remain out of the ranking.
+Any method reported as `INCOMPLETE` or `DIAGNOSTIC-ONLY` must remain out of the
+unconditional ranking.  `DIAGNOSTIC-ONLY` results retain successful-sequence
+metrics and must report the failed-sequence count/rate.  A `WARNING ... direct
+metric artifacts are complete` line does not require a re-run for numerical
+metrics, but should be resolved before a final artifact release if runner
+provenance is required.

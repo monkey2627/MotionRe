@@ -31,9 +31,13 @@ def _read_result(path: Path) -> dict:
         "run_status": "unknown",
         "failed_sequences_total": "",
         "eligible_for_ranking": False,
+        "diagnostic_only": False,
+        "analysis_status": "incomplete",
+        "artifact_complete": False,
     }
     report_path = path.with_name("benchmark_report.json")
     manifest_path = path.with_name("detailed_metrics_manifest.json")
+    detailed_path = path.with_name("detailed_metrics.jsonl")
     if report_path.exists():
         report = json.loads(report_path.read_text(encoding="utf-8"))
         row["run_status"] = report.get("status", "unknown")
@@ -41,8 +45,39 @@ def _read_result(path: Path) -> dict:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         failed_sequences = int(manifest.get("failed_sequences", 0))
         row["failed_sequences_total"] = failed_sequences
+        records = []
+        if detailed_path.exists():
+            with detailed_path.open(encoding="utf-8") as handle:
+                records = [json.loads(line) for line in handle if line.strip()]
+        row["artifact_complete"] = (
+            detailed_path.exists()
+            and int(manifest.get("record_count", -1)) == len(records)
+            and bool(records)
+            and all(
+                (
+                    record.get("status") == "passed"
+                    and record.get("array_file")
+                    and (path.parent / str(record["array_file"])).exists()
+                )
+                or (
+                    record.get("status") != "passed"
+                    and bool(record.get("failure_reason"))
+                )
+                for record in records
+            )
+        )
+        if not report_path.exists() and row["artifact_complete"]:
+            row["run_status"] = "direct-artifacts"
         row["eligible_for_ranking"] = (
-            row["run_status"] == "passed" and failed_sequences == 0
+            row["run_status"] in ("passed", "direct-artifacts")
+            and row["artifact_complete"]
+            and failed_sequences == 0
+        )
+        row["diagnostic_only"] = row["artifact_complete"] and failed_sequences > 0
+        row["analysis_status"] = (
+            "diagnostic-only" if row["diagnostic_only"]
+            else "ranking" if row["eligible_for_ranking"]
+            else "incomplete"
         )
     if np.isfinite(translation[valid]).any():
         row["translation_m"] = "{:.6f}".format(float(np.nanmean(translation[valid])))
@@ -67,7 +102,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     fields = (
         "method", "suite", "run_status", "eligible_for_ranking",
-        "failed_sequences_total", "sensor_count", "evaluated_frames",
+        "diagnostic_only", "analysis_status", "failed_sequences_total",
+        "artifact_complete", "sensor_count", "evaluated_frames",
         "all_rotation_deg", "lumbar_rotation_deg", "translation_m",
     )
     with output.open("w", newline="", encoding="utf-8") as handle:

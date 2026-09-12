@@ -100,7 +100,6 @@ The IMUPoser Dataset is available for download [here](https://www.dropbox.com/s/
 Institute for Intelligent Systems for help with processing our motion capture data.
 
 ## Follow up Research:
-- [WheelPoser: Sparse-IMU Based Body Pose Estimation for Wheelchair Users](https://github.com/axle-lab/WheelPoser) (ASSETS 2024)
 - [MobilePoser: Real-Time Full-Body Pose Estimation and 3D Human Translation from IMUs in Mobile Consumer Devices](https://spice-lab.org/projects/MobilePoser/) (UIST 2024)
 - [SmartPoser: Arm Pose Estimation with a Smartphone and Smartwatch Using UWB and IMU Data](https://www.figlab.com/research/2023/smartposer) (UIST 2023)
 
