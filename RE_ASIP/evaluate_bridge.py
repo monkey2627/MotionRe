@@ -33,6 +33,7 @@ sys.path.insert(0, str(_BASE))
 from benchmarks.bridge_data import load_dip_sequences
 from benchmarks.detailed_results import write_detailed_index, write_sequence_result
 from benchmarks.standard_results import write_standard_result
+from benchmarks.video import render_comparison_video
 from drift_eval_common import angle_between_rotmats, load_long_sequences
 
 FPS = 30
@@ -123,6 +124,52 @@ def evaluate(sequences, model, device, max_frames: int, out_dir: Path):
     return rotation, count, records
 
 
+@torch.no_grad()
+def render_videos(sequences, model, device, max_frames: int, out_dir: Path,
+                  max_seconds: int, render_fps: int) -> None:
+    """Render pose-only ASIP predictions with GT root translation for display.
+
+    ASIP has no translation output.  Using GT translation here is strictly a
+    common visual reference so that rotation quality is visible; the standard
+    metrics still contain NaN translation values.
+    """
+    import mobileposer.articulate as art
+    from mobileposer.config import paths
+
+    bodymodel = art.model.ParametricModel(str(paths.smpl_file))
+    for idx, seq in enumerate(sequences):
+        pose = _field(seq, "pose")
+        length = min(len(pose), max_frames, max_seconds * FPS)
+        if length < WINDOW:
+            continue
+        try:
+            ori = _field(seq, "ori")[:length]
+            pred = _predict(model, _make_input(_field(seq, "acc")[:length], ori), device)
+            target = pose[WINDOW - 1:length]
+            tran = _field(seq, "tran")[WINDOW - 1:length]
+            valid_length = len(pred)
+            pose_fk = torch.eye(3).view(1, 1, 3, 3).expand(valid_length, 24, 3, 3).clone()
+            root_ori = ori[WINDOW - 1:length, 5]
+            pose_fk[:, 0] = root_ori
+            for slot, joint in {0: 18, 1: 19, 2: 1, 3: 2}.items():
+                pose_fk[:, joint] = root_ori.transpose(-1, -2) @ ori[WINDOW - 1:length, slot]
+            _, gt_joints = bodymodel.forward_kinematics(target, tran=tran)
+            _, pred_joints = bodymodel.forward_kinematics(pred, tran=tran)
+            _, fk_joints = bodymodel.forward_kinematics(pose_fk, tran=tran)
+            errors = angle_between_rotmats(pred, target)[:, [1, 2, 3, 6, 9]].mean(-1).numpy()
+            fk_errors = angle_between_rotmats(pose_fk, target)[:, [1, 2, 3, 6, 9]].mean(-1).numpy()
+            render_comparison_video(
+                gt_joints=gt_joints.numpy(), method_joints=pred_joints.numpy(),
+                fk_joints=fk_joints.numpy(), method="ASIP", combo="full_6s",
+                sequence=seq, fps=FPS, out_dir=out_dir, seq_idx=idx,
+                max_seconds=max_seconds, render_fps=render_fps,
+                method_errors=errors, fk_errors=fk_errors,
+            )
+        except Exception as exc:
+            source = _field(seq, "source") if not isinstance(seq, dict) else seq.get("source", "unknown")
+            print("  skip video {}: {}: {}".format(source, type(exc).__name__, exc))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="ASIP evaluation on shared processed data")
     parser.add_argument("--suite", choices=("dip", "drift"), required=True)
@@ -136,6 +183,8 @@ def main() -> int:
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--no-video", action="store_true")
+    parser.add_argument("--video-seconds", type=int, default=30)
+    parser.add_argument("--video-fps", type=int, default=10)
     args = parser.parse_args()
     max_frames = args.max_seconds * FPS
     sequences = (load_dip_sequences(args.processed_root, args.min_frames, max_frames) if args.suite == "dip" else
@@ -144,11 +193,15 @@ def main() -> int:
     if not sequences:
         raise RuntimeError("No eligible sequences found")
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    rotation, count, records = evaluate(sequences, _load_model(args.model, torch.device(args.device)),
-                                        torch.device(args.device), max_frames, args.out_dir)
+    device = torch.device(args.device)
+    model = _load_model(args.model, device)
+    rotation, count, records = evaluate(sequences, model, device, max_frames, args.out_dir)
     np.savez_compressed(args.out_dir / "asip_{}.npz".format(args.suite), rotation=rotation, count=count, fps=FPS)
     write_standard_result(args.out_dir, "asip", args.suite, rotation, count, FPS, 6, [0, 1, 2, 3, 4, 5])
     write_detailed_index(args.out_dir, "asip", args.suite, FPS, records)
+    if not args.no_video:
+        render_videos(sequences, model, device, max_frames, args.out_dir,
+                      args.video_seconds, args.video_fps)
     print("Saved ASIP results to {}".format(args.out_dir))
     return 0
 
