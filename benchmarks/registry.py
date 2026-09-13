@@ -209,6 +209,20 @@ def build_specs(root: Path) -> Tuple[MethodSpec, ...]:
             notes="Physics-based global motion baseline; bridge evaluator supports dip/drift suites.",
         ),
         MethodSpec(
+            "asip",
+            "ASIP",
+            "pure-imu-sequence",
+            "6 IMUs",
+            code / "RE_ASIP",
+            ("dip", "drift"),
+            (
+                "code/RE_ASIP/evaluate_bridge.py",
+                "code/RE_ASIP/common/modules.py",
+                "code/RE_ASIP/checkpoint/ck",
+            ),
+            notes="ASIP sequence-structure baseline; predicts pose only and has no root-translation head.",
+        ),
+        MethodSpec(
             "imuposer",#，没给预训练
             "IMUPoser",
             "mobile-device",
@@ -357,6 +371,13 @@ def missing_requirements(
         )
         return [str(path.relative_to(root)) for path in required if not path.exists()]
 
+    if spec.name == "asip":
+        candidates = (spec.working_dir / "checkpoint" / "ck",
+                      spec.working_dir / "checkpoint" / "ck.bin")
+        if not any(path.exists() and path.stat().st_size > 0 for path in candidates):
+            return ["one of: {} (non-empty checkpoint required)".format(
+                ", ".join(str(path.relative_to(root)) for path in candidates))]
+
     # These DIP adapters only need their evaluator and the checkpoint supplied
     # by the caller.  Their drift-only asset lists include AMASS-specific
     # resources and must not block real-DIP evaluation.
@@ -364,7 +385,7 @@ def missing_requirements(
         script = spec.working_dir / "evaluate_dip.py"
         return [str(script.relative_to(root))] if not script.exists() else []
 
-    if spec.name in {"pip", "transpose", "globalpose"} and suite in {"dip", "drift"}:
+    if spec.name in {"pip", "transpose", "globalpose", "asip"} and suite in {"dip", "drift"}:
         script = spec.working_dir / "evaluate_bridge.py"
         return [str(script.relative_to(root))] if not script.exists() else []
 
@@ -638,6 +659,26 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
             plans.append(CommandPlan(spec.name, suite, suite, cwd, tuple([python] + args), output))
             return plans
         plans.append(CommandPlan(spec.name, suite, "native", cwd, (python, "test.py"), output))
+        return plans
+
+    if spec.name == "asip":
+        output = _output_dir(options, spec.name, suite)
+        default_model = "checkpoint/ck.bin" if (cwd / "checkpoint" / "ck.bin").exists() else "checkpoint/ck"
+        args = ["evaluate_bridge.py", "--suite", suite,
+                "--model", model or default_model,
+                "--min-frames", str(1 if suite == "drift" and options.action_manifest else options.effective_min_frames),
+                "--max-seconds", str(int(options.effective_max_seconds)),
+                "--out-dir", str(output)]
+        if suite == "drift":
+            args += ["--max-seqs", str(0 if options.action_manifest else options.effective_max_seqs)]
+            if options.action_manifest:
+                args += ["--action-manifest", str(options.action_manifest),
+                         "--max-per-action", str(options.max_per_action)]
+        if options.device:
+            args += ["--device", options.device]
+        if not options.with_video:
+            args += ["--no-video"]
+        plans.append(CommandPlan(spec.name, suite, suite, cwd, tuple([python] + args), output))
         return plans
 
     if spec.name == "uip":
