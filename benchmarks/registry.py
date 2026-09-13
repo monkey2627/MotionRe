@@ -374,9 +374,16 @@ def missing_requirements(
     if spec.name == "asip":
         candidates = (spec.working_dir / "checkpoint" / "ck",
                       spec.working_dir / "checkpoint" / "ck.bin")
+        missing = []
         if not any(path.exists() and path.stat().st_size > 0 for path in candidates):
-            return ["one of: {} (non-empty checkpoint required)".format(
-                ", ".join(str(path.relative_to(root)) for path in candidates))]
+            missing.append("one of: {} (non-empty checkpoint required)".format(
+                ", ".join(str(path.relative_to(root)) for path in candidates)))
+        for filename in ("spatial_prior.pt", "temporal_prior.pt"):
+            path = spec.working_dir / "dataset" / filename
+            if not path.exists() or path.stat().st_size == 0:
+                missing.append(str(path.relative_to(root)))
+        if missing:
+            return missing
 
     # These DIP adapters only need their evaluator and the checkpoint supplied
     # by the caller.  Their drift-only asset lists include AMASS-specific

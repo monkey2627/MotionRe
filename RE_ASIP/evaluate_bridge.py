@@ -24,7 +24,7 @@ _ROOT = next(
 )
 _CODE = _ROOT / "code" if (_ROOT / "code" / "base_mobileposer").is_dir() else _ROOT
 _BASE = _CODE / "base_mobileposer"
-os.chdir(str(_DIR / "common"))
+os.chdir(str(_DIR))
 sys.path.insert(0, str(_DIR / "common"))
 sys.path.insert(0, str(_DIR))
 sys.path.insert(0, str(_CODE))
@@ -64,6 +64,14 @@ def _r6d_to_matrix(x: torch.Tensor) -> torch.Tensor:
 
 def _load_model(weights: Path, device: torch.device):
     from modules import Inertial_PoseTransformer
+
+    prior_files = (_DIR / "dataset" / "spatial_prior.pt", _DIR / "dataset" / "temporal_prior.pt")
+    missing = [str(path) for path in prior_files if not path.exists()]
+    if missing:
+        raise FileNotFoundError(
+            "ASIP spatial/temporal priors are missing; obtain the released "
+            "dataset assets before evaluation: {}".format(", ".join(missing))
+        )
 
     model = Inertial_PoseTransformer(
         num_frame=WINDOW, in_num_joints=6, out_num_joints=15,

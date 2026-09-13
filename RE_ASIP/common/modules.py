@@ -161,6 +161,10 @@ class Inertial_PoseTransformer(nn.Module):
         self.with_temporal_pos_embed = with_temporal_pos_embed
         self.with_ssms = with_ssms
         self.with_ssmt = with_ssmt
+        # SPM/TPM live in ssm.py in the released repository.  Import lazily
+        # here because ssm.py imports Mlp from this module.
+        if self.with_ssms or self.with_ssmt:
+            from ssm import SPM, TPM
         if not self.with_spatial_block:
             self.with_spatial_pos_embed = False
             
