@@ -1,4 +1,4 @@
-"""Render FBX sampled skeleton and fitted SMPL GT side by side."""
+"""Render source skeleton and fitted SMPL GT side by side."""
 
 import argparse
 from pathlib import Path
@@ -12,7 +12,7 @@ import torch
 from mobileposer.articulate.model import ParametricModel
 from mobileposer.config import paths
 from mobileposer.evaluate_no_head_5imu import EDGES, FPS, _draw_skeleton, _normalize_pair_for_video, _setup_axis
-from mobileposer.fit_ours_smpl import _FBX_BONES, _load_fbx_positions
+from mobileposer.fit_ours_smpl import _HUMANPOSE_BONES, _load_fbx_positions, _load_humanpose_positions
 
 
 FBX_TO_SMPL_EDGES = [
@@ -25,31 +25,57 @@ FBX_TO_SMPL_EDGES = [
 ]
 
 
-def _fbx_to_24_joints(fbx_positions: torch.Tensor) -> np.ndarray:
-    name_to_idx = {name: idx for idx, name in enumerate(_FBX_BONES)}
-    out = torch.zeros(fbx_positions.shape[0], 24, 3)
-    mapping = {
-        0: "pelvis", 1: "femur_l", 2: "femur_r", 3: "lumbar_body",
-        4: "tibia_l", 5: "tibia_r", 7: "talus_l", 8: "talus_r",
-        9: "thorax", 10: "toes_l", 11: "toes_r", 12: "thorax",
-        15: "head", 16: "humerus_l", 17: "humerus_r", 18: "ulna_l",
-        19: "ulna_r", 20: "hand_l", 21: "hand_r", 22: "hand_l", 23: "hand_r",
-    }
-    for smpl_idx, fbx_name in mapping.items():
-        out[:, smpl_idx] = fbx_positions[:, name_to_idx[fbx_name]]
+def _source_to_24_joints(source_positions: torch.Tensor) -> np.ndarray:
+    name_to_idx = {name: idx for idx, name in enumerate(_HUMANPOSE_BONES)}
+    out = torch.zeros(source_positions.shape[0], 24, 3)
+    def p(name):
+        return source_positions[:, name_to_idx[name]]
+
+    # Fill the intermediate SMPL joints too. Leaving clavicles/neck at zero
+    # makes an otherwise valid FBX skeleton look folded toward the origin.
+    out[:, 0] = p("pelvis")
+    out[:, 1] = p("femur_l")
+    out[:, 2] = p("femur_r")
+    out[:, 3] = p("lumbar_body")
+    out[:, 4] = p("tibia_l")
+    out[:, 5] = p("tibia_r")
+    out[:, 6] = (p("lumbar_body") + p("thorax")) * 0.5
+    out[:, 7] = p("talus_l")
+    out[:, 8] = p("talus_r")
+    out[:, 9] = p("thorax")
+    out[:, 10] = p("toes_l")
+    out[:, 11] = p("toes_r")
+    out[:, 12] = (p("thorax") + p("head")) * 0.5
+    out[:, 13] = (p("thorax") + p("humerus_l")) * 0.5
+    out[:, 14] = (p("thorax") + p("humerus_r")) * 0.5
+    out[:, 15] = p("head")
+    out[:, 16] = p("humerus_l")
+    out[:, 17] = p("humerus_r")
+    out[:, 18] = p("ulna_l")
+    out[:, 19] = p("ulna_r")
+    out[:, 20] = p("hand_l")
+    out[:, 21] = p("hand_r")
+    out[:, 22] = p("hand_l")
+    out[:, 23] = p("hand_r")
     return out.numpy()
 
 
-def _render_video(fbx_joints, smpl_joints, output_path: Path, render_fps: int, max_seconds: int):
+def _load_source_positions(path: Path):
+    if path.suffix.lower() == ".json":
+        return _load_humanpose_positions(path)
+    return _load_fbx_positions(path)
+
+
+def _render_video(source_joints, smpl_joints, output_path: Path, render_fps: int, max_seconds: int, source_label: str, smpl_label: str):
     import cv2
 
-    n = min(len(fbx_joints), len(smpl_joints), max_seconds * FPS)
+    n = min(len(source_joints), len(smpl_joints), max_seconds * FPS)
     stride = max(1, round(FPS / render_fps))
-    fbx_joints, smpl_joints = _normalize_pair_for_video(fbx_joints[:n], smpl_joints[:n])
+    source_joints, smpl_joints = _normalize_pair_for_video(source_joints[:n], smpl_joints[:n])
 
-    ground = np.concatenate([fbx_joints[:, :, [0, 2]], smpl_joints[:, :, [0, 2]]], axis=1)
+    ground = np.concatenate([source_joints[:, :, [0, 2]], smpl_joints[:, :, [0, 2]]], axis=1)
     horizontal = max(1.2, float(np.percentile(np.abs(ground), 99.5)) + 0.15)
-    y_values = np.concatenate([fbx_joints[:, :, 1].reshape(-1), smpl_joints[:, :, 1].reshape(-1)])
+    y_values = np.concatenate([source_joints[:, :, 1].reshape(-1), smpl_joints[:, :, 1].reshape(-1)])
     vertical_limits = (
         min(-0.1, float(np.percentile(y_values, 0.5)) - 0.15),
         max(2.0, float(np.percentile(y_values, 99.5)) + 0.15),
@@ -68,12 +94,12 @@ def _render_video(fbx_joints, smpl_joints, output_path: Path, render_fps: int, m
         ]
         for ax, (title, view, x_limits, y_limits, show_floor) in zip(axes, panels):
             _setup_axis(ax, title, x_limits, y_limits, show_floor=show_floor)
-            _draw_skeleton(ax, fbx_joints[i], "#42A5F5", "FBX", view, linewidth=2.4, alpha=0.95)
-            _draw_skeleton(ax, smpl_joints[i], "#EF5350", "SMPL fit", view, linewidth=1.9, alpha=0.9)
+            _draw_skeleton(ax, source_joints[i], "#42A5F5", source_label, view, linewidth=2.4, alpha=0.95)
+            _draw_skeleton(ax, smpl_joints[i], "#EF5350", smpl_label, view, linewidth=1.9, alpha=0.9)
             legend = ax.legend(loc="upper right", frameon=False, fontsize=8)
             for text in legend.get_texts():
                 text.set_color("white")
-        fig.suptitle(f"FBX skeleton vs fitted SMPL GT    frame={i}    time={i / FPS:.2f}s", color="white", fontsize=11, y=0.98)
+        fig.suptitle(f"{source_label} skeleton vs {smpl_label}    frame={i}    time={i / FPS:.2f}s", color="white", fontsize=11, y=0.98)
         fig.tight_layout()
         fig.canvas.draw()
         frames.append(np.asarray(fig.canvas.buffer_rgba())[:, :, :3].copy())
@@ -90,23 +116,29 @@ def _render_video(fbx_joints, smpl_joints, output_path: Path, render_fps: int, m
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Render ours FBX skeleton against fitted SMPL GT.")
-    parser.add_argument("--fbx-cache", type=Path, default=paths.processed_datasets / "ours_fbx_cache/1.fbx_joints.npz")
+    parser = argparse.ArgumentParser(description="Render ours source skeleton against fitted SMPL GT.")
+    parser.add_argument("--source-cache", "--fbx-cache", dest="source_cache", type=Path,
+                        default=paths.processed_datasets / "ours_humanpose_cache/1.humanpose_joints.json")
     parser.add_argument("--ours-smpl", type=Path, default=paths.eval_dir / "ours_smpl.pt")
-    parser.add_argument("--output", type=Path, default=paths.root_dir / "results/ours_gt_debug/fbx_vs_smpl_gt.mp4")
+    parser.add_argument("--output", type=Path, default=paths.root_dir / "results/ours_gt_debug/humanpose_vs_smpl_gt.mp4")
     parser.add_argument("--max-seconds", type=int, default=30)
     parser.add_argument("--render-fps", type=int, default=10)
     args = parser.parse_args()
 
-    fbx_positions, _ = _load_fbx_positions(args.fbx_cache)
-    fbx_joints = _fbx_to_24_joints(fbx_positions)
+    source_positions, source_meta = _load_source_positions(args.source_cache)
+    source_joints = _source_to_24_joints(source_positions)
+    source_label = "HumanPose" if source_meta.get("source_type") == "unity_humanpose" else "FBX"
 
     data = torch.load(args.ours_smpl, map_location="cpu")
     pose = data["pose"][0]
     tran = data["tran"][0]
+    shape = data.get("shape", [None])[0]
     body = ParametricModel(paths.smpl_file)
-    _, smpl_joints = body.forward_kinematics(pose, tran=tran)
-    _render_video(fbx_joints, smpl_joints.numpy(), args.output, args.render_fps, args.max_seconds)
+    _, smpl_joints = body.forward_kinematics(pose, shape=shape, tran=tran)
+    metadata = data.get("metadata") or []
+    is_retarget = bool(metadata) and metadata[0].get("source_type") == "unity_humanpose_rotation_retarget"
+    smpl_label = "SMPL rotation retarget" if is_retarget else "SMPL fit"
+    _render_video(source_joints, smpl_joints.detach().numpy(), args.output, args.render_fps, args.max_seconds, source_label, smpl_label)
 
 
 if __name__ == "__main__":

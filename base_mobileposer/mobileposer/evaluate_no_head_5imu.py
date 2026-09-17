@@ -33,6 +33,9 @@ import mobileposer.articulate as art
 
 
 FPS = 30
+# no_head_layouts rotates AMASS from its source basis into the model's training
+# basis.  Videos are easier to inspect in the Unity-style y-up basis.
+TRAINING_WORLD_ROT = torch.tensor([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, -1.0, 0.0]])
 JOINT_NAMES = {
     0: "pelvis", 1: "l_hip", 2: "r_hip", 3: "spine1", 4: "l_knee",
     5: "r_knee", 6: "spine2", 7: "l_ankle", 8: "r_ankle", 9: "spine3",
@@ -215,9 +218,15 @@ def render_comparison_video(gt_joints, pred_joints, output_path: Path,
     print(f"  video: {output_path}")
 
 
+def _to_y_up_for_video(joints: torch.Tensor) -> torch.Tensor:
+    """Undo the training-world rotation for y-up visual inspection only."""
+    inverse_rotation = TRAINING_WORLD_ROT.transpose(0, 1).to(joints)
+    return joints @ inverse_rotation.transpose(0, 1)
+
+
 @torch.no_grad()
 def evaluate_model(model, sequences, bodymodel, device, video_count,
-                   video_dir, render_fps, max_seconds, overwrite):
+                   video_dir, render_fps, max_seconds, overwrite, video_y_up):
     sums = {name: 0.0 for name in PARTS}
     count = {name: 0 for name in PARTS}
     tran_sum = 0.0
@@ -255,6 +264,9 @@ def evaluate_model(model, sequences, bodymodel, device, video_count,
             if overwrite or not video_path.exists():
                 _, gt_joints = bodymodel.forward_kinematics(pose_gt, tran=tran_gt)
                 _, pred_joints = bodymodel.forward_kinematics(pose_pred, tran=tran_pred)
+                if video_y_up:
+                    gt_joints = _to_y_up_for_video(gt_joints)
+                    pred_joints = _to_y_up_for_video(pred_joints)
                 render_comparison_video(
                     gt_joints.cpu().numpy(),
                     pred_joints.cpu().numpy(),
@@ -280,6 +292,8 @@ def main():
     parser.add_argument("--video-count", type=int, default=2)
     parser.add_argument("--max-seconds", type=int, default=30)
     parser.add_argument("--render-fps", type=int, default=10)
+    parser.add_argument("--video-y-up", action="store_true",
+                        help="Undo the no-head training-world rotation before rendering videos.")
     parser.add_argument("--no-video", action="store_true")
     parser.add_argument("--videos-only", action="store_true",
                         help="Only render GT/pred videos for the first --video-count sequences; do not write metrics or comparison.csv.")
@@ -333,6 +347,7 @@ def main():
             model, sequences, bodymodel, device,
             0 if args.no_video else args.video_count,
             video_dir, args.render_fps, args.max_seconds, args.overwrite,
+            args.video_y_up,
         )
         if args.videos_only:
             print(f"[videos-only] {layout_name}: rendered up to {args.video_count} videos; metrics were not written.")
