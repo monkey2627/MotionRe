@@ -13,6 +13,9 @@
 **/*_drift_results/
 **/RBDL-PIP/
 **/drift_results/
+**/checkpoints/
+**/results/
+**/IMUTrack-for-Spine
 # 数据集目录
 data/
 datasets/

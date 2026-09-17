@@ -9,8 +9,7 @@
 ## 1. 结论摘要
 
 本轮覆盖 GlobalPose、IMUCoCo、MobilePoser、PIP、PNP、SliMeVR、TransPose 七种方法。DIP 统一结果包含 2,799 个有效帧；AMASS drift
-使用 618 个序列、最长 120 s 的 3,600 帧时间窗。结果已经可以用于工程诊断，
-但不能把所有标准指标直接放进论文排名：
+使用 618 个序列、最长 120 s 的 3,600 帧时间窗。
 
 1. **DIP 旋转精度**：TransPose 为 19.58°，MobilePoser 六物理 IMU 配置为
    20.62°；MobilePoser 五物理 IMU 配置为 21.03°，只比 TransPose 高 1.45°。

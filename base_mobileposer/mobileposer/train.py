@@ -6,14 +6,17 @@ torch.set_printoptions(sci_mode=False)
 from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 import lightning as L
-from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.loggers import CSVLogger, WandbLogger
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch import seed_everything
 from argparse import ArgumentParser
 from pathlib import Path
 from typing import List
 from tqdm import tqdm 
-import wandb
+try:
+    import wandb
+except Exception:
+    wandb = None
 
 from mobileposer.constants import MODULES
 from mobileposer.data import PoseDataModule
@@ -38,12 +41,17 @@ class TrainingManager:
         self.hypers = finetune_hypers if finetune else train_hypers
 
     def _setup_wandb_logger(self, save_path: Path):
-        wandb_logger = WandbLogger(
+        if os.environ.get("MOBILEPOSER_DISABLE_WANDB") == "1" or wandb is None:
+            return CSVLogger(
+                save_dir=save_path,
+                name="csv_logs",
+            )
+
+        return WandbLogger(
             project=save_path.name, 
             name=get_datestring(),
             save_dir=save_path
         ) 
-        return wandb_logger
 
     def _setup_callbacks(self, save_path):
         checkpoint_callback = ModelCheckpoint(
@@ -92,7 +100,8 @@ class TrainingManager:
         try:
             trainer.fit(model, datamodule=datamodule)
         finally:
-            wandb.finish()
+            if wandb is not None:
+                wandb.finish()
             del model
             torch.cuda.empty_cache()
 
