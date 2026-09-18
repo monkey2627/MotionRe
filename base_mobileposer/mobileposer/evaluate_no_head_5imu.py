@@ -153,11 +153,14 @@ def render_comparison_video(gt_joints, pred_joints, output_path: Path,
                             render_fps=10, max_seconds=30):
     import cv2
 
-    n = min(len(gt_joints), len(pred_joints), int(max_seconds * FPS))
+    n = min(len(gt_joints), len(pred_joints))
+    if max_seconds > 0:
+        n = min(n, int(max_seconds * FPS))
     if n == 0:
         return
     stride = max(1, round(FPS / render_fps))
-    frames = []
+    writer = None
+    temporary_path = output_path.with_suffix(".partial.mp4")
     gt_joints, pred_joints = _normalize_pair_for_video(
         np.asarray(gt_joints[:n]), np.asarray(pred_joints[:n])
     )
@@ -200,21 +203,16 @@ def render_comparison_video(gt_joints, pred_joints, output_path: Path,
         fig.tight_layout()
         fig.canvas.draw()
         frame = np.asarray(fig.canvas.buffer_rgba())[:, :, :3].copy()
-        frames.append(frame)
+        if writer is None:
+            height, width = frame.shape[:2]
+            writer = cv2.VideoWriter(str(temporary_path), cv2.VideoWriter_fourcc(*"mp4v"), FPS / stride, (width, height))
+            if not writer.isOpened():
+                raise RuntimeError(f"Cannot open video: {temporary_path}")
+        writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
         plt.close(fig)
 
-    height, width = frames[0].shape[:2]
-    writer = cv2.VideoWriter(
-        str(output_path),
-        cv2.VideoWriter_fourcc(*"mp4v"),
-        render_fps,
-        (width, height),
-    )
-    if not writer.isOpened():
-        raise RuntimeError(f"OpenCV could not open MP4 writer: {output_path}")
-    for frame in frames:
-        writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
     writer.release()
+    temporary_path.replace(output_path)
     print(f"  video: {output_path}")
 
 
@@ -259,7 +257,7 @@ def evaluate_model(model, sequences, bodymodel, device, video_count,
         tran_sum += tran_err.sum().item()
         tran_count += T
 
-        if seq_idx < video_count:
+        if video_count == -1 or seq_idx < video_count:
             video_path = video_dir / f"{seq_idx:04d}.mp4"
             if overwrite or not video_path.exists():
                 _, gt_joints = bodymodel.forward_kinematics(pose_gt, tran=tran_gt)
@@ -289,8 +287,8 @@ def main():
     parser.add_argument("--layouts", nargs="+", default=["all"])
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--max-seq", type=int, default=None)
-    parser.add_argument("--video-count", type=int, default=2)
-    parser.add_argument("--max-seconds", type=int, default=30)
+    parser.add_argument("--video-count", type=int, default=2, help="Number of videos; -1 renders every sequence")
+    parser.add_argument("--max-seconds", type=int, default=30, help="Duration limit; 0 renders the full sequence")
     parser.add_argument("--render-fps", type=int, default=10)
     parser.add_argument("--video-y-up", action="store_true",
                         help="Undo the no-head training-world rotation before rendering videos.")
@@ -301,8 +299,10 @@ def main():
     args = parser.parse_args()
     if args.videos_only and args.no_video:
         parser.error("--videos-only cannot be used with --no-video")
-    if args.videos_only and args.video_count <= 0:
-        parser.error("--videos-only requires --video-count > 0")
+    if args.video_count < -1 or args.max_seconds < 0 or not 1 <= args.render_fps <= FPS:
+        parser.error("Use video-count >= -1, max-seconds >= 0, render-fps between 1 and 30")
+    if args.videos_only and args.video_count == 0:
+        parser.error("--videos-only requires a positive video-count or -1")
 
     layout_names = list(LAYOUTS) if args.layouts == ["all"] else args.layouts
     unknown = [x for x in layout_names if x not in LAYOUTS]
@@ -336,13 +336,20 @@ def main():
         print(f"model: {model_path}")
         model = load_model(str(model_path)).to(device).eval()
         sequence_limit = args.max_seq
-        if args.videos_only:
+        if args.videos_only and args.video_count != -1:
             sequence_limit = args.video_count if args.max_seq is None else min(args.max_seq, args.video_count)
         sequences = load_sequences(data_dir, sequence_limit)
         if not sequences:
             print(f"[skip] {layout_name}: no sequences")
             continue
 
+        if not args.no_video:
+            video_dir.mkdir(parents=True, exist_ok=True)
+            count = len(sequences) if args.video_count == -1 else min(args.video_count, len(sequences))
+            manifest = [{'video': f'{i:04d}.mp4', 'source': sequences[i]['source'],
+                         'frames': len(sequences[i]['pose']), 'source_fps': FPS,
+                         'max_seconds': args.max_seconds} for i in range(count)]
+            (video_dir / 'manifest.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
         result = evaluate_model(
             model, sequences, bodymodel, device,
             0 if args.no_video else args.video_count,

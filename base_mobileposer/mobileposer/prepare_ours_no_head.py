@@ -99,7 +99,15 @@ def _load_raw_imu(path):
                 continue
             rot = _rotation_from_sensor(sensor)
             ori[role][i] = rot
-            acc[role][i] = rot.matmul(_vec3(sensor.get("accelerationG", {})) * GRAVITY)
+            # SolarXR's ``linear`` field is Tracker.getAcceleration(), which
+            # SlimeVR has already reference-adjusted into world coordinates.
+            # Rotating it by the recorded raw Euler attitude again double
+            # transforms the signal. Raw sensor acceleration is the only case
+            # where a device-frame -> world rotation would be appropriate.
+            acceleration = _vec3(sensor.get("accelerationG", {})) * GRAVITY
+            if sensor.get("accelerationKind") == "raw":
+                acceleration = rot.matmul(acceleration)
+            acc[role][i] = acceleration
             online[role][i] = bool(sensor.get("online", False))
     return acc, ori, online
 

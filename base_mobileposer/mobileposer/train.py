@@ -12,6 +12,7 @@ from lightning.pytorch import seed_everything
 from argparse import ArgumentParser
 from pathlib import Path
 from typing import List
+from types import SimpleNamespace
 from tqdm import tqdm 
 try:
     import wandb
@@ -89,6 +90,8 @@ class TrainingManager:
         module_path = checkpoint_path / module_name
         make_dir(module_path)
         datamodule = PoseDataModule(finetune=self.finetune)
+        if self.fast_dev_run:
+            datamodule.hypers = SimpleNamespace(batch_size=1, num_workers=0)
         trainer = self._setup_trainer(module_path)
 
         print()

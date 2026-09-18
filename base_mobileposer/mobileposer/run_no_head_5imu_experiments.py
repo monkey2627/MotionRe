@@ -8,6 +8,7 @@ Use --fast-dev-run for a quick wiring check before launching full training.
 """
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -16,7 +17,8 @@ from pathlib import Path
 import torch
 
 from mobileposer.config import paths
-from mobileposer.no_head_layouts import LAYOUTS, generate_dip_layout_dataset, generate_layout_dataset
+from mobileposer.no_head_layouts import LAYOUTS, generate_dip_layout_dataset, generate_layout_dataset, synthesis_metadata, validate_cached_dataset
+from mobileposer.surface_imu import DEFAULT_CONFIG
 
 
 DEFAULT_LAYOUTS = list(LAYOUTS)
@@ -35,8 +37,13 @@ def _latest_numeric_dir(root: Path) -> Path:
     return max(dirs, key=lambda p: int(p.name))
 
 
-def _write_layout_manifest(layout_name: str, run_dir: Path, processed_dir: Path) -> None:
+def _write_layout_manifest(layout_name: str, run_dir: Path, processed_dir: Path, args) -> None:
     layout = LAYOUTS[layout_name]
+    manifest = synthesis_metadata(args.imu_mode, args.attachment_config)
+    manifest_path = run_dir / "synthesis.json"
+    if manifest_path.exists() and json.loads(manifest_path.read_text()) != manifest:
+        raise ValueError(f"Conflicting synthesis manifest: {manifest_path}")
+    manifest_path.write_text(json.dumps(manifest, indent=2))
     text = [
         f"layout: {layout_name}",
         f"labels: {layout['labels']}",
@@ -64,6 +71,7 @@ def _run_final_evaluation(args, layout_names, processed_root: Path, run_root: Pa
                 data_root / layout_name,
                 split="test",
                 overwrite=args.overwrite_eval_data,
+                mode=args.imu_mode, attachment_config=args.attachment_config, mesh_chunk_size=args.mesh_chunk_size,
             )
 
     eval_cmd = [
@@ -106,6 +114,11 @@ def _launch_parallel_workers(args, layout_names):
     run_root.mkdir(parents=True, exist_ok=True)
     result_root.mkdir(parents=True, exist_ok=True)
     worker_stages = [stage for stage in args.stages if stage != "evaluate"]
+    if not worker_stages:
+        env = os.environ.copy()
+        env["CUDA_VISIBLE_DEVICES"] = gpus[0]
+        _run_final_evaluation(args, layout_names, processed_root, run_root, result_root, env=env)
+        return
 
     procs = []
     for gpu, chunk in zip(gpus, chunks):
@@ -127,9 +140,15 @@ def _launch_parallel_workers(args, layout_names):
             args.run_root,
             "--result-root",
             args.result_root,
+            "--imu-mode", args.imu_mode,
+            "--attachment-config", str(args.attachment_config),
+            "--mesh-chunk-size", str(args.mesh_chunk_size),
+            "--dip-eval-root", args.dip_eval_root,
             "--worker-gpu",
             gpu,
         ]
+        if args.overwrite_eval_data:
+            cmd.append("--overwrite-eval-data")
         if args.overwrite_data:
             cmd.append("--overwrite-data")
         if args.fast_dev_run:
@@ -169,12 +188,12 @@ def main():
     parser.add_argument("--stages", nargs="+", default=DEFAULT_STAGES,
                         choices=DEFAULT_STAGES,
                         help="Subset of stages to run.")
-    parser.add_argument("--processed-root", default=str(paths.root_dir / "data/no_head_5imu_processed"))
+    parser.add_argument("--processed-root", default=None)
     parser.add_argument("--eval-dataset", choices=["train-source", "dip"], default="train-source",
                         help="Evaluation data source. train-source uses --processed-root; dip uses DIP_IMU s_09/s_10 synthesized for each layout.")
-    parser.add_argument("--dip-eval-root", default=str(paths.root_dir / "data/no_head_5imu_dip_test"))
-    parser.add_argument("--run-root", default=str(paths.root_dir / "checkpoints/no_head_5imu"))
-    parser.add_argument("--result-root", default=str(paths.root_dir / "results/no_head_5imu"))
+    parser.add_argument("--dip-eval-root", default=None)
+    parser.add_argument("--run-root", default=None)
+    parser.add_argument("--result-root", default=None)
     parser.add_argument("--overwrite-data", action="store_true")
     parser.add_argument("--overwrite-eval-data", action="store_true",
                         help="Regenerate eval-only data such as DIP layout test files.")
@@ -195,7 +214,22 @@ def main():
                         help="Run layout groups in parallel on these GPU ids, e.g. --gpus 0 1 2.")
     parser.add_argument("--worker-gpu", default=None,
                         help=argparse.SUPPRESS)
+    parser.add_argument('--imu-mode', choices=['joint', 'surface'], default='joint')
+    parser.add_argument('--attachment-config', type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument('--mesh-chunk-size', type=int, default=128)
     args = parser.parse_args()
+    suffix = '_surface' if args.imu_mode == 'surface' else ''
+    for attr, default in {
+        'processed_root': f'data/no_head_5imu{suffix}_processed',
+        'dip_eval_root': f'data/no_head_5imu{suffix}_dip_test',
+        'run_root': f'checkpoints/no_head_5imu{suffix}',
+        'result_root': f'results/no_head_5imu{suffix}',
+    }.items():
+        if getattr(args, attr) is None:
+            setattr(args, attr, str(paths.root_dir / default))
+    synthesis_metadata(args.imu_mode, args.attachment_config)
+    if args.fast_dev_run and any(s in args.stages for s in ['combine', 'infer', 'evaluate']):
+        parser.error('--fast-dev-run does not save checkpoints; use --stages preprocess train or --stages train')
 
     layout_names = DEFAULT_LAYOUTS if args.layouts == ["all"] else args.layouts
     unknown = [name for name in layout_names if name not in LAYOUTS]
@@ -229,7 +263,7 @@ def main():
         layout_results = result_root / layout_name
         layout_run_root.mkdir(parents=True, exist_ok=True)
         layout_results.mkdir(parents=True, exist_ok=True)
-        _write_layout_manifest(layout_name, layout_run_root, processed_dir)
+        _write_layout_manifest(layout_name, layout_run_root, processed_dir, args)
 
         env = os.environ.copy()
         env["MOBILEPOSER_PROCESSED_DATASETS"] = str(processed_dir)
@@ -239,10 +273,22 @@ def main():
         env.setdefault("WANDB_MODE", "offline")
 
         if "preprocess" in args.stages:
-            generate_layout_dataset(layout_name, processed_dir, overwrite=args.overwrite_data)
+            generate_layout_dataset(layout_name, processed_dir, overwrite=args.overwrite_data, mode=args.imu_mode, attachment_config=args.attachment_config, mesh_chunk_size=args.mesh_chunk_size)
+            if args.imu_mode == "surface":
+                for split in ("train", "test"):
+                    generate_dip_layout_dataset(layout_name, Path(args.dip_eval_root) / layout_name / ("train" if split == "train" else ""), split=split, overwrite=args.overwrite_eval_data, mode=args.imu_mode, attachment_config=args.attachment_config, mesh_chunk_size=args.mesh_chunk_size)
+
+        if not any(stage in args.stages for stage in ("train", "combine", "infer")):
+            continue
 
         checkpoint_dir = None
         if "train" in args.stages:
+            expected = synthesis_metadata(args.imu_mode, args.attachment_config)
+            training_files = list(processed_dir.glob("*.pt"))
+            if not training_files:
+                raise RuntimeError(f"No training data: {processed_dir}")
+            for data_file in training_files:
+                validate_cached_dataset(data_file, expected)
             before = set(p for p in layout_run_root.iterdir() if p.is_dir())
             cmd = [sys.executable, "-m", "mobileposer.train"]
             if args.fast_dev_run:
@@ -254,6 +300,8 @@ def main():
         else:
             checkpoint_dir = _latest_numeric_dir(layout_run_root)
 
+        if args.fast_dev_run:
+            continue
         model_path = checkpoint_dir / "base_model.pth"
         if "combine" in args.stages:
             _run(
