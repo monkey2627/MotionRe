@@ -1,0 +1,927 @@
+                                         EnvPoser: Environment-aware Realistic Human Motion Estimation from Sparse
+                                                          Observations with Uncertainty Modeling
+
+                                          Songpengcheng Xia1          Yu Zhang 1 Zhuo Su2 * Xiaozheng Zheng2 Zheng Lv2 Guidong Wang2
+                                                                       Yongjie Zhang2 Qi Wu1,2 Lei Chuz 3    Ling Pei1 †
+                                                       1                                                 y
+                                                         Shanghai Jiao Tong University 2 ByteDance 3 University of Southern California
+                                                                                                                                  x
+arXiv:2412.10235v2 [cs.CV] 23 Mar 2025
+
+
+
+
+                                                                     Abstract                                      Environment Pre-Scanned
+                                                                                                                    in VRzDevice Initialization Phase
+                                                                                                                              y                     z
+                                             Estimating full-body motion using the tracking signals                                                      y
+                                                                                                                              x
+                                                                                                                                                        x
+                                         of head and hands from VR devices holds great potential
+                                         for various applications. However, the sparsity and unique
+                                         distribution of observations present a significant challenge,
+                                         resulting in an ill-posed problem with multiple feasible so-
+                                         lutions (i.e., hypotheses). This amplifies uncertainty and
+                                         ambiguity in full-body motion estimation, especially for the
+                                         lower-body joints. Therefore, we propose a new method,                                                                             Pre-Scanned
+                                                                                                                                                                          Environment Mesh
+                                         EnvPoser, that employs a two-stage framework to per-
+                                         form full-body motion estimation using sparse tracking sig-
+                                         nals and pre-scanned environment from VR devices. En-
+                                         vPoser models the multi-hypothesis nature of human motion
+                                         through an uncertainty-aware estimation module in the first
+                                         stage. In the second stage, we refine these multi-hypothesis
+                                         estimates by integrating semantic and geometric environ-
+                                         mental constraints, ensuring that the final motion estima-
+                                         tion aligns realistically with both the environmental con-                                            Motion Estimation with Three Tracking Signals
+                                         text and physical interactions. Qualitative and quantitative
+                                         experiments on two public datasets demonstrate that our                Figure 1. EnvPoser can estimate the full-body motion using three
+                                         method achieves state-of-the-art performance, highlight-               tracking signals (HMD and hand controllers) and a pre-scanned
+                                         ing significant improvements in human motion estimation                environment mesh.
+                                         within motion-environment interaction scenarios. Project
+                                         page: https://xspc.github.io/EnvPoser/.                                like PICO and Quest typically provide sparse tracking sig-
+                                                                                                                nals of the head and hands, presenting challenges in estimat-
+                                                                                                                ing the full-body motion from these limited observations.
+                                         1. Introduction                                                           Current sparse-observation-based human motion esti-
+                                         In recent years, motion capture algorithms using sparse                mation methods typically rely on large-scale motion cap-
+                                         tracking signals have achieved significant progress across             ture datasets, such as AMASS [28], to capture full-body
+                                         various research fields, establishing themselves as essential          motion through regression [14, 55] or generative mod-
+                                         technologies for applications such as motion-sensing games             els [2, 6, 8]. Alternatively, physics engines and reinforce-
+                                         and immersive VR/AR experiences [13, 18, 42, 49]. With                 ment learning have been used [39] to synthesize full-body
+                                         the rapid development of VR devices, full-body motion esti-            motion, bypassing dataset dependency. Utilizing various
+                                         mation algorithms based on head-mounted display (HMD)                  advanced architectures or large-scale datasets, these meth-
+                                         have shown great application potential. However, devices               ods [2, 6, 8, 39, 55] attempt to model the mapping from
+                                                                                                                sparse tracking signals to the most probable full-body mo-
+                                            * Project Lead
+                                            † Corresponding Author                                              tion. However, the lack of direct joint observations results in
+                                         This work was supported by the National Nature Science Foundation of   the same sparse input often corresponding to multiple plau-
+                                         China (NSFC) under Grant 62273229.                                     sible motions, making it a challenge for sparse-observation-
+based motion estimation algorithms to converge on the most        tegrates semantic and geometric constraints to ensure re-
+probable full-body motion. To address this one-to-many            alistic outcomes in diverse scenarios, setting a new bench-
+mapping ambiguity, existing methods [4, 30, 31] attempt to        mark in motion estimation with environmental interac-
+add sensors to regions such as the pelvis and legs to narrow      tions.
+the distribution of possible motion outcomes. Although ad-      • Comprehensive quantitative and qualitative experiments
+ditional sensors can enhance the accuracy and robustness of       demonstrate that our proposed method achieves state-of-
+full-body motion estimation, this approach may negatively         the-art performance across two public datasets and excels
+impact user experience due to increased hardware require-         in scenarios with frequent environmental interactions.
+ments [13, 17, 41, 49, 54].
+    Therefore, an alternative approach to addressing the in-    2. Related Work
+herent ambiguity in sparse observations is to incorporate
+additional environmental constraints, as shown in Fig. 1.       2.1. Motion estimation with sparse observations
+Human motion is highly correlated with the surrounding          Current Wearable-based human motion estimation ap-
+environment, which contains rich context that can provide       proaches mainly adopt two configurations: one uses mul-
+valuable cues for motion estimation. However, effectively       tiple inertial measurement units (IMUs) placed on body ex-
+utilizing environmental constraints presents its own chal-      tremities [13, 17, 36, 40, 48, 54], while the other relies on
+lenges, as existing methods [35, 55] often simplify human-      an HMD with two controllers [2, 4, 7, 14, 15, 55].
+environment interactions to basic foot-to-ground contact,           While methods utilizing six IMUs have shown im-
+overlooking the complexities of interactions. In reality, in-   pressive results, HMD-based techniques leveraging sparse
+dividuals frequently engage in more complex interactions        three-point observations show significant potential for prac-
+with their surroundings.                                        tical applications. For instance, AvatarPoser [14] employs a
+    Our key insight is that joint uncertainty estimation can    transformer architecture to achieve accurate full-body mo-
+explicitly model the multi-hypothesis nature of full-body       tion. While Zheng et al. [55] developed a two-stage frame-
+motion estimation, and by incorporating environmental in-       work to capture joint dependencies, improving motion ac-
+formation, we can reduce estimation uncertainty, guiding        curacy and fluidity. Some studies [1, 5, 8] address the ill-
+the motion estimation to converge toward the most plau-         posed problem of sparse-to-dense mapping using generative
+sible outcome that aligns with both the environment and         models. Dittadi et al. [5] and Aliakbarian et al. [1] pro-
+sparse input observations. Therefore, we design a two-          posed using Variational Autoencoders (VAE) and normal-
+stage deep learning framework to handle the one-to-many         izing flows, respectively, to estimate full-body poses from
+mapping ambiguity challenge. We first explicitly model          three tracking points. Additionally, the diffusion model
+the multi-hypothesis human motion by the joint uncertainty      [6, 8, 35] has also shown notable performance in motion
+estimation and its sampling strategy. Then, by integrating      estimation with sparse data. Despite these advances, most
+environmental information, we guide the uncertainty-based       methods rely solely on sparse tracking signals, leading to
+multi-hypothesis motion estimations to converge on a full-      high uncertainty and multiple potential poses for the same
+body motion that best aligns with both the environment and      input. Therefore, this paper introduces joint uncertainty es-
+sparse observations. To address the challenge of effectively    timation and constrains physically implausible motions us-
+utilizing environmental information, we introduce semantic      ing environmental information.
+constraints for non-contact motions, providing contextual
+cues for realistic estimation, and geometric constraints for    2.2. Pose regression with uncertainty estimation
+contact scenarios, ensuring consistency and preventing col-     The sparse nature of observations in 3D human pose es-
+lisions.                                                        timation introduces significant uncertainty for unobserved
+    The key contributions of this paper are as follows:         joints, as identical inputs can correspond to multiple pose
+• We propose EnvPoser, a novel framework that signifi-          hypotheses [8, 54, 55]. This challenge is particularly ev-
+  cantly advances full-body motion estimation from sparse       ident in image-based pose estimation [3, 9, 22, 24, 43],
+  tracking signals by incorporating pre-scanned environ-        where monocular methods face depth ambiguity. For in-
+  mental context. This framework addresses the complex-         stance, Wehrbein et al. [38] modeled the posterior distribu-
+  ities of estimating human motion from sparse observa-         tion of 3D pose hypotheses using normalizing flows, while
+  tions, ensuring robustness across diverse interactive sce-    MHFormer [24] employed a multi-hypothesis transformer
+  narios.                                                       to capture diverse pose hypotheses through a one-to-many
+• This work presents a two-stage framework for human mo-        mapping. Recently, Shan et al. [33] proposed diffusion-
+  tion estimation: an uncertainty-aware module provides         based methods to aggregate multi-hypothesis predictions
+  initial estimates that account for multi-hypothesis mo-       with joint-wise re-projection.
+  tion, while an environment-aware refinement module in-           In our paper, we aim to use uncertainty estimation
+to model the multi-hypothesis nature of motion from           signal at time step t consists of the head and hand positions
+sparse observations. Uncertainty in deep learning can be      pt , rotations Rt , and linear velocities v t , represented as
+categorized into two types [19]: aleatoric (data-related)     xt = [pt , Rt , v t ]. Moreover, we utilize a cropped 3D envi-
+and epistemic (model-related). Li et al. [23] refined         ronment point cloud VS ∈ RNS ×3 , where NS , the number
+3D poses by incorporating joint uncertainties through         of sampled points, is set to 1000. With the human transla-
+uncertainty guided-sampling and uncertainty-guided self-      tion, this point cloud refines pose estimation by incorporat-
+attention, while Zhang et al. [53] introduced a probabilis-   ing environmental context, leveraging both contact and non-
+tic framework that encodes aleatoric uncertainty using a      contact interactions between the body and the environment
+robust negative log-likelihood loss, with epistemic uncer-    to reduce the uncertainty inherent in sparse observations.
+tainty guiding model refinement. In wearable motion es-           As shown in Fig. 2, our approach is a two-stage
+timation, Yang et al. [46] leveraged uncertainty to weight    model comprising two core technical modules: 1) an
+IMU-derived features, enhancing pose corrections with ad-     uncertainty-aware initial motion estimation module; and 2)
+ditional text annotations.                                    an environment-aware motion refinement module that lever-
+                                                              ages semantic and geometric information from the envi-
+2.3. Scene-aware motion estimation and generation             ronment. We first train the uncertainty-aware initial mo-
+Recent advancements in human motion estimation and gen-       tion estimation module (Stage I) on the AMASS dataset,
+eration have expanded from solely analyzing body mo-          with a focus on explicitly capturing the multi-hypothesis
+tion to integrating interactions with the surrounding envi-   nature of motion estimation through uncertainty quantifica-
+ronment, especially vision-based approaches [11, 12, 16,      tion. Subsequently, we jointly train both modules (Stage II)
+34, 47, 52]. For instance, PROX [10] incorporated scene       on the motion-environment interaction datasets, applying
+constraints into monocular human pose estimation to ad-       environmental semantic and geometric constraints to refine
+dress depth ambiguity, while Shen et al. [34] used sparse     the multi-hypothesis estimates from Stage I into the most
+3D CNNs to estimate absolute positions and dense scene        plausible motion estimation.
+contacts, refining human mesh recovery via cross-attention
+with 3D scene cues. EgoHMR [52] leveraged ego-camera          3.2. Uncertainty-aware Initial Human Motion Esti-
+images and diffusion models within pre-scanned environ-             mation Module
+ments to recover full-body motion. Similarly, S2Fusion        To obtain the joint uncertainty quantification and explic-
+[35] utilized sparse observations by learning human motion    itly model the multi-hypothesis nature of motion estima-
+priors on synthetic datasets and conditioned motion genera-   tion, we propose an uncertainty-aware initial human motion
+tion on scene encoding and VR inputs. However, S2Fusion       estimation module. This module is designed with three pri-
+primarily focuses on lower body and environment interac-      mary objectives: (1) to integrate historical motion states and
+tions. QuestEnvsim [21] employed reinforcement learning       sparse observations for the current initial motion estimation;
+to generate realistic poses in highly constrained environ-    (2) to effectively extract features from sparse signals; and
+ments using HMDs. Additionally, recent studies further        (3) to quantify uncertainty in motion estimation, explicitly
+emphasize the integration of scene context and historical     modeling the multi-hypothesis nature of motion under iden-
+motion to produce plausible human motion [27, 44, 45].        tical input conditions. Accordingly, this module comprises
+   These scene-aware methods underscore the importance        three sub-modules: sparse input signal and historical mo-
+of environmental context for enhancing motion estimation.     tion embedding, transformer-based motion feature extrac-
+Our approach builds on these foundations by comprehen-        tion, and human motion and joint uncertainty regression.
+sively leveraging human-environment interactions, address-        Sparse Input Signal and Historical Human Motion
+ing both contact and non-contact scenarios to improve mo-     Embedding. To integrate historical motion states and
+tion estimation with sparse tracking signals.                 sparse observations for the current initial motion estimation,
+                                                              we adopt an auto-regressive structure in the uncertainty-
+3. Method                                                     aware initial human motion estimation module. Our model
+                                                              takes sparse observations X ∈ RT ×36 and historical mo-
+3.1. Problem Statement
+                                                              tion X hm ∈ RT ×132 as inputs, embedding these inputs
+Our goal is to estimate the full-body motion sequence θ =     through linear layers to obtain the observation representa-
+{θt }Tt=1 ∈ RT ×132 (the first 22 joints of SMPL [26] model   tion Z X and motion historical state representation Z hm .
+with the 6D representation of rotations) using the sparse     Then, we concatenate the sparse observation embedding
+tracking signals X = {xt }Tt=1 ∈ RT ×Nc from the HMD          and historical motion embedding to obtain the shallow mo-
+and hand controllers, along with a pre-scanned 3D environ-    tion representation Z S = [Z X , Z hm ], which can be used
+ment point cloud S, where T denotes the length of input,      for subsequent transformer-based feature extraction.
+Nc = 36 means the channel of input. Each sparse tracking          Transformer-based Motion Feature Extraction.
+                       Uncertainty-aware Initial Human Motion Estimation                                                                         Environment-aware Human Motion Refinement
+
+                                         𝒁𝒁𝑿𝑿                                                                                                                                      Concatenate
+                                                                                                                                                   Uncertainty-                                                                       � 𝑹𝑹𝑹𝑹
+                              E                                                                                                                                                                                                       𝜽𝜽
+                                                                                                                                                     Guided                                                                         Final Motion
+                                                                                                          𝐹𝐹𝒑𝒑𝒑𝒑
+                                                                                                                                                    Sampling                                                      Time               Regression
+                                                  𝒁𝒁𝑺𝑺
+            𝑿𝑿                                                                                                            Time                                                                    �
+                                                                                                                                                                                                  𝜽𝜽
+                   Input Observation
+                                                                                                                                                                                  Time                                   𝐹𝐹𝒐𝒐𝒐𝒐𝒐𝒐
+                                                                                                     Pose Regression             �
+                                                                                                                                 𝜽𝜽                                               Sampling Motion
+                      Embedding                                                                           Head
+
+
+                                                                                                                                                                                                𝒑𝒑𝒉𝒉𝒉𝒉𝒉𝒉𝒉𝒉
+
+
+
+
+                                                                             …
+                                                                                                          𝐹𝐹𝒖𝒖𝒖𝒖                                                             Human Translation
+
+
+
+
+                                                                      …
+                          E                                                                 𝒁𝒁𝑯𝑯                                                                                                                              Contact
+                                                                                                                                                  Relative Head
+                                        𝒁𝒁𝒉𝒉𝒉𝒉                  Transformer                                                                                                                                                             �
+                                                                                                                                                                                                                             Estimation 𝑪𝑪
+                                                                                                                                                 Height Calculate
+   Time                                             Position                                                                  𝜹𝜹
+                                                                      𝐹𝐹𝒕𝒕                            Uncertainty                                                                                                     MLP
+          𝑿𝑿𝒉𝒉𝒉𝒉                                   Embedding                                        Estimation Head
+                   Pose Embedding                                                                                                                                                 Observations 𝑿𝑿𝒏𝒏𝒏𝒏𝒏𝒏
+
+
+                     Environment Point Cloud Embedding                                                                                                                                            𝒁𝒁𝑴𝑴
+                                                                                                                                                              Motion Encoder
+                                                                                                                                      𝒁𝒁𝒆𝒆𝒆𝒆𝒆𝒆
+                                                                                                                   𝐹𝐹𝒆𝒆𝒆𝒆𝒆𝒆                                          K     Q       Linear
+
+
+
+
+                                                                                                                                                           Linear
+
+
+
+
+                                                                                                                                                                                                                MLP
+                                                                                                                                                                           Env-Semantic
+                                     Crop with                                                                                                                       V
+                                                                                                                                                                             Attention                 𝒁𝒁𝑴𝑴𝑴𝑴                        𝒁𝒁𝑹𝑹𝑹𝑹
+                                      human                                      Up/Down                                    Scene
+                                                                                 Sampling          𝑽𝑽𝑺𝑺    Scene Embedding Features
+                                    translation                                                                                                  Motion-Environment Attention for Semantic Refinement
+
+
+Figure 2. Overview of EnvPoser: A Two-Stage Motion Estimation Model. Stage I involves training the uncertainty-aware initial estimation
+module on the AMASS dataset to produce initial motion estimates with uncertainty quantification.
+                                                          0 0 0 0 0
+                                                                                           A
+                                                                                                                 V
+                                                                                                    Stage IIK refines these estimates by
+
+
+
+
+                                                                                                                                                                                                                                                     MLP
+                                                          1 1 1 1 1
+                                                                                                                                 Motion-Scene
+training on motion-environment datasets, incorporating semantic and geometric environmental constraints.                          Attention
+
+                                                                                                                                                                    Translation
+Based on the shallow motion representation Z S , we                                                                   N (θ,
+                                                                                                                          e δ)Crop & the uncertainty
+                                                                                                                                with          Embeddings δ. This resampling technique
+                                                                                                                           Down-Sample
+employ a transformer-based feature extraction module [17]                                                             introduces a multi-hypothesis representation, characterizing
+for motion features learning. To retain sequence order                                                                the inherent ambiguity in the unobserved joints. To ensure
+information, temporal positional encoding is applied to the                                                           differentiability throughout the model training process, we
+shallow motion representation [37]. Using multi-head self-                                                            apply the reparameterization trick on this sampling opera-
+attention and a position-wise feed-forward network within                                                             tion, drawing a parameter ϵ from a standard Gaussian dis-
+the transformer encoder Ft , this module efficiently captures                                                         tribution N (0, 1), represented by θ = θ   e + δ · ϵ.
+intricate relationships in the sparse tracking signals and                                                                Through the uncertainty regression head, we can ob-
+historical motion, resulting in high-dimensional motion                                                               tain the joint uncertainty estimation for predicted human
+features Z H = Ft (Z S ). While the transformer architecture                                                          motion, enabling a multi-hypothesis motion representation
+is effective for extracting motion features, the sparsity                                                             with the sampling strategy. We pre-train the first stage of
+of the input data—limited to tracking signals from the                                                                our method on the large synthetic dataset AMASS [28].
+head and hands—introduces high uncertainty in estimating                                                              Based on the predicted mean human motion θ          e and uncer-
+unobserved joints, particularly in the lower body. This                                                               tainty δ, we train the first stage module with the following
+uncertainty arises from the lack of direct observations for                                                           loss function:
+these joints, making their estimation inherently ambiguous.                                                                                LM = ∥θ    e − θ∥2 ,                    (1)
+To address this challenge, we incorporate a mechanism to
+quantify the uncertainty in joint estimations.                                                                        where θ represents the ground-truth of human motion. Ad-
+                                                                                                                      ditionally, to ensure accurate uncertainty prediction, we also
+   Human Motion and Joint Uncertainty Regression.
+                                                                                                                      incorporate an uncertainty estimation loss as [19] stated:
+With the high-dimensional motion features Z H , we em-
+ploy a pose regression network Fph (·) to predict the hu-                                                                                                       e−θ
+                                                                                                                                                                θ
+                                                                                                                                                 Lδ = ∥             ∥2 + log(∥δ∥2 ).                                                           (2)
+man motion θ  e = Fph (Z H ). Given the sparse nature of the
+                                                                                                                                                                  δ
+input signals, capturing joint uncertainty is crucial in map-
+ping the limited observations to a full-body motion estima-                                                              Thus, based on the uncertainty-aware initial human mo-
+tion. To achieve this, we utilize a heteroscedastic neural                                                            tion module, the objective function for Stage I is defined as
+network [19, 23] to estimate the joint uncertainty. Specifi-                                                          follows:
+cally, an uncertainty regression head Fuh (·) is employed on                                                                         LS−I = λM LM + λδ Lδ ,                     (3)
+the high-dimensional motion feature to estimate the joint                                                             where the λM and λδ are the hyper-parameters for Stage I
+uncertainty δ ∈ RT ×132 of the predicted motion.                                                                      training.
+   Using the predicted motion and its associated uncer-                                                                   Training Stage I on the AMASS dataset, along with the
+tainty, we resample the full-body motion θ around the pre-                                                            design for motion uncertainty quantification, allows our net-
+dicted mean motion θ  e according to a Gaussian distribution                                                          work to effectively capture the multi-hypothesis nature of
+motion estimation arising from sparse observations. To ad-       cross-attention network.
+dress the inherent one-to-many ambiguity, we introduce en-           The motion information embedding network Fmotion (·)
+vironmental information as a refinement stage. By incorpo-       takes the sampled motion estimation θ,    e head translation
+rating both semantic and geometric environmental informa-        phead and the extended sparse observations X new =
+tion, our method guides the multi-hypothesis motion esti-        {X, h, θ up } ∈ RT ×40 as input. The extended sparse ob-
+mates to converge toward the solution that best aligns with      servations X new include the relative head height h and
+the sparse observations and environmental constraints.           head up-vector θ up , obtained via a relative head height cal-
+                                                                 culation module. Following [17, 20], this module calcu-
+3.3. Environment-aware Human Motion Refine-
+                                                                 lates terrain height by using the height of the feet when
+     ment with Semantic and Geometry Constraint
+                                                                 stationary and nearby environmental points, and then de-
+Based on the initial motion estimation and its uncertainty       termines h as the difference between the absolute head
+produced by the first-stage uncertainty-aware module, we         height from the HMD and the estimated terrain height.
+further refine the multi-hypothesis human motion estimates       These inputs are concatenated and processed through lin-
+using the pre-scanned environment point clouds collected         ear layers to produce the motion information embedding
+by real-world devices. To effectively utilize the environ-       Z M = Fmotion (concat(θ, phead , X new )).
+mental information, our design is guided by a key insight:           For the environment-motion cross-attention network, the
+human motion within an environment involves both ob-             Key K and Value V vectors can be obtained by multi-
+ject interactions (contact scenarios) and collision avoidance    plying the weight matrix W k , W v with the environmental
+(non-contact scenarios). In this module, the environment         embedding Z env , while the motion information embedding
+point clouds are processed through cropping, sampling, and       Z M multiplies the weight matrices W q to get the Query
+encoding. We then apply constraints based on the environ-        Q vectors. Inspired by [25, 27], we incorporate a spa-
+ment’s semantic and geometric properties to ensure that the      tial salience sspatial = M LP (VS ) that expects our cross-
+full-body motion estimation realistically aligns with the sur-   attention model to be able to perceive the distance between
+rounding context.                                                environmental points clouds and human bodies. Using the
+    Environmental Point Cloud Embedding. To enhance              spatial salience sspatial in conjunction with attention scores
+computational efficiency and focus on relevant interaction       Attn(Q, K), we derive a motion-environment representa-
+areas, we first clip the environmental point clouds based on     tion Z M E , which could be represented by
+the human’s global position. A circular sampling approach
+is used to minimize the impact of body orientation, selecting            Z M E = (Attn(Q, K) + sspatial ) · V .            (5)
+a 1-meter radius around the body and uniformly distributing
+NS points within this area, denoted as VS ∈ RNS ×3 . The             Then, by concatenating the motion-environment repre-
+cropped environmental point cloud VS is then processed by        sentation Z M E with the motion information embedding
+the environment encoder Fenv (·) to obtain the environmen-       Z M and passing them through an MLP network, we ob-
+tal point cloud embedding Z env , represented by:                tain the environment-refined motion representation Z RM =
+                                                                 M LP (concat(Z M E , Z M )).
+                   Z env = Fenv (VS ),                    (4)        Using the environment-refined motion representation
+                                                                 ZRM , which integrates environmental semantics and spa-
+where the environment encoder Fenv (·) is implemented us-        tial priors between the human and environment, the model
+ing the vanilla PointNet++ [32]. The extracted environmen-       can then regress the probability of human-environment con-
+tal embedding would be used in the environment semantic-         tact and generate the final motion estimation.
+aware motion refinement.                                             Motion Regression with Contact Estimation. With
+    Environment Semantic-Aware Constraint for Motion             the environment-refined motion representation Z RM , we
+Refinement. Capturing semantic information from the en-          estimate the contact probability C = {c}Tt=1 ∈ RT ×22
+vironmental point cloud provides crucial guidance for mo-        and regress the final human motion θ̂ RM . We take
+tion generation [27, 44, 47], as human motion is highly cor-     the environment-refined motion representation Z RM and
+related with environmental context. Therefore, leveraging        the extended sparse observations X new as input, and
+this motion-environment correlation as a valuable supple-        apply two-layers MLP layers on the concatenated in-
+ment has the potential to enhance the sparse-observation-        put to get the contact probability prediction Ĉ =
+based human motion estimation. Inspired by [27, 34], we          M LP (concat(X new , ZRM )).
+employ a cross-attention module between the initial mo-              Contact probability prediction is typically treated as a
+tion estimates and the cropped environmental point clouds        binary classification problem, where Binary Cross Entropy
+to refine the human motion estimation. This module com-          (BCE) loss is used for training:
+prises an environment-embedding network, a motion in-
+formation embedding network and an environment-motion                         Lcontact = BCELoss(Ĉ, C).                   (6)
+Finally, the contact probability Ĉ and environment-refined         Final Loss Function. In addition to the first stage loss
+motion representation Z RM are concatenated to regress the       (Eq.2, Eq.1), COAP-based collision loss (Eq.9), contact
+final motion with a motion decoder network Fout (·):             loss (Eq.6), foot-ground loss (Eq.10) and final motion loss
+                                                                 (Eq.8), we also apply some additional losses to improve
+           θ̂ RM = Fout (concat(ZRM , Ĉ)),               (7)    model training. With the forward kinematic chain, the joint
+                                                                 position P , P̂ RM , and the global hands positions P hand ,
+where Fout (·) consists of two linear layers with a ReLU           hand
+                                                                 P̂ RM could be calculated by the motion pose θ and θ̂. To
+activation function. We then obtain the final motion loss:
+                                                                 penalize the errors accumulating along the kinematic chain,
+                  LM ′ = ∥θ̂ RM − θ∥2 .                   (8)    we apply a joint position loss (Lposi ) and a hand alignment
+                                                                 loss(LhAL ):
+    Scene Geometry-Aware Constraint for Motion Re-
+                                                                                                         hand
+finement. To complement semantic-level constraints, we             Lposi = ∥P̂ RM − P ∥2 , LhAL = ∥P̂ RM − P hand ∥1 .
+leverage the geometric structure of the environment to en-                                                              (11)
+hance motion estimation accuracy, especially in human-              Therefore, with the technical analysis provided above,
+environment interactions (contact scenarios). A straight-        we can formulate the second stage objective function as fol-
+forward approach is to detect collisions between the es-         lows:
+timated human motion and the environment point cloud,
+thereby refining unrealistic motions. While existing meth-        LS−II = LS−I + LM ′ + λ1 Lposi + λ2 LhAL + λ3 Lf c
+ods [10, 50] often convert 3D environments into Signed Dis-        + λ4 Lcontact + λ5 Lgf h + λ6 Lgp + λ7 Lcoap .
+tance Fields (SDF) for collision detection, this approach can                                                           (12)
+be computationally intensive. Inspired by recent advance-        Here, {λi }i=1,...,7 represents the hyperparameters. Our
+ments [29, 52], we instead employ the COAP model [29] to         model is first trained on the AMASS using the Eq. 3 and
+efficiently compute collisions between the human body and        then fine-tuned on a motion-environment interaction dataset
+environmental points. With this novel model and the envi-        with Eq. 12. The training process and selection of hyperpa-
+ronment point clouds, the COAP-based collision loss [52]         rameters can be found in the supplementary material.
+can be formulated as:
+               NS                                                4. Experiments
+             1 X
+    Lcoap =        σ(fΘ (VSi |G))IfΘ (VSi |G)>0 ,         (9)
+            NS i=1                                               This section introduces the datasets, metrics, and compet-
+                                                                 ing algorithms used in our experiments. We then com-
+where VS denotes the cropped environment point clouds,           pare our method EnvPoser with state-of-the-art algorithms,
+with NS representing the number of points. Θ represents          highlighting its advantages in motion estimation. Finally,
+the transformation parameters of the human body, encom-          ablation studies validate the effectiveness of each module.
+passing both the motion pose θ and shape β. fΘ (VSi |G)          Additional case studies and discussions are provided in the
+represents the spatial relationship between the human body       supplementary materials.
+model and environmental points. The function σ(·) is the            Datasets. To comprehensively evaluate the efficacy of
+Sigmoid function, which maps the value of fΘ (VSi |G) to a       our proposed method, we conduct experiments on two chal-
+range between 0 and 1.                                           lenging public motion-scene interactions datasets: Egobody
+   Since most motions occur on the ground, we remove             [51] and GIMO [56] datasets. Detailed information about
+ground points from the scene to ensure that the COAP-            these datasets can be found in the supplementary document.
+based collision loss specifically targets interactions with         Competing methods. We compare the motion estima-
+surrounding objects. To account for interactions with the        tion performance of the proposed model with the state-
+ground, we introduce additional constraints, including foot      of-the-art competing methods, including AvatarPoser [14],
+contact, foot height, and ground penetration losses [55]:        AGRoL [6], AvatarJLM [55], and S2Fusion [35] on two
+                                                                 public datasets. We re-train all competing methods on the
+                         f eet
+             Lf c = ∥(P̂ RM − P f eet ) · C∥1 ,                  EgoBody and GIMO datasets until convergence. For the re-
+                                                                 sults on the GIMO dataset, we reused the values reported in
+             Lgf h = ∥ẑ fPeet − z ground ∥1 ,           (10)
+                           RM                                    previous studies [35]. For the EgoBody dataset, we tested
+             Lgp = ∥(ẑ min
+                        PRM − z
+                                ground
+                                       ) · l∥1 ,                 our trained model under real-time settings and presented the
+                                                                 results as follows. It is worth noting that S2Fusion [35] is
+where the ẑ fPeet
+               RM
+                   and z ground means the height of feet joint   not fully open-source; therefore, we reproduced S2Fusion
+positions and the floor height, and l denotes whether the        based on the details provided in its paper and partial open-
+joint is lower than the ground.                                  source code, marking it as S2Fusion* in this experiment.
+                    Figure 3. Visualization of motion estimation on three test sequences from EgoBody Dataset [51].
+
+                                    EgoBody
+                   MPJRE(°)   MPJPE(mm)    MPJVE(mm/s)     Jitter
+ AvatarPoser[14]     6.80         97.8         237.3       11.0
+ AGRoL[6]            7.21        100.9         370.3       21.1
+ AvatarJLM[55]       6.42         91.7         177.4        7.2
+ S2Fusion*[35]       6.65         89.2         219.4       12.5
+ EnvPoser            6.00         74.7         174.0        6.6
+                                        GIMO
+                   MPJRE(°)   MPJPE(mm)    MPJVE(mm/s)     Jitter
+ AvatarPoser[14]     7.02        91.3          324.0       16.4
+ AGRoL[6]            6.58        88.6          269.4       12.5
+ AvatarJLM[55]       4.95        70.7          258.1       10.7
+ S2Fusion[35]        4.65        57.8          235.7       10.1
+ EnvPoser            4.38        57.6          234.6        8.9
+      Table 1. The performance comparison with SOTAs.
+                                                                           Figure 4. Qualitative Comparison of Interaction Details.
+    Metrics. Following [35, 55], we use these metrics for
+evaluation: 1) MPJRE [°]: The mean joint rotational er-               JLM [55], which does not utilize environmental informa-
+ror across all body joints, measured in degrees; 2) MPJPE             tion, our method achieves significant improvements on two
+[cm]: The mean positional error per joint, measured in cen-           key metrics—MPJRE and MPJPE—by 0.42 (6.5%)/17.0
+timeters. 3) MPJVE [cm/s]: Represents the average error               (18.5%) and 0.57 (11.5%)/13.1 (18.5%) on the EgoBody
+in joint velocities, expressed in centimeters per second; 4)          and GIMO datasets, respectively. These results under-
+Jitter : Measures motion smoothness by calculating the av-            score the increased accuracy in motion estimation achieved
+erage jerk (rate of change of acceleration) across all joints,        through the integration of environmental information.
+with lower values indicating smoother motion.
+                                                                         Additionally, we benchmark our model against the latest
+4.1. Comparison with the State-of-the-Art                             algorithm S2Fusion [35], which introduces environmental
+                                                                      information as a constraint for human motion estimation.
+Quantitative Experimental Analysis. We compare our                    On the GIMO dataset, our method reduces MPJRE errors
+proposed method with the competing methods on the two                 by 5.8% compared to S2Fusion [35], and it outperforms
+public motion-environment interaction datasets. Among                 S2Fusion across all evaluation metrics, demonstrating the
+these, AvatarPoser [14], AGRoL [6], and AvatarJLM [55]                superior effectiveness of our approach in leveraging envi-
+are the SOTAs that rely solely on sparse tracking sig-                ronmental information. Moreover, the motion estimation
+nals. As shown in Tab. 1, our model, which incorporates               performance of our method also outperforms S2Fusion* on
+pre-scanned environmental point cloud information, effec-             the EgoBody dataset, which reduces MPJRE and MPJPE er-
+tively constrains the uncertainty in motion reconstruction            rors by 9.8% and 16.3%. Furthermore, our method shows a
+caused by sparse tracking signals. Compared to Avatar-                marked improvement in motion smoothness, with an 11.9%
+                         EgoBody             GIMO                                             EgoBody                   GIMO
+                                                                                      MPJRE   MPJPE     MPJVE   MPJRE   MPJPE   MPJVE
+                     MPJRE    MPJPE     MPJRE    MPJPE
+                                                                 1)Baseline w/o UNC    7.63    90.8     333.0    5.90    77.5   270.2
+ ①Baseline             7.45     87.1     5.72      74.6          2)Baseline            7.45    87.1     342.9    5.72    74.6   266.7
+ ②w/o env-semantic     6.04     78.0     4.55      62.5          3)EnvPoser w/o UNC    6.56    80.1     172.7    4.45    60.2   278.6
+ ③w/o env-geometry     6.03     77.5     4.63      63.2          EnvPoser              6.00    74.7     174.0    4.38    57.6   234.6
+ EnvPoser              6.00     74.7     4.38      57.6
+                                                                    Table 3. The effectiveness of the uncertainty estimation.
+Table 2. The ablation study on environment refinement module.
+                                                                    Effectiveness of the uncertainty estimation. As shown
+reduction in Jitter over S2Fusion and a 16.8% improvement       in Tab. 3, we compare two variants: 1) Baseline w/o UNC:
+over AvatarJLM on the GIMO dataset.                             a baseline without uncertainty estimation and 2) Baseline: a
+    Qualitative Experimental Analysis. Fig. 3 showcases         baseline with uncertainty estimation. Results show that in-
+the motion estimation results on the EgoBody dataset,           tegrating the uncertainty estimation module not only quan-
+where we present three representative sequences and visu-       tifies joint uncertainty across motions but also improves
+alize the human motion estimation results at key moments.       full-body motion estimation through additional supervision.
+For state-of-the-art algorithms that do not incorporate en-     We further incorporated both baseline methods into the
+vironmental information, the visualization results in Fig. 3    environment-aware refinement module. As shown in Tab. 3,
+show multiple instances of environment penetration during       our method achieves significant improvements over variant
+interactions. For example, AvatarJLM exhibits errors such       3) EnvPoser w/o UNC: our method without uncertainty es-
+as hand intersections with walls (second row) and leg pene-     timation, reducing MPJRE and MPJPE errors by 8.11% and
+trations through boxes (third row). Furthermore, in scenar-     5.68%, respectively, on the EgoBody dataset. These re-
+ios without chairs, squatting motions are misinterpreted as     sults indicate that the uncertainty estimation and resampling
+sitting (first row) in AvatarJLM due to the absence of en-      methods effectively capture the multi-hypothesis nature of
+vironment understanding. In contrast, EnvPoser effectively      initial motion estimates and, when combined with environ-
+leverages environmental information to reduce penetration       mental refinement, adaptively align motion estimation with
+errors and produce more realistic motion estimates.             sparse tracking signals and environmental context.
+    In more challenging interaction scenarios, EnvPoser
+shows certain advantages over S2Fusion, which also incor-       5. Conclusions
+porates environmental information. Notably, S2Fusion fails
+                                                                This paper presents a novel two-stage framework for reli-
+to prevent interpenetration between the lower body and sur-
+                                                                able human motion estimation leveraging sparse tracking
+rounding objects (third row in Fig. 3). Moreover, Fig. 4 pro-
+                                                                signals and environmental context. In the first stage, we
+vides a comparison between EnvPoser and S2Fusion, high-
+                                                                model the multi-hypothesis nature of motion through un-
+lighting the advantages of our approach in handling upper-
+                                                                certainty estimation, followed by a refinement phase that
+body interactions with objects and complex lower-body mo-
+                                                                applies environment-aware constraints from both semantic
+tions through the integration of uncertainty modeling and
+                                                                and geometric perspectives. Extensive experiments show
+environmental semantic/geometric constraints. Addition-
+                                                                that EnvPoser outperforms existing methods, particularly in
+ally, compared to AvatarJLM, both EnvPoser and S2Fusion
+                                                                complex interaction scenarios, highlighting the significance
+demonstrate the effectiveness of incorporating environmen-
+                                                                of environmental context in wearable motion estimation and
+tal information to improve human motion estimation.
+                                                                paving the way for future approaches to harness this valu-
+                                                                able contextual information. This work has the potential to
+4.2. Ablation Study
+                                                                impact a wide range of interactive applications that benefit
+Effectiveness of the environment-aware refinement               from more accurate and context-aware motion estimation.
+module. We conducted ablation studies comparing our             Limitations and future works. The model assumes a static
+method with three variants: ① Baseline: an auto-regressive      environment, lacking consideration for dynamic multi-user
+transformer-based network with joint uncertainty estima-        interactions or object motion, which may limit its effective-
+tion; ② w/o env-semantic: incorporating only geometric          ness. This limitation could be addressed by incorporating a
+constraints; ③ w/o env-geometry: incorporating only se-         third-person perspective to estimate the movement of other
+mantic constraints. Tab. 2 presents the motion estimation       people and objects, along with additional semantic and ge-
+performance for each variant. Compared to variant ①, our        ometric constraints. Furthermore, real-time mesh quality in
+method achieves substantial improvements by integrating         complex environments is often limited, which may affect
+both semantic and geometric environmental information.          performance. Future work will explore using raw images
+Further analysis shows that each environment-aware refine-      to infer contacts in complex scenes via 2D semantic under-
+ment module independently enhances performance, with            standing and introducing additional constraints to improve
+the combination yielding the best overall results.              overall reconstruction quality.
+References                                                               the IEEE/CVF Conference on Computer Vision and Pattern
+                                                                         Recognition, pages 13274–13285, 2022. 3
+ [1] Sadegh Aliakbarian, Pashmina Cameron, Federica Bogo,
+                                                                    [12] Siyuan Huang, Zan Wang, Puhao Li, Baoxiong Jia, Tengyu
+     Andrew Fitzgibbon, and Thomas J Cashman. Flag: Flow-
+                                                                         Liu, Yixin Zhu, Wei Liang, and Song-Chun Zhu. Diffusion-
+     based 3d avatar generation from sparse observations. In Pro-
+                                                                         based generation, optimization, and planning in 3d scenes.
+     ceedings of the IEEE/CVF Conference on Computer Vision
+                                                                         In Proceedings of the IEEE/CVF Conference on Computer
+     and Pattern Recognition, pages 13253–13262, 2022. 2
+                                                                         Vision and Pattern Recognition, pages 16750–16761, 2023.
+ [2] Sadegh Aliakbarian, Fatemeh Saleh, David Collier, Pash-
+                                                                         3
+     mina Cameron, and Darren Cosker. Hmd-nemo: Online
+                                                                    [13] Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J
+     3d avatar motion generation from sparse observations. In
+                                                                         Black, Otmar Hilliges, and Gerard Pons-Moll. Deep inertial
+     Proceedings of the IEEE/CVF International Conference on
+                                                                         poser: learning to reconstruct human pose from sparse iner-
+     Computer Vision, pages 9622–9631, 2023. 1, 2
+                                                                         tial measurements in real time. ACM Trans. Graph. (TOG),
+ [3] Rongyu Chen, Linlin Yang, and Angela Yao. Mhentropy:
+                                                                         37(6):1–15, 2018. 1, 2
+     Entropy meets multiple hypotheses for pose and shape re-
+     covery. In Proceedings of the IEEE/CVF International Con-      [14] Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa
+     ference on Computer Vision, pages 14840–14849, 2023. 2              Laich, Patrick Snape, and Christian Holz. Avatarposer: Ar-
+                                                                         ticulated full-body pose tracking from sparse motion sens-
+ [4] Peng Dai, Yang Zhang, Tao Liu, Zhen Fan, Tianyuan Du,
+                                                                         ing. In European conference on computer vision, pages 443–
+     Zhuo Su, Xiaozheng Zheng, and Zeming Li. Hmd-poser:
+                                                                         460. Springer, 2022. 1, 2, 6, 7, 3
+     On-device real-time human motion tracking from scalable
+     sparse observations. In Proceedings of the IEEE/CVF Con-       [15] Jiaxi Jiang, Paul Streli, Manuel Meier, and Christian Holz.
+     ference on Computer Vision and Pattern Recognition, pages           Egoposer: Robust real-time egocentric pose estimation from
+     874–884, 2024. 2                                                    sparse and intermittent observations everywhere. In Eu-
+                                                                         ropean Conference on Computer Vision, pages 277–294.
+ [5] Andrea Dittadi, Sebastian Dziadzio, Darren Cosker, Ben
+                                                                         Springer, 2025. 2
+     Lundell, Thomas J Cashman, and Jamie Shotton. Full-
+     body motion from a single head-mounted device: Generat-        [16] Nan Jiang, Zhiyuan Zhang, Hongjie Li, Xiaoxuan Ma, Zan
+     ing smpl poses from partial observations. In Proceedings            Wang, Yixin Chen, Tengyu Liu, Yixin Zhu, and Siyuan
+     of the IEEE/CVF International Conference on Computer Vi-            Huang. Scaling up dynamic human-scene interaction mod-
+     sion, pages 11687–11697, 2021. 2                                    eling. In Proceedings of the IEEE/CVF Conference on Com-
+ [6] Yuming Du, Robin Kips, Albert Pumarola, Sebastian Starke,           puter Vision and Pattern Recognition, pages 1737–1747,
+     Ali Thabet, and Artsiom Sanakoyeu. Avatars grow legs:               2024. 3
+     Generating smooth human motion from sparse tracking in-        [17] Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won,
+     puts with diffusion model. In Proceedings of the IEEE/CVF           Alexander W Winkler, and C Karen Liu. Transformer inertial
+     Conference on Computer Vision and Pattern Recognition,              poser: Real-time human motion reconstruction from sparse
+     pages 481–490, 2023. 1, 2, 6, 7, 3                                  imus with simultaneous terrain generation. In SIGGRAPH
+ [7] Zhen Fan, Peng Dai, Zhuo Su, Xu Gao, Zheng Lv, Jiarui               Asia 2022 Conference Papers(SA’ 22), pages 1–9, 2022. 2,
+     Zhang, Tianyuan Du, Guidong Wang, and Yang Zhang.                   4, 5
+     Emhi: A multimodal egocentric human motion dataset with        [18] Manuel Kaufmann, Yi Zhao, Chengcheng Tang, Lingling
+     hmd and body-worn imus. arXiv preprint arXiv:2408.17168,            Tao, Christopher Twigg, Jie Song, Robert Wang, and Otmar
+     2024. 2                                                             Hilliges. Em-pose: 3d human pose estimation from sparse
+ [8] Han Feng, Wenchao Ma, Quankai Gao, Xianwei Zheng, Nan               electromagnetic trackers. In Proceedings of the IEEE/CVF
+     Xue, and Huijuan Xu. Stratified avatar generation from              international conference on computer vision(ICCV), pages
+     sparse observations. In Proceedings of the IEEE/CVF Con-            11510–11520, 2021. 1
+     ference on Computer Vision and Pattern Recognition, pages      [19] Alex Kendall and Yarin Gal. What uncertainties do we need
+     153–163, 2024. 1, 2                                                 in bayesian deep learning for computer vision? Advances in
+ [9] Jia Gong, Lin Geng Foo, Zhipeng Fan, Qiuhong Ke, Hos-               neural information processing systems, 30, 2017. 3, 4
+     sein Rahmani, and Jun Liu. Diffpose: Toward more reliable      [20] Jiye Lee and Hanbyul Joo. Mocap everyone everywhere:
+     3d pose estimation. In Proceedings of the IEEE/CVF Con-             Lightweight motion capture with smartwatches and a head-
+     ference on Computer Vision and Pattern Recognition, pages           mounted camera. In Proceedings of the IEEE/CVF Con-
+     13041–13051, 2023. 2                                                ference on Computer Vision and Pattern Recognition, pages
+[10] Mohamed Hassan, Vasileios Choutas, Dimitrios Tzionas,               1091–1100, 2024. 5
+     and Michael J Black. Resolving 3d human pose ambiguities       [21] Sunmin Lee, Sebastian Starke, Yuting Ye, Jungdam Won,
+     with 3d scene constraints. In Proceedings of the IEEE/CVF           and Alexander Winkler. Questenvsim: Environment-aware
+     international conference on computer vision, pages 2282–            simulated motion tracking from sparse sensors. In ACM SIG-
+     2292, 2019. 3, 6                                                    GRAPH 2023 Conference Proceedings, pages 1–9, 2023. 3
+[11] Chun-Hao P Huang, Hongwei Yi, Markus Höschle, Matvey          [22] Chen Li and Gim Hee Lee. Generating multiple hypotheses
+     Safroshkin, Tsvetelina Alexiadis, Senya Polikovsky, Daniel          for 3d human pose estimation with mixture density network.
+     Scharstein, and Michael J Black. Capturing and inferring            In Proceedings of the IEEE/CVF conference on computer vi-
+     dense full-body human-scene contact. In Proceedings of              sion and pattern recognition, pages 9887–9895, 2019. 2
+[23] Han Li, Bowen Shi, Wenrui Dai, Hongwei Zheng, Botao                  Computer Vision and Pattern Recognition, pages 17038–
+     Wang, Yu Sun, Min Guo, Chenglin Li, Junni Zou, and                   17047, 2023. 3, 5
+     Hongkai Xiong. Pose-oriented transformer with uncertainty-      [35] Jiangnan Tang, Jingya Wang, Kaiyang Ji, Lan Xu, Jingyi Yu,
+     guided refinement for 2d-to-3d human pose estimation. In             and Ye Shi. A unified diffusion framework for scene-aware
+     Proceedings of the AAAI Conference on Artificial Intelli-            human motion estimation from sparse signals. In Proceed-
+     gence, pages 1296–1304, 2023. 3, 4                                   ings of the IEEE/CVF Conference on Computer Vision and
+[24] Wenhao Li, Hong Liu, Hao Tang, Pichao Wang, and Luc                  Pattern Recognition, pages 21251–21262, 2024. 2, 3, 6, 7
+     Van Gool. Mhformer: Multi-hypothesis transformer for 3d         [36] Tom Van Wouwe, Seunghwan Lee, Antoine Falisse, Scott
+     human pose estimation. In Proceedings of the IEEE/CVF                Delp, and C Karen Liu. Diffusionposer: Real-time human
+     Conference on Computer Vision and Pattern Recognition,               motion reconstruction from arbitrary sparse sensors using
+     pages 13147–13156, 2022. 2                                           autoregressive diffusion. In Proceedings of the IEEE/CVF
+[25] Ze Liu, Han Hu, Yutong Lin, Zhuliang Yao, Zhenda Xie,                Conference on Computer Vision and Pattern Recognition,
+     Yixuan Wei, Jia Ning, Yue Cao, Zheng Zhang, Li Dong, et al.          pages 2513–2523, 2024. 2
+     Swin transformer v2: Scaling up capacity and resolution. In     [37] A Vaswani. Attention is all you need. Advances in Neural
+     Proceedings of the IEEE/CVF conference on computer vi-               Information Processing Systems, 2017. 4, 1
+     sion and pattern recognition, pages 12009–12019, 2022. 5        [38] Tom Wehrbein, Marco Rudolph, Bodo Rosenhahn, and Bas-
+[26] Matthew Loper, Naureen Mahmood, Javier Romero, Gerard                tian Wandt. Probabilistic monocular 3d human pose es-
+     Pons-Moll, and Michael J Black. Smpl: A skinned multi-               timation with normalizing flows. In Proceedings of the
+     person linear model. ACM Transactions on Graphics, 34(6),            IEEE/CVF international conference on computer vision,
+     2015. 3                                                              pages 11199–11208, 2021. 2
+[27] Zhenyu Lou, Qiongjie Cui, Haofan Wang, Xu Tang, and             [39] Alexander Winkler, Jungdam Won, and Yuting Ye. Quest-
+     Hong Zhou. Multimodal sense-informed forecasting of 3d               sim: Human motion tracking from sparse sensors with simu-
+     human motions. In Proceedings of the IEEE/CVF Confer-                lated avatars. In SIGGRAPH Asia 2022 Conference Papers,
+     ence on Computer Vision and Pattern Recognition, pages               pages 1–8, 2022. 1
+     2144–2154, 2024. 3, 5                                           [40] Yinghao Wu, chaoran wang, Lu Yin, Shihui Guo, and Yipeng
+                                                                          Qin. Accurate and steady inertial pose estimation through
+[28] Naureen Mahmood, Nima Ghorbani, Nikolaus F Troje, Ger-
+                                                                          sequence structure learning and modulation. In The Thirty-
+     ard Pons-Moll, and Michael J Black. Amass: Archive
+                                                                          eighth Annual Conference on Neural Information Processing
+     of motion capture as surface shapes. In Proceedings of
+                                                                          Systems, 2024. 2
+     the IEEE/CVF international conference on computer vision,
+     pages 5442–5451, 2019. 1, 4, 2                                  [41] Songpengcheng Xia, Lei Chu, Ling Pei, Zixuan Zhang,
+                                                                          Wenxian Yu, and Robert C Qiu. Learning disentangled rep-
+[29] Marko Mihajlovic, Shunsuke Saito, Aayush Bansal, Michael
+                                                                          resentation for mixed-reality human activity recognition with
+     Zollhoefer, and Siyu Tang. Coap: Compositional articulated
+                                                                          a single imu sensor. IEEE Transactions on Instrumentation
+     occupancy of people. In Proceedings of the IEEE/CVF Con-
+                                                                          and Measurement, 70:1–14, 2021. 2
+     ference on Computer Vision and Pattern Recognition, pages
+                                                                     [42] Songpengcheng Xia, Lei Chu, Ling Pei, Jiarui Yang, Wenx-
+     13201–13210, 2022. 6
+                                                                          ian Yu, and Robert C Qiu. Timestamp-supervised wearable-
+[30] Jose Luis Ponton, Haoran Yun, Andreas Aristidou, Carlos              based activity segmentation and recognition with contrastive
+     Andujar, and Nuria Pelechano. Sparseposer: Real-time full-           learning and order-preserving optimal transport. IEEE
+     body motion reconstruction from sparse data. ACM Trans-              Transactions on Mobile Computing, 2024. 1
+     actions on Graphics, 43(1):1–14, 2023. 2                        [43] Yuan Xu, Xiaoxuan Ma, Jiajun Su, Wentao Zhu, Yu Qiao,
+[31] Jose Luis Ponton, Eduard Pujol, Andreas Aristidou, Car-              and Yizhou Wang. Scorehypo: Probabilistic human mesh
+     los Andujar, and Nuria Pelechano. Dragposer: Motion re-              estimation with hypothesis scoring. In Proceedings of the
+     construction from variable sparse tracking signals via latent        IEEE/CVF Conference on Computer Vision and Pattern
+     space optimization. arXiv preprint arXiv:2406.14567, 2024.           Recognition, pages 979–989, 2024. 2
+     2                                                               [44] Haibiao Xuan, Xiongzheng Li, Jinsong Zhang, Hongwen
+[32] Charles Ruizhongtai Qi, Li Yi, Hao Su, and Leonidas J                Zhang, Yebin Liu, and Kun Li. Narrator: Towards natural
+     Guibas. Pointnet++: Deep hierarchical feature learning on            control of human-scene interaction generation via relation-
+     point sets in a metric space. Advances in neural information         ship reasoning. In Proceedings of the IEEE/CVF Interna-
+     processing systems, 30, 2017. 5, 1                                   tional Conference on Computer Vision, pages 22268–22278,
+[33] Wenkang Shan, Zhenhua Liu, Xinfeng Zhang, Zhao Wang,                 2023. 3, 5
+     Kai Han, Shanshe Wang, Siwei Ma, and Wen Gao.                   [45] Hongdi Yang, Chengyang Li, Zhenxuan Wu, Gaozheng Li,
+     Diffusion-based 3d human pose estimation with multi-                 Jingya Wang, Jingyi Yu, Zhuo Su, and Lan Xu. Smgdiff:
+     hypothesis aggregation. In Proceedings of the IEEE/CVF               Soccer motion generation using diffusion probabilistic mod-
+     International Conference on Computer Vision, pages 14761–            els. arXiv preprint arXiv:2411.16216, 2024. 3
+     14771, 2023. 2                                                  [46] Xueyuan Yang, Chao Yao, and Xiaojuan Ban. Spatial-related
+[34] Zehong Shen, Zhi Cen, Sida Peng, Qing Shuai, Hujun Bao,              sensors matters: 3d human motion reconstruction assisted
+     and Xiaowei Zhou. Learning human mesh recovery in 3d                 with textual semantics. In Proceedings of the AAAI Confer-
+     scenes. In Proceedings of the IEEE/CVF Conference on                 ence on Artificial Intelligence, pages 10225–10233, 2024. 3
+[47] Hongwei Yi, Chun-Hao P Huang, Shashank Tripathi, Lea
+     Hering, Justus Thies, and Michael J Black. Mime: Human-
+     aware 3d scene generation. In Proceedings of the IEEE/CVF
+     Conference on Computer Vision and Pattern Recognition,
+     pages 12965–12976, 2023. 3, 5
+[48] Xinyu Yi, Yuxiao Zhou, and Feng Xu. Transpose: Real-time
+     3d human translation and pose estimation with six inertial
+     sensors. ACM Transactions On Graphics (TOG), 40(4):1–
+     13, 2021. 2
+[49] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada,
+     Vladislav Golyanik, Christian Theobalt, and Feng Xu. Phys-
+     ical inertial poser (pip): Physics-aware real-time human mo-
+     tion tracking from sparse inertial sensors. In Proceedings of
+     the IEEE/CVF Conference on Computer Vision and Pattern
+     Recognition(CVPR), pages 13167–13178, 2022. 1, 2
+[50] Siwei Zhang, Yan Zhang, Federica Bogo, Marc Pollefeys,
+     and Siyu Tang. Learning motion priors for 4d human body
+     capture in 3d scenes. In Proceedings of the IEEE/CVF In-
+     ternational Conference on Computer Vision, pages 11343–
+     11353, 2021. 6
+[51] Siwei Zhang, Qianli Ma, Yan Zhang, Zhiyin Qian, Taein
+     Kwon, Marc Pollefeys, Federica Bogo, and Siyu Tang. Ego-
+     body: Human body shape and motion of interacting peo-
+     ple from head-mounted devices. In European conference on
+     computer vision, pages 180–200. Springer, 2022. 6, 7, 2
+[52] Siwei Zhang, Qianli Ma, Yan Zhang, Sadegh Aliakbarian,
+     Darren Cosker, and Siyu Tang. Probabilistic human mesh
+     recovery in 3d scenes from egocentric views. In Proceedings
+     of the IEEE/CVF International Conference on Computer Vi-
+     sion, pages 7989–8000, 2023. 3, 6
+[53] Yufei Zhang, Hanjing Wang, Jeffrey O Kephart, and Qiang
+     Ji. Body knowledge and uncertainty modeling for monoc-
+     ular 3d human body reconstruction. In Proceedings of the
+     IEEE/CVF International Conference on Computer Vision,
+     pages 9020–9032, 2023. 3
+[54] Yu Zhang, Songpengcheng Xia, Lei Chu, Jiarui Yang, Qi
+     Wu, and Ling Pei. Dynamic inertial poser (dynaip): Part-
+     based motion dynamics learning for enhanced human pose
+     estimation with sparse inertial sensors. In Proceedings of
+     the IEEE/CVF Conference on Computer Vision and Pattern
+     Recognition, pages 1889–1899, 2024. 2
+[55] Xiaozheng Zheng, Zhuo Su, Chao Wen, Zhou Xue, and
+     Xiaojie Jin. Realistic full-body tracking from sparse ob-
+     servations via joint-level modeling. In Proceedings of the
+     IEEE/CVF International Conference on Computer Vision,
+     pages 14678–14688, 2023. 1, 2, 6, 7, 3
+[56] Yang Zheng, Yanchao Yang, Kaichun Mo, Jiaman Li, Tao
+     Yu, Yebin Liu, C Karen Liu, and Leonidas J Guibas. Gimo:
+     Gaze-informed human motion prediction in context. In Eu-
+     ropean Conference on Computer Vision, pages 676–694.
+     Springer, 2022. 6, 2
+EnvPoser: Environment-aware Realistic Human Motion Estimation from Sparse
+                 Observations with Uncertainty Modeling
+                                                 Supplementary Material
+    This supplementary material provides additional infor-
+mation to complement our main paper. Sec. A details the
+network architecture and training procedures of our pro-
+posed method. Sec. B summarizes the datasets used in our
+study. Sec. C presents extended ablation studies, encom-
+passing various environment points sampling strategy and
+further analysis of component design. Sec. D showcases ad-
+ditional qualitative comparisons between our approach and
+state-of-the-art methods. Finally, Sec. E summarizes our
+work, discusses its limitations, and outlines potential direc-
+tions for future research.
+
+A. Implementation Details
+Network Details. Our model architecture consists of dis-
+tinct sub-networks tailored to each stage. The uncertainty-
+aware initial motion estimation module processes sparse
+tracking signals and historical motion states, both pre-
+segmented into windows of length 40. These inputs are fed
+through two linear layers and positional encoding before
+                                                                 Figure 1. Environmental point cloud with different sampling
+entering a standard Transformer network with eight atten-
+                                                                 strategies.
+tion heads [37]. Subsequently, two MLP layers estimate the
+human motion and corresponding joint uncertainty. Dur-
+                                                                                          EgoBody             GIMO
+ing the first stage of training, this module is trained in two
+steps: first, the motion reconstruction head is optimized,                            MPJRE    MPJPE     MPJRE    MPJPE
+followed by training the uncertainty estimation head using        (a) EnvPoser-cube    6.04      75.4     4.85      65.4
+Eq.(3). The hyperparameters λM and λδ are set to 1 and            (b) EnvPoser-500     6.05      76.4     4.47      60.2
+0.001, respectively.                                              (c) EnvPoser-2000    5.95      76.0     4.45      59.8
+                                                                  EnvPoser-1000        6.00      74.7     4.38      57.6
+    For environment-aware motion refinement module, we
+utilize PointNet++ [32] to extract features from the cropped     Table 1. The effectiveness of environment point cloud sampling
+environment point clouds. These features are integrated into     strategy.
+the motion-environment attention network. In this stage,
+the initial motion estimates, combined with additional in-
+puts such as head translations and head height, are con-
+catenated into a 175-dimensional motion embedding. This          the concatenated environment-refined motion representa-
+embedding is projected into a 256-dimensional latent space       tion and sparse observations into a 256-dimensional embed-
+through a linear layer. Spatial priors are computed by nor-      ding via a linear layer. This embedding is passed through
+malizing scene points to a human-centered coordinate sys-        a fully connected contact prediction head to estimate joint
+tem and combining distance-based salience with directional       contacts.
+components. These priors are refined using a learnable net-         Finally, the sparse observations and contact predictions
+work with two fully connected layers and ReLU activations.       are concatenated and processed through a decoder compris-
+To integrate motion and environmental information, we em-        ing two fully connected layers with ReLU activations, gen-
+ploy a cross-attention mechanism that aligns scene features      erating the final pose estimation. During the second train-
+and spatial priors with the motion embedding. The result-        ing phase, we use Eq.(12) as the objective function. At the
+ing environment-refined motion representation ZRM is ob-         beginning of this phase, the parameters of the first mod-
+tained by passing the integrated features through an MLP         ule are fixed, and only the environment refinement mod-
+with two fully connected layers.                                 ule is trained. The hyper-parameters {λi }i=1,...,7 are set to
+    Joint contact probabilities are predicted by projecting      {2.0, 1.0, 0.75, 0.75, 0.75, 1.0, 0.1}.
+                           EgoBody             GIMO
+                        MPJRE    MPJPE    MPJRE     MPJPE
+ EnvPoser-w/o Contact    6.18     77.6      4.49     59.4
+ EnvPoser                6.00     74.7      4.38     57.6
+
+    Table 2. The effectiveness of contact estimation module.
+
+
+B. Datasets Details
+To comprehensively evaluate the efficacy of our proposed
+method, we conduct experiments on two challenging pub-
+lic motion-scene interaction datasets: Egobody [51] and
+GIMO [56]. These datasets are carefully selected for
+their diverse and complex representations of human motion
+within interactive and immersive environments.                   Figure 2. Qualitative results of lower-body MPJPE box plot for
+                                                                 ablation study on GIMO dataset.
+• Egobody: The Egobody dataset is a robust egocentric
+  dataset designed to capture 3D human motion during so-
+  cial interactions in immersive virtual environments. It        C. Additional Analysis
+  includes 125 sequences collected from 36 participants,
+                                                                 In this section, we present more experimental results of our
+  with an equal distribution of 18 males and 18 females.
+                                                                 proposed method (EnvPoser).
+  These participants engage in a wide range of social activ-
+                                                                     Effectiveness of the Environment Point Clouds Sam-
+  ities across 15 distinct indoor scenes, making the dataset
+                                                                 pling Strategy. EnvPoser processes the environmental
+  highly diverse. Egobody offers detailed annotations for
+                                                                 point cloud through clipping and normalization in the En-
+  various interaction scenarios, enabling precise evaluation
+                                                                 vironmental Point Cloud Embedding module. Specifically,
+  of motion estimation techniques in dynamic and inter-
+                                                                 we first clip the environmental point clouds based on the
+  active settings. Following the official split in [51], the
+                                                                 human’s global position, as illustrated in Fig. 1. To evalu-
+  dataset is divided into 65 sequences for training and 43
+                                                                 ate the impact of the clipping and sampling strategies on
+  sequences for testing. Its focus on immersive, egocentric
+                                                                 model performance, we experimented with various sam-
+  perspectives provides valuable data for analyzing motion
+                                                                 pling methods. In this study, we replaced the circular sam-
+  within constrained and socially active environments.
+                                                                 pling approach with a square sampling method, shown in
+• GIMO: The GIMO dataset is notable for its multi-
+                                                                 Fig. 1(a). In Tab. 1, we could find that using circular sam-
+  modal nature, offering a rich combination of body pose
+                                                                 pling improves motion estimation performance to some ex-
+  sequences, detailed environmental scans, and eye gaze
+                                                                 tent.
+  data. Motion data were collected using a combination of
+                                                                     Subsequently, based on circular clipping, we adjusted the
+  HoloLens devices and IMU-based motion capture suits,
+                                                                 number of sampled points to 500 and 2000 to further ana-
+  providing precise motion trajectories and body pose se-
+                                                                 lyze the impact of point cloud sampling strategies on model
+  quences. Additionally, an iPhone 12 was used to scan the
+                                                                 performance. Sampling 500 environmental points as input
+  surrounding ambient scenes, resulting in high-quality en-
+                                                                 leads to performance degradation due to the sparsity of the
+  vironmental reconstructions. This multi-modal setup en-
+                                                                 point cloud. Conversely, increasing the number of sam-
+  ables the dataset to capture the intricate relationships be-
+                                                                 pled points to 2000 does not consistently improve perfor-
+  tween human motion and environmental contexts. GIMO
+                                                                 mance. On the EgoBody dataset, EnvPoser-2000 achieves
+  is particularly valuable for its emphasis on interactions
+                                                                 a marginal improvement of 0.05 in the MPJRE metric, but
+  within detailed 3D environments, offering a comprehen-
+                                                                 on the GIMO dataset, using more points results in a de-
+  sive perspective that bridges the gap between motion and
+                                                                 cline in performance. These results indicate that sampling
+  scene understanding.
+                                                                 1000 environmental points within the selected area is suffi-
+   To ensure a diverse range of motion data, we also lever-      cient to refine the initial motion estimates. Considering the
+age the AMASS [28] dataset during training. Specifically,        trade-off between motion estimation accuracy and compu-
+our model’s uncertainty-aware initial human motion estima-       tational efficiency, this paper adopts circular sampling with
+tion module is first trained on AMASS to capture diverse         1000 environmental points as the optimal configuration.
+motion patterns. Subsequently, the entire model is fine-             Effectiveness of the Contact Estimation Module. With
+tuned on motion-environment interaction datasets [51, 56],       the environment-refined motion representation Z RM ob-
+incorporating the environment-aware motion refinement            tained through environment-semantic attention, EnvPoser
+module in the second stage.                                      first estimates contact probabilities and subsequently re-
+            AvatarPoser           AGRoL            AvatarJLM          S2Fusion*          EnvPoser              GT
+                          Figure 3. Visualization of various sitting motions from EgoBody and GIMO Datasets.
+
+gresses full-body motion. To validate the effectiveness of           improves lower-body motion estimation accuracy. The con-
+the contact probability estimation, we conducted an abla-            straints provided by environmental information not only en-
+tion experiment by removing this step and directly regress-          hance overall accuracy but also effectively reduce outliers
+ing full-body motion from the environment-refined motion             in lower-body estimation, underscoring the importance of
+representation Z RM . This variant, referred to as EnvPoser-         leveraging both environmental semantic and geometric as-
+w/o Contact, was evaluated on the EgoBody and GIMO                   pects for refining motion estimates.
+datasets.
+   As shown in Tab. 2, omitting the contact probability              D. Additional Qualitative Results
+estimation results in degraded motion reconstruction per-
+                                                                     In this section, We show more visualization results of our
+formance compared to EnvPoser. Specifically, the MPJPE
+                                                                     method compared to the state-of-the-art methods.
+metric declines by 3.7% on the EgoBody dataset and 3.0%
+on the GIMO dataset, highlighting the importance of con-                 Additional Qualitative Comparison on Sitting Mo-
+tact probability estimation in enhancing reconstruction ac-          tion. The most common interaction between human mo-
+curacy.                                                              tion and the environment involves sitting, such as sitting
+                                                                     on chairs, sofas, or beds. Fig. 3 compares the performance
+   Additional Comparison on Environment Refinement                   of our method, EnvPoser, with other approaches in visu-
+Module. To further illustrate the effectiveness of our envi-         alizing sitting motions across various scenarios. Notably,
+ronment refinement module, we present box plots of lower-            EnvPoser effectively adapts to different object shapes, gen-
+body position estimation errors (Lower-body MPJPE) on                erating realistic and plausible sitting poses. In contrast,
+the Gimo dataset for EnvPoser and its three variants: ①              methods that lack environmental information [55], such as
+Baseline, ② w/o env-semantic, and ③ w/o env-geometry,                AvatarPoser [14] and AGRoL [6], can estimate sitting mo-
+as defined in Sec.4.                                                 tions but often produce diverse and inconsistent lower-body
+   As shown in Fig. 2, EnvPoser achieves the lowest                  poses due to the absence of joint observations. This results
+maximum Lower-body MPJPE and exhibits significantly                  in unrealistic and impractical sitting motion estimates that
+fewer outliers, demonstrating that the integration of se-            fail to align with actual human motions.
+mantic and geometric environmental constraints enables the               S2Fusion [35], which incorporates environmental infor-
+most robust and accurate estimation across diverse mo-               mation, shows notable improvements in sitting motion es-
+tions. Comparing variants ② and ③ with ①, we observe                 timation compared to other competing methods. However,
+that incorporating environmental information significantly           it performs slightly less accurately than EnvPoser in esti-
+                     Figure 4. Visualization of full-body estimation on three test sequences from GIMO Datasets.
+
+mating upper-body interactions with objects during sitting
+motions. These findings highlight the effectiveness of En-
+vPoser, which leverages environmental information from
+both semantic and geometric perspectives to refine full-
+body motion estimation, ensuring more accurate and con-
+textually appropriate results.
+    Additional Qualitative Comparison on GIMO
+Dataset. Fig. 4 presents motion estimation results on the
+GIMO dataset, showcasing three representative sequences
+with human motion visualized at key moments. Errors in
+comparison methods are highlighted with red bounding                     Figure 5. Qualitative results on real data from VR device.
+boxes for clarity. As illustrated in Fig. 4, EnvPoser exhibits
+robust performance, effectively handling challenging sce-            dynamic interactions involving multiple users or moving
+narios such as lying down and navigating narrow passages.            objects. While this simplification facilitates efficient motion
+These results further demonstrate the effectiveness and              estimation, it limits the model’s applicability in real-world
+reliability of our proposed method.                                  scenarios where dynamic changes are common. For exam-
+    Additional Qualitative Comparison on Realistic Self-             ple, interactions in crowded spaces or with moving objects,
+collected Data. We validated our model using data col-               such as passing a ball, are not effectively captured. To ad-
+lected from real-world VR devices. The environment mesh              dress this, future work could incorporate a third-person per-
+within the motion range was pre-scanned, and human mo-               spective or additional external sensors to estimate the move-
+tion was estimated based on three 6DoF tracking signals              ments of other users and objects. These additions could
+captured by the VR devices. Fig. 5 showcases the full-body           complement our existing environmental refinement module
+motion estimation results of EnvPoser, with a more compre-           by providing more robust motion-context interaction capa-
+hensive performance demonstration available in the supple-           bilities.
+mentary video material.
+                                                                         Mesh Quality in Complex Environments: In real-
+E. Discussions and Future Works                                      time applications, the quality of pre-scanned environment
+                                                                     meshes can vary significantly, especially in complex envi-
+Despite the effectiveness of our proposed framework, there           ronments. Low-quality meshes may introduce inaccuracies
+are limitations that provide opportunities for future research       in environmental constraints, impacting overall motion es-
+and development.                                                     timation performance. Exploring methods to enhance real-
+   Static Environment Assumptions: Our current model                 time mesh quality or mitigate the effects of noisy environ-
+assumes a static environment, which does not account for             ment inputs will be essential.
+    Leveraging Raw Ego-centric Visual Data: Lastly, the
+model currently relies on pre-scanned point clouds for envi-
+ronmental context. Future work could extend this by incor-
+porating raw visual data, such as images or video streams,
+to infer contact points and environmental semantics directly
+through 2D or 3D understanding. This approach could en-
+able real-time processing of dynamic environments while
+reducing the dependency on pre-scanned data. For example,
+2D semantic segmentation combined with depth estimation
+could enhance the system’s ability to handle occlusions and
+complex interactions in cluttered scenes.
+    In summary, while our method achieves state-of-the-art
+performance in human motion estimation with sparse track-
+ing signals, addressing these limitations through dynamic
+interactions, improved environmental modeling, and adap-
+tive strategies will further enhance its robustness and appli-
+cability. These directions hold promise for broadening the
+utility of our approach in increasingly complex and interac-
+tive environments.
+

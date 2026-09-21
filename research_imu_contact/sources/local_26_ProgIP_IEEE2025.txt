@@ -1,0 +1,885 @@
+                                        JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021                                                                                     1
+
+
+
+
+                                         Progressive Inertial Poser: Progressive Real-Time
+                                        Kinematic Chain Estimation for 3D Full-Body Pose
+                                                     from Three IMU Sensors
+                                               Zunjie Zhu, Yan Zhao, Yihan Hu, Guoxiang Wang, Hai Qiu, Bolun Zheng, Chenggang Yan, Feng Xu
+
+
+
+                                           Abstract—The motion capture system that supports full-body
+                                                                                                                      V     IRTUAL reality technology offers users an immersive
+arXiv:2505.05336v1 [cs.CV] 8 May 2025
+
+
+
+
+                                        virtual representation is of key significance for virtual reality.                  experience through computer-generated environments,
+                                        Compared to vision-based systems, full-body pose estimation                   with precise full-body motion tracking playing a crucial role in
+                                        from sparse tracking signals is not limited by environmental
+                                        conditions or recording range. However, previous works either                 enhancing this experience. The innovative integration of virtual
+                                        face the challenge of wearing additional sensors on the pelvis and            reality and motion capture ensures a seamless alignment
+                                        lower-body or rely on external visual sensors to obtain global po-            between real-world motions and virtual scenes, and opens up
+                                        sitions of key joints. To improve the practicality of the technology          new interactive possibilities for various fields such as motion
+                                        for virtual reality applications, we estimate full-body poses using           analysis [1] and healthcare applications [2].
+                                        only inertial data obtained from three Inertial Measurement Unit
+                                        (IMU) sensors worn on the head and wrists, thereby reducing                      In current virtual reality applications, one of the mature
+                                        the complexity of the hardware system. In this work, we propose               high-precision motion capture solutions is the vision-based
+                                        a method called Progressive Inertial Poser (ProgIP) for human                 method [3], [4]. This method estimates human pose using
+                                        pose estimation, which combines neural network estimation with
+                                        a human dynamics model, considers the hierarchical structure                  multiple RGB cameras with or without markers [5], but
+                                        of the kinematic chain, and employs a multi-stage progressive                 it is prone to being affected by external environments and
+                                        network estimation with increased depth to reconstruct full-body              application scenarios. Wearable inertial sensors also provide
+                                        motion in real time. The encoder combines Transformer Encoder                 a satisfactory solution for motion capture, overcoming the
+                                        and bidirectional LSTM (TE-biLSTM) to flexibly capture the                    inherent issues of occlusions and limited monitoring areas in
+                                        temporal dependencies of the inertial sequence, while the de-
+                                        coder based on multi-layer perceptrons (MLPs) transforms high-                vision [6], [7]. For example, the commercial inertial motion
+                                        dimensional features and accurately projects them onto Skinned                capture system Xsens [8] obtains motion information about
+                                        Multi-Person Linear (SMPL) model parameters. Quantitative                     human joints from 17 or more inertial sensors. In recent years,
+                                        and qualitative experimental results on multiple public datasets              research has further reduced the required sensor data to six,
+                                        show that our method outperforms state-of-the-art methods with                which are sparsely worn on the head, pelvis, wrists, and ankles,
+                                        the same inputs, and is comparable to recent works using six
+                                        IMU sensors.                                                                  and uses sparse inertial sensor data to estimate 3D human pose
+                                                                                                                      in real time [9]–[11]. However, additional devices worn on
+                                          Index Terms—motion capture, virtual reality, full-body virtual
+                                                                                                                      the lower-body limit motion diversity and personal comfort.
+                                        representation, kinematic chain, progressive estimation, neural
+                                        network, IMU sensors.                                                         Therefore, a head-mounted display (HMD) and two handheld
+                                                                                                                      controllers are usually used for interactions in typical virtual
+                                                                                                                      reality settings [12], [13].
+                                                                 I. I NTRODUCTION
+                                                                                                                         To reduce the number of devices and improve portability
+                                                                                                                      in applications such as virtual reality, we aim to improve
+                                           This paper was produced by the IEEE Publication Technology Group. They     the applicability and efficiency of full-body pose estimation
+                                        are in Piscataway, NJ.
+                                           Manuscript received xx xx, xxxx; revised xx xx, xxxx. (Corresponding       using only the acceleration and rotation provided by three pure
+                                        author: Bolun Zheng (e-mail: blzheng@hdu.edu.cn).)                            inertial sensors worn on the head and wrists. It is a challenging
+                                           Zunjie Zhu and Yihan Hu are with the School of Communication Engi-         inverse kinematics (IK) problem to directly estimate full-
+                                        neering, Hangzhou Dianzi University, Hangzhou 323000, China. Zunjie Zhu
+                                        is also with the Key Laboratory of Micro-nano Sensing and IoT of Wenzhou,     body joint poses based on known inertial constraints without
+                                        Wenzhou Institute of Hangzhou Dianzi University, Wenzhou, 325038, China.      position knowledge of sparse upper-body joints. However, tra-
+                                           Yan Zhao is with the School of Control Science and Engineering, Tiangong   ditional IK methods neglect the human dynamics constraints,
+                                        University, Tianjin 300387, China.
+                                           Guoxiang Wang is with the College of Business, Lishui University, Lishui   causing joint rotation errors to accumulate along the kinematic
+                                        310018, China.                                                                chain and result in unnatural deformation of the end-effector
+                                           Hai Qiu is with Costar Intelligent Optoelectronics Technology Co.,Ltd,     [14]. We observe significant motion correlation between ad-
+                                        China.
+                                           Bolun Zheng and Chenggang Yan are with the School of Automation,           jacent joints and introduce a local region modeling strategy,
+                                        Hangzhou Dianzi University, Hangzhou 323000, China. Chenggang Yan is          which progressively estimates joint poses with the same or
+                                        also with the Faculty of Applied Sciences, Macao Polytechnic University,      similar depth in the corresponding region according to the
+                                        Macao 999078, China.
+                                           Feng Xu is with the School of software and BNRist, Tsinghua University,    order of the kinematic chain depth increase in multiple stages.
+                                        Beijing 100084, China.                                                        The rotation of ancestor joints should be estimated earlier than
+                                                                                                   0000–0000/00$00.00 © 2021 IEEE
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021                                                                                                      2
+
+
+
+
+Fig. 1. The pipeline of our method. We divide the human body into four regions based on the hierarchical structure of the kinematic chain and use multi-stage
+progressive pose estimation to achieve real-time full-body motion synthesis. First, the full-body motion information pglobal is roughly estimated from the
+IMU measurements, and its output is combined with the IMU measurements X (0) as X (1)h. The progressive     i     estimation process is divided into four stages:
+                                                                                                       (1)
+(1) The first stage estimates joint poses in the first region from input X (1) , and the output p1 , ppelvis is concatenated with X (1) to form X (2) ; (2) The
+                                                                                          h          i
+                                                                                                (2)
+second stage estimates joint poses in the second region from input X (2) , and output p2 , ppelvis is concatenated with X (1) to form X (3) ; (3) The third
+                                                                                 h          i
+                                                                                        (3)
+stage estimates joint poses in the third region from input X (3) , and outputs p3 , ppelvis represents the pose of the upper-body joints including the pelvis;
+                                                                                                            (1)
+(4) The fourth stage estimates joint poses in the fourth region from concatenated input of X (1) and ppelvis , and outputs p4 represents lower-body poses.
+                     h          i
+                           (3)
+Finally, we combine p3 , ppelvis and p4 to obtain full-body poses and project them onto the SMPL model.
+
+
+
+the rotation of descendant joints, because joints with smaller                         from the head and wrists to guide the regression of
+depths are closer to the center of the body and influence all                          full-body joint rotation. ProgIP progressively estimates
+joints at their subsequent depths, thus determining the posture                        joint poses in four regions according to the depth of
+of the entire skeleton [15]. This estimation strategy effectively                      the kinematic chain, where the TE-biLSTM encoder
+reduces error accumulation and improves the accuracy and                               and the MLP-based decoder focus on the dependencies
+naturalness of virtual full-body character reconstruction.                             between adjacent joints by leveraging both local and
+   Consequently, to achieve realistic real-time full-body motion                       global information from the inertial data. Additionally, we
+synthesis, we propose a kinematic chain estimation method                              incorporate joint position consistency loss calculated by
+called Progressive Inertial Poser (ProgIP), which progressively                        forward kinematics into the iterative optimization, which
+estimates joint poses along the depth of the kinematic chain us-                       effectively reduces the accumulation of rotation errors in
+ing only the acceleration and rotation measurements provided                           the kinematic chain. ProgIP offers a reference scheme
+by three IMU sensors worn on the head and wrists, as shown                             for full-body motion capture with only available inertial
+in Fig. 1. The well-designed TE-biLSTM encoder provides                                tracking inputs from the head and wrists.
+both global and local understanding of the inertial signals,                         • We present live demonstrations that capture a variety of
+
+enhancing the quality of motion reconstruction in online mode.                         challenging motions while allowing performers to move
+The MLP-based decoder shares high-dimensional complex                                  freely. ProgIP generates realistic, smooth motion and
+features from the encoder to project and transform the pose                            achieves real-time inference speeds, making it suitable
+features into the SMPL model parameters. To the best of our                            for online applications in virtual reality environments.
+knowledge, there is currently no task specifically designed to
+estimate full-body poses using only three pure IMU sensors                                                 II. R ELATED WORKS
+from the head and wrists. We demonstrate the effectiveness
+of ProgIP on challenging public datasets (including AMASS,                           Motion capture focusing on full-body digitization has been
+DIP-IMU, and TotalCapture), achieving state-of-the-art per-                       extensively studied in academia. Existing vision- and marker-
+formance for full-body pose estimation with three sets of                         based works have achieved numerous remarkable results. For
+inertial inputs, and generating realistic real-time animated                      example, commercial motion capture systems such as Vicon
+demonstrations within an acceptable delay.                                        [16] and OptiTrack [17] provide high-quality solutions for
+                                                                                  the gaming and film industries. Our method requires only
+   The contributions are summarized as follows:
+                                                                                  three sparse IMU sensors worn on the head and wrists as
+   •   We propose ProgIP, which uses only three IMU sensors                       input sources, so in this section, we mainly review closely
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021                                                                                  3
+
+
+
+related solutions for estimating full-body poses using wearable      as the intermediate representation of estimated joint relative
+sensors, including 6 DOF (rotation and translation) inputs           rotations, and suggested developing the pose estimation task
+from the head and wrists, and pure inertial (acceleration and        in a multi-stage manner. On this basis, PIP [23] proposed a
+rotation) inputs from sparse joints.                                 physics-aware motion optimizer to refine motion to satisfy
+                                                                     physical constraints, which is a significant improvement over
+A. 6 DOF Inputs From The Head And Wrists                             previous technologies. Aiming to address the challenges of
+                                                                     inconsistent prediction time and joint motion drift, Jiang et
+   Some recent research aims to address the challenge of
+                                                                     al. [24] proposed TIP, which uses the Transformer to improve
+generating full-body poses from input in realistic virtual reality
+                                                                     the reasoning ability by explicitly taking its past predictions as
+settings, relying on 6 DOF information accessible from an
+                                                                     input and achieves real-time enhanced reconstruction of full-
+HMD and two handheld controllers to track human motion
+                                                                     body motion using only six IMU sensors. Zhang et al. [25]
+in real-time and generate realistic motion while observing
+                                                                     proposed a part-based human pose estimation model focusing
+specific body parts. Jiang et al. [13] were the first to propose
+                                                                     on the spatial relationship between human body parts and
+a learning-based method to estimate full-body poses using
+                                                                     IMU sensors. Unlike previous work that used only temporal
+only the rotation and translation inputs from the user’s head
+                                                                     information to reconstruct complex motions, the proposed
+and hands, called AvatarPoser. This method uses holistic
+                                                                     model focuses on the exclusive features of corresponding body
+avatar representation to overcome the limitations of floating
+                                                                     regions to improve the estimation accuracy. Mollyn et al. [26]
+avatars in virtual reality interactions. On this basis, Du et al.
+                                                                     explored using built-in IMU sensors from low-cost consumer
+[18] proposed AGRoL to address the challenging lower-body
+                                                                     products to guess the optimal joint poses, called IMUPoser,
+motion and generating smoothness, and the designed diffusion
+                                                                     which builds an intriguing real-time ecosystem to automat-
+model with sparse tracking conditions reconstructed the full-
+                                                                     ically track available equipment without additional external
+body motion from 6 DOF tracking information for the first
+                                                                     facilities, so that it is particularly suitable for applications in
+time. Aliakbarian et al. [19] also used a generative model to
+                                                                     the healthcare market.
+learn the conditional distribution of full-body poses based on
+                                                                        In summary, all the methods reviewed in this section either
+the knowledge from the head and hands, named FLAG, and
+                                                                     require additional joint position information, additional track-
+proposed an optimized pose prior and a new approach based
+                                                                     ing inputs from more than three joints, or face difficulties in
+on conditional normalized flow to generate high-quality poses.
+                                                                     predicting accurate full-body poses in real time from sparse
+In order to reduce the influence of the visual range of the
+                                                                     inputs. Our proposed ProgIP can effectively estimate full-body
+HMD on hand interaction, Streli et al. [20] proposed HOOV,
+                                                                     poses using only pure inertial inputs from three IMU sensors
+which supplements the headset information with continuous
+                                                                     worn on the head and wrists. It performs progressive pose
+signals from a wristband to estimate the current hand position
+                                                                     estimation along the depth of the kinematic chain and employs
+outside the visible field of view. Some other studies suggest
+                                                                     a straightforward network structure based on Transformers and
+adding additional signal sources to track pelvic motion. Yang
+                                                                     RNNs. Through the analysis and comparison of these existing
+et al. [21] estimated lower-body poses based on tracking
+                                                                     methods, we aim to develop a simple, practical, and cost-
+signals from the head, hands, and pelvis, known as LoBSTr,
+                                                                     effective full-body pose estimation technique to advance the
+which employs velocity to represent the correlation between
+                                                                     development and application of motion capture solutions.
+the upper-body signal and the lower-body motion and finally
+obtained the full-body virtual animation through the IK solver.
+                                                                                                III. M ETHOD
+B. Pure Inertial Inputs From Sparse Joints                           A. Problem Formulation
+   To overcome the limitations of system cost and dense                We introduce a full-body pose estimation method that aims
+placement, previous works have worn sparse pure IMU sensors          to reconstruct human motion in real time from continuous
+on different body parts for motion tracking to accurately
+estimate full-body poses. Early work [22] attempted to use
+only five sparse accelerometers to continuously match the
+collected data with the closest data in the existing database
+for motion capture. Recently, the groundbreaking work for
+full-body pose estimation using inertial sensors that measure
+acceleration and rotation simultaneously is SIP, proposed by
+Marcard et al. [9]. SIP can optimize all poses in the sequence
+at once, but it does not meet real-time requirements. Therefore,
+Huang et al. [10] proposed to use deep learning to learn
+temporal pose prior, called DIP, which is the first deep learning
+method based on a bidirectional RNN to estimate human
+pose and deploy sliding window architecture to maintain real-
+                                                                     Fig. 2. The proposed ProgIP generates full-body poses by using only
+time capabilities. Yi et al. believed that directly regressing       acceleration and rotation data from the head and wrists. The left image
+rotation from sparse IMU sensors is extremely challenging,           illustrates the IMU placement, where the sensors are tightly bound with
+so they proposed TransPose [11] to estimate joint positions          arbitrary orientations.
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021                                                                                      4
+
+
+
+inertial measurements collected by a set of sparse IMU sensors
+worn on the head and wrists, as shown in Fig. 2. This severely
+under-constrained problem is challenging, for which we aim to
+estimate full-body poses P 1:J = {Mj,t (θ)} ∈ RJ×N through
+a learning-based approach using the observed sparse joint
+                                          S
+feature sequences F 1:S = {(as,t , Rs,t )}s=1 ∈ RS×(A+C) and
+the state-of-the-art human parameterization model SMPL [27],
+where J is the number of joints in the full-body skeleton,
+N is the dimension of the output joint poses, S is the
+number of joints tracked by IMU sensors, A and C represent
+the dimensions of acceleration and direction, respectively.
+(as,t , Rs,t ) ∈ RA+C represents a set of acceleration and
+rotation measurements from the s-th IMU sensor at the t-th
+frame. The SMPL model is denoted by Mj,t (θ), where θ is
+the pose parameter. We omit the shape parameter.
+
+
+B. Input and Output Representation
+   We use the rotation and acceleration measurements of each
+IMU as the raw inputs for the system. We aligned these
+measurements into the same reference frame and scaled the ac-
+celeration 30 times to be suitable for neural network. Referring
+to [13], [18], we use the rotation Rt to calculate the angular
+                   −1
+velocity Wt = Rt−1     Rt , which provides additional dynamic       Fig. 3. The detailed structure of the backbone network in the pipeline. It
+information. Since the continuous 6D rotation representation        mainly includes the TE-biLSTM encoder and the MLP-based decoder, and
+                                                                    the final two decoders in the network output the pose of the pelvic joint and
+is suitable for neural network training, we discard the last        the poses of the other joints, respectively.
+column of the rotation matrix to obtain the 6D rotation
+representation [28]. Therefore, the final input representation
+X = [{a1 , R1 , W1 } , · · · , {aS , RS , WS }] ∈ RS×15 is a con-   motion and real-time application tasks, and can better adapt
+catenated vector of acceleration, rotation, and angular velocity    to the inertial input in practical scenarios.
+from all given sparse IMU sensors. We set the number of                The decoder is a two-layer MLP structure that shares high-
+worn IMU sensors to S = 3, and the input feature dimension          dimensional pose features from the encoder, and the ReLU
+at each time step is 45. The output is the global rotation of       activation function is applied to enhance the nonlinear capa-
+the pelvis and the local rotation of other joints relative to       bility of the network. We set the global rotation decoder and
+the parent joints, represented by 6D rotation. According to         the pose feature decoder according to the different functions
+relevant studies [11], we do not assign rotational degrees of       performed, in which the global rotation decoder generates the
+freedom to wrists, hands, ankles and feet because there are no      global direction represented by the pelvic rotation to guide the
+observations to resolve these, so the output feature dimension      navigation of the character.
+of each time step is 96.                                               For a given input signal, we apply a linear projection in the
+                                                                    FC layer to expand the features to 256 dimensions, and then
+                                                                    feed the feature output generated by the Transformer Encoder
+C. Backbone Network
+                                                                    into two biLSTM networks with a width of 256 to process
+   We hereby introduce the detailed structure of the backbone       the data. We set the number of heads to 8 and the number of
+network in the proposed ProgIP as shown in Fig. 3. It primarily     self-attention layers to 3. The linear operation of the decoder
+consists of two parts: the encoder and the decoder.                 maps the encoder output to a specific dimension, and applies
+   The encoder is composed of three main components: a              a ReLU activation function to convert the input vector into an
+single-layer fully connected (FC) layer, a Transformer En-          embedding of 256 dimensions. The SMPL pose parameters
+coder, and a two-layer bidirectional long short-term memory         are finally output represented by 6D rotation. Table I shows
+(biLSTM) network. The main purpose of the FC layer is to            the details of our network architecture.
+process and transform the input information and project the
+input data into a high-dimensional space. The biLSTM layer
+is added to the Transformer Encoder layer to jointly extract        D. Multi-stage Progressive Kinematic Chain Estimation
+the temporal features of inertial sequences, which leverages the       Inspired by observations from [25], [30], [31], we propose
+parallelism of the self-attention mechanism in the Transformer      incorporating four regions into the multi-stage estimation task,
+Encoder and the memory of the gating mechanism in the               with each stage featuring a backbone network structure to
+biLSTM to provide an understanding of global and local              estimate joint poses within the corresponding region. The
+information [29]. The well-designed encoder enhances the            effectiveness primarily relies on the following two key ob-
+performance in maintaining the temporal continuity of human         servations: (1) The region-based structure can enhance the
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021                                                                                                   5
+
+
+
+                            TABLE I                                                  SXN (·) consists of inertial measurements from the head and
+  S PECIFIC PARAMETERS OF THE BACKBONE NETWORK . RNN-L AYER                          wrists X, and the output includes the global rotation of the
+DENOTES THE NUMBER OF LAYERS OF BI LSTM, TF-L AYER REPRESENTS
+  THE NUMBER OF LAYERS OF T RANSFORMER E NCODER , AND H EAD                          pelvis and the local rotations of other joints relative to the
+    INDICATES THE NUMBER HEADS IN THE MULTI - HEAD ATTENTION                         parent joints, expressed as:
+                          MECHANISM .
+                                                                                                             pglobal = SXN (X)                            (1)
+                                  1
+                         SXN (·) SP        2        3        4
+       Structure                    N (·) SP N (·) SP N (·) SP N (·)
+                                                                                        Subsequently, we concatenate the global information pglobal
+          Input             45         141        165        183        147
+         FC layer           256        256        256        256        256          output by SXN (·) with the inertial measurements X to form
+Encoder RNN-layer            2          2          2          2          2           the combined input [X, pglobal ]. In the subsequent progressive
+         TF-layer            3          3          3          3          3           pose estimation task, the inputs X (i) for the four
+          Head               8          8          8          8          8                                                                 stages are
+                                                                                                                                                    
+                                                                                     expressed as X (1) = [X, pglobalh], X (2) = iX (1) , pd1 ,
+             Hidden         256        256        256        256        256                                                         (1)
+Recoder
+             Output         96         24         42         72         24           X (3) = X (2) , pd2 , and X (4) = X (1) , ppelvis .
+                                                                                        We use the TE-biLSTM encoder and the MLP-based de-
+                                                                                     coder to extract depth features that combine past and future
+interdependence between adjacent joints and mitigate the                             time information from the input to calculate joint poses. The
+negative effects of weakly correlated joints, thereby enabling                       output of the network for the first three stages includes the
+effective learning of the unique joint features in local body                        global rotation of the pelvis ppelvis and the local rotation of
+regions; (2) The range of estimated joint poses is progressively                     other joints pi , and the mapping relationship is expressed as:
+expanded with increasing depth, preventing the focus from
+                                                                                                        h             i             
+                                                                                                           (i)
+                                                                                                          ppelvis , pi = SPi N X (i)               (2)
+being limited to local regions and ensuring consideration of
+the overall structure.                                                               where SPi N (·) is the i-th pose estimation module, p1 =
+   Here, we appropriately modify the region division in [25]                         [pSpine1 , pSpine2 , pSpine3 ], p2 = [p1 , pd2 ], p3 = [p1 , pd2 , pd3 ].
+as shown in Fig. 4a, considering that the neck joint and                             Consequently, we derive the loss function Li as follows:
+the collar joints are the transition links between the trunk
+                                                                                                                              2                  2
+and the upper-body. Therefore, we pay special attention to                                                  (i)       (i)GT
+                                                                                                Li = λ p̃pelvis − ppelvis         + p̃i − pGT             (3)
+                                                                                                                                           i     2
+these three joints and divide the joints of the full-body into                                                                2
+four regions, and the joint poses of each region can be                              where p̃ represents the estimated joint poses, and pGT denotes
+represented as p = [pd1 , pd2 , pd3 , pd4 ], where pd1 = [                           the ground truth.
+pPelvis , pSpine1 , pSpine2 , pSpine3 ], pd2 = [ pNeck , pR Collar , pL Collar         For the fourth stage, the output is the local rotation of the
+], pd3 = [pHead , pR Shoulder , pL Shoulder , pR Elbow , pL Elbow ],                 lower-body joints relative to the parent joints, expressed as
+pd4 = [pR Hip , pL Hip , pR Knee , pL Knee ]. The joint poses in each                p4 = SP4 N X (4) , where p4 = pd4 . The loss function is
+specific body region divided according to the depth order of                         expressed as:
+the kinematic chain are shown in Fig. 4b.                                                                                     2
+                                                                                                           L4 = p̃4 − pGT 4   2
+                                                                                                                                                 (4)
+   We design a global feature extraction module SXN (·)
+to roughly estimate full-body poses, which further enhances                             In addition, the pose is constrained not only by the relative
+the overall consistency of global information. The input of                          rotation between joints but also by the positional relationships.
+                                                                                     Therefore, we utilize the estimated pose parameter to the
+                                                                                     skeletal hierarchy based on the SMPL model, and calculate
+                                                                                     the sub-joints global position bi through Forward Kinematics,
+                                                                                     represented as:
+                                                                                                            bi = F K ([ppelvis , pi ])                    (5)
+                                                                                     where F K(·) is a forward kinematics function, which takes
+                                                                                     local joint rotation as input and outputs the position of the
+                                                                                     joint in the global coordinate system.
+                                                                                        The integration of joint position information is more consis-
+                                                                                     tent with the fundamental biomechanical constraints compared
+                                                                                     to minimizing joint rotation alone. We simultaneously consider
+                                                                                     both rotation errors and position errors in backpropagation
+                                                                                     optimization to obtain the loss, expressed as:
+                                                                                                                          2                  2
+                      (a)                                     (b)                            Li = λ p̃pelvis − pGT                GT
+                                                                                                                pelvis 2 + p̃i − pi  2
+                                                                                                                                       + Lb               (6)
+Fig. 4. Human body region division and hierarchical structure in the dynamic                                                      2
+model. (a) We modify the human body region division from previous work                                    L4 = p̃4 − pGT
+                                                                                                                      4  2
+                                                                                                                           + Lb                           (7)
+by dividing the human body into four regions, with specific attention given to
+the neck, left collar, and right collar as a transition region. (b) We present the                                2
+joint poses of the four divided body regions in detail in order of kinematic         where Lb = b̃ − bGT represents joint position consistency
+                                                                                                               2
+chain depth, gradually increasing from the pelvis to the upper and lower body.       loss. Referring to [13], the weight parameter λ is set to 0.1 to
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021                                                                            6
+
+
+
+                            TABLE II                                  C. Implementation Details
+ D ETAILS OF THE AMASS, T OTAL C APTURE , AND DIP-IMU DATASETS .
+                                                                         The training, evaluation, and testing of ProgIP are conducted
+    Dataset        Type      People   Motions   Frames      Minutes   using the PyTorch framework on a computer equipped with an
+    AMASS        Synthetic    487     14208     8122942     1335383   AMD RyzenTM 7 5700X CPU and an NVIDIA GeForce RTX
+   DIP-IMU         Real       10        5       176198        2937    4060 Ti graphics card. We set the input block size to M = 40
+  TotalCapture     Real        5        4       316779        5280    and the current frame to N = 30, resulting in a tolerable
+                                                                      latency of 166 milliseconds in the live demonstration. To
+                                                                      ensure the full reproducibility of the network and the validity
+balance the error of pelvic rotation (global orientation) with        of the ablation experiments, the random seed was set to 10.
+the error of local rotations of other joints, thereby ensuring the    We used the Adam optimizer [35] with a batch size of 256 and
+stability and convergence speed of the optimization process.          a learning rate of 10−4 to optimize the network parameters.
+The proposed integrated optimization method helps to alleviate        We employed the Noitom PN Lab system with three IMU
+the potential instability that may arise from relying solely on       sensors to collect real data, and the front end of the live
+joint rotations, thereby improving the accuracy and biological        demonstration was implemented in Unity3D. For subsequent
+plausibility of full-body pose estimation to achieve a more           practical applications, we standardized the frame rate to 60
+natural and realistic avatar representation.                          Hz. Please note that we do not perform temporal filtering on
+                                                                      the input data.
+                          IV. E XPERIENCE
+A. Dataset                                                            D. Evaluation Metrics
+   We use three public datasets widely recognized in the                 We quantitatively evaluated the proposed method using
+motion capture field for training, validation, and testing:           well-established metrics introduced in related work: (1) Mean
+AMASS [32], TotalCapture [33], and DIP-IMU [10] datasets,             Joint Rotation Error [deg] (MJRE): The mean angular error of
+as detailed in Table II. Since the data size of TotalCapture          all joints between the estimated global rotation and the ground
+and DIP-IMU datasets is insufficient for network training, we         truth. MJRE-Pelvis evaluates the global rotation error of the
+add additional synthetic inertial data generated by the AMASS         pelvis. (2) Mean Joint Position Error [cm] (MJPE): The mean
+dataset as a supplement to increase the diversity and quantity        Euclidean distance error of all joints between the estimated
+of training data [11], [25]. Following the same protocol as           Cartesian positions and the ground truth, with the pelvic joint
+[11], we use the data collected by the last two participants in       aligned. MJPE-Wrist evaluates the mean Euclidean distance
+the DIP-IMU dataset for verification and the rest for training.       error of both wrists. (3) Mesh Error [cm] (ME): The mean
+In addition, HumanEval [34] and Transition [32] subsets in            Euclidean distance error of all mesh vertices of the SMPL
+the AMASS dataset are used for testing, and the remaining             model, with the pelvic joint aligned.
+subsets are used for training. Since the TotalCapture dataset is
+relatively limited in size and type, we use it only for testing
+as a check for cross-dataset generalization. Incorporating the        E. Comparison with existing methods
+DIP-IMU dataset containing real inertial measurements (with               We selected four baselines that are most similar to our work
+noise and drift) in the synthetic training data to fine-tune          from recent state-of-the-art methods for estimating full-body
+the network, thereby reducing the distribution discrepancies          poses from sparse inputs. The first baseline is AvatarPoser.
+between synthetic and real data, which helps generalize to            Since our input does not include positional data, we adjust
+real-world application scenarios. In addition, we recalibrate         the input signals to include acceleration, rotation, and angular
+the acceleration measurements in TotalCapture to align the            velocity, while ignoring the inverse kinematics module. The
+average acceleration measurement of each sequence with the            second baseline is AGRoL, for which we also adjust its input
+average synthetic value. We also align the orientation of the         to acceleration, rotation, and angular velocity. IMUPoser is
+AMASS dataset with the DIP-IMU dataset in the global frame            closest to our method due to its perfect match with the device
+to unify the character orientation.                                   combinations mentioned, and we omit the downsampling and
+                                                                      filtering of the input signal. The final baseline is TransPose,
+                                                                      which uses six IMU sensors worn at specific locations. There-
+B. Training Strategy                                                  fore, we remove the sensors worn on the pelvis and lower-
+   During the training process, we feed the sequence with the         body, estimating only the upper-body joint positions as an
+input block size of M frames to the network, and propagate the        intermediate process, without considering global translation.
+error only for the specific N -th frame back. The selected frame      All baselines are publicly available on GitHub. For a fair com-
+serves as the current frame in the real-time testing, meaning         parison, we follow the original implementation for training,
+that the network uses the past N − 1 frames and the future            validation, and testing on the same datasets, and maintain other
+M −N frames in the input sequence to estimate the current N -         details consistent with the original papers.
+th frame. This strategy helps to improve the interpretability of          1) Quantitative evaluation: To demonstrate the effective-
+the model, while reducing overfitting and saving computational        ness of the proposed ProgIP, we quantitatively compare it
+resources especially when dealing with large-scale data.              with four baselines using test sequences from existing datasets
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021                                                                                                      7
+
+
+
+(AMASS-HumanEval&Transition and TotalCapture). Consid-                            AGRoL performs the worst in all metrics in TotalCapture and
+ering that the quality of upper-body representation is also cru-                  the second-to-last performance in AMASS, due to its MLP-
+cial for virtual reality applications, we divide the quantitative                 based diffusion model. Although the specially customized
+evaluation into three scenarios: estimating and evaluating full-                  motion-conditioned diffusion model plays a key role in motion
+body joint poses, estimating full-body joint poses but evaluat-                   generation, its MLP backbone does not adequately capture
+ing only upper-body joint poses, and estimating and evaluating                    temporal information. Fig. 5 shows the mean position errors
+upper-body joint poses. These results are detailed in Table                       of the full-body joints along the x-axis, y-axis, and z-axis
+III, Table IV and Table V, respectively. We report the mean                       for the partial sequences in the TotalCapture dataset. It can
+and standard deviation for each metric, with ProgIP achieving                     be seen that the joint error does not drift significantly over
+the best results across all metrics and outperforming the four                    time, but is only related to the action of the current frame.
+baselines. AvatarPoser is inferior to our method and achieves                     This is attributed to multi-stage progressive estimation and
+the second-best performance on both datasets, where the                           joint position consistency loss designed by ProgIP, which
+Transformer-based network provides a significant advantage                        enhances the dependency between adjacent joints and reduces
+and the forward kinematics module reduces the accumulation                        the accumulation of joint rotation estimation errors along the
+of rotation errors in the kinematic chain. However, AvatarPoser                   kinematic chain. When tested on the TotalCapture real dataset,
+directly estimates full-body pose from input signals and relies                   ProgIP performs similarly to the original TransPose, with
+on a single Transformer architecture to extract global features,                  rotation error differing by 3.24 deg, global position error by
+without explicitly modeling the hierarchical relationships of                     1.46 cm, and mesh position error by 1.01 cm, which is close to
+joints. The third place is TransPose, which uses the joint po-                    the full-body pose estimation scheme using six IMU sensors,
+sition as the intermediate process to solve the relative rotation                 as shown in Fig. 6.
+of the joints. However, relying solely on three sets of inertial
+measurements is insufficient for accurately estimating the root                      Additionally, the error margins of ProgIP for different types
+relative position of the joint. IMUPoser achieved the second-                     of motion are specifically reported to demonstrate its relia-
+to-last result in TotalCapture and the worst result in AMASS.                     bility. We conduct experiments on the TotalCapture dataset,
+Compared with TransPose, it simplifies the solution of joint                      including three replicates for each of the four motion types,
+positions and the designed RNN structure is relatively simple.                    and report the performance and error margins for different
+                                                                                  motion types, as shown in Table VI.
+
+
+                                                             TABLE III
+E STIMATION AND EVALUATION OF FULL - BODY JOINT POSES AND COMPARISON OF ONLINE PERFORMANCE BETWEEN P ROG IP AND BASELINES ON THE
+                                 AMASS-H UMAN E VAL &T RANSITION AND T OTAL C APTURE DATASETS .
+
+       Dataset            Method                   RE                   RE-Pelvis                  PE                   PE-Wrist                  Me
+                         IMUposer           17.40 (+/- 9.20)         15.21 (+/- 7.98)        9.45 (+/- 5.47)        14.48 (+/- 7.11)        10.30 (+/- 5.81)
+                          AGRoL             14.47 (+/- 7.79)         16.77 (+/- 8.13)        9.52 (+/- 5.48)        12.89 (+/- 5.76)        10.05 (+/- 5.49)
+      AMASS              TransPose          14.16 (+/- 7.89)         15.05 (+/- 7.98)        8.71 (+/- 5.74)        10.51 (+/- 6.46)         8.86 (+/- 5.87)
+                        AvatarPoser         12.65 (+/- 7.31)         14.01 (+/- 6.97)        7.49 (+/- 4.89)         8.48 (+/- 5.37)         7.55 (+/- 4.96)
+                          ProgIP            11.42 (+/- 6.35)         13.79 (+/- 7.18)        7.06 (+/- 4.88)        7.87 (+/- 4.79)         7.02 (+/- 4.74)
+                         IMUposer          19.44 (+/- 11.78)        18.05 (+/- 12.03)        11.34 (+/- 7.81)       14.61 (+/- 8.77)        12.23 (+/- 8.08)
+                          AGRoL            19.18 (+/- 11.60)        16.21 (+/- 10.98)        10.01 (+/- 7.13)       14.50 (+/- 8.74)        10.98 (+/- 7.52)
+    TotalCapture         TransPose         18.04 (+/- 11.13)        16.31 (+/- 11.25)         9.82 (+/- 7.25)       12.32 (+/- 7.88)        10.27 (+/- 7.37)
+                        AvatarPoser        16.74 (+/- 10.53)        14.83 (+/- 10.11)         8.53 (+/- 6.47)       10.69 (+/- 6.80)         8.97 (+/- 6.50)
+                          ProgIP           16.17 (+/- 9.98)         14.01 (+/- 9.81)         8.07 (+/- 6.22)        10.33 (+/- 6.43)        8.50 (+/- 6.18)
+
+
+
+
+Fig. 5. The mean position error of the full-body joints along the x-axis, y-axis, and z-axis of the partial sequence in the TotalCapture dataset. The blue line
+represents the mean estimated joint position, the orange line represents the mean ground truth joint position, and the green line represents the average position
+error.
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021                                                                                                    8
+
+
+
+                                                               TABLE IV
+  E STIMATION OF FULL - BODY JOINT POSES AND EVALUATION OF UPPER - BODY JOINT POSES , AND COMPARISON OF ONLINE PERFORMANCE BETWEEN
+                     P ROG IP AND BASELINES ON THE AMASS-H UMAN E VAL &T RANSITION AND T OTAL C APTURE DATASETS .
+
+      Dataset           Method                 RE                  RE-Pelvis                     PE                 PE-Wrist                  Me
+                       IMUposer          15.31 (+/- 7.83)       15.21 (+/- 7.98)         8.69 (+/- 4.68)        14.48 (+/- 7.11)        9.85 (+/- 5.33)
+                        AGRoL            12.82 (+/- 6.29)       16.77 (+/- 8.13)         9.04 (+/- 4.67)        12.89 (+/- 5.76)        9.78 (+/- 5.00)
+      AMASS            TransPose         12.00 (+/- 6.44)       15.05 (+/- 7.98)         8.02 (+/- 5.12)        10.51 (+/- 6.46)        8.46 (+/- 5.50)
+                      AvatarPoser        10.93 (+/- 5.89)       14.01 (+/- 6.97)         7.04 (+/- 4.13)         8.48 (+/- 5.37)        7.29 (+/- 4.49)
+                        ProgIP           9.78 (+/- 4.92)        13.79 (+/- 7.18)         6.87 (+/- 4.00)        7.87 (+/- 4.79)         6.92 (+/- 4.19)
+                       IMUposer         17.28 (+/- 10.44)      18.05 (+/- 12.03)         10.59 (+/- 6.90)       14.61 (+/- 8.77)        11.78 (+/- 7.52)
+                        AGRoL           16.97 (+/- 10.25)      16.21 (+/- 10.98)          8.89 (+/- 6.07)       14.50 (+/- 8.74)        10.28 (+/- 6.86)
+    TotalCapture       TransPose        15.68 (+/- 9.62)       16.31 (+/- 11.25)          8.66 (+/- 6.15)       12.32 (+/- 7.88)        9.55 (+/- 6.68)
+                      AvatarPoser       14.72 (+/- 8.94)       14.83 (+/- 10.11)          7.69 (+/- 5.30)       10.69 (+/- 6.80)        8.45 (+/- 5.76)
+                        ProgIP          14.17 (+/- 8.40)       14.01 (+/- 9.81)          7.27 (+/- 5.10)        10.33 (+/- 6.43)        8.00 (+/- 5.47)
+
+
+                                                              TABLE V
+E STIMATION AND EVALUATION OF UPPER - BODY JOINT POSES AND COMPARISON OF ONLINE PERFORMANCE BETWEEN P ROG IP AND BASELINES ON THE
+                                  AMASS-H UMAN E VAL &T RANSITION AND T OTAL C APTURE DATASETS .
+
+       Dataset           Method                RE                  RE-Pelvis                     PE                PE-Wrist                  Me
+                        IMUposer         13.87 (+/- 7.65)       14.37 (+/- 8.23)         7.92 (+/- 4.70)        12.67 (+/- 6.90)        8.87 (+/- 5.30)
+                         AGRoL           11.77 (+/- 5.92)       15.61 (+/- 7.99)         8.45 (+/- 4.54)        11.66 (+/- 5.49)        9.08 (+/- 4.86)
+      AMASS             TransPose        12.20 (+/- 6.26)       15.52 (+/- 7.83)         8.17 (+/- 5.01)        10.49 (+/- 6.23)        8.55 (+/- 5.38)
+                       AvatarPoser       11.12 (+/- 5.94)       13.98 (+/- 7.07)         7.08 (+/- 4.05)         9.01 (+/- 5.50)        7.40 (+/- 4.42)
+                         ProgIP          9.78 (+/- 4.92)        13.79 (+/- 7.18)         6.87 (+/- 4.00)        7.87 (+/- 4.79)         6.92 (+/- 4.19)
+                        IMUposer         16.66 (+/- 10.18)      17.10 (+/- 11.85)        9.86 (+/- 6.71)        13.77 (+/- 8.44)       11.03 (+/- 7.28)
+                         AGRoL            16.14 (+/- 9.59)      15.57 (+/- 10.29)        8.42 (+/- 5.75)        13.35 (+/- 8.22)        9.66 (+/- 6.48)
+    TotalCapture        TransPose         15.72 (+/- 9.45)      16.32 (+/- 11.13)        8.58 (+/- 6.06)        12.07 (+/- 7.87)        9.44 (+/- 6.58)
+                       AvatarPoser        14.90 (+/- 9.09)      14.97 (+/- 10.33)        7.70 (+/- 5.39)        10.98 (+/- 7.09)        8.48 (+/- 5.85)
+                         ProgIP          14.17 (+/- 8.40)       14.01 (+/- 9.81)         7.27 (+/- 5.10)        10.33 (+/- 6.43)       8.00 (+/- 5.47)
+
+
+
+                                                                                                           TABLE VI
+                                                                                           E RROR MARGINS FOR DIFFERENT MOTION TYPES .
+
+                                                                                     Motion             RE      RE-Pelvis      PE      PE-Wrist     ME
+                                                                                     Acting1          15.4632   12.2639      7.1213     9.9872      7.5915
+                                                                                     Acting2          16.3864   12.0632      7.1879     9.7243      7.6254
+                                                                                     Acting3          16.8083   14.5456      8.4185    10.4747      8.8982
+                                                                                    Freestyle1        18.8902   19.6545     11.1892    12.7348     11.4093
+                                                                                    Freestyle2        21.0383   19.4369     11.7885    13.7456     12.1566
+                                                                                    Freestyle3        28.7018   24.0060     14.7723    22.1103     16.3339
+                                                                                      Rom1            13.1808   10.5633      6.2621     6.8497      6.3128
+                                                                                      Rom2            12.6847    9.6734      5.6447     6.5468      5.8281
+                                                                                      Rom3            12.2427   10.8259      5.6481     6.4169      5.7638
+                                                                                    Walking1          10.4948    8.2597      4.8203     6.5451      5.0911
+                                                                                    Walking2          11.5415   10.5645      5.2881     6.8734      5.6125
+                                                                                    Walking3          11.9107   10.1390      5.5036     7.2858      5.8703
+                                                                                     Mean             15.7786   13.4997       7.8037    9.9412     8.2078
+                                                                               Standard deviation     5.1834    4.9173        3.1526    4.5944     3.4406
+
+
+
+Fig. 6. Performance comparison of ProgIP and the original TransPose using
+six IMU sensors. The superscript * denotes the original paper.              remain reasonable even when the estimated leg poses slightly
+                                                                            differ from the ground truth. In some scenarios, we see that
+                                                                            ProgIP successfully reconstructs both the upper and lower
+   2) Qualitative evaluation: We use partial sequences se-                  body, while AGRoL fails to accurately estimate upper arm
+lected from the TotalCapture dataset to compare the poses                   poses in certain cases. The performance of ProgIP with these
+reconstructed by ProgIP with those of the four baselines, and               real data can be attributed to the well-designed encoder and
+the qualitative results from the real dataset better reflect the            decoder help capture both consistency and variation in motion,
+stability and superiority of ProgIP. Fig. 7 intuitively presents            combined with progressive body modeling, which is particu-
+some examples where ProgIP demonstrates superior perfor-                    larly beneficial for estimating challenging poses. As evidenced
+mance and effectively captures the nuances of challenging                   by the qualitative results, we achieve visually pleasing state-
+motions, especially arm motions and pelvic rotation. However,               of-the-art online capture quality.
+for lower-body reconstruction of turning motions, our results                  A substantial number of quantitative and qualitative exper-
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021                                                                                                9
+
+
+
+                                                             TABLE VII
+A BLATION STUDIES ON BODY REGION DIVISION , PROGRESSIVE ESTIMATION , GLOBAL FEATURE EXTRACTION MODULE AND FORWARD KINEMATICS . I T
+                               SHOWS THE CONTRIBUTION OF OUR KEY COMPONENTS TO POSE ESTIMATION .
+
+
+                                                      AMASS                                                        TotalCapture
+         Method
+                                    RE                   PE                  ME                    RE                    PE                  ME
+  No deep-based region        12.19 (+/- 6.60)     7.42 (+/- 4.85)      7.38 (+/- 4.72)     16.62 (+/- 10.13)      8.24 (+/- 6.41)     8.65 (+/- 6.37)
+      No progres              12.86 (+/- 7.20)     7.47 (+/- 4.82)      7.46 (+/- 4.77)     16.61 (+/- 10.31)      8.45 (+/- 6.38)     8.89 (+/- 6.40)
+       No global              12.43 (+/- 6.82)     7.72 (+/- 5.14)      7.79 (+/- 5.09)     17.30 (+/- 10.55)      8.93 (+/- 6.82)     9.34 (+/- 6.82)
+        No FK                 12.31 (+/- 6.57)     7.58 (+/- 4.88)      7.57 (+/- 4.79)     16.97 (+/- 10.49)      8.75 (+/- 6.71)     9.18 (+/- 6.73)
+        ProgIP                11.42 (+/- 6.35)     7.06 (+/- 4.88)      7.02 (+/- 4.74)     16.17 (+/- 9.98)       8.07 (+/- 6.22)     8.50 (+/- 6.18)
+
+
+
+imental results demonstrate that ProgIP significantly outper-                 experimental results in Table VII clearly show the perfor-
+forms baselines in terms of capture accuracy and physical                     mance differences. The removal of these components sig-
+realism. In the progressive estimation of depth along the                     nificantly increases joint rotation and position errors. ProgIP
+kinematic chain, the TE-biLSTM encoder and the MLP-based                      progressively estimates descendant joint poses and iteratively
+decoder are used to better capture state change signals to                    updates parent joint poses in order to increase kinematic
+resolve motion blur. At the same time, the further improvement                chain depth, which positively contributes to optimizing full-
+in estimation accuracy is attributed to the effective constraint              body motion reconstruction. Additionally, we constrain joint
+of joint positions calculated using forward kinematics.                       rotations relative to parent joints using positions calculated by
+                                                                              forward kinematics to further improve performance. Trends
+F. Ablation experiment                                                        in both datasets confirm that ProgIP not only performs well
+   To evaluate the effectiveness of the key components of                     on synthetic data but is also robust and effective in handling
+ProgIP, we compare it with four additional variants: (1)                      complex and dynamic motions in real-world scenarios.
+No deep-based region: the body is segmented into three
+regions using the body region segmentation technique used
+                                                                              G. Network structure comparison
+in [25] without considering kinematic chain constraints; (2)
+No progress: the full-body poses are directly estimated using                    The choice of network structure plays a vital role in
+inertial measurements rather than the multi-stage progressive                 encoder performance, so we compare the network compo-
+estimation; (3) No global: the progressive estimation task                    nents of the designed encoder to highlight the advantages of
+relies solely on inertial measurements without global infor-                  the TE-biLSTM encoder. This section considers two popular
+mation; (4) No FK: the loss function only minimizes the                       alternative backbone architectures: Transformer and RNN,
+rotation angles without incorporating additional constraints                  and evaluates their performance on the pose estimation task.
+from joint positions calculated by forward kinematics. We                     To ensure a fair comparison, the input of the alternative
+compare these four variants with our method on the AMASS-                     architecture used is consistent with the inertial measurement
+HumanEval&Transition and Total Capture datasets, and the                      X =∈ RS×15 , and the feature dimension is extended to 256
+
+
+
+
+Fig. 7. Qualitative comparison of our method ProgIP with four baselines. We conduct online comparison on the TotalCapture dataset and select some results
+here, where the orange is ground truth. Additional qualitative results are available in the supplementary materials.
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021                                                                              10
+
+
+
+                        TABLE VIII                                                                TABLE IX
+  P ERFORMANCE COMPARISON OF OUR PROPOSED ENCODER WITH THE                     S PECIFIC PARAMETERS OF PN L AB INERTIAL SENSORS .
+             T RANSFORMER E NCODER AND BI LSTM
+                                                                                       Accelerometer     Gyroscope      Magnetometer
+                                     AMASS
+                                                                          Range             ±8g         ±2000 deg/s       ±10 Gauss
+  Method
+                     RE                 PE                  ME           Accuracy         0.244mg        0.07 deg/s      0.003 Gauss
+     TF        12.19 (+/- 6.69)   7.68 (+/- 5.08)   7.63 (+/- 4.97)
+  biLSTM       13.88 (+/- 7.81)   8.33 (+/- 5.56)   8.38 (+/- 5.63)
+  ProgIP       11.42 (+/- 6.35)   7.06 (+/- 4.88)   7.02 (+/- 4.74)    of ProgIP in full-body pose estimation. Specifically, a total of
+                                   TotalCapture                        five independent experiments are conducted in the live demon-
+  Method
+                     RE                 PE                  ME         stration, each lasting about two minutes and covering different
+                                                                       motion scenarios. Since the similar reliability and consistency
+     TF       17.11 (+/- 10.41)   8.93 (+/- 6.78)    9.34 (+/- 6.74)
+  biLSTM      17.89 (+/- 11.31)   9.74 (+/- 7.19)   10.25 (+/- 7.34)   of each experiment are similar, the live demonstration shown
+  ProgIP      16.17 (+/- 9.98)    8.07 (+/- 6.22)   8.50 (+/- 6.18)    uses the results of the first experiment. In the current version,
+                                                                       one participant (male, 180cm tall, weighing 70kg) performs
+                                                                       in the demonstration and tested various of full-body motions,
+through the FC layer. RNN architecture processes the motion            including but not limited to walking, running, turning, and
+data through a two-layer biLSTM network with a width of                waving. These cover most of the basic motion patterns in
+256, and the feature dimension of the concatenated output              daily life. The participant repeats each motions multiple times
+of bidirectional hidden states is 512. Transformer architecture        and the estimation results are very similar, which ensures the
+outputs features of the same dimension through three layers            stability and repeatability of the live demonstration.
+of multi-head self-attention (the number of heads is set to 8).           The system shows excellent stability during long-term op-
+Finally, the corresponding decoder projects the output features        eration, capable of generating smooth animation transitions
+into the target space respectively. As shown in Table VIII,            in real-time without noticeable jitter or drift. The motions of
+the TE-biLSTM encoder in ProgIP achieves better results                the virtual characters are natural and realistic, in line with
+than the other two backbone architectures. The RNN network             the laws of human kinematics, especially in terms of lower-
+exhibits significant rotation and position errors at some joints.      body motions and pelvic rotation. Based on this, we generally
+The rotation and position errors in the AMASS dataset are              believe that the virtual characters are close to real human
+10.64% and 20.69% higher than those of the TE-biLSTM                   bodies, and the overall performance is realistic and smooth.
+encoder, respectively, while in the TotalCapture dataset, these
+errors are 21.54% and 17.99% higher than those of the TE-              I. Failure cases
+biLSTM encoder, respectively. In comparison, the Transformer
+architecture has 5.81% and 6.74% higher rotation errors, and              We conduct a qualitative analysis of ProgIP on the TotalCap-
+10.66% and 9.40% higher position errors than the TE-biLSTM             ture dataset and find that it performed poorly in the following
+encoder. Using either the RNN or Transformer architecture              specific motions, as shown in the Fig. 9. We analyze it and
+alone leads to performance degradation, this is due to the             clarified the direction of improvement, and subsequent work
+limitations of their single and constrained data processing            will focus on optimization: (1) Unconventional lower-body
+approaches. RNN architecture primarily captures local motion           motions: When the test motions are insufficiently covered in
+continuity explicitly, while Transformer architecture focuses          the training or the correlation between the motions of lower-
+on global dependencies through self-attention mechanisms.              body and upper-body is weak, the system may exhibit bias.
+The architecture based on the combination of Transformer               For example, as shown in Fig. 9(a), swinging the arms up and
+and RNN can better capture the dynamic features in time                down while backing up may lead to inaccurate leg prediction
+series data and improve the accurate estimation of joint poses.        and even misidentification as jumping. Enriching the training
+This demonstrates that the designed TE-biLSTM encoder                  samples and introducing physical constraints on the feet may
+combined with Transformer and RNN architecture benefits the            be a potential solution; (2) Sitting and standing up: Since
+reconstruction accuracy of full-body motion.                           the rotation measurements of the pelvis and lower limbs are
+                                                                       similar, it is difficult for the system to distinguish the details
+                                                                       of the motion by relying only on the head and wrist IMU.
+H. Live Demo                                                           For example, as shown in Fig. 9(b), when going up the stairs
+   We use the wireless high-precision pure inertial sensor             and squatting, the system estimates the correct pose for a short
+system Perception Neuron Laboratory (PN Lab) developed                 time, but then returns to the standing. Future work will explore
+by Noitom for live demonstrations. The sampling rate is set            a dynamic initial state encoder and an initial state consistency
+to 60Hz and the built-in AHRS calculation library provides             to improve the sensitivity to acceleration information; (3) Fast
+sensor attitude data. The specific parameters shown in Table           and complex motions: When the subject suddenly changes his
+IX. Three Noitom sensors worn on the participants’ heads and           posture and moves drastically, the system may have a short-
+wrists are connected to a real-time data processing system on          term posture abnormality, but it can gradually return to normal
+the computer via Bluetooth technology, and real-time anima-            in a short time, as shown in Fig. 9(c). This may be due to
+tions are rendered in Unity. We conducted a series of real-time        insufficient diversity of training data and weak correlation of
+live demonstrations to validate the effectiveness and feasibility      window data. We will consider fast or complex motions in
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021                                                                                            11
+
+
+
+
+Fig. 8. We test our method using motion data recorded by Noitom’s PN LAB inertial sensors and display the real-time animation rendering in Unity. The
+top shows the real-world motion performed by the user, and the bottom shows the rendered predicted animation. Please refer to our supplemental materials
+for more results.
+
+
+training and improve the online strategy to improve robustness.               Thirdly, although ProgIP has a lower wrist position error
+                                                                              compared to advanced baselines, there are still noticeable dis-
+                                                                              crepancies from the ground truth in some cases. In the future,
+                                                                              an effective compensation mechanism should be developed to
+                                                                              optimize hand position estimation, because the hand position is
+                                                                              crucial in virtual reality applications. Finally, pose estimation
+                                                                              methods usually need to be applied across various practical
+                                                                              scenarios and environments. Thus, integrating pose estimation
+                                                                              technology with specific application contexts and addressing
+                                                                              practical needs is an important issue to consider.
+
+                                                                                                       V. C ONCLUSIONS
+                                                                                 This paper introduces ProgIP, a pose estimation method
+                                                                              that combines a human dynamics model with neural networks
+                                                                              and uses only three IMU sensors worn on the head and
+                                                                              wrists. ProgIP progressively reconstructs full-body motion by
+                                                                              increasing the kinematic chain depth, with the TE-biLSTM
+Fig. 9. Failed cases. We show the comparative differences between the         encoder and MLP-based decoder effectively learning and
+estimated pose and the ground-truth pose, including three specific motions:   mapping the temporal correlation features of human motion.
+(a)Unconventional lower-body motions, (b)Sitting and standing up, (c)Fast
+and complex motions.                                                          Extensive experiments on multiple public datasets demonstrate
+                                                                              that ProgIP outperforms advanced methods and meets the
+                                                                              requirements for real-time operation by generating realistic
+                                                                              and plausible motions. The proposed solution relying only on
+J. Limitations and Future Work
+                                                                              three IMU sensors provides economical and stable technical
+   Firstly, ProgIP is a learning-based method, so the generated               support for practical full-body virtual reality applications.
+avatar animation may exhibit unnatural motions when encoun-
+tering poses significantly different from the training datasets,
+                                                                                                     ACKNOWLEDGMENTS
+such as shaking or foot sliding, but the poses generated by our
+method are nearly identical and reasonable. We will build and                   This work was supported by the Fundamental Re-
+integrate representative and diverse datasets with real inertial              search Funds for the Provincial Universities of Zhejiang
+data to enhance the generalization ability of the model in future             (GK259909299001-023), the Key R&D Program of Zhejiang
+work. Secondly, ProgIP may reconstruct inaccurate poses for                   under Grant (2025C03001, 2023C01044), the National Nature
+motions such as sitting down and standing up, which have                      Science Foundation of China (62301198), the National Key
+almost similar rotation measurements. Therefore, future work                  R&D Program of China (2023YFC3305600), the Zhejiang
+will explore an acceleration-based dynamic initial state en-                  Provincial Natural Science Foundation (LDT23F02024F02),
+coder applied to the RNN architecture and introduce an initial                and the NSFC (61822111, 62021002). This work was also
+state consistency regularization term in back propagation to                  supported by THUIBCS, Tsinghua University, and BLBCI,
+further enhance the sensitivity to acceleration information.                  Beijing Municipal Education Commission.
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021                                                                                                   12
+
+
+
+                               R EFERENCES                                         [22] R. Slyper and J. K. Hodgins, “Action capture with accelerometers,” in
+                                                                                       Proc. ACM SIGGRAPH/Eurographics Symposium on Computer Anima-
+[1] J. Wang, Z. Wang, F. Gao, H. Zhao, S. Qiu and J. Li, “Swimming stroke              tion, Dublin Ireland, 2008, pp. 193-199. DOI: 10.1145/3544548.3581468.
+    phase segmentation based on wearable motion capture technique,” IEEE           [23] X. Yi, Y. Zhou, M. Habermann, S. Shimada, V. Golyanik, C.
+    Transactions on Instrumentation and Measurement, vol. 69, no. 10, pp.              Theobalt and F. Xu, “Physical Inertial Poser (PIP): Physics-aware
+    8526-8538, Oct. 2020.                                                              real-time human motion tracking from sparse inertial sensors,” in
+[2] Q. Zhang, T. Jin, J. Cai, L. Xu, T. He, T. Wang, Y. Tian, L. Li, Y. Peng and       Proc. IEEE/CVF Conference on Computer Vision and Pattern Recog-
+    C. Lee, “Wearable triboelectric sensors enabled gait analysis and waist            nition (CVPR), New Orleans, LA, USA, 2022, pp. 13157-13168. DOI:
+    motion capture for IoT-based smart healthcare applications,” Advanced              10.1109/CVPR52688.2022.01282.
+    Science, vol. 9, no. 4, pp. 2103694, Feb. 2022.                                [24] Y. Jiang, Y. Ye, D. Gopinath, J. Won, A. W. Winkler and C. K. Liu,
+[3] N. Saini, C. -H. P. Huang, M. J. Black and A. Ahmad, “SmartMocap:                  “Transformer Inertial Poser: Real-time human motion reconstruction from
+    Joint estimation of human and camera motion using uncalibrated RGB                 sparse IMUs with simultaneous terrain generation,” in Proc. SIGGRAPH
+    cameras,” IEEE Robotics and Automation Letters, vol. 8, no. 6, pp. 3206-           Asia 2022 Conference Papers, Daegu, Republic of Korea, 2022, pp. 1-9.
+    3213, Jun. 2023.                                                                   DOI: 10.1145/3550469.3555428.
+[4] D. C. Luvizon, M. Habermann, V. Golyanik, A. Kortylewski and C.                [25] Y. Zhang, S. Xia, L. Chu, J. Yang, Q. Wu and L. Pei, “Dynamic Inertial
+    Theobalt, “Scene-aware 3D multi-human motion capture from a single                 Poser (DynaIP): Part-based motion dynamics learning for enhanced
+    camera,” Computer Graphics Forum, Vol. 42, No. 2, pp. 371-383, May.                human pose estimation with sparse inertial sensors,” in Proc. IEEE/CVF
+    2023.                                                                              Conference on Computer Vision and Pattern Recognition (CVPR), Seattle,
+[5] M. Loper, N. Mahmood and M. J. Black, “MoSh: motion and shape                      WA, USA, 2024, pp. 1889-1899.
+    capture from sparse markers,” ACM Transactions on Graphics, vol. 33,           [26] V. Mollyn, R. Arakawa, M. Goel, C. Harrison and K. Ahuja, “IMUPoser:
+    no. 6, pp. 220:1-220:13, Nov. 2014.                                                Full-body pose estimation using IMUs in phones, watches, and earbuds,”
+[6] C. Lu, Z. Dai and L. Jing, “Measurement of hand joint angle using                  in Proc. CHI Conference on Human Factors in Computing Systems,
+    inertial-based motion capture system,” IEEE Transactions on Instrumen-             Hamburg, Germany, 2023, pp. 1-12. DOI: 10.1145/3544548.3581392.
+    tation and Measurement, vol. 72, pp. 1-11, 2023.                               [27] M. Loper, N. Mahmood, J. Romero, G. Pons-Moll, and M. J. Black,
+[7] H. Jamil and D.-H. Kim, “Optimal fusion-based localization method for              “SMPL: a skinned multi-person linear model,” ACM Transactions on
+    tracking of smartphone user in tall complex buildings,” CAAI Transactions          Graphics, vol. 34, no. 6, pp. 1-16, Oct. 2015.
+    on Intelligence Technology, vol. 8, no. 4, pp. 1104-1123, Jul. 2023.           [28] Y. Zhou, C. Barnes, J. Lu, J. Yang and H. Li, “On the continuity of
+[8] M. Schepers, M. Giuberti and G. Bellusci, “Xsens MVN: Consistent                   rotation representations in neural networks,” in Proc. IEEE/CVF Confer-
+    tracking of human motion using inertial sensing,” Xsens Technol, vol.              ence on Computer Vision and Pattern Recognition (CVPR), Long Beach,
+    1, no. 8, pp. 1-8, 2018.                                                           CA, USA, 2019, pp. 5738-5746. DOI: 10.1109/CVPR.2019.00589.
+[9] T. von Marcard, B. Rosenhahn, M. J. Black and G. Pons-Moll, “Sparse            [29] S. Ma, T. Zhang, Y. -B. Zhao, Y. Kang and P. Bai, “TCLN: A
+    Inertial Poser: Automatic 3D human pose estimation from sparse IMUs,”              Transformer-based Conv-LSTM network for multivariate time series
+    Computer Graphics Forum, vol. 36, no. 2, pp. 349-360, May. 2017.                   forecasting,” Applied Intelligence, vol. 53, pp. 28401–28417, Oct. 2023.
+[10] Y. Huang, M. Kaufmann, E. Aksan, M. J. Black, O. Hilliges and G.              [30] A. Zeng, X. Sun, F. Huang, M. Liu, Q. Xu and S. Lin, “SRNet:
+    Pons-Moll, “Deep inertial poser: learning to reconstruct human pose                Improving generalization in 3D human pose estimation with a split-and-
+    from sparse inertial measurements in real time,” ACM Transactions on               recombine approach,” in Proc. European Conference on Computer Vision
+    Graphics, vol. 37, no. 6, pp. 1-15, Dec. 2018.                                     (ECCV), Glasgow, UK, 2020, pp. 507–523. DOI: 10.1007/978-3-030-
+[11] X. Yi, Y. Zhou and F. Xu, “TransPose: real-time 3D human translation              58568-6 30.
+    and pose estimation with six inertial sensors,” ACM Transactions on            [31] H. Shuai, L. Wu and Q. Liu, “Adaptive multi-view and temporal fusing
+    Graphics, vol. 40, no. 4, pp. 1-13, Jul. 2021.                                     transformer for 3D human pose estimation,” IEEE Transactions on Pattern
+[12] A. Dittadi, S. Dziadzio, D. Cosker, B. Lundell, T. Cashman and J. Shot-           Analysis and Machine Intelligence, vol. 45, no. 4, pp. 4122-4135, Apr.
+    ton, “Full-body motion from a single head-mounted device: Generating               2023.
+    SMPL poses from partial observations,” in Proc. IEEE/CVF International         [32] N. Mahmood, N. Ghorbani, N. F. Troje, G. Pons-Moll and M. Black,
+    Conference on Computer Vision (ICCV), Montreal, QC, Canada, 2021, pp.              “AMASS: Archive of motion capture as surface shapes,” in Proc.
+    11667-11677, doi: 10.1109/ICCV48922.2021.01148.                                    IEEE/CVF International Conference on Computer Vision (ICCV), Seoul,
+[13] J. Jiang, P. Streli, H. Qiu, A. Fender, L. Laich, P. Snape and C. Holz,           Korea (South), 2019, pp. 5441-5450. DOI: 10.1109/ICCV.2019.00554.
+    “AvatarPoser: Articulated full-body pose tracking from sparse motion           [33] M. Trumble, A. Gilbert, C. Malleson, A. Hilton and J. Collomosse,
+    sensing,” in Proc. European Conference on Computer Vision (ECCV), Tel              “Total Capture: 3D human pose estimation fusing video and inertial
+    Aviv, Israel, 2022, pp. 443-460. DOI: 10.1007/978-3-031-20065-6 26.                sensors,” in Proc. British Machine Vision Conference (BMVC), London,
+[14] J. Ma, X. Duan, and D. Zhang, “Kernel extreme learning machine-                   UK, 2017. DOI: 10.5244/C.31.14.
+    based general solution to forward kinematics of parallel robots,” CAAI         [34] L. Sigal, A. O. Balan and M. J. Black, “HUMANEVA: Synchronized
+    Transactions on Intelligence Technology, vol. 8, no. 3, pp. 1002-1013,             video and motion capture dataset and baseline algorithm for evaluation
+    Jan. 2023.                                                                         of articulated human motion,” International Journal of Computer Vision,
+[15] X. Yi, Y. Zhou and F. Xu, “HierarIK: Hierarchical inverse kinematics              vol. 87, pp. 4-27, Aug. 2009.
+    solver for human body and hand pose estimation,” in Proc. CAAI                 [35] D. P. Kingma and J. Ba, “Adam: A method for stochastic optimization,”
+    International Conference on Artificial Intelligence (CICAI), Hangzhou,             ArXiv Preprint, 2014. DOI: 10.48550/arXiv.1412.6980.
+    China, 2021, pp. 371–382. DOI: 10.1007/978-3-030-93049-3 31.
+[16] Vicon. Award winning motion capture systems. [Website]. Available:
+    https://www.vicon.com
+[17] NaturalPoint Inc. OptiTrack. [Website]. Available: http://optitrack.com
+[18] Y. Du, R. Kips, A. Pumarola, S. Starke, A. Thabet and A. Sanakoyeu,
+    “Avatars Grow Legs: Generating smooth human motion from sparse
+    tracking inputs with diffusion model,” in Proc. IEEE/CVF Conference
+    on Computer Vision and Pattern Recognition (CVPR), Vancouver, BC,
+    Canada, 2023, pp. 481-490. DOI: 10.1109/CVPR52729.2023.00054.
+[19] S. Aliakbarian, P. Cameron, F. Bogo, A. Fitzgibbon and T. J. Cashman,
+    “FLAG: Flow-based 3D avatar generation from sparse observations,” in
+    Proc. IEEE/CVF Conference on Computer Vision and Pattern Recog-
+    nition (CVPR), New Orleans, LA, USA, 2022, pp. 13243-13252. DOI:
+    10.1109/CVPR52688.2022.01290.
+[20] P. Streli, R. Armani, Y. F. Cheng and C. Holz, “HOOV: Hand out-of-view
+    tracking for proprioceptive interaction using inertial sensing,” in Proc.
+    CHI Conference on Human Factors in Computing Systems, Hamburg,
+    Germany, 2023, pp. 1-16. DOI: 10.1145/3544548.3581468.
+[21] D. Yang, D. Kim and S. -H. Lee, “LoBSTr: Real-time lower-body pose
+    prediction from sparse upper-body tracking signals,” Computer Graphics
+    Forum, vol. 40, no. 2, pp. 265-275, May. 2021.
+JOURNAL OF LATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021                                                                        13
+
+
+
+                        Zunjie Zhu received the B.S. degree in electronic      Bolun Zheng received the B.S. and Ph.D. degrees
+                        and information engineering and the Ph.D. degree       in electronic information technology and instrument
+                        in automation from Hangzhou Dianzi University,         from Zhejiang University in 2014 and 2019, respec-
+                        Hangzhou, China, in 2016 and 2022, respectively.       tively. He is currently an Associate Professor with
+                        He is currently an Assistant Professor with the De-    Hangzhou Dianzi University. His research interests
+                        partment of Communication Engineering, Hangzhou        are computer vision, pattern recognition, image pro-
+                        Dianzi University. His research interests include 3-   cessing and embedded parallel computing.
+                        D vision, simultaneous localization and mapping
+                        (SLAM), and image restoration.
+
+
+
+
+                        Yan Zhao received the B.S. degree in electronic
+                        information engineering and the M.S. degree in
+                        electronic information from Linyi University, Linyi,
+                        China, in 2019 and 2023, respectively. He is cur-
+                        rently pursuing the Ph.D. degree with the School of
+                        Control Science and Engineering, Tiangong Univer-
+                        sity, Tianjin, China. His current research interests
+                        include pattern recognition, body sensor network,
+                        and intelligent signal processing.
+
+
+                                                                               Chenggang Yan received the B.S. degree in control
+                                                                               science and engineering from Shandong University,
+                                                                               Shandong, China, in 2008, and the Ph.D. degree
+                                                                               in computer science from the Chinese Academy of
+                                                                               Sciences University, Beijing, China, in 2013. He is
+                        Yihan Hu received the B.S. degree in communica-        currently a Professor with the Department of Au-
+                        tion engineering from Hangzhou Dianzi University,      tomation, Hangzhou Dianzi University, Hangzhou,
+                        Hangzhou, China, in 2024. He is currently pursuing     China. His research interests include computational
+                        the master’s degree with the College of Commu-         photography and pattern recognition and intelligent
+                        nication Engineering, Hangzhou Dianzi University,      system.
+                        Hangzhou. His research interests include 3-D vision,
+                        simultaneous localization and mapping (SLAM), and
+                        image restoration.
+
+
+
+
+                        Guoxiang Wang received the M.S. degree in Bei-
+                        jing University of Posts and Telecommunications in
+                        2017. He is currently an Assistant Professor with
+                        Lishui University. His research interests are com-
+                        puter vision, pattern recognition, image processing.
+
+
+                                                                               Feng Xu received the B.S. degree in physics and the
+                                                                               Ph.D. degree in automation from Tsinghua Univer-
+                                                                               sity, Beijing, China, in 2007 and 2012, respectively.
+                                                                               He is currently an Associate Professor with the
+                                                                               School of Software, Tsinghua University. His re-
+                                                                               search interests include face animation, performance
+                                                                               capture, and 3-D reconstruction.
+
+
+                        Hai Qiu received B.S degree in industrial engi-
+                        neering from Southwest Jiaotong University, China,
+                        in 2009, M.S degree in industrial engineering from
+                        Shanghai Jiaotong University, China, in 2012, and
+                        PhD degree in human and system engineering from
+                        Ulsan National Institute of Science and Technology,
+                        South Korea, in 2016. He is currently an Senior
+                        Engineer with the Department of Visual Intelligence
+                        in Costar (Hang Zhou) Intelligent Optoelectronics
+                        Technology Co.,Ltd. His research interests include
+                        machine learning, deep learning, and simultaneous
+localization and mapping (SLAM).
+

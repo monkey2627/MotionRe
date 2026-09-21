@@ -1,0 +1,1101 @@
+                                        EgoLocate: Real-time Motion Capture, Localization, and Mapping with
+                                        Sparse Body-mounted Sensors
+                                        XINYU YI, School of Software and BNRist, Tsinghua University, China
+                                        YUXIAO ZHOU, ETH Zurich, Switzerland
+                                        MARC HABERMANN, Max Planck Institute for Informatics, Saarland Informatics Campus, Germany
+                                        VLADISLAV GOLYANIK, Max Planck Institute for Informatics, Saarland Informatics Campus, Germany
+                                        SHAOHUA PAN, School of Software and BNRist, Tsinghua University, China
+                                        CHRISTIAN THEOBALT, Max Planck Institute for Informatics, Saarland Informatics Campus, Germany
+                                        FENG XU, School of Software and BNRist, Tsinghua University, China
+arXiv:2305.01599v1 [cs.CV] 2 May 2023
+
+
+
+
+                                        Fig. 1. Key results of our method. Left: for a user moving in a 3D scene, our technique estimates the user’s pose, localizes the user’s positions in the
+                                        scene (green moving trajectory, loop closed after 143m motion with upstairs and downstairs), and reconstructs sparse 3D points of the scene (black scene
+                                        points) simultaneously in real time. Right: benefiting from the sensor fusion, the localization accuracy of our method is largely improved compared with the
+                                        state-of-the-art techniques.
+
+                                        Human and environment sensing are two important topics in Computer Vi-                  1   INTRODUCTION
+                                        sion and Graphics. Human motion is often captured by inertial sensors, while            Humans and environments are two important components of our
+                                        the environment is mostly reconstructed using cameras. We integrate the two
+                                                                                                                                world. Human motion sensing, aiming to capture and understand hu-
+                                        techniques together in EgoLocate, a system that simultaneously performs
+                                        human motion capture (mocap), localization, and mapping in real time from
+                                                                                                                                man activities, is a widely studied topic with many applications such
+                                        sparse body-mounted sensors, including 6 inertial measurement units (IMUs)              as VR/AR, sports, and gaming. Meanwhile, environment sensing
+                                        and a monocular phone camera. On one hand, inertial mocap suffers from                  techniques, which get the knowledge of the surrounding environ-
+                                        large translation drift due to the lack of the global positioning signal. EgoLo-        ment including its 3D shape and semantics, have long been studied
+                                        cate leverages image-based simultaneous localization and mapping (SLAM)                 and are widely used in areas such as autonomous driving and robot
+                                        techniques to locate the human in the reconstructed scene. On the other hand,           navigation.
+                                        SLAM often fails when the visual feature is poor. EgoLocate involves inertial              While humans and environments are two indispensable and in-
+                                        mocap to provide a strong prior for the camera motion. Experiments show                 terdependent parts of the world, existing techniques mostly handle
+                                        that localization, a key challenge for both two fields, is largely improved             them independently. We believe that the combinative sensing of hu-
+                                        by our technique, compared with the state of the art of the two fields. Our
+                                                                                                                                man motion and environments is of great importance for scenarios
+                                        codes are available for research at https://xinyu-yi.github.io/EgoLocate/.
+                                                                                                                                where humans interact with the environment. And it may benefit
+                                                                                                                                new applications such as human behavior understanding, human
+                                                                                                                                localization, and motion planning.
+                                                                                                                                   As an important human sensing technique, human motion cap-
+                                                                                                                                ture (mocap) aims to reconstruct kinematic body motions and is
+                                        Authors’ addresses: Xinyu Yi, School of Software and BNRist, Tsinghua University,       widely studied in the literature. The works that leverage multi-view
+                                        China, yixy20@mails.tsinghua.edu.cn; Yuxiao Zhou, ETH Zurich, Switzerland; Marc
+                                        Habermann, Max Planck Institute for Informatics, Saarland Informatics Campus, Ger-      external cameras (some even with multiple markers on the human
+                                        many; Vladislav Golyanik, Max Planck Institute for Informatics, Saarland Informatics    body) usually achieve robust and accurate results [Chen et al. 2020;
+                                        Campus, Germany; Shaohua Pan, School of Software and BNRist, Tsinghua University,
+                                        China; Christian Theobalt, Max Planck Institute for Informatics, Saarland Informatics
+                                                                                                                                Dong et al. 2019; Reddy et al. 2021; Shao et al. 2022; Zhang et al.
+                                        Campus, Germany; Feng Xu, School of Software and BNRist, Tsinghua University,
+                                        China, xufeng2003@gmail.com.
+2 •   Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav Golyanik, Shaohua Pan, Christian Theobalt, and Feng Xu
+
+
+2020]. However, the capture space is constrained in the camera frus-                  when the visual features are sparse due to camera occlusion or ex-
+tums as the performers need to be visible to the cameras. While                       treme lighting, the mocap module can provide pose and translation
+egocentric works do not constrain the recording space [Akada et al.                   estimation for the SLAM system, avoiding total failure in previous
+2022; Tome et al. 2019; Xu et al. 2019] and achieve lightweight re-                   SLAM systems. Furthermore, we propose a mocap-related map point
+construction and real-time performance [Jiang et al. 2022b; Yi et al.                 confidence, which helps to dynamically determine the importance
+2022, 2021], they often suffer from translation drifts as there are no                of each map point in the bundle adjustment. By reducing the influ-
+global positioning signals, which results in the wrong position of                    ence of potentially wrong 3D points, our method achieves a good
+the human after a period of motion.                                                   balance between the map point-based constraints and the mocap
+   For environment sensing, simultaneous localization and mapping                     constraints, which helps to reduce the uncertainty in the tracking
+(SLAM) is the capstone technique that leverages a moving camera                       and improve the localization accuracy. Combining the mocap and
+to reconstruct the 3D scene and locate the camera in the scene                        the SLAM system results in a win-win. On the one hand, with the
+simultaneously. In this setting, camera localization is a key as it                   help of camera localization, the translation drift in inertial mocap
+is required to fuse the 3D information at different time instances                    is largely reduced. On the other hand, with the help of mocap, the
+together to make a complete 3D scene. Despite previous efforts,                       accuracy and robustness of localization and mapping are greatly
+current pure visual SLAM [Davison 2003; Engel et al. 2014; Forster                    improved.
+et al. 2014; Klein and Murray 2007; Mur-Artal and Tardós 2017a]                          To the best of our knowledge, our method is the first effort that
+may still fail to track the camera when feature absence or motion                     achieves real-time mocap and simultaneous mapping from sparse
+blur happens. By incorporating an IMU into the camera, visual-                        body-mounted sensors. The most related works to ours are HPS [Gu-
+inertial SLAM becomes more robust when reliable visual features are                   zov et al. 2021] and HSC4D [Dai et al. 2022]. HPS performs offline
+insufficient [Campos et al. 2021; Leutenegger et al. 2015; Mourikis                   human motion capture and localization in a known scene from 17
+et al. 2007; Qin et al. 2018], but still suffers from tracking losses                 densely placed IMUs and a body-mounted camera, and requires a
+in long-time camera occlusion and fast camera rotation, especially                    pre-scanned scene with plenty of registered photos. HSC4D lever-
+when the frequency of the IMU signals is low. This will also result                   ages 17 IMUs and a LiDAR sensor placed on the human body, and
+in large localization errors or even system failure.                                  estimates the human motion and the scene simultaneously but also
+   Localization is a key task for both mocap and SLAM and is very                     in an offline manner. Compared with these works, our system is
+challenging. While inertial-sensor-based mocap explores inner in-                     much more lightweight, as we only use 6 IMUs and a body-mounted
+formation such as human motion signals and motion priors, SLAM                        monocular camera. Importantly, we also do not rely on pre-scanning
+majorly relies on outer information, i.e., environment captured by                    the scene. Moreover, our system performs motion capture, localiza-
+the camera. The former achieves good stability, but the global posi-                  tion, and mapping in real time.
+tion drifts accumulate in long-time motions as no correction from                        In summary, our contributions are:
+outside is available; the latter estimates the global position in the                      • We propose the first real-time simultaneous human motion
+scene with high accuracy, but suffers from tracking losses when the                          capture, localization, and mapping system using only 6 IMUs
+environmental information is unreliable, e.g., in textureless or oc-                         and a body-mount camera, which estimates drift-free human
+cluded places. To this end, we propose EgoLocate, which effectively                          motion and sparse scene points in unconstrained 3D space.
+combines the two complementary techniques (mocap and SLAM)                                 • We propose a tightly-coupled optimization framework by
+together and achieves robust and accurate localization (see Fig. 1).                         incorporating the mocap prior in key SLAM modules, which
+Our system leverages sparse body-mounted sensors including 6                                 improves both the localization and mapping accuracy as well
+IMUs mounted on the forearms, the lower legs, the head, and the                              as the robustness to poor visual features.
+pelvis of the human, and a monocular RGB camera attached to the                            • We propose mocap-related map point confidence to dynami-
+head looking outwards. This design is inspired by the behavior of                            cally adjust the influence of each map point and the mocap
+real humans: when humans are in a new environment, they use                                  constraints in the bundle adjustment, which improves the
+their eyes to get knowledge of the scene with their location and                             localization accuracy while reducing the uncertainty in the
+plan their movements in the scene. The monocular camera acts as                              results.
+the "eye" that provides visual signals to our method for real-time
+                                                                                         Our work is trying to merge human sensing and environment
+scene reconstruction and self-localization, while the IMUs measure
+                                                                                       sensing together. Even though we mostly focus on localization, we
+human motion in the scene.
+                                                                                       believe this work is a first step toward joint motion capture and
+   We propose an organically coupled framework to exploit the
+                                                                                       dense environment sensing and reconstruction.
+complementary advantages of the sparse inertial mocap and SLAM
+techniques. In this framework, the human motion prior is integrated                    2 RELATED WORK
+into multiple key components of SLAM, and the SLAM localization
+is fed back to the mocap routine. By jointly optimizing the camera                     2.1 Egocentric Human Motion Capture
+pose and map point positions with the awareness of mocap, both                         Egocentric human motion capture (mocap) is widely studied due
+the tracking and mapping are improved in terms of accuracy and                         to its advantage that the recording space is not constrained in a
+robustness. When the visual cues are reliable, the SLAM is able to                     fixed volume. Existing works leverage different body-mount sensors
+correct the drift of the mocap using the environmental information;                    to capture or infer human motions. One category of works uses
+                                                                                       body-mounted cameras, either capturing the human motion from
+                                                          EgoLocate: Real-time Motion Capture, Localization, and Mapping with Sparse Body-mounted Sensors • 3
+
+
+egocentric views (cameras looking at the wearer) [Akada et al. 2022;            the camera movements while simultaneously reconstructing the
+Hori et al. 2022; Rhodin et al. 2016; Tome et al. 2020, 2019; Wang              scene in 3D points or structures. However, they often fail to track
+et al. 2021, 2023] or estimating the human motion from first-person             the camera when the visual feature is poor, e.g., due to motion blur
+views (cameras looking outwards) [Jiang and Grauman 2017; Li                    or camera occlusion. They are also unaware of the true scale of the
+et al. 2022; Luo et al. 2021; Shiratori et al. 2011; Yuan and Kitani            scene and the camera movement. Visual-inertial SLAM incorporates
+2019, 2018]. These techniques enable space-free human mocap and                 an IMU to the camera, which becomes more robust to fast camera
+have yielded many impressive results. However, the former setting               motions and poor visual features, and can also determine the scale
+may encounter self-occlusions and difficulty in detecting global                factor [Campos et al. 2021; Leutenegger et al. 2015; Mourikis et al.
+movements, limiting the accuracy of pose and translation estima-                2007; Mur-Artal and Tardós 2017b; Qin et al. 2018; Von Stumberg
+tion. While the latter is limited in its ability to reconstruct certain         et al. 2018]. However, they still suffer from tracking failures when
+types of human motion as the human body is not visible in the                   the camera is occluded for a longer time, and are also sensitive to
+camera view. A combination of egocentric-view and first-person-                 the camera-IMU relative pose (IMU extrinsic) and IMU noise pa-
+view cameras can help with translation estimation [Liu et al. 2022].            rameters (IMU intrinsic). Some works [Campos et al. 2021; Castle
+Some approaches [Henning et al. 2022; Liu et al. 2021; von Marcard              et al. 2008; Schmuck and Chli 2017] use a multi-map system to im-
+et al. 2018; Yuan et al. 2022] leverage a moving external camera,               prove the robustness. [Campos et al. 2021] starts a new map when
+e.g., held by another person, to capture the human motion. They                 the tracking is lost. However, the online localization results will be
+do an excellent job of decoupling human and camera motion, e.g.,                reset in the new map, which means it is not possible to obtain the
+by leveraging/reconstructing the static background scene. Overall,              absolute position in real time until the new map is merged with
+these camera-based approaches have made remarkable progress                     the initial map. Our system focuses on situations where humans
+in enabling space-free human motion capture. Another category                   wear the camera. In this situation, the existing SLAM techniques
+of works captures human motions from sparse non-vision-based                    are mostly unaware of the human prior. To this end, we propose to
+body-mounted sensors, including accelerometers [Riaz et al. 2015;               incorporate inertial human mocap with SLAM techniques, which
+Slyper and Hodgins 2008; Tautges et al. 2011], inertial measurement             not only improve the accuracy of the localization and mapping, but
+units (IMUs) [Cha et al. 2021; Geissinger and Asbeck 2020; Huang                also enhance the robustness of the system.
+et al. 2018; Jiang et al. 2022b; Puchert and Ropinski 2021; Vlasic
+et al. 2007; von Marcard et al. 2017; Xia et al. 2022; Yi et al. 2022,          3     METHOD
+2021], and electromagnetic sensors [Kaufmann et al. 2021]. They
+                                                                                Our goal is to use body-worn sensors to capture the body motion
+overcome common limitations of vision-based approaches like oc-
+                                                                                while simultaneously reconstructing the environment and locating
+clusions, and can estimate accurate human articulated pose and
+                                                                                the human in the environment in real time. The input of our system
+global movements within a short period after calibration. However,
+                                                                                is the synchronized signals from the sensors, including the inertial
+since there are no global positioning signals from the sensors, their
+                                                                                measurements from 6 IMUs and the monocular images from a head-
+translation drifts can be large, resulting in the wrong position of the
+                                                                                mounted camera. The system estimates the human pose and global
+human after a long period of motion. This can lead to penetration
+                                                                                motion, as well as the reconstructed scene as a sparse 3D point cloud;
+and even wrong interaction with the digital scene, which is unde-
+                                                                                see Fig. 2 for an overview. Our method first performs human motion
+sirable in applications like VR and gaming. Some works leverage
+                                                                                capture from the inertial inputs (Sec. 3.1). Then, the camera pose is
+body-mounted VR devices [Jiang et al. 2022a; Winkler et al. 2022] to
+                                                                                optimized by minimizing the reprojection error of the reconstructed
+capture the human motion in a constrained space. HPS [Guzov et al.
+                                                                                map with mocap constraints (Sec. 3.2). The optimized camera pose
+2021] and its extension [Guzov et al. 2022] propose to locate the
+                                                                                is then used to update the human translation to avoid the drifting
+human in the environment by leveraging a head-mounted camera
+                                                                                artifacts caused by inertial error accumulation (Sec. 3.4). In parallel
+and densely-worn IMUs. They achieve good accuracy on human
+                                                                                to the motion tracking, our method reconstructs the scene map
+localization, but they rely on the pre-scanned scene with plenty of
+                                                                                and performs loop closing with mocap awareness (Sec. 3.3). The
+registered photos and run in an offline manner. HSC4D [Dai et al.
+                                                                                calibration of the system is discussed in Sec. 3.5, including how to
+2022] simultaneously reconstructs the human motion and the scene
+                                                                                initialize the inertial mocap and SLAM respectively, as well as how
+with good consistency. However, they need dense IMUs and a body-
+                                                                                to calculate the extrinsic between the mocap and the SLAM system.
+worn LiDAR sensor and also run in an offline manner. While we use
+sparse IMUs and a body-mounted camera to capture the space-free
+human motion in real time, without the need to pre-scan the scene.              3.1    Inertial Motion Capture
+                                                                                From the orientation and acceleration measurements of 6 body-
+                                                                                mounted IMUs, we first estimate an initial human pose and trans-
+2.2   Visual and Visual-Inertial SLAM                                           lation. Our method follows the sparse inertial mocap work PIP [Yi
+Simultaneous localization and mapping (SLAM) has long been stud-                et al. 2022], but we remove its planar assumption that the whole
+ied due to its importance in scene reconstruction and localization in           scene is a known level ground and the human movements are on
+unknown environments. Visual SLAM [Bloesch et al. 2018; Davison                 the ground because our goal is to enable unconstrained mocap in
+2003; Engel et al. 2017, 2014; Forster et al. 2014; Koestler et al. 2022;       free 3D space. We also re-design the motion optimizer in PIP by
+Mur-Artal and Tardós 2017a; Teed and Deng 2021; Yang et al. 2020;               removing the force calculation. This is because we do not know the
+Zubizarreta et al. 2020] leverages a monocular camera and estimates             dense geometry of the scene (the reconstruction is only in sparse
+4   •   Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav Golyanik, Shaohua Pan, Christian Theobalt, and Feng Xu
+
+
+
+
+Fig. 2. Overview of our method. The inputs are real-time measurements of 6 IMUs and images from a body-worn camera. We first estimate initial human
+poses and camera poses from sparse inertial signals (Inertial Motion Capture, Sec. 3.1). Next, we refine the camera pose by minimizing the mocap constraints
+and the reprojection errors of the 3D-2D feature matches (Camera Tracking, Sec. 3.2). Then, the refined camera pose and a confidence are used to correct the
+human’s global position and velocity (Body Translation Updater, Sec. 3.4). This results in 60-FPS drift-free human motion output. In parallel, we perform
+mapping and loop closing using keyframes (Mapping & Loop Closing, Sec. 3.3). We calculate another confidence for each map point, and use it in bundle
+adjustment (BA), where we jointly optimize the map points and the camera poses by a combined mocap and weighted reprojection error. If a loop is detected,
+we also perform pose graph optimization with mocap constraints. The estimated map is also outputted in real time.
+
+
+scene points), making it impossible to detect human-environment                          coordinates of the matched 2D keypoint as 𝒙 𝑖2D ∈ R2 , where 𝑖 ∈ X
+collisions to apply forces on the contacts. More details about the                       for all matches. We use 𝑹¯ ∈ SO(3) and ¯𝒕 ∈ R3 to denote the camera
+modification to PIP are presented in App. C.                                             pose w.r.t the world before the optimization, which is obtained from
+   Our inertial mocap estimates human pose (in terms of joint angles)                    the inertial mocap. The mocap-constrained camera tracking is then
+and the human global rotation and translation in a user-defined                          formulated as the nonlinear optimization of the camera pose 𝑹, 𝒕:
+mocap coordinate system at 60 FPS. Then, the 6-DoF pose of the
+head-mounted camera can be extracted from the inertial mocap                                                 arg min Eproj (𝑹, 𝒕) + Emocap (𝑹, 𝒕)
+                                                                                                                𝑹,𝒕
+result with the calibrated camera-head extrinsic (see Sec. 3.5), which                                           ∑︁                            2 
+will be used as an initialization of the following camera tracking                                      Eproj =     ρ 𝒙 𝑖2D − π 𝑹𝑇 (𝒙 𝑖3D − 𝒕)                             (1)
+                                                                                                                                                              𝜮𝑖
+step. Note that the inertial mocap provides good articulated pose                                                 𝑖 ∈X
+                                                                                                                                          2
+estimation, but the global motion of the human drifts significantly                                      Emocap = 𝜆R Log( 𝑹¯ 𝑇 𝑹)             + 𝜆t ∥ ¯𝒕 − 𝒕 ∥ 2 ,
+over time.
+                                                                                        where ρ is the Huber robust cost function, 𝜮 𝑖 is the covariance
+                                                                                        matrix associated with the keypoint scale1 , Log : SO(3) → R3 is
+3.2     Camera Tracking
+                                                                                        a mapping from the Lie group to the vector space, and π is the
+This module aims to estimate better camera poses by using the                           camera projection function. 𝜆R and 𝜆t are the coefficients aligning
+30-FPS images from the head-mounted camera and the estimated                            the unit and controlling the weights of the corresponding terms.
+camera poses from the inertial mocap, which are synchronized to                         The reprojection term Eproj (𝑹, 𝒕) refines the camera pose by min-
+the same frame rate of images. We design this module based on ORB-                      imizing the projection error of the matched 3D-2D points, while
+SLAM3 [Campos et al. 2021], where we first extract ORB feature                          the mocap term Emocap (𝑹, 𝒕) constrains the camera pose to be near
+points (keypoints) from the image and find the matches between                          to the mocap-based pose. Similar to [Campos et al. 2021], we per-
+the keypoints and the 3D map points using feature similarity. Note                      form the optimization 3 times and classify the keypoint matches
+that the map points are reconstructed and maintained online by a                        as inliers/outliers after each optimization, where outliers are ex-
+mapping module (see Sec. 3.3). Then, we optimize the camera pose                        cluded from the next optimization. To this end, the mocap term
+by minimizing the reprojection error of the matches with additional                     provides a strong prior on the camera pose, which helps with the
+mocap constraints.                                                                      classification of the wrong 3D-2D matches and reduces the errors
+3.2.1 Mocap-constrained Camera Tracking. Formally, we denote                             1 The scale of a keypoint is determined by the level where it is detected in the image
+the world position of the 𝑖th 3D map point as 𝒙 𝑖3D ∈ R3 and the pixel                   pyramid. See [Mur-Artal et al. 2015].
+                                                                       EgoLocate: Real-time Motion Capture, Localization, and Mapping with Sparse Body-mounted Sensors • 5
+
+
+caused by outliers. The coefficients of the mocap terms are set to
+𝜆R = 0.01𝑓 2 and 𝜆t = 0.5𝑓 2𝑠 2 where 𝑓 is the camera focal length and
+𝑠 is the scale factor of the SLAM coordinate system computed in the
+calibration module (Sec. 3.5). This automatically converts the unit
+of the mocap errors to pixels, which is at the same magnitude as the
+reprojection error. Such a strategy makes the optimization indepen-
+dent with the camera intrinsic and the scale factor. We leverage the
+Levenberg–Marquardt algorithm implemented in g2o [Kümmerle
+et al. 2011] to solve the nonlinear optimization. To ensure real-time
+performance, we calculate the Jacobian analytically, which is pre-
+sented in App. D, and retrieve a local visible map (instead of using                         Fig. 3. Explanation on the mocap-related map point confidence. (A) The
+                                                                                             confidence is computed from the baseline length and the parallax of the
+the entire map) for the keypoint matching and camera tracking,
+                                                                                             keyframes that observe the point. (B) With the same baseline length 𝑏 1 =
+which is detailed in App. E. After the optimization, we extract the                          𝑏 2 and the same perturbation on the camera positions (denoted as the
+number of the inlier 3D-2D matches 𝑛 as the confidence to indicate                           transparent cameras), a larger parallax (blue cameras) is often less prone
+the quality of the refined camera pose, which will be used in the                            to errors compared with a smaller parallax (red cameras) (i.e., point error
+following module. Intuitively, we have larger confidence if more                             𝑒 1 < 𝑒 2 ).
+map points have been successfully matched.
+3.2.2 Camera Pose Alignment. In practice, the absolute camera
+translation derived from pure inertial mocap usually contains large                          information, and are mainly used for mapping and loop closing.
+drifts due to inertial error accumulation. As a result, directly using                       This is a key to achieving real-time performance [Klein and Mur-
+it in the camera tracking optimization is not feasible for long se-                          ray 2007]. We select the keyframes following [Campos et al. 2021],
+quences because such non-linear optimizations typically require                              where multiple criteria are considered, such as sufficient time inter-
+a good initialization. Therefore, before optimization, we perform                            val between keyframes, sufficient matched keypoints, and enough
+a camera pose alignment step for each frame to reduce the drifts                             visual changes. We also include the mocap-derived camera poses
+                                                                                              ˜ 𝒕˜ in the keyframes, as they provide mocap priors for the global
+                                                                                             𝑹,
+Specifically, we compute the relative camera rotation and translation
+from the mocap and add it to the previous SLAM-optimized camera                              optimizations detailed later.
+pose. This is based on the observation that the refined camera poses
+in SLAM consider the visual information and the drift problem is                             3.3    Mapping and Loop Closing
+largely reduced. We denote the SLAM-optimized camera pose as                                 In this section, we involve mocap information in the global optimiza-
+𝑹 ∈ SO(3), 𝒕 ∈ R3 for the camera orientation and position w.r.t the                          tion schemes in traditional SLAM, including the bundle adjustment
+world respectively, and the camera pose extracted from mocap as                              (BA) scheme and the pose graph optimization in loop closure, which
+ ˜ 𝒕˜ . Then, the alignment can be written as:
+𝑹,                                                                                           leads to more accurate mapping and localization results. Specifi-
+                                                                                             cally, we integrate the mocap prior in the BA algorithm, where
+                                𝑹¯ cur = 𝑹 last 𝑹˜ last 𝑹˜ cur
+                                                   𝑇
+                                                                                    (2)      the map and keyframe poses3 are optimized by considering both
+                            ¯𝒕 cur = 𝒕 last − 𝒕˜ last + 𝒕˜ cur,                              3D reprojection errors and mocap constraints (Sec. 3.3.2). In BA,
+where 𝑹¯ cur and ¯𝒕 cur are the aligned camera pose at the current frame,                    we calculate mocap-related map point confidences to dynamically
+subscript ·cur and ·last denote the current and last frame respectively.                     match the weight of the projection error of each map point with
+We use the last keyframe (defined later) for the alignment because                           the mocap constraints (Sec. 3.3.1). Besides, when a loop closure is
+its pose is more accurate as it has been optimized in the bundle                             detected (i.e., the camera returns to a visited place), we perform a
+adjustment (BA) (Sec. 3.3). However, if a relocalization2 recently                           pose graph optimization to close the loop, where the mocap prior is
+happens, when no keyframe is available after the relocalization, we                          also incorporated, which constrains the relative pose between each
+choose to use the latest frame after the relocalization to avoid the                         keyframe from the view of mocap (Sec. 3.3.3).
+drift. As the orientation estimation 𝑹˜ cur does not suffer from evident                     3.3.1 Map Point Confidence Calculation. In order to achieve accu-
+drifts in inertial mocap, we finally always rotate 𝑹¯ cur towards 𝑹˜ cur                     rate results in BA, it is essential to consider the relative weights of
+by 0.1 through spherical linear interpolation. This ensures that the                         mocap constraints in comparison to traditional reprojection terms.
+aligned orientation does not deviate from the mocap estimation                               To make a delicate design of the weights, we no longer treat all
+significantly. After the alignment, the drifts in the camera pose are                        the map points equally but calculate their individual confidence to
+mostly removed, and then we can perform the keypoint matching                                match their relative weights to the mocap constraints. We consider
+and the camera tracking (Eq. 1).                                                             a 3D point as accurate if 1) the frames that observe it are located
+3.2.3 Keyframe Decision. This module also determines whether                                 in largely different positions in the real world and 2) the viewing
+the current frame becomes a keyframe. Keyframes are a set of rep-                            direction in which the frames look at the point span a sufficiently
+resentative frames with minimal redundancy on visual and mocap                               large angle. This is inspired by the multi-view 3D reconstruction,
+
+2 Relocalization refers to the process of re-estimating the camera pose in the built map     3 For brevity, we use keyframe pose to denote the camera pose (position and orientation)
+when the visual tracking is lost. See [Mur-Artal et al. 2015].                               at the keyframe throughout the paper.
+6 •     Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav Golyanik, Shaohua Pan, Christian Theobalt, and Feng Xu
+
+
+                                                                                             the unit to pixels and make them scale-invariant. The mocap-aware
+                                                                                             BA optimization is easier to understand through the factor graph as
+                                                                                             shown in Fig. 4. The reprojection term Eproj in Eq. 4 corresponds
+                                                                                             to the blue nodes in the factor graph, which computes the repro-
+                                                                                             jection error using the keyframe poses and the map points (shown
+                                                                                             as the adjacent variables connected to the node). The mocap terms
+                                                                                                                          (R)
+                                                                                             involve a rotation term Emocap (green nodes) that constrains the
+                                                                                             keyframe rotations to be near to the mocap results, and a trans-
+                                                                                                             (t)
+                                                                                             lation term Emocap (pink nodes) that constrains the translations
+Fig. 4. Factor graph for the mocap-aware bundle adjustment. Circles denote
+                                                                                             between adjacent keyframes to be similar to the mocap estimation.
+optimizable/fixed variables (i.e., map points and keyframe poses). Squares                   We apply absolute constraints on the keyframe rotations but relative
+denote constraints among the connected variables (i.e., reprojection residual                constraints on the keyframe translations because the translation es-
+in blue for the observation constraints, mocap residual in green for the                     timation suffers from drifts over time while the rotation estimation
+orientation constraints and pink for the position constraints).                              is relatively stable in the inertial mocap.
+                                                                                                Note that the map point confidence 𝑐𝑖 is used as the weights of
+                                                                                             the reprojection error, where potentially good points have larger
+where a larger baseline and parallax lead to accurate estimation (see                        weights compared with the mocap priors, which help to refine the
+Fig. 3).                                                                                     keyframe poses, while probably inaccurate points (e.g., recently
+   To be specific, for each map point 𝑖 that will participate in the BA                      triangulated points) have smaller weights compared with the mocap
+optimization, we first calculate the baseline length 𝑏𝑖 in the mocap                         priors, which can be refined in the optimization and have a lower
+coordinate system and the parallax angle 𝜃𝑖 of multiple keyframes                            impact in estimating the keyframe poses. With the help of the mocap
+in which the point 𝑖 is visible. Then, the map point confidence 𝑐𝑖                           priors and the map point confidence, BA becomes more stable, and
+is calculated as the scaled product of the baseline length and the                           both the mapping and keyframe pose accuracy can be improved.
+parallax:                                                                                       We solve the nonlinear problem using graph optimization imple-
+                              𝑐𝑖 = 𝑘𝑏𝑖 𝜃𝑖 ,                          (3)                     mented in g2o [Kümmerle et al. 2011]. To accelerate the algorithm,
+where 𝑘 is experimentally set to 50 to make the confidence near 1                            the map points are marginalized as in [Campos et al. 2021], and
+for most of the points. The transformation to the mocap coordinate                           we calculate the Jacobian of the keyframe poses and map points
+system is necessary because the confidence should be invariant to                            analytically, which is presented in App. D. As our system targets
+the scale factor of SLAM. This is a requirement to combine mocap                             at online localization, the optimized keyframe poses after the BA
+and SLAM in BA.                                                                              are not directly used in the real-time tracking system due to the
+                                                                                             delay. Specifically, it affects the real-time tracking implicitly: the
+3.3.2 Mocap-aware Bundle Adjustment. With the map point confi-                               mapping module updates the keyframe camera poses and the map
+dence, we perform a mocap-aware BA to refine the recent keyframe                             points in parallel with the real-time modules in another thread, and
+poses and the visible map. The variables to be optimized include the                         the real-time camera tracking module tracks the camera pose w.r.t
+poses of the recent keyframes and the positions of the map points                            the updated map. Thus, our real-time results can be improved.
+observed by these keyframes. Other keyframes that also observe
+the points also participate in the BA, but remain fixed. We denote                           3.3.3 Mocap-aware Pose Graph Optimization. When a loop is de-
+the optimizable and fixed set of keyframe poses as Ko and Kf re-                             tected, we perform a pose graph optimization to close the loop.
+spectively, and the observed map points of keyframe 𝑗 as X𝑗 . Let                            This optimization involves only keyframe poses but no map points,
+R o = {𝑹 𝑗 | 𝑗 ∈ Ko } and To = {𝒕 𝑗 | 𝑗 ∈ Ko } denote the optimizable                        which aims at closing the loop by distributing the aligning error
+keyframe poses w.r.t the world, and X 3D = 𝑗 ∈Ko {𝒙 𝑖3D |𝑖 ∈ X𝑗 }
+                                                 Ð                                           to all keyframes. Based on ORB-SLAM3 [Campos et al. 2021], we
+denotes the map point positions in the world. The mocap-aware BA                             perform the optimization on the essential graph over the keyframe
+is then defined as:                                                                          poses expressed as rigid transformations in SE(3) (rather than simi-
+                                                                                             larity transformations in Sim(3)) as we do not suffer from the scale
+      arg min Eproj (R o, To, X 3D ) + Emocap (R o ) + Emocap (To )
+                                                (R)                  (t)
+                                                                                             drift due to the combination with mocap. We denote the keyframes
+      R o ,To ,X 3D
+               ∑︁ ∑︁                                         2                           (vertices) and connections (edges) of the essential graph as F and
+      Eproj =               ρ 𝑐𝑖 𝒙 𝑖2D − π 𝑹𝑇𝑗 (𝒙 𝑖3D − 𝒕 𝑗 )                                C respectively. The pose graph optimization is then defined as:
+                                                                               𝜮𝑖
+                  𝑗 ∈Ko ∪Kf 𝑖 ∈X𝑗
+                                                              2                        (4)                         arg min Egraph + Emocap
+                                              Log( 𝑹˜ 𝑗 𝑹 𝑗 )
+                         (R)
+                                    ∑︁               𝑇
+                      Emocap = 𝜇 R                                                                                 {𝑻 𝑗 } 𝑗 ∈F
+                                                                                                                             ∑︁                          2
+                                   𝑗 ∈Ko
+                                                                               2
+                                                                                                             Egraph =                Log(𝑻 𝑖 𝑗 𝑻 −1
+                                                                                                                                                 𝑗 𝑻𝑖)                       (5)
+                                ( 𝒕˜ 𝑗 − 𝒕˜ prev( 𝑗) ) − (𝒕 𝑗 − 𝒕 prev( 𝑗) )
+           (t)
+                        ∑︁
+         Emocap = 𝜇 t                                                              ,                                     (𝑖,𝑗) ∈ C
+                                                                                                                                                                     2
+                                                                                                                             Log(𝑻˜ prev( 𝑗) 𝑻˜ 𝑗 𝑻 −1
+                                                                                                                                      −1
+                                                                                                                      ∑︁
+                        𝑗 ∈Ko                                                                       Emocap = 𝜔 pose                                 𝑗 𝑻 prev( 𝑗) )       ,
+where prev( 𝑗) denotes the previous keyframe of keyframe 𝑗, 𝑹,    ˜ 𝒕˜ are                                            𝑗 ∈F
+the initial camera pose obtained from the mocap, and the coefficients                        where 𝑻 𝑗 ∈ SE(3) is the pose of keyframe 𝑗 w.r.t the world, 𝑻 𝑖 𝑗 ∈
+of the mocap terms are set to 𝜇 R = 0.01𝑓 2 and 𝜇 t = 0.05𝑓 2𝑠 2 to align                    SE(3) is the relative transformation between keyframe 𝑖 and 𝑗 before
+                                                        EgoLocate: Real-time Motion Capture, Localization, and Mapping with Sparse Body-mounted Sensors • 7
+
+
+the optimization, 𝑻˜ 𝑗 is the transformation obtained by mocap, Log :            In addition to these two initialization steps, we also need to cal-
+SE(3) → R6 maps a rigid transformation to the vector space, and               ibrate the extrinsic between the mocap coordinate frame and the
+𝜔 pose is the coefficient of the mocap term, which we empirically             SLAM coordinate frame. We propose an easy-to-perform method,
+set to 0.2. Intuitively, the graph term Egraph constrains the change          where we require the user to walk in a curve for several seconds, and
+in the relative pose between the connected keyframes to be small              then the extrinsic can be automatically computed. Specifically, we
+before and after the optimization, while the mocap term regularizes           express the mocap-to-SLAM extrinsic as a similarity transformation
+the keyframe 6-DoF trajectory to be similar to the estimation of the          in Sim(3) as the real scale is unknown for monocular SLAM. During
+mocap in a local manner.                                                      the curve motion, we first independently reconstruct the trajectory
+                                                                              of the root by mocap and the camera by SLAM. Then, given the
+3.4   Body Translation Updater                                                body poses and fixing the camera on the head, we can align the
+The camera tracking module considers both visual and inertial in-             two trajectories and get the similarity transformation between the
+formation, so the output 30-FPS camera localization should be able            mocap coordinate frame and the SLAM coordinate frame.
+to refine the 60-FPS human motion from the inertial motion cap-
+ture module. To make the refinement fully constrained, we only
+update the human translation and implement the module using a                 4     EXPERIMENTS
+prediction-correction algorithm in Kalman Filter.                             In this section, we first present the implementation details including
+   Specifically, we define the global position and velocity of the            the setup of our live system and the datasets used in our experiments
+human as the state variables (𝒑, 𝒗), which will be refined in this            (Sec. 4.1). Then, we compare our method with the state-of-the-art
+module. Using the global acceleration 𝒂 extracted from the mo-                techniques in both the research fields of motion capture (mocap)
+cap module, the state variables can be predicted by the following             with sparse inertial sensors and SLAM (Sec. 4.2). Next, we evaluate
+prediction equation:                                                          the key designs and components in our method (Sec. 4.3). Finally,
+                       𝒑𝑘 = 𝒑𝑘−1 + 𝒗𝑘−1 Δ𝑡                                    we discuss our limitations (Sec. 4.4). More results can be found in
+                                                                   (6)        our supplemental video.
+                    𝒗𝑘 = 𝒗𝑘−1 + 𝒂𝑘−1 Δ𝑡 + 𝝋𝑘−1,
+where the subscript 𝑘 indicates the 𝑘th frame, Δ𝑡 = 1/60 is the time
+interval, and 𝝋 ∼ N (0, 𝜎 2 𝑰 ) models the error in the mocap predic-         4.1    Implementation Details
+tion, where we experimentally set 𝜎 = Δ𝑡 based on the assumption
+that the mocap-estimated acceleration follows a normal distribution           4.1.1 System Setup. The system receives 60Hz IMU signals from 6
+with a variance of 1. With the optimized camera position 𝒑 cam and            Xsens Dot [Xsens [n. d.]] IMUs via Bluetooth and 30Hz RGB images
+its confidence 𝑛 from the camera tracking module, the state can also          in the resolution of 640 × 480 from a smartphone camera via Wi-Fi.
+be corrected in 30 FPS based on the following correction equation:            Then, the two signals are synchronized by a user’s jumping motion,
+                                                                              which is easy to be detected from the two signals. Our method runs
+                   𝒑𝑘cam = 𝒑𝑘 + 𝒑𝑘root→cam + 𝝍 𝑘 ,                 (7)        on a laptop with Intel(R) Core(TM) i7-12700H CPU. Note that we do
+where 𝒑 root→cam is the position difference between the camera and            not need a specific graphic card as our method runs purely on CPU.
+the root, which can be computed by the estimated human pose using             The whole system runs in real time at about 60 FPS. We implement
+forward kinematics, and 𝝍 ∼ N (0, 𝜮 cam ) models the noise in the             our main method using Pytorch [Pytorch [n. d.]] and Rigid Body
+camera tracking, where the covariance matrix 𝜮 cam is computed                Dynamic Library (RBDL) [Felis 2017] in python. The SLAM module
+from the camera position confidence 𝑛 as:                                     is implemented in C++ to achieve real-time performance and is
+                                     1000                                     compiled as a shared object library that can be dynamically linked
+                           𝜮 cam =        𝑰,                       (8)        by our main method.
+                                    𝑛 +𝜖
+where 𝑰 ∈ R3×3 is the identity matrix and 𝜖 = 10−3 is used to avoid
+division by zero. Given the prediction and correction equations               4.1.2 Datasets. The datasets used in the experiments include DIP-
+(Eq. 6 and 7), we predict the state variables based on the prediction-        IMU [Huang et al. 2018], AMASS [Mahmood et al. 2019], TotalCap-
+correction algorithm (details are presented in App. F).                       ture [Trumble et al. 2017], and HPS [Guzov et al. 2021]. AMASS and
+                                                                              DIP-IMU datasets are used to train our mocap networks and we
+3.5   System Calibration                                                      follow [Yi et al. 2022, 2021] to use them for training and fine-tuning
+Here we discuss how to initialize the inertial mocap module and               respectively. TotalCapture and HPS datasets are used to evaluate
+the SLAM module respectively, as well as how to calibrate the coor-           our technique. Since we combine sparse inertial mocap and SLAM,
+dinate system of the two modules. Inertial mocap needs a T-pose               we require synchronized and calibrated visual and inertial data to
+calibration before capturing the human motion, where the sensor-              run our technique. Thus, for TotalCapture, we synthesize visual
+to-bone rotations and the relative rotation between the IMU inertial          data by constructing virtual scenes and putting virtual cameras on
+frame and the user-defined global frame are determined [Huang                 a virtual character driven by the mocap data. For HPS, we calibrate
+et al. 2018; Yi et al. 2022, 2021]. The SLAM module needs a monoc-            the inertial and visual signals by the first short clip of each motion
+ular initialization, where the initial map points are triangulated            sequence and discard those sequences that cannot be calibrated.
+by computing the relative pose between two frames based on the                Details about the dataset preprocessing can be found in App. A. An
+homography or the fundamental matrix [Mur-Artal et al. 2015].                 overview of the training and evaluation datasets is shown in Tab. 1.
+8 •     Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav Golyanik, Shaohua Pan, Christian Theobalt, and Feng Xu
+
+
+
+
+Fig. 5. Qualitative comparisons on human motion capture with TransPose [Yi et al. 2021], TIP [Jiang et al. 2022b], and PIP [Yi et al. 2022] on HPS [Guzov et al.
+2021] dataset. We show the ground-truth humans in green and the estimated humans in blue. The movements of the human are also plotted in the top view.
+The orange point in the top view denotes the current global position of the human.
+
+
+Table 1. Overview of the datasets. The table shows whether the datasets                  et al. 2022b], and PIP [Yi et al. 2022] for mocap from sparse IMUs,
+contain pose, translation, IMU measurements, videos from first-person cam-               ORB-SLAM3 [Campos et al. 2021] for monocular/monocular-inertial
+eras, and scene meshes/point clouds. "Y/N" indicates the dataset does/does
+                                                                                         SLAM.
+not contain such data. "S" means such data is synthetic.
+
+                                                                                        4.2.1 Comparisons with Sparse Inertial Mocap. We first quantita-
+      Datasets      Pose    Translation    IMU     FP Camera      Scene    Minutes
+                                                                                        tively compare the methods using absolute root position error, i.e., the
+   AMASS             Y           Y           S          N           N        1217       average root position error of all frames, on TotalCapture [Trumble
+   DIP-IMU           Y           N           Y          N           N         80
+                                                                                        et al. 2017] and HPS [Guzov et al. 2021] datasets, with the root’s
+ TotalCapture        Y           Y           Y          S           S         49
+     HPS             Y*          Y*          Y          Y           Y        180        position and orientation aligned with the ground truth at the first
+                                                                                        frame. The results are shown in Tab. 2, where we achieve as large
+      *We use the results of the HPS [Guzov et al. 2021] method as ground truths.       as 41% and 38% improvement on TotalCapture and HPS datasets
+                                                                                        respectively over the state-of-the-art methods. Our method signif-
+                                                                                        icantly outperforms previous works in different scenes including
+4.2     Comparisons                                                                     small/large indoor/outdoor environments and for different human
+Our work simultaneously captures human motion and performs                              motions. It demonstrates that our method successfully and robustly
+localization and mapping from sparse IMUs and a wearable camera.                        leverages the camera to reduce the translation drift in inertial mocap.
+Since there is no existing technique that solves these two tasks                        One special case is the "rom" motions in the TotalCapture dataset,
+simultaneously, we compare our method with the state-of-the-art                         which contain very few global movements of humans, making it
+methods of both fields, i.e., TransPose [Yi et al. 2021], TIP [Jiang                    difficult to correctly initialize the SLAM system and determine the
+                                                                   EgoLocate: Real-time Motion Capture, Localization, and Mapping with Sparse Body-mounted Sensors • 9
+
+
+Table 2. Comparisons with sparse inertial mocap approaches TransPose [Yi et al. 2021], TIP [Jiang et al. 2022b], and PIP [Yi et al. 2022] on TotalCapture [Trumble
+et al. 2017] (categorized by motions) and HPS [Guzov et al. 2021] (categorized by scenes) datasets. The reported numbers are absolute root position errors
+averaged over the frames in meters. For our method, we test it 9 times and report the median error (the top number) and the standard deviation (the bottom
+number, beginning with "±").
+
+
+                                        TotalCapture                                                                 HPS
+     Method
+                     acting    freestyle     rom     walking   average     BIB_AB     BIB_EG       EG     Etage6    GEB     BIB_UG      KINO     BIB_OG     average
+  TransPose           0.53      0.69        0.18      0.45      0.42        6.83        5.53      2.40     2.77      1.91     4.99      2.20       4.58       4.11
+     TIP             0.43        0.87        0.21      0.49      0.45        2.23      3.41      1.43       3.87     1.38      2.92      0.89     3.89        3.00
+     PIP             0.61        0.51       0.07       0.49     0.37         1.26      2.59      1.89      1.78      1.35      2.49      1.50      4.81      2.75
+                     0.28       0.33        0.10      0.25      0.22        1.23       1.54      1.83      1.35     1.17      2.40      0.87      1.90       1.70
+        Ours
+                     ±0.06      ±0.06       ±0.02     ±0.03     ±0.04       ±0.37      ±0.28     ±0.37     ±0.18    ±0.29     ±0.49     ±0.16     ±0.41      ±0.34
+
+Table 3. Comparisons with ORB-SLAM3 [Campos et al. 2021] in [M]onocular/[M]onocular-[I]nertial [Off]line/[On]line modes. We calculate camera localization
+errors in meters and we present the numbers on both the [full] sequences and the [tracked] frames (excluding the tracking-failed frames) for the compared
+methods. We test all methods 9 times on each sequence and report the median error (the top number), the standard deviation (beginning with "±"), and the
+percentage of the tracked frames (ending with "%"). If a method fails too many times (>85%) during evaluation, we mark it as a failure (denoted as "-").
+
+
+                                           TotalCapture                                                               HPS
+      Method
+                      acting    freestyle     rom    walking   average      BIB_AB     BIB_EG      EG     Etage6     GEB     BIB_UG     KINO     BIB_OG     average
+                       0.82       0.89        0.25      0.42     0.54         8.58      12.57      8.87     5.62     1.62      9.29      4.79      7.61       8.18
+            M-Off
+                      ±0.44      ±0.17       ±0.16     ±0.46    ±0.29        ±0.92      ±2.30     ±2.23    ±1.62    ±0.15     ±1.52     ±0.52     ±2.06      ±1.71
+                       1.34       1.01        0.25      0.80     0.76         8.59      13.94      8.95     9.04     1.84      9.91      5.78      7.77       9.38
+            M-On
+                      ±0.47      ±0.17       ±0.16     ±0.48    ±0.30        ±0.92      ±2.02     ±1.20    ±1.76    ±0.24     ±1.43     ±0.67     ±1.19      ±1.41
+  Full
+
+
+
+
+                      10.54       4.75          -       1.08     4.87           -       78.32        -        -        -       7.23        -         -       67.64
+            MI-Off
+                      ±5.48      ±2.62          -      ±1.88    ±3.24           -      ±136.05       -        -        -      ±5.98        -         -      ±116.52
+                       2.08       0.95          -       0.92     1.33           -       78.87        -        -        -       7.31        -         -       68.12
+            MI-On
+                      ±0.56      ±0.41          -      ±1.10    ±0.84           -      ±136.18       -        -        -      ±6.23        -         -      ±116.66
+                       0.35       0.32        0.23      0.36     0.30         2.96       5.65      6.67     4.43     0.67      4.20      0.88      8.73       5.19
+            M-Off     ±0.50      ±0.20       ±0.28     ±0.36    ±0.34        ±2.48      ±3.50     ±3.11    ±1.62    ±0.62     ±5.57     ±1.03     ±3.04      ±2.75
+                      85.9%      58.9%       85.0%     89.7%    80.7%        51.8%      62.1%     37.3%    61.1%    55.5%     22.5%     61.2%     40.4%      46.5%
+                       0.92       0.52        0.24      0.52     0.50         3.88       9.44      6.41     7.59     1.09      3.46      2.04     10.33       7.15
+            M-On      ±0.44      ±0.29       ±0.25     ±0.54    ±0.37        ±1.33      ±3.35     ±3.22    ±2.48    ±0.94     ±5.12     ±1.34     ±2.08      ±2.62
+  Tracked
+
+
+
+
+                      83.1%      62.3%       83.3%     87.6%    79.7%        51.2%      59.1%     43.7%    58.1%    55.6%     18.1%     62.3%     39.5%      45.2%
+                       0.32       0.39          -       0.58     0.53           -       77.84        -        -        -       7.15        -         -       66.98
+            MI-Off    ±0.07      ±0.11          -      ±0.60    ±0.48           -      ±132.20       -        -        -      ±5.73        -         -      ±112.77
+                      14.5%        5%          0%      59.7%    17.1%          0%       88.6%       0%       0%       0%      15.9%       0%        0%       18.7%
+                       0.41       0.37          -       0.59     0.54           -       78.35        -        -        -       7.23        -         -       67.44
+            MI-On     ±0.08      ±0.11          -      ±0.62    ±0.49           -      ±132.23       -        -        -      ±5.97        -         -      ±112.84
+                      12.1%       7.6%         0%      57.7%    16.7%          0%       88.6%       0%       0%       0%      15.9%       0%        0%       18.7%
+                       0.29       0.35        0.13      0.25     0.24         1.25       1.53      1.81     1.34     1.18      2.39      0.86      1.90       1.69
+            Ours
+                      ±0.06      ±0.06       ±0.02     ±0.04    ±0.04        ±0.37      ±0.28     ±0.36    ±0.18    ±0.29     ±0.49     ±0.16     ±0.41      ±0.33
+
+
+scale factor in our method, and such errors reflect in the results.                      times for each sequence and report the median error as well as the
+Another special case is the "EG" scene in the HPS dataset, where TIP                     standard deviation.
+outperforms our method on the root position error. However, TIP                             We also present qualitative mocap comparison results in Fig. 5.
+still suffers from large translation drifts most of the time, which is                   Due to the error accumulation in inertial mocap, previous approaches
+reflected in other sequences. While our method is more robust and                        suffer from translation drifts. Thus, as shown in the figure, they
+reduces 43% errors on average on the HPS dataset compared with                           estimate wrong human positions in the scene as time goes by. By
+TIP. Note that since all the methods assume a mean body shape, we                        incorporating SLAM in the human mocap, our method largely re-
+rescale the estimated translation with the ground-truth leg lengths                      duces the translation drifts during human motion, and the global
+when evaluating the position error. Also note that the three pure                        position of the human is the most accurate. Note that the beginning
+mocap algorithms (TransPose, TIP, and PIP) are deterministic, i.e.,                      human global position and orientation are aligned with the ground
+there is no randomness in the results. While our method is stochastic                    truth in all the methods, and the results are selected after a period
+(due to the RANSAC algorithm and multi-threading in the SLAM                             of human motion (shown as the trajectory lines in the figure). All
+part). Thus, following previous SLAM works, we test our method 9                         methods are not aware of the ground-truth scene.
+10   •   Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav Golyanik, Shaohua Pan, Christian Theobalt, and Feng Xu
+
+
+   Regarding the comparisons on human pose estimation, we would                          in the low percentage of tracked frames. This could happen when
+like to note that involving SLAM in mocap majorly contributes to                         the human moves quickly or just turn around. By combining mocap
+determining the global positions, rather than the human poses. Thus,                     and SLAM, our system always gives an estimation based on the
+we present the pose estimation results in App. B, where we achieve                       mocap result even when the visual tracking is lost.
+similar pose estimation accuracy compared with the state-of-the-art
+mocap methods.                                                                             Mapping Comparisons. In addition to localization comparisons,
+                                                                                        we also compare the mapping accuracy with ORB-SLAM3 [Campos
+4.2.2 Comparisons with SLAM. We compare our method with ORB-                            et al. 2021] by extracting the reconstructed 3D map points at the
+SLAM3 [Campos et al. 2021], which is a state-of-the-art technique                       end of each sequence. We evaluate map point error, i.e., the average
+in visual and visual-inertial SLAM. We run two modes in ORB-                            distance between each reconstructed map point and the nearest
+SLAM3: monocular (M) mode which takes RGB stream as input,                              scene point, on three different scenes4 . The quantitative evaluation
+and monocular-inertial (MI) mode which uses synchronized RGB                            results are shown in Tab. 4. Our method consistently outperforms
+images and IMU measurements. In each mode, we output both                               monocular/monocular-inertial ORB-SLAM3 in different scenes and
+the online (On) localization results from the SLAM front-end at                         for different human motions, demonstrating that the deep fusion
+running frame rate, and the offline (Off) localization results from                     of mocap and SLAM not only helps with human localization but
+the SLAM back-end after running the whole sequence. The offline                         also enhances the mapping accuracy largely. We also qualitatively
+results are usually better than the online results as they have been                    show the mapping results of the three scenes in Fig. 6. Our method
+optimized in the bundle adjustment in the back end, but they cannot                     accurately reconstructs sparse environment points with much fewer
+be obtained online in real time. For our system, we always calculate                    noises compared with the SLAM methods. It also robustly handles
+real-time camera positions online from the estimated human pose                         unconstrained outdoor large environments ("Flooded Grounds").
+and translation.                                                                        This is attributed to the close fusion of inertial mocap and SLAM,
+   Localization Comparisons. We quantitatively compare different                        which involves mocap priors in the mapping. Readers may notice
+solutions on TotalCapture [Trumble et al. 2017] and HPS [Guzov                          that the reconstructed points are sparser in "Flooded Grounds" and
+et al. 2021] datasets by absolute camera position error. For a fair                     has a larger error than the indoor scenes. This is because the outdoor
+comparison, we should calculate errors on the full sequences for all                    environment has fewer visual feature points, and reconstructing
+methods. However, due to fast human motions, the SLAM system                            a far point of a large scene is more difficult and prone to errors
+may often fail to track the camera, which will lead to very large                       in multi-view 3D reconstruction. Besides, the mapping errors on
+errors. To this end, we also report the errors calculated on the                        "rom" motions are larger compared with other human motions. This
+successfully tracked frames for the SLAM solutions, while for our                       is because the "rom" motions contain very few global movements,
+method we consistently report the errors on full frames as we do                        making it difficult to reconstruct the map due to the high similarity
+not suffer the failure.                                                                 of camera views.
+   The comparison results are shown in Tab. 3. Among different set-
+tings, online monocular-inertial SLAM (MI-on) is the closest to our                      4.3    Evaluations
+method, as both methods leverage inertial sensors and run online.                        4.3.1 Performance. We first evaluate the run-time performance of
+Our method consistently outperforms MI-on on both full sequences                         our method and the results are shown in Tab. 5. Note that our system
+and tracked frames, achieving 82% and 56% improvement respec-                            receives IMU signals in 60 FPS and color images in 30 FPS. To process
+tively. Offline monocular SLAM (M-Off) occasionally achieves lower                       a frame with inertial signals, we need to synchronize multiple IMU
+errors on tracked frames than our method. However, it runs offline,                      signals, perform inertial mocap, and update the translation, which
+and up to 36% human motions fail to be tracked. Furthermore, our                         takes about 10.2 milliseconds. To process a frame with both inertial
+real-time method still outperforms it on average on both datasets.                       and visual signals, we need additional camera tracking, which takes
+Overall, our method achieves lower localization errors and lower                         23 milliseconds in total. Therefore, in 1 second, we can process 30
+standard deviations on both datasets, which reflects that the com-                       pure-inertial frames and 30 visual-inertial frames in total, i.e., our
+bination of mocap and SLAM greatly improves both the accuracy                            system can leverage all the available input signals and output pose
+and robustness of SLAM systems. Note that for monocular SLAM                             and translation in 60 FPS. While the mapping (and loop closing) takes
+(M-Off, M-On), we calculate the scale of the estimated trajectory by                     much more time than the tracking, we run it only on keyframes and
+the ground truth as monocular SLAM has an inherent ambiguity                             as a background task through multi-threading to avoid additional
+here. Our method and MI do not suffer this ambiguity.                                    time costs. Thus, it does not affect our real-time 60 FPS performance.
+   We would like to list two further advantages of our system over
+monocular/monocular-inertial ORB-SLAM3. 1) Less sensitive to cali-                       4.3.2 Effectiveness. We demonstrate the effectiveness of our method
+bration errors. Readers may find that monocular-inertial ORB-SLAM3                       by conducting ablative experiments on different combining methods
+performs well on TotalCapture but nearly fails on HPS. This is                           of inertial mocap and SLAM. Specifically, we evaluate 1) inertial
+mainly because HPS contains more calibration errors on camera-
+IMU extrinsic and the frequency of IMU signals is lower (see dataset                    4 The three scenes include Japan Office (http://aec.unity3d.jp/), Flooded Grounds
+
+preprocessing in App. A). Nevertheless, our method performs well                        (https://assetstore.unity.com/packages/3d/environments/flooded-grounds-48529), and
+                                                                                        SciFi Warehouse (https://assetstore.unity.com/packages/3d/environments/sci-fi/sci-fi-
+on both datasets with the same extrinsic calibration. 2) No failures.                   construction-kit-modular-159280). All the scenes are free assets and can be accessed
+Pure SLAM systems often fail to track the camera, which is reflected                    from Unity Asset Store.
+                                                                   EgoLocate: Real-time Motion Capture, Localization, and Mapping with Sparse Body-mounted Sensors •     11
+
+
+Table 4. Comparisons on mapping accuracy with [M]onocular/[M]onocular-[I]nertial ORB-SLAM3 [Campos et al. 2021]. For each of the three scenes, we
+synthesize monocular videos based on the human motions in TotalCapture [Trumble et al. 2017] dataset. We test each method 9 times and report the median
+map point errors (the top number) and the standard deviations (the bottom number, beginning with "±") in meters. If a method fails too many times (>85%)
+during evaluation, i.e., no map point is reconstructed, we mark it as a failure (denoted as "-").
+
+
+                                  Japan Office                                         Flooded Grounds                                  SciFi Warehouse
+   Method
+                acting   freestyle   rom      walking    average       acting    freestyle   rom     walking   average   acting   freestyle   rom     walking   average
+                0.88       1.10       1.20        0.60     0.95         2.89      2.06       3.10     1.36       2.31    0.40       0.43      0.44      0.35     0.41
+  SLAM (M)
+                ±0.26     ±0.76      ±1.69       ±0.30    ±0.76        ±1.52      ±1.30      ±1.65    ±1.31     ±1.44    ±0.03     ±0.13      ±0.05    ±0.02     ±0.06
+                0.66       0.54         -        0.61     0.61            -         -          -       0.90        -      0.49      0.40        -       0.51      0.48
+ SLAM (MI)
+                ±0.83     ±1.50         -        ±0.49    ±0.79           -         -          -      ±0.77        -     ±0.10     ±0.13        -      ±0.41     ±0.28
+                0.32      0.49       0.72        0.24     0.45         0.94       1.49       1.75     0.80      1.23     0.24      0.37       0.44     0.18      0.31
+    Ours
+                ±0.09     ±0.09      ±0.23       ±0.06    ±0.12        ±0.31      ±0.70      ±1.13    ±0.19     ±0.56    ±0.03     ±0.10      ±0.17    ±0.02     ±0.08
+
+
+
+
+Fig. 6. Qualitative mapping comparisons with [M]onocular/[M]onocular-[I]nertial ORB-SLAM3 [Campos et al. 2021]. We show the reconstructed map points
+in a walking sequence for different methods. Color encodes the map point error. For monocular SLAM, we calculate the map scale from the ground truth.
+
+
+Table 5. Run-time performance on an Intel(R) Core(TM) i7-12700H CPU                          tracking, the baseline mocap method where we estimate the trans-
+on a laptop. We show the time costs in milliseconds when processing one                      lation only from 6 IMUs using the inertial motion capture module,
+frame.
+                                                                                             which is similar to PIP [Yi et al. 2022] but the flat ground assump-
+                                                                                             tion and the force calculation are removed; 2) monocular SLAM, the
+ sync signals     motion capture      cam tracking       tran update    mapping              baseline SLAM method where the translation is estimated by track-
+      4.7                5.3                 12.8            0.2          97.1               ing the monocular video purely; 3) fuse as init, where we initialize
+                                                                                             the camera pose in monocular SLAM by the mocap-derived values,
+                                                                                             while removing all the mocap terms in the optimization, and use the
+12   •    Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav Golyanik, Shaohua Pan, Christian Theobalt, and Feng Xu
+
+
+Table 6. Ablation study on the methods of combining mocap and SLAM.                       mocap and SLAM in both front-end tracking and back-end mapping,
+We report the median root position errors and the standard deviations in                  as well as the proposed mocap-related map point confidence.
+meters in 9 tests on the TotalCapture [Trumble et al. 2017] dataset.
+
+
+                                                   TotalCapture
+                                                                                          4.4    Limitations
+             Method
+                                acting   freestyle    rom    walking    average
+                                                                                            Online Loop Closure. In our system, visual information could
+                                                                                         help to reduce the drift in inertial mocap as we did in Sec. 3.4, but
+                                 0.72       0.64      0.12      0.57      0.46
+         inertial tracking                                                               there are still remaining drifts and loop closing is applied to handle
+                                   ±0        ±0        ±0        ±0        ±0
+                                 1.34      1.01       0.25      0.80     0.76            them. However, loop closure requires modifying the camera pose
+         monocular SLAM                                                                  of previous frames when a loop is detected, which is not consistent
+                                 ±0.47     ±0.17     ±0.16     ±0.48     ±0.30
+                                 1.90       0.74      0.13      0.98      0.82           with an online mocap system whose results of previous frames have
+            fuse as init
+                                 ±0.36     ±0.17     ±0.03     ±0.23     ±0.17           already been exported and cannot be modified. So, in our online
+                                 1.13      0.66       0.12      0.92     0.63            system, even though we can leverage the loop closure component in
+          fused tracking
+                                 ±0.35     ±0.07     ±0.01     ±0.26     ±0.15
+                                                                                         SLAM, we have to teleport the user to its correct position to reduce
+ fused tracking&mapping           0.29     0.34      0.09      0.28      0.23
+          (w/o confidence)       ±0.13     ±0.08     ±0.03     ±0.08     ±0.07           the drift rather than generate a smooth trajectory.
+                                 0.28      0.33       0.10     0.25      0.22
+               Ours
+                                 ±0.06     ±0.06     ±0.02     ±0.03     ±0.04              Body Shape and Scene Scale. By aligning the mocap trajectory
+                                                                                          and the SLAM trajectory during initialization, the scene scale is
+                                                                                          consistent with the body shape scale. However, since we assume
+                                                                                          mean shape rather than measure the true shape scale of the user,
+body translation updater to get the root translation from the camera.
+                                                                                          our reconstructed scene scale may be slightly different from the real
+In other words, it is the same as the standard monocular SLAM
+                                                                                          one. This problem could be handled by measuring the bone lengths
+except that the mocap-derived camera pose is used to initialize the
+                                                                                          and scaling the mocap output accordingly.
+camera tracking optimization, replacing the original initialization
+scheme based on the constant-speed assumption; 4) fused track-
+                                                                                            Calibration Errors. To obtain optimal results, data synchroniza-
+ing, where we fuse mocap and SLAM in the camera tracking, i.e.,
+                                                                                         tion and system calibration should be carefully performed. In our
+using the proposed mocap-constrained camera tracking; 5) fused
+                                                                                         implementation, we need a jumping motion for sensor synchro-
+tracking&mapping, where we fuse mocap and SLAM in both camera
+                                                                                         nization, a still T pose for sensor-to-bone calibration, and a curve
+tracking and mapping/loop closing, which is the same as our full
+                                                                                         movement for global frame alignment. To ensure the calibration is
+method except that the mocap-related map point confidences are not
+                                                                                         well done, we check the curve trajectory alignment error to deter-
+used in the mocap-aware bundle adjustment during optimization.
+                                                                                         mine whether the calibration is successful. Typically, a successful
+We evaluate the root position errors on the TotalCapture [Trum-
+                                                                                         calibration takes about 20 seconds. These steps are required because
+ble et al. 2017] dataset, and the results are shown in Tab. 6 Due to
+                                                                                         a bad calibration will lead to large inconsistencies between mocap
+the translation drifts in pure 1) inertial tracking and the frequent
+                                                                                         and SLAM estimations, yielding poor results.
+tracking failure in pure 2) monocular SLAM, the two baselines have
+relatively large errors (Row 1&2). We then show that a naive fusion
+                                                                                             Degenerated Cases. Our system is robust to a few dynamic objects
+of mocap and SLAM by 3) fuse as init will not give good results (Row
+                                                                                          by leveraging the human prior (e.g., playing ping-pong in the supple-
+3). With the 4) fused tracking, the system performs slightly better
+                                                                                          mented video, where the second person is always moving in front
+(Row 4), because the mocap constraints help to reduce the errors
+                                                                                          of the head-mounted camera), but the system will degenerate into
+caused by keypoint mismatches in the camera tracking. Neverthe-
+                                                                                          inertial mocap or become less accurate if the scene is too dynamic
+less, the shallow fusion of mocap and SLAM in the camera tracking
+                                                                                          or sparsely textured. Besides, in extreme cases where the human
+still can not outperform the mocap baseline. This is because, though
+                                                                                          shakes the head fast or performs very weird poses, our system may
+the camera tracking accuracy w.r.t the map is improved, the map
+                                                                                          generate wrong scene points as the mocap fails.
+itself is often poorly reconstructed (e.g., in a wrong scale) due to the
+unawareness of mocap. Then, tracking the camera in an inaccurate
+map will lead to poor localization results, which further degenerate                      5     CONCLUSION
+the mapping in a positive-feedback loop. To this end, we propose 5)                      This is the first work that combines inertial mocap with SLAM to
+fused tracking&mapping (Row 5), which shows a large enhancement                          achieve simultaneously human motion capture (mocap), localiza-
+in tracking accuracy and robustness compared with the baselines.                         tion, and mapping in real time. The system is still lightweight as
+We attribute this to the mocap-aware bundle adjustment algorithm,                        it only requires sparse body-mounted sensors, including 6 inertial
+where the map and keyframe camera poses are jointly optimized                            measurement units (IMUs) and a monocular phone camera. For on-
+with mocap prior, which greatly enhances the mapping accuracy.                           line tracking, the mocap and SLAM densely exchange information
+Furthermore, with the proposed mocap-related map point confi-                            by coupled optimizations and Kalman filter techniques, leading to
+dence (Row 6), the standard deviation of multiple experiments is                         more robust and accurate localization. For the back-end optimiza-
+reduced by 43%, reflecting that the uncertainty in the tracking is                       tion, both bundle adjustment and loop closure in SLAM benefit
+largely reduced. On the other hand, the overall accuracy is further                      from the inertial mocap and the localization errors can be further
+improved slightly. This shows the effectiveness of the deep fusion of                    reduced.
+                                                                        EgoLocate: Real-time Motion Capture, Localization, and Mapping with Sparse Body-mounted Sensors •             13
+
+
+ACKNOWLEDGMENTS                                                                                Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J. Black, Otmar Hilliges, and
+                                                                                                   Gerard Pons-Moll. 2018. Deep Inertial Poser Learning to Reconstruct Human Pose
+This work was supported by the National Key R&D Program of                                         from SparseInertial Measurements in Real Time. ACM Transactions on Graphics,
+China (2018YFA0704000), the NSFC (No.62021002), Beijing Natural                                   (Proc. SIGGRAPH Asia) 37 (nov 2018).
+                                                                                               Hao Jiang and Kristen Grauman. 2017. Seeing Invisible Poses: Estimating 3D Body
+Science Foundation (M22024), and the Key Research and Develop-                                     Pose from Egocentric Video. In 2017 IEEE Conference on Computer Vision and Pattern
+ment Project of Tibet Autonomous Region (XZ202101ZY0019G).                                         Recognition (CVPR).
+This work was also supported by THUIBCS, Tsinghua University,                                  Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa Laich, Patrick Snape, and
+                                                                                                   Christian Holz. 2022a. Avatarposer: Articulated full-body pose tracking from sparse
+and BLBCI, Beijing Municipal Education Commission. This work                                       motion sensing. In Computer Vision–ECCV 2022: 17th European Conference, Tel Aviv,
+was partially supported by the ERC consolidator grant 4DReply                                      Israel, October 23–27, 2022, Proceedings, Part V. Springer, 443–460.
+(770784). The authors would like to thank Wenbin Lin, Zunjie Zhu,                              Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W. Winkler, and
+                                                                                                   C. Karen Liu. 2022b. Transformer Inertial Poser: Real-Time Human Motion Recon-
+Guofeng Zhang, and Haoyu Hu for their extensive help on the ex-                                    struction from Sparse IMUs with Simultaneous Terrain Generation. In SIGGRAPH
+periments and live demos. The authors would also like to thank                                     Asia 2022 Conference Papers.
+                                                                                               Manuel Kaufmann, Yi Zhao, Chengcheng Tang, Lingling Tao, Christopher Twigg, Jie
+Ting Shu, Shuyan Han, and Kelan Liu for their help on this project.                                Song, Robert Wang, and Otmar Hilliges. 2021. Em-pose: 3d human pose estimation
+Feng Xu is the corresponding author.                                                               from sparse electromagnetic trackers. In Proceedings of the IEEE/CVF International
+                                                                                                   Conference on Computer Vision. 11510–11520.
+                                                                                               Georg Klein and David Murray. 2007. Parallel Tracking and Mapping for Small AR
+REFERENCES                                                                                        Workspaces. In 2007 6th IEEE and ACM International Symposium on Mixed and
+                                                                                                   Augmented Reality. 225–234. https://doi.org/10.1109/ISMAR.2007.4538852
+Hiroyasu Akada, Jian Wang, Soshi Shimada, Masaki Takahashi, Christian Theobalt,                Lukas Koestler, Nan Yang, Niclas Zeller, and Daniel Cremers. 2022. Tandem: Tracking
+   and Vladislav Golyanik. 2022. UnrealEgo: A New Dataset for Robust Egocentric 3D                 and dense mapping in real-time using deep multi-view stereo. In Conference on
+   Human Motion Capture. In European Conference on Computer Vision (ECCV).                         Robot Learning. PMLR, 34–45.
+Michael Bloesch, Jan Czarnowski, Ronald Clark, Stefan Leutenegger, and Andrew J                Rainer Kümmerle, Giorgio Grisetti, Hauke Strasdat, Kurt Konolige, and Wolfram Bur-
+   Davison. 2018. CodeSLAM—learning a compact, optimisable representation for                      gard. 2011. G2o: A general framework for graph optimization. In 2011 IEEE Interna-
+   dense visual SLAM. In Proceedings of the IEEE conference on computer vision and                 tional Conference on Robotics and Automation.
+   pattern recognition. 2560–2568.                                                             Stefan Leutenegger, Simon Lynen, Michael Bosse, Roland Siegwart, and Paul Furgale.
+Carlos Campos, Richard Elvira, Juan J. Gómez, José M. M. Montiel, and Juan D. Tardós.              2015. Keyframe-based visual–inertial odometry using nonlinear optimization. The
+   2021. ORB-SLAM3: An Accurate Open-Source Library for Visual, Visual-Inertial                    International Journal of Robotics Research 34, 3 (2015), 314–334.
+   and Multi-Map SLAM. IEEE Transactions on Robotics 37, 6 (2021), 1874–1890.                  Jiaman Li, C Karen Liu, and Jiajun Wu. 2022. Ego-Body Pose Estimation via Ego-Head
+Robert Castle, Georg Klein, and David W Murray. 2008. Video-rate localization in                   Pose Estimation. arXiv preprint arXiv:2212.04636 (2022).
+   multiple maps for wearable augmented reality. In 2008 12th IEEE International               Miao Liu, Dexin Yang, Yan Zhang, Zhaopeng Cui, James M. Rehg, and Siyu Tang. 2021.
+   Symposium on Wearable Computers. IEEE, 15–22.                                                   4D Human Body Capture from Egocentric Video via 3D Scene Grounding. In 2021
+Young-Woon Cha, Husam Shaik, Qian Zhang, Fan Feng, Andrei State, Adrian Ilie, and                  International Conference on 3D Vision (3DV).
+   Henry Fuchs. 2021. Mobile. Egocentric Human Body Motion Reconstruction Using                Yuxuan Liu, Jianxin Yang, Xiao Gu, Yao Guo, and Guang-Zhong Yang. 2022. Ego+X:
+   Only Eyeglasses-mounted Cameras and a Few Body-worn Inertial Sensors. In 2021                   An Egocentric Vision System for Global 3D Human Pose Estimation and Social
+   IEEE Virtual Reality and 3D User Interfaces (VR). 616–625.                                      Interaction Characterization. In 2022 IEEE/RSJ International Conference on Intelligent
+Long Chen, Haizhou Ai, Rui Chen, Zijie Zhuang, and Shuang Liu. 2020. Cross-View                    Robots and Systems (IROS). 5271–5277.
+   Tracking for Multi-Human 3D Pose Estimation at Over 100 FPS. In 2020 IEEE/CVF               Matthew Loper, Naureen Mahmood, Javier Romero, Gerard Pons-Moll, and Michael J.
+   Conference on Computer Vision and Pattern Recognition (CVPR).                                   Black. 2015. SMPL: A Skinned Multi-Person Linear Model. ACM Trans. Graphics
+Yudi Dai, Yitai Lin, Chenglu Wen, Siqi Shen, Lan Xu, Jingyi Yu, Yuexin Ma, and Cheng              (Proc. SIGGRAPH Asia) 34 (oct 2015).
+   Wang. 2022. HSC4D: Human-Centered 4D Scene Capture in Large-Scale Indoor-                   Zhengyi Luo, Ryo Hachiuma, Ye Yuan, and Kris Kitani. 2021. Dynamics-Regulated
+   Outdoor Space Using Wearable IMUs and LiDAR. In Proceedings of the IEEE/CVF                     Kinematic Policy for Egocentric Pose Estimation. In Advances in Neural Information
+   Conference on Computer Vision and Pattern Recognition (CVPR). 6792–6802.                        Processing Systems.
+Andrew J Davison. 2003. Real-time simultaneous localisation and mapping with a                 Naureen Mahmood, Nima Ghorbani, Nikolaus F. Troje, Gerard Pons-Moll, and Michael J.
+   single camera. In Computer Vision, IEEE International Conference on, Vol. 3. IEEE               Black. 2019. AMASS: Archive of Motion Capture as Surface Shapes. In The IEEE
+   Computer Society, 1403–1403.                                                                    International Conference on Computer Vision (ICCV).
+Junting Dong, Wen Jiang, Qixing Huang, Hujun Bao, and Xiaowei Zhou. 2019. Fast and             Anastasios I Mourikis, Stergios I Roumeliotis, et al. 2007. A Multi-State Constraint
+   Robust Multi-Person 3D Pose Estimation From Multiple Views. In 2019 IEEE/CVF                    Kalman Filter for Vision-aided Inertial Navigation.. In ICRA, Vol. 2. 6.
+   Conference on Computer Vision and Pattern Recognition (CVPR).                               Raul Mur-Artal, J. M. M. Montiel, and Juan D. Tardos. 2015. ORB-SLAM: A Versatile
+Jakob Engel, Vladlen Koltun, and Daniel Cremers. 2017. Direct sparse odometry. IEEE                and Accurate Monocular SLAM System. IEEE Transactions on Robotics 31, 5 (oct
+   transactions on pattern analysis and machine intelligence 40, 3 (2017), 611–625.                2015), 1147–1163.
+Jakob Engel, Thomas Schöps, and Daniel Cremers. 2014. LSD-SLAM: Large-scale direct             Raul Mur-Artal and Juan D Tardós. 2017a. Orb-slam2: An open-source slam system
+   monocular SLAM. In European conference on computer vision. Springer, 834–849.                   for monocular, stereo, and rgb-d cameras. IEEE transactions on robotics 33, 5 (2017),
+Martin Felis. 2017. RBDL: an efficient rigid-body dynamics library using recursive                 1255–1262.
+   algorithms. Autonomous Robots 41 (02 2017).                                                 Raúl Mur-Artal and Juan D Tardós. 2017b. Visual-inertial monocular SLAM with map
+Christian Forster, Matia Pizzoli, and Davide Scaramuzza. 2014. SVO: Fast semi-direct               reuse. IEEE Robotics and Automation Letters 2, 2 (2017), 796–803.
+   monocular visual odometry. In 2014 IEEE international conference on robotics and            Patrik Puchert and Timo Ropinski. 2021. Human Pose Estimation from Sparse Inertial
+   automation (ICRA). IEEE, 15–22.                                                                 Measurements through Recurrent Graph Convolution. CoRR abs/2107.11214 (2021).
+Jack H. Geissinger and Alan T. Asbeck. 2020. Motion Inference Using Sparse Inertial                arXiv:2107.11214
+   Sensors, Self-Supervised Learning, and a New Dataset of Unscripted Human Motion.            Pytorch. [n. d.]. Pytorch. Website. https://pytorch.org/.
+   Sensors 20 (2020).                                                                          Tong Qin, Peiliang Li, and Shaojie Shen. 2018. Vins-mono: A robust and versatile
+Vladimir Guzov, Aymen Mir, Torsten Sattler, and Gerard Pons-Moll. 2021. Human                      monocular visual-inertial state estimator. IEEE Transactions on Robotics 34, 4 (2018),
+   POSEitioning System (HPS): 3D Human Pose Estimation and Self-localization in                    1004–1020.
+   Large Scenes from Body-Mounted Sensors. In IEEE Conference on Computer Vision               N Dinesh Reddy, Laurent Guigues, Leonid Pishchulin, Jayan Eledath, and Srinivasa G
+   and Pattern Recognition (CVPR).                                                                 Narasimhan. 2021. Tessetrack: End-to-end learnable multi-person articulated 3d
+Vladimir Guzov, Torsten Sattler, and Gerard Pons-Moll. 2022. Visually plausible human-             pose tracking. In Proceedings of the IEEE/CVF Conference on Computer Vision and
+   object interaction capture from wearable sensors. In arXiv.                                     Pattern Recognition. 15190–15200.
+Dorian F. Henning, Tristan Laidlow, and Stefan Leutenegger. 2022. BodySLAM: Joint              Helge Rhodin, Christian Richardt, Dan Casas, Eldar Insafutdinov, Mohammad Shafiei,
+   Camera Localisation, Mapping, And Human Motion Tracking. In Computer Vision –                   Hans-Peter Seidel, Bernt Schiele, and Christian Theobalt. 2016. EgoCap: Egocentric
+   ECCV 2022: 17th European Conference, Tel Aviv, Israel, October 23–27, 2022, Proceedings,        Marker-Less Motion Capture with Two Fisheye Cameras. 35 (2016).
+   Part XXXIX. 656–673.                                                                        Qaiser Riaz, Guanhong Tao, Björn Krüger, and Andreas Weber. 2015. Motion Recon-
+Ryosuke Hori, Ryo Hachiuma, Mariko Isogawa, Dan Mikami, and Hideo Saito. 2022.                     struction Using Very Few Accelerometers and Ground Contacts. Graph. Models 79
+   Silhouette-Based 3D Human Pose Estimation Using a Single Wrist-Mounted 360°                     (may 2015).
+   Camera. IEEE Access 10 (2022), 54957–54968.
+14   •   Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav Golyanik, Shaohua Pan, Christian Theobalt, and Feng Xu
+
+
+Patrik Schmuck and Margarita Chli. 2017. Multi-uav collaborative monocular slam.
+    In 2017 IEEE International Conference on Robotics and Automation (ICRA). IEEE,
+    3863–3870.
+Ruizhi Shao, Zerong Zheng, Hongwen Zhang, Jingxiang Sun, and Yebin Liu. 2022.
+    Diffustereo: High quality human reconstruction via diffusion-based stereo using
+    sparse cameras. In Computer Vision–ECCV 2022: 17th European Conference, Tel Aviv,
+    Israel, October 23–27, 2022, Proceedings, Part XXXII. Springer, 702–720.
+Takaaki Shiratori, Hyun Soo Park, Leonid Sigal, Yaser Sheikh, and Jessica K. Hodgins.
+    2011. Motion Capture from Body-Mounted Cameras. ACM Trans. Graph. 30, 4,
+   Article 31 (jul 2011), 10 pages.
+Ronit Slyper and Jessica Hodgins. 2008. Action Capture with Accelerometers. ACM
+    SIGGRAPH/Eurographics Symposium on Computer Animation (01 2008).
+Jochen Tautges, Arno Zinke, Björn Krüger, Jan Baumann, Andreas Weber, Thomas             Fig. 7. We synthesize first-person videos for the TotalCapture dataset. The
+    Helten, Meinard Müller, Hans-Peter Seidel, and Bernhard Eberhardt. 2011. Motion      pictures at the bottom right corner are the synthesized first-person views.
+    Reconstruction Using Sparse Accelerometer Data. ACM Transactions on Graphics 30
+   (05 2011).
+Zachary Teed and Jia Deng. 2021. Droid-slam: Deep visual slam for monocular, stereo,
+    and rgb-d cameras. Advances in Neural Information Processing Systems 34 (2021),         In 2020 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR).
+    16558–16569.                                                                         Jon Zubizarreta, Iker Aguinaga, and Jose Maria Martinez Montiel. 2020. Direct sparse
+Denis Tome, Thiemo Alldieck, Patrick Peluse, Gerard Pons-Moll, Lourdes Agapito,             mapping. IEEE Transactions on Robotics 36, 4 (2020), 1363–1370.
+    Hernan Badino, and Fernando de la Torre. 2020. SelfPose: 3D Egocentric Pose
+    Estimation from a Headset Mounted Camera. IEEE Transactions on Pattern Analysis
+    and Machine Intelligence (Oct 2020).                                                 A    DATASET PREPROCESSING
+Denis Tome, Patrick Peluse, Lourdes Agapito, and Hernan Badino. 2019. xr-egopose:        In this section, we explain the details of our preprocessing for the
+    Egocentric 3d human pose from an hmd camera. In Proceedings of the IEEE/CVF
+    International Conference on Computer Vision (ICCV).                                  datasets, including AMASS [Mahmood et al. 2019], DIP-IMU [Huang
+Matthew Trumble, Andrew Gilbert, Charles Malleson, Adrian Hilton, and John Collo-        et al. 2018], TotalCapture [Trumble et al. 2017], and HPS [Guzov et al.
+    mosse. 2017. Total Capture: 3D Human Pose Estimation Fusing Video and Inertial
+    Sensors. In 2017 British Machine Vision Conference (BMVC).
+                                                                                         2021]. Since these datasets are recorded for different purposes and
+Daniel Vlasic, Rolf Adelsberger, Giovanni Vannucci, John Barnwell, Markus Gross,         have different usages in our experiments, we process each dataset
+   Wojciech Matusik, and Jovan Popović. 2007. Practical Motion Capture in Everyday       differently. 1) AMASS. This dataset is used only in training. Thus,
+    Surroundings. ACM Trans. Graph. 26 (jul 2007).
+Timo von Marcard, Roberto Henschel, Michael Black, Bodo Rosenhahn, and Gerard            we use ground-truth pose and translation, and synthesize 60Hz ac-
+    Pons-Moll. 2018. Recovering Accurate 3D Human Pose in The Wild Using IMUs            celeration and orientation measurements from the human motion,
+    and a Moving Camera. In European Conference on Computer Vision (ECCV).               following [Yi et al. 2022, 2021]. 2) DIP-IMU. This dataset contains real
+Timo von Marcard, Bodo Rosenhahn, Michael Black, and Gerard Pons-Moll. 2017.
+    Sparse Inertial Poser: Automatic 3D Human Pose Estimation from Sparse IMUs.          inertia measurements but no human translation. Thus, we use it in
+    Computer Graphics Forum 36(2), Proceedings of the 38th Annual Conference of the      the network fine-tuning step following [Yi et al. 2022, 2021]. 3) Total-
+    European Association for Computer Graphics (Eurographics) (2017).
+Lukas Von Stumberg, Vladyslav Usenko, and Daniel Cremers. 2018. Direct sparse
+                                                                                         Capture. This dataset is used in the evaluation and contains character
+    visual-inertial odometry using dynamic marginalization. In 2018 IEEE International   pose, translation, and IMUs, but no first-person videos. Thus, we
+    Conference on Robotics and Automation (ICRA). IEEE, 2510–2517.                       transfer the ground-truth pose and translation to a SMPL [Loper
+Jian Wang, Lingjie Liu, Weipeng Xu, Kripasindhu Sarkar, and Christian Theobalt.
+    2021. Estimating Egocentric 3D Human Pose in Global Space. In Proceedings of the     et al. 2015] human model and put the model in virtual scenes. With
+    IEEE/CVF International Conference on Computer Vision (ICCV).                         a virtual camera on the model’s head, first-person videos are syn-
+Jian Wang, Diogo Luvizon, Weipeng Xu, Lingjie Liu, Kripasindhu Sarkar, and Christian     thesized for this dataset (see Fig. 7). Such videos are used to run
+   Theobalt. 2023. Scene-aware Egocentric 3D Human Pose Estimation. CVPR (2023).
+Alexander Winkler, Jungdam Won, and Yuting Ye. 2022. QuestSim: Human Motion              our method during evaluation, and the virtual scenes are used to
+   Tracking from Sparse Sensors with Simulated Avatars. In SIGGRAPH Asia 2022            validate the mapping accuracy. The camera-head relative pose is
+    Conference Papers. 1–8.
+Di Xia, Yeqing Zhu, and Heng Zhang. 2022. Faster Deep Inertial Pose Estimation with
+                                                                                         fixed when synthesizing the first-person videos, and is assumed
+    Six Inertial Sensors. Sensors 22, 19 (2022).                                         known in the experiments. Besides, visual-inertial SLAM assumes
+Xsens. [n. d.]. Xsens 3D motion tracking. Website. https://www.xsens.com/.               known IMU noise parameters (IMU intrinsic), which we assign ex-
+Weipeng Xu, Avishek Chatterjee, Michael Zollhoefer, Helge Rhodin, Pascal Fua, Hans-
+    Peter Seidel, and Christian Theobalt. 2019. Mo2 Cap2 : Real-time Mobile 3D Motion
+                                                                                         perimentally in the values that produce the best results, and known
+    Capture with a Cap-mounted Fisheye Camera. IEEE Transactions on Visualization        camera-IMU relative pose (camera-IMU extrinsic), which we calcu-
+    and Computer Graphics (2019).                                                        late from T-pose calibration. Note that the intrinsic and extrinsic are
+Nan Yang, Lukas von Stumberg, Rui Wang, and Daniel Cremers. 2020. D3vo: Deep depth,
+    deep pose and deep uncertainty for monocular visual odometry. In Proceedings of      only used by visual-inertial SLAM, while our method does not need
+    the IEEE/CVF Conference on Computer Vision and Pattern Recognition. 1281–1292.       them. 4) HPS. This dataset is recorded in large scenes and provides
+Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada, Vladislav Golyanik, Christian      both real inertial measurements and first-person videos. HPS also
+   Theobalt, and Feng Xu. 2022. Physical Inertial Poser (PIP): Physics-aware Real-time
+    Human Motion Tracking from Sparse Inertial Sensors. In IEEE/CVF Conference on        estimates character pose and translation by combining dense iner-
+    Computer Vision and Pattern Recognition (CVPR).                                      tial motion capture and scene-based localization, which are used as
+Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2021. TransPose: Real-time 3D Human Translation
+    and Pose Estimation with Six Inertial Sensors. ACM Transactions on Graphics 40 (08
+                                                                                         the ground truths for our evaluations. To evaluate different meth-
+    2021).                                                                               ods on the dataset, we need three extrinsics: imu-to-bone rotation,
+Ye Yuan, Umar Iqbal, Pavlo Molchanov, Kris Kitani, and Jan Kautz. 2022. GLAMR: Global    camera-to-head rotation, and camera-to-imu rotation, which are
+    Occlusion-Aware Human Mesh Recovery with Dynamic Cameras. In Proceedings of
+    the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR).           not provided in this dataset. We first use the beginning 150 frames
+Ye Yuan and Kris Kitani. 2019. Ego-Pose Estimation and Forecasting As Real-Time PD       of each sequence to perform IMU-to-bone calibration, which deter-
+    Control. In 2019 IEEE/CVF International Conference on Computer Vision (ICCV).        mines imu-to-bone rotations. Then, the camera-to-head rotation
+Ye Yuan and Kris M. Kitani. 2018. 3D Ego-Pose Estimation via Imitation Learning. In
+    ECCV.                                                                                is calculated as the mean rotation between the head orientations
+Yuxiang Zhang, Liang An, Tao Yu, Xiu Li, Kun Li, and Yebin Liu. 2020. 4D Association     measured by the IMU and the camera orientations measured by
+    Graph for Realtime Multi-Person Motion Capture Using Multiple Video Cameras.
+                                                                                         scene-based localization in the first 60 frames. Note that sequences
+                                                            EgoLocate: Real-time Motion Capture, Localization, and Mapping with Sparse Body-mounted Sensors •            15
+
+
+Table 7. Comparisons on pose accuracy with TransPose [Yi et al. 2021],             The only optimizable variable is the generalized acceleration 𝒒¥ of
+TIP [Jiang et al. 2022b], and PIP [Yi et al. 2022] on TotalCapture [Trumble        the human pose and translation, while we do not consider the forces.
+et al. 2017] dataset. We report the mean per joint position error (MPJPE) in
+                                                                                   The optimization solves the acceleration that best reproduces the
+millimeters with the root position aligned.
+                                                                                   kinematically estimated human pose and joint velocity leveraging
+                                                                                   the dual PD controller. The contact constraints C is defined by:
+                                       TotalCapture
+       Method
+                    acting    freestyle   rom     walking    average                         C𝑗 = {¤𝒓 𝑗 ∈ R3 || 𝒓¤ 𝑥𝑗 | ≤ 𝜎, | 𝒓¤ 𝑧𝑗 | ≤ 𝜎 },
+                                                                                                                                                                       (12)
+      TransPose      62.9       89.3      55.6      55.0       63.6                          C = {[ 𝒓¤ 1 · · · 𝒓¤ 𝑛j ] ∈ R3𝑛j | 𝒓¤ 𝑗 ∈ C𝑗 , 𝑗 = 1, 2, · · · , 𝑛 j },
+         TIP         56.9       79.4      56.0      49.2       59.3
+         PIP         60.1       82.1      45.7      46.6       56.2                where we remove the vertical velocity constraints of the original
+        Ours         59.6       82.5      44.9      47.6       56.1                method as we do not assume a known ground (we allow the capture
+                                                                                   in the free 3D space). Besides, we only consider the kinematically
+                                                                                   estimated contact probabilities during the contact determination,
+with too much false camera localization in the beginning 60 frames
+                                                                                   where a foot with a probability larger than 0.5 is classified as in con-
+or have evidently wrong IMU-camera synchronization are discarded.
+                                                                                   tact and vice versa. Our new optimization can be efficiently solved
+Finally, the camera-to-imu rotation is computed by multiplying the
+                                                                                   using quadratic programming algorithms. Readers are referred to [Yi
+camera-to-head rotation and the head-to-imu rotation. To perform
+                                                                                   et al. 2022] for the notations and more details.
+visual-inertial SLAM on this dataset, we synthesize the IMU angular
+velocities and local accelerations from the sensor orientation and
+free acceleration signals as they are not provided in this dataset.                D     NONLINEAR OPTIMIZATIONS IN SLAM
+Mathematically, the sensor-local angular velocity 𝝎 𝑆 and accelera-                To accelerate our algorithm, we compute the partial Jacobians ana-
+tion 𝒂𝑆 are calculated as:                                                         lytically for the key optimizations, including the mocap-constrained
+                          1                                                        camera tracking (Eq. 1) and the mocap-aware bundle adjustment
+                𝝎 𝑆 (𝑡) =    Log(𝑹 𝐼𝑆 (𝑡) −1 𝑹 𝐼𝑆 (𝑡 + 1)),     (9)                (Eq. 4). We present the details in the following.
+                          Δ𝑡
+                    𝒂𝑆 (𝑡) = 𝑹 𝐼𝑆 (𝑡) −1 (𝒂 𝐼 (𝑡) − 𝒈 𝐼 ),        (10)                Parameterization. As we express the camera orientation 𝑹 ∈
+where 𝑹 𝐼𝑆 (𝑡) and 𝒂 𝐼 (𝑡) are the sensor orientation and free acceler-            SO(3) in the over-parameterized matrix representation that lies
+ation in the global inertial frame at frame 𝑡 respectively, Δ𝑡 is the              in a non-Euclidean space, we optimize it by adding a perturbation
+time interval between two frames, 𝒈 𝐼 is the gravity in the global                 Δ𝜽 ∈ R3 around the current value, which uses a minimal repre-
+inertial frame, and the logarithm map Log : SO(3) → R3 maps                        sentation for 3D rotations. We define the new "adding" operator ⊕
+from the Lie group to the vector space. This results in 30Hz inertia               between a rotation matrix and a perturbation as:
+measurements, the highest frequency of signals we can acquire from
+the provided data. The visual-inertial SLAM also needs the IMU                                                     𝑹 ⊕ Δ𝜽 = 𝑹Exp(Δ𝜽 ),                                 (13)
+intrinsic, which is assigned experimentally, and the camera-IMU
+extrinsic, which is assigned with the camera-to-imu rotation and                   where the exponential map Exp : R3 → SO(3) maps from the Lie
+zero relative position.                                                            algebra to the Lie group. Similarly, we redefine the "adding" operator
+                                                                                   for the camera translation 𝒕 to make the perturbation Δ𝒕 ∈ R3 acts
+B    POSE COMPARISONS WITH INERTIAL MOCAP                                          in the camera-local space:
+We conduct pose comparisons with sparse inertial mocap methods
+TransPose [Yi et al. 2021], TIP [Jiang et al. 2022b], and PIP [Yi et al.                                            𝒕 ⊕ Δ𝒕 = 𝒕 + 𝑹Δ𝒕,                                  (14)
+2022] using mean per joint position error (MPJPE) with the root
+positions aligned with the ground truth. The results are shown in                  where 𝑹 is the camera orientation. For the map point positions, we
+Tab. 7. We achieve comparable pose estimation accuracy with the                    express the increment in the same space of the point (i.e., the world).
+state-of-the-art mocap methods. We would like to note that intro-
+ducing SLAM in the inertial mocap majorly helps with improving                        Mocap-constrained Camera Tracking. According to Eq. 1, without
+the translation estimation accuracy rather than the pose in our                    loss of generality, we respectively denote the reprojection error of
+algorithm.                                                                         point 𝑖 in keyframe 𝑗, the orientation error of keyframe 𝑗, and the
+                                                                                   position error of keyframe 𝑗 as:
+C    MODIFICATION OVER PIP IN MOCAP                                                                                                            
+                                                                                                                 = 𝒙 𝑖2D − π 𝑹𝑇𝑗 (𝒙 𝑖3D − 𝒕 𝑗 )
+                                                                                                          (proj)
+The motion capture module is designed following [Yi et al. 2022].                                       𝒆𝑖 𝑗
+We use the same neural kinematics estimator but a different motion
+                                                                                                                = Log( 𝑹¯ 𝑇𝑗 𝑹 𝑗 )
+                                                                                                          (ori)
+                                                                                                        𝒆                                                              (15)
+optimizer as discussed in Sec. 3.1. Following the notations in [Yi                                       𝑗
+                                                                                                         (pos)
+et al. 2022], our new motion optimizer is defined as:                                                   𝒆𝑗     = ¯𝒕 𝑗 − 𝒕 𝑗 .
+             arg min ∥ 𝒒¥ 3: − 𝜽¥ des ∥ 2 + ∥ 𝑱 𝒒¥ + 𝑱¤ 𝒒¤ − 𝒓¥ des ∥ 2
+                𝒒¥                                                      (11)       For brevity, we denote the map point 𝑖’s position in the camera 𝑗’s
+                   s.t. 𝒓¤ j ( 𝒒¥ ) ∈ C.                                           coordinate frame as 𝒚𝑖 𝑗 = 𝑹𝑇𝑗 (𝒙 𝑖3D − 𝒕 𝑗 ). Then, the Jacobians of the
+16   •   Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav Golyanik, Shaohua Pan, Christian Theobalt, and Feng Xu
+
+
+errors to the pose perturbations can be computed as:                                    ALGORITHM 1: Body Translation Updater
+                                                                                             Input: Global acceleration 𝒂𝑘−1 , camera-root position difference
+          (proj)      (proj)
+                                                                 
+                                  = −𝑱 p (𝒚𝑖 𝑗 )𝒚𝑖 𝑗∧ 𝑱 p (𝒚𝑖 𝑗 )
+        𝜕𝒆𝑖 𝑗      𝜕𝒆𝑖 𝑗
+                    𝜕Δ𝒕 𝑗                                                                           𝒑 root→cam (computed from the human pose), camera
+      𝜕Δ𝜽     𝑗
+           (ori)     (ori)
+                                                       −1                                       localization 𝒑 cam and its confidence 𝜮 cam (only if the camera
+                                 = 𝑱 r Log( 𝑹¯ 𝑇𝑗 𝑹 𝑗 )
+                                      
+                                                                                (16)
+        𝜕𝒆 𝑗      𝜕𝒆 𝑗
+                                                             𝑶                                      image is available in the current frame).
+         𝜕Δ𝜽 𝑗     𝜕Δ𝒕 𝑗
+          (pos)      (pos)
+                                                                                            Output: The human’s global position 𝑝𝑘 for the current frame.
+        𝜕𝒆 𝑗      𝜕𝒆 𝑗                           
+                                  = 𝑶 −𝑹 𝑗 ,                                                 // initialization
+           𝜕Δ𝜽 𝑗      𝜕Δ𝒕 𝑗
+                                                                                             if first frame then
+where ·∧ converts the 3D vector to the skew symmetric matrix,                                     𝒙ˆ 𝑘−1 ← 0; 𝑷 𝑘−1 ← 𝑶;
+𝑱 p (·) is calculated as:                                                                         initialize 𝑨, 𝑩, 𝑯 , and 𝑸 according to Eq. 23;
+                                                                                             end
+                                             0
+                                       𝑓𝑥              𝑓 𝑦
+                                © 𝑦𝑧               − 𝑥𝑦 2 𝑥 ª
+                      𝑱 p (𝒚) = ­            𝑓𝑦
+                                                       𝑧
+                                                    𝑓 𝑦 ®,                      (17)         // prediction
+                                  0                − 𝑦𝑦 2 𝑦
+                                «            𝑦𝑧        𝑧    ¬                                𝒖𝑘−1 ← 𝒂𝑘−1 ;
+where we assume 𝒚 = (𝑦𝑥 , 𝑦 𝑦 , 𝑦𝑧 )𝑇 and omit its subscript 𝑖 and 𝑗,                        𝒙ˆ 𝑘− ← 𝑨𝒙ˆ 𝑘−1 + 𝑩𝒖𝑘−1 ;
+and 𝑓𝑥 , 𝑓𝑦 are the camera focal lengths. 𝑱 r (·) −1 in Eq. 16 is calculated                 𝑷 𝑘− ← 𝑨𝑷 𝑘−1 𝑨𝑇 + 𝑸;
+as:
+                         𝜃   𝜃          𝜃         𝜃          𝜃                               // correction
+           𝑱 r (𝜃 𝒂) −1 = cot 𝑰 + (1 − cot )𝒂𝒂𝑇 + 𝒂 ∧,                  (18)                 if camera not available in the current frame then
+                         2   2           2        2          2
+                                                                                                  𝒙ˆ 𝑘 ← 𝒙ˆ 𝑘− ; 𝑷 𝑘 ← 𝑷 𝑘− ;
+where we assume Log( 𝑹¯ 𝑇𝑗 𝑹 𝑗 ) = 𝜃 𝒂 in Eq. 16, where 𝜃 ∈ R, 𝒂 ∈ R3
+                                                                                             else
+corresponds to the angle and axis respectively. Note that we omit                                 𝑹𝑘 ← 𝜮 cam ; 𝒛𝑘 ← 𝒑 cam − 𝒑 root→cam ;
+the subscript 𝑗 for brevity.                                                                      if relocalization detected then
+   Mocap-aware Bundle Adjustment. The mocap-aware bundle ad-                                           𝒙ˆ 𝑘 ← 𝒙ˆ 𝑘− ; 𝑷 𝑘 ← 𝑷 𝑘− ;
+justment (Eq. 4) shares the same reprojection error with the camera                                    replace the position in 𝒙ˆ 𝑘 with 𝒛𝑘 ;
+tracking. The absolute orientation error and the relative position                                else
+error in the BA are defined as:                                                                        𝑲 𝑘 ← 𝑷 𝑘− 𝑯 𝑇 (𝑯 𝑷𝒌− 𝑯 𝑇 + 𝑹𝑘 ) −1 ;
+                                                                                                       𝒙ˆ 𝑘 ← 𝒙ˆ 𝑘− + 𝑲 𝑘 (𝒛𝑘 − 𝑯 𝒙ˆ 𝑘− );
+                      = Log( 𝑹˜ 𝑗 𝑹 𝑗 )
+               (aori)             𝑇
+              𝒆𝑗                                                                                       𝑷 𝑘 ← (𝑰 − 𝑲 𝑘 𝑯 )𝑷 𝑘− ;
+               (rpos)                                                 (19)
+              𝒆𝑗      = ( 𝒕˜ 𝑗 − 𝒕˜ prev( 𝑗) ) − (𝒕 𝑗 − 𝒕 prev( 𝑗) ).                             end
+                                                                                             end
+The non-zero jacobians of the two errors can be computed as:
+                     (aori)                  −1                                             // output
+                                     ˜𝑇
+                  𝜕𝒆 𝑗         
+                                                                                             𝒑𝑘 ← 𝑯 𝒙ˆ 𝑘 ;
+                   𝜕Δ𝜽 = 𝑱 r Log( 𝑹 𝑗 𝑹 𝑗 )
+                              𝑗
+                           (rpos)
+                                                                                (20)
+                        𝜕𝒆 𝑗
+                         𝜕Δ𝒕 𝑗 = −𝑹 𝑗
+                             (rpos)
+                         𝜕𝒆 𝑗                                                           candidates. This effectively accelerates the recovery from visual
+                        𝜕Δ𝒕 prev( 𝑗 ) = 𝑹 prev( 𝑗) .
+                                                                                        tracking losses because the camera tracking can often succeed ahead
+As the map point positions are also optimized in the BA (through                        of the strict place-recognition-based relocalization since we still
+reprojection errors), the Jacobian of the reprojection error to the                     have an accurate camera pose due to the combination with mocap.
+map point positions can be computed as:                                                 Therefore, we do not give up the camera tracking during visual
+                               (proj)                                                   losses as the original system does. Instead, we actively construct
+                           𝜕𝒆𝑖 𝑗
+                                        = −𝑱 p (𝒚𝑖 𝑗 )𝑹𝑇𝑗 .                     (21)    the local map from similar keyframes and try tracking the camera
+                              𝜕𝒙 𝑖3D                                                    with respect to it.
+
+E    LOCAL MAP CONSTRUCTION FOR REAL-TIME                                                F     DETAILS OF BODY TRANSLATION UPDATER
+     TRACKING                                                                           The task of the translation updater is to estimate the drift-free human
+As the reconstructed map can grow very large during tracking and                        global position from the global acceleration 𝒂, camera localization
+finding matches between the image keypoints and 3D map points                           𝒑 cam , and the camera confidence 𝜮 cam . We formulate the prediction-
+can be very time-consuming, we only use a local visible map in                          correction algorithm in the Kalman filter framework, where the state
+the camera tracking module to ensure its real-time performance.                         and observation equations are defined as:
+Following [Campos et al. 2021], we construct the local map from the
+observed points in recent and neighboring frames. One difference is                                             𝒙 𝑘 = 𝑨𝒙 𝑘−1 + 𝑩𝒖𝑘−1 + 𝝋𝑘−1
+                                                                                                                                                                  (22)
+that, when the visual tracking is lost, we additionally add to the local                                              𝒛𝑘 = 𝑯 𝒙 𝑘 + 𝝍 𝑘 ,
+map the 3D points observed by any of 1) the candidate keyframes                         where, in our setting, the state 𝒙 = [𝒑𝑇 𝒗𝑇 ]𝑇 is the concatenation
+selected for relocalization and 2) the covisible5 keyframes of the                      of the human’s global position and velocity, 𝒖𝑘−1 = 𝒂𝑘−1 is the
+5 If two keyframes observe some shared map points, we say they are covisible.           acceleration input, 𝒛𝑘 is the root position observation calculated
+                                                    EgoLocate: Real-time Motion Capture, Localization, and Mapping with Sparse Body-mounted Sensors •   17
+
+
+from the camera localization and the estimated human pose, 𝝋𝑘−1 ∼          Readers can refer to Sec. 3.4 as this equation is the matrix version of
+N (0, 𝑸) and 𝝍 𝑘 ∼ N (0, 𝑹) denote the process and measurement             Eq. 6 and 7. Notice that we overload the notation 𝝋 here to model the
+noise respectively. Then, we have:                                         full-state transition noise. The body translation updater algorithm
+        
+           𝑰 Δ𝑡 𝑰
+                              
+                                   𝑶
+                                       
+                                                                          is presented in Alg. 1. We run the updater at 60 FPS. As the camera
+   𝑨=                  ,   𝑩=            ,  𝑯= 𝑰 𝑶 ,                       tracking module runs at the frame rate of the monocular camera
+          𝑶     𝑰               Δ𝑡 𝑰                        (23)         (i.e., 30 FPS), we distinguish the frames with/without the camera
+                         𝑶
+               𝑸=           2
+                           𝜎 𝑰
+                                  ,    𝑹 = 𝜮 cam .                         image in the algorithm. The drift-free human global positions can
+                                                                           finally be outputted at 60 FPS.
+

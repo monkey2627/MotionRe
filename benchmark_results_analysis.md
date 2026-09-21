@@ -34,7 +34,83 @@
    延迟、峰值 RAM 或能耗记录，因此目前只能讨论精度和端到端运行时间，不能宣称
    已满足移动端部署指标。
 
-## 2. 完整性门禁
+## 2. 传感器协议与实现对应关系
+
+### 2.1 本项目统一桥接协议
+
+所有进入 `benchmark_results` 的六 IMU 方法都被转换到同一槽位顺序。这里的
+“关节”是佩戴位置的 SMPL 近邻代理，不代表传感器真的安装在关节旋转中心：
+
+下列图片均基于仓库中 `code/PNP/models/SMPL_male.pkl` 的真实 SMPL 模板网格，采用正面二维投影，
+橙色点由 `J_regressor` 计算得到。每张图的标题同时记录了实际采用的代码来源，
+避免把原始 DIP 索引和 benchmark bridge 槽位混为一谈。
+
+| 方法 | SMPL 网格上的传感器布局 |
+|---|---|
+| MobilePoser | ![MobilePoser](benchmark_results_analysis_assets/sensor_layout_mobileposer_smpl_front.png) |
+| PIP | ![PIP](benchmark_results_analysis_assets/sensor_layout_pip_smpl_front.png) |
+| PNP | ![PNP](benchmark_results_analysis_assets/sensor_layout_pnp_smpl_front.png) |
+| TransPose | ![TransPose](benchmark_results_analysis_assets/sensor_layout_transpose_smpl_front.png) |
+| GlobalPose | ![GlobalPose](benchmark_results_analysis_assets/sensor_layout_globalpose_smpl_front.png) |
+| IMUCoCo | ![IMUCoCo](benchmark_results_analysis_assets/sensor_layout_imucoco_smpl_front.png) |
+| SliMeVR FK | ![SliMeVR](benchmark_results_analysis_assets/sensor_layout_slimevr_smpl_front.png) |
+
+图 1：各方法的 SMPL 传感器布局。PIP、PNP、TransPose、GlobalPose 的原生 DIP
+预处理按 `imu_mask=[7,8,11,12,0,2]` 并依据各自评估器的 `lw,rw,lp,rp,hd,root`
+标签画出（左右前臂、左右髋/大腿、头、骨盆）；IMUCoCo、SliMeVR 和 MobilePoser
+按各自评测代码的共享槽位/关节映射画出。对于最终跨方法数值比较，仍以统一
+bridge 后的六槽位数据为准。
+
+```mermaid
+flowchart LR
+    S0[slot 0\n左前臂/左腕] --> J18[SMPL j18\n左肘近邻]
+    S1[slot 1\n右前臂/右腕] --> J19[SMPL j19\n右肘近邻]
+    S2[slot 2\n左大腿/左髋] --> J1[SMPL j1\n左髋]
+    S3[slot 3\n右大腿/右髋] --> J2[SMPL j2\n右髋]
+    S4[slot 4\n头部] --> J15[SMPL j15\n头]
+    S5[slot 5\n骨盆/根] --> J0[SMPL j0\n根节点]
+```
+
+| 统一槽位 | 身体佩戴位置 | 代码中的 SMPL 代理 | 评测中是否必需 |
+|---:|---|---:|---|
+| 0 | 左前臂/左腕 | j18（左肘近邻） | 六传感器方法必需；MobilePoser 可屏蔽 |
+| 1 | 右前臂/右腕 | j19（右肘近邻） | 六传感器方法必需；MobilePoser 可屏蔽 |
+| 2 | 左大腿/左髋 | j1 | 六传感器方法必需；MobilePoser 可屏蔽 |
+| 3 | 右大腿/右髋 | j2 | 六传感器方法必需；MobilePoser 可屏蔽 |
+| 4 | 头部 | j15 | 六传感器方法必需；MobilePoser 的 sweep 可屏蔽 |
+| 5 | 骨盆/根 | j0 | 统一协议中的根参考；MobilePoser 的物理计数始终包含它 |
+
+### 2.2 各方法代码中的传感器位置
+
+| 方法 | 论文/原始代码描述 | 本项目桥接后的配置 | 需要特别注意的实现事实 |
+|---|---|---|---|
+| MobilePoser | 左右前臂、左右下肢、头、骨盆 | `[0,1,2,3,4,5]`；4/5/6 IMU 分别保留 3/4/5 个学习槽加 slot 5 | 网络输入固定 5 个可学习槽；物理 IMU 数不能写成网络输入维度 |
+| TransPose | 原始 DIP 代码 `imu_mask=[7,8,11,12,0,2]`，标签为 `lw,rw,lp,rp,hd,root` | 左右前臂、左右髋/大腿、头、骨盆 | 代码注释中的 `lw/rw/lp/rp` 是协议标签；桥接数据使用统一槽位 |
+| PIP | `preprocess.py` 使用同一 `imu_mask`；评估器标签为左/右腕、左/右髋、头、root | 左右前臂、左右髋/大腿、头、骨盆 | PIP 另外进行骨盆相对归一化和物理 QP；失败记录必须保留 |
+| PNP | `process.py` 使用同一 `imu_mask`；`evaluate_dip.py` 明确写明 `lw,rw,lp,rp,hd,root` | 左右前臂、左右髋/大腿、头、骨盆 | 固定六传感器，不支持公平的少传感器消融 |
+| GlobalPose | `process.py` 同一 `imu_mask`；原生输入还包含姿态、加速度和角速度转换 | 左右前臂、左右髋/大腿、头、骨盆 | bridge 版本从共享 `acc/ori` 数值微分角速度；不是原生传感器日志格式 |
+| IMUCoCo | `evaluate_drift.py` 明确写为 `[L_wrist,R_wrist,L_hip,R_hip,Head,Pelvis]` | 左右前臂、左右髋/大腿、头、骨盆 | 支持组合消融，但本报告主表使用 full-6 配置 |
+| SliMeVR FK | 评估器将传感器姿态直接赋给仪器化身体部位，骨盆隐式保留 | 左右前臂、左右髋/大腿、头、骨盆 | 是几何 FK 下界，不输出可比的根平移估计 |
+
+因此，表中的“6 IMU”表示六个物理佩戴点，而不是所有网络都接收相同的张量
+维度。尤其 MobilePoser 的 `6s = 5 个学习槽 + 1 个骨盆参考`，不能与 PIP、PNP
+的六个显式输入槽直接按网络宽度比较。
+
+### 2.3 结果图索引
+
+drift 目录中已经生成了可直接用于报告的图：
+
+| 图 | 用途 | 文件 |
+|---|---|---|
+| 图 1 | 随时间的旋转漂移 | `benchmark_results/<method>/drift/fig1_drift_timeseries.png` |
+| 图 2 | 组合/传感器配置比较 | `benchmark_results/<method>/drift/fig2_combo_comparison.png` |
+| 图 3 | 传感器数量与腰部误差 | `benchmark_results/<method>/drift/fig3_sensor_count_vs_lumbar.png` |
+| 图 4 | 根平移漂移 | `benchmark_results/<method>/drift/fig4_translation_drift.png` |
+
+建议论文或汇报中至少并排放置 MobilePoser 的图 1、图 3、图 4，以及 PNP、
+TransPose 的图 1；这样能同时呈现传感器数量、姿态随时间变化和根平移发散。
+
+## 3. 完整性门禁
 
 逐序列清单中，`record_count` 是尝试的序列数，`failed_sequences` 是有明确
 失败原因的记录。`benchmark_report.json` 缺失或状态非 `passed` 时，结果不具备
@@ -57,7 +133,7 @@ drift 的五个强制动作在每个完整序列清单中均有相同覆盖：`c
 `interaction` 100、`lying` 5、`sports` 12、`transitions` 92。其余序列属于
 `standing`、`walking`、`running`、`jumping`、`sitting`、`dancing` 等动作。
 
-## 3. 指标定义和注意事项
+## 4. 指标定义和注意事项
 
 - `mean_rotation_deg.all`：24 个 SMPL 关节的平均角误差，单位为度，越低越好。
 - `lumbar`：joints 3、6、9 的平均值；动作清单中的腰部统计还可在 JSON/CSV
@@ -69,7 +145,7 @@ drift 的五个强制动作在每个完整序列清单中均有相同覆盖：`c
 - `contact_foot_sliding_m_per_s` 是基于 GT 近地面帧的运动学代理，不是力传感器
   接触标签。当前只有 MobilePoser drift 传出了预测/目标关节轨迹并计算该字段。
 
-## 4. DIP-IMU 标准结果
+## 5. DIP-IMU 标准结果
 
 下表的传感器数是**物理 IMU 数**。MobilePoser 同时列出学习输入槽数；其他方法
 按各自 evaluator 的 `sensor_count` 记录。PIP 行带 †，表示虽有标准 JSON，逐序列
@@ -88,7 +164,7 @@ drift 的五个强制动作在每个完整序列清单中均有相同覆盖：`c
 TransPose 与 PIP 的整体角误差差 0.46°，但 PIP 的 QP 失败使这个差值不能当作
 严格排名。MobilePoser 六物理 IMU 的膝部误差最低；上肢远端仍明显高于 TransPose。
 
-### 4.1 MobilePoser 4/5/6 传感器 sweep
+### 5.1 MobilePoser 4/5/6 传感器 sweep
 
 MobilePoser 的骨盆是固定参考槽位，物理计数和网络输入必须分开写：
 
@@ -108,7 +184,7 @@ MobilePoser 的骨盆是固定参考槽位，物理计数和网络输入必须�
 平移没有单调改善，5 IMU 的 2.240 m 反而略低于 6 IMU，差值只有 0.026 m，
 应通过重复种子和更多动作确认，而不能解读为传感器越少越好。
 
-## 5. AMASS drift 标准结果
+## 6. AMASS drift 标准结果
 
 | 方法 | 物理 IMU | 全身旋转 (°) | 腰部 (°) | 平移 (m) | 状态 |
 |---|---:|---:|---:|---:|---|
@@ -126,7 +202,7 @@ MobilePoser 的骨盆是固定参考槽位，物理计数和网络输入必须�
 runner 生成的 `benchmark_report.json`，所以只保留 provenance warning。若需要
 完整视频，当前目录有 1,715/1,854 个 MP4，视频补齐才需要重跑视频阶段。
 
-## 6. 强制动作类别：均值、P90 和失败率
+## 7. 强制动作类别：均值、P90 和失败率
 
 下面是 `full_6s`（MobilePoser 为物理 6/学习 5 槽）的全身旋转角误差，格式为
 “均值 / P90；失败率”。PIP 的均值/P90 仅对成功序列计算。完整的腰部、根平移和
@@ -147,7 +223,7 @@ MobilePoser 在 transitions、interaction 和 sports 接近 TransPose，但 craw
 和 lying 的 P90 更高；IMUCoCo 在 crawling/lying 明显变差。PIP 的成功序列数值很低，但 interaction 失败率 19%、lying 20%，
 因此不能只看其均值。
 
-### 6.1 根平移和接触代理
+### 7.1 根平移和接触代理
 
 对有平移输出的方法，逐动作均值如下（RMSE / 每秒漂移率 / 终点误差，单位分别为
 m、m/s、m）：
@@ -166,7 +242,7 @@ transitions 0.295、interaction 0.100、sports 0.149 m/s（均值）；对应 P9
 SliMeVR 和 TransPose 当前没有把预测/目标关节轨迹传给统一接触指标，
 所以其接触脚滑移必须写 N/A，不能填入 0。
 
-## 7. MobilePoser drift 4/5/6 传感器曲线
+## 8. MobilePoser drift 4/5/6 传感器曲线
 
 下表来自 `benchmark_results/mobileposer/drift/drift_data.npz` 的逐时间平均曲线，
 不是逐动作标准表。根误差是该时刻的平均欧氏误差；“全程均值”对应标准 JSON 的
@@ -182,7 +258,7 @@ SliMeVR 和 TransPose 当前没有把预测/目标关节轨迹传给统一接触
 较低，不足以证明其长期更稳定，因为这是一次固定噪声种子和动作抽样。应增加
 重复种子、短时 RMSE、接触约束和起身/躺下终点误差。
 
-## 8. 运行成本和移动端缺口
+## 9. 运行成本和移动端缺口
 
 `duration_seconds` 是端到端进程时间，包含数据读取、模型推理、视频和图表 I/O，
 不是 CPU 单帧延迟。当前 runner 记录如下：
@@ -202,7 +278,7 @@ SliMeVR 和 TransPose 当前没有把预测/目标关节轨迹传给统一接触
 下记录参数量、FP16/INT8 文件大小、预热后 CPU 单帧延迟、峰值 RAM 和能耗，并
 单独排除视频渲染时间。
 
-## 9. 当前可复现文件和下一步
+## 10. 当前可复现文件和下一步
 
 - 标准指标：`benchmark_results/<method>/<suite>/standard_metrics.json`
 - 逐序列结果：`benchmark_results/<method>/<suite>/detailed_metrics.jsonl`
@@ -239,3 +315,67 @@ python benchmarks/run.py run --method pip --suite drift \
 
 只有在需要补齐 MobilePoser 的 139 个缺失视频，或必须拥有 runner 生成的命令/退出
 时间元数据时，才额外执行其 drift 命令；这不会改善已有数值指标。
+
+## 11. 按方法的实现解释与适用边界
+
+### MobilePoser：可变传感器数量，但根平移长期漂移
+
+MobilePoser 是本轮唯一原生面向少传感器配置的学习方法。代码通过固定五个学习
+槽位和缺失槽补零实现 4/5/6 物理 IMU sweep；骨盆 slot 5 作为参考信号保留。DIP
+上 6 IMU 的全身旋转误差为 20.62°，在四、五、六个物理 IMU 间分别为 21.38°、
+21.03°、20.62°，说明减少一个前端传感器的姿态代价较小。相反，drift 中根误差
+在 120 s 达到约 26.4 m，且 4/5/6 配置均出现明显累积，说明其根平移头仍是长期
+运动的主要风险。它适合研究“少传感器能否保持姿态覆盖”，不适合仅凭当前结果
+宣称长期全局轨迹可靠。
+
+### TransPose：当前最稳定的端到端折中
+
+TransPose 由三级姿态网络和根速度/接触分支组成，代码中 `forward_offline` 同时
+返回 pose 与 root translation。它在 DIP（19.58°）和 drift（19.35°）均为完整
+零失败结果，五类强制动作也保持 0% 失败率；drift 根平移均值 1.421 m，明显低于
+MobilePoser 的 12.766 m。代价是固定六传感器配置，且上肢远端和膝部误差仍高于
+理想的局部姿态估计。
+
+### PIP：成功序列精度高，但 QP 失败改变了结论
+
+PIP 在成功序列上的 drift 全身误差为 13.27°、根平移 1.005 m，表面上优于其他
+方法；但 618 条 drift 序列中有 104 条因 `cvxopt: invalid QP solution` 失败，DIP
+也有 1/6 失败。因此 PIP 数值应解释为“成功序列诊断值”，而不是完整覆盖率下的
+方法排名。其优势来自物理 QP，失败模式也正是该后处理在 interaction、running、
+jumping 等高接触/高加速度动作上的稳定性瓶颈。
+
+### PNP：物理优化更完整，但腰部和根平移仍偏高
+
+PNP drift 已补齐 618/618 序列，因而具备完整排名资格。其全身旋转 24.35°、腰部
+14.92°、根平移 1.958 m，均高于 TransPose；transitions 的根平移 RMSE 2.581 m、
+终点误差 4.206 m，说明物理约束并不会自动消除长时根漂移。PNP 是完整性良好的
+物理基线，而不是当前数据上的精度上界。
+
+### GlobalPose：姿态结果中等，代码路径与原生论文输入不同
+
+GlobalPose drift 全身误差 21.94°、腰部 9.66°，没有根平移字段。原始代码需要
+加速度、角速度和传感器姿态；本项目 bridge 根据共享 `ori` 通过有限差分构造角
+速度。因此它的结果适合做统一协议下的姿态比较，但不能直接等同于使用原生校准
+日志的论文复现。报告中的 N/A translation 是“没有可比预测”，不是零误差。
+
+### IMUCoCo：灵活放置方向的代价集中在上肢
+
+IMUCoCo 代码显式支持 `lw/rw/lp/rp` 等组合，并以网格/部位特征和根运动分支完成
+姿态与平移。full-6 DIP 全身误差 34.15°，上臂 72.19°、前臂 70.84°，明显高于
+TransPose 和 MobilePoser；但 DIP 根平移 0.754 m，优于 MobilePoser。它更适合
+作为“传感器位置灵活性”的对照，而不是当前 full-6 精度主基线。
+
+### SliMeVR FK：必要的几何下界
+
+SliMeVR 直接将仪器化部位姿态赋给 SMPL 关节并沿骨架传播，不包含学习或根平移估计。
+DIP 全身误差 26.61°、drift 27.94°，上肢误差尤其高。它的价值在于给出“不使用
+学习模型时，仅靠传感器姿态和 FK 能达到什么水平”的下界，不能与学习方法的平移
+输出直接比较。
+
+### 比较时应遵循的三条规则
+
+1. 先按 `run_status`、失败率和传感器配置过滤，再比较误差均值；PIP 必须保留
+   `diagnostic-only` 标记。
+2. 将姿态与根平移分开解读；GlobalPose、SliMeVR 没有平移预测，不能填 0。
+3. 对 MobilePoser 报告物理 IMU 数和学习槽数两个字段；对 PIP、PNP、TransPose
+   报告固定六物理 IMU，不把不同的输入张量实现误认为不同的传感器数量。

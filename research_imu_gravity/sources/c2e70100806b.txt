@@ -1,0 +1,184 @@
+URL: https://arxiv.org/abs/2209.08816
+
+[2209.08816] LGC-Net: A Lightweight Gyroscope Calibration Network for Efficient Attitude Estimation
+Skip to main content
+Search arXiv
+Press Enter to search ·
+Advanced search
+Computer Science > Robotics
+arXiv:2209.08816
+(cs)
+[Submitted on 19 Sep 2022]
+Title:
+LGC-Net: A Lightweight Gyroscope Calibration Network for Efficient Attitude Estimation
+Authors:
+Yaohua Liu
+,
+Wei Liang
+,
+Jinqiang Cui
+View a PDF of the paper titled LGC-Net: A Lightweight Gyroscope Calibration Network for Efficient Attitude Estimation, by Yaohua Liu and 1 other authors
+View PDF
+HTML (experimental)
+Abstract:
+This paper presents a lightweight, efficient calibration neural network model for denoising low-cost microelectromechanical system (MEMS) gyroscope and estimating the attitude of a robot in real-time. The key idea is extracting local and global features from the time window of inertial measurement units (IMU) measurements to regress the output compensation components for the gyroscope dynamically. Following a carefully deduced mathematical calibration model, LGC-Net leverages the depthwise separable convolution to capture the sectional features and reduce the network model parameters. The Large kernel attention is designed to learn the long-range dependencies and feature representation better. The proposed algorithm is evaluated in the EuRoC and TUM-VI datasets and achieves state-of-the-art on the (unseen) test sequences with a more lightweight model structure. The estimated orientation with our LGC-Net is comparable with the top-ranked visual-inertial odometry systems, although it does not adopt vision sensors. We make our method open-source at:
+this https URL
+Subjects:
+Robotics (cs.RO)
+; Artificial Intelligence (cs.AI)
+Cite as:
+arXiv:2209.08816
+[cs.RO]
+(or
+arXiv:2209.08816v1
+[cs.RO]
+for this version)
+https://doi.org/10.48550/arXiv.2209.08816
+Focus to learn more
+arXiv-issued DOI via DataCite
+Submission history
+From: Yaohua Liu [
+view email
+]
+[v1]
+Mon, 19 Sep 2022 08:03:03 UTC (1,117 KB)
+Full-text links:
+Access Paper:
+View a PDF of the paper titled LGC-Net: A Lightweight Gyroscope Calibration Network for Efficient Attitude Estimation, by Yaohua Liu and 1 other authors
+View PDF
+HTML (experimental)
+TeX Source
+view license
+Current browse context:
+cs.RO
+< prev
+|
+next >
+new
+|
+recent
+|
+2022-09
+Change to browse by:
+cs
+cs.AI
+References & Citations
+NASA ADS
+Google Scholar
+Semantic Scholar
+export BibTeX citation
+Loading...
+BibTeX formatted citation
+×
+loading...
+Data provided by:
+Bookmark
+Bibliographic Tools
+Bibliographic and Citation Tools
+Bibliographic Explorer Toggle
+Bibliographic Explorer
+(
+What is the Explorer?
+)
+Connected Papers Toggle
+Connected Papers
+(
+What is Connected Papers?
+)
+Litmaps Toggle
+Litmaps
+(
+What is Litmaps?
+)
+scite.ai Toggle
+scite Smart Citations
+(
+What are Smart Citations?
+)
+Code, Data, Media
+Code, Data and Media Associated with this Article
+alphaXiv Toggle
+alphaXiv
+(
+What is alphaXiv?
+)
+Links to Code Toggle
+CatalyzeX Code Finder for Papers
+(
+What is CatalyzeX?
+)
+DagsHub Toggle
+DagsHub
+(
+What is DagsHub?
+)
+GotitPub Toggle
+Gotit.pub
+(
+What is GotitPub?
+)
+Huggingface Toggle
+Hugging Face
+(
+What is Huggingface?
+)
+ScienceCast Toggle
+ScienceCast
+(
+What is ScienceCast?
+)
+Demos
+Demos
+Replicate Toggle
+Replicate
+(
+What is Replicate?
+)
+Spaces Toggle
+Hugging Face Spaces
+(
+What is Spaces?
+)
+Spaces Toggle
+TXYZ.AI
+(
+What is TXYZ.AI?
+)
+Related Papers
+Recommenders and Search Tools
+Link to Influence Flower
+Influence Flower
+(
+What are Influence Flowers?
+)
+Core recommender toggle
+CORE Recommender
+(
+What is CORE?
+)
+Author
+Venue
+Institution
+Topic
+About arXivLabs
+arXivLabs: experimental projects with community collaborators
+arXivLabs is a framework that allows collaborators to develop and share new arXiv features directly on our website.
+Both individuals and organizations that work with arXivLabs have embraced and accepted our values of openness, community, excellence, and user data privacy. arXiv is committed to these values and only works with partners that adhere to them.
+Have an idea for a project that will add value for arXiv's community?
+Learn more about arXivLabs
+.
+Which authors of this paper are endorsers?
+|
+Disable MathJax
+(
+What is MathJax?
+)
+We gratefully acknowledge support from
+        our
+major funders
+,
+member institutions
+,
+,
+        and all contributors.
+Major funding support from

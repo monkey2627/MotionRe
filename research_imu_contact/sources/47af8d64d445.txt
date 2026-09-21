@@ -1,0 +1,191 @@
+URL: https://arxiv.org/abs/2606.28604
+
+[2606.28604] IMU-HOI: A Symbiotic Framework for Coherent Human-Object Interaction and Motion Capture via Contact-Conscious Inertial Fusion
+Skip to main content
+Search arXiv
+Press Enter to search ·
+Advanced search
+Computer Science > Computer Vision and Pattern Recognition
+arXiv:2606.28604
+(cs)
+[Submitted on 26 Jun 2026]
+Title:
+IMU-HOI: A Symbiotic Framework for Coherent Human-Object Interaction and Motion Capture via Contact-Conscious Inertial Fusion
+Authors:
+Lizhou Lin
+,
+Songpengcheng Xia
+,
+Zengyuan Lai
+,
+Lan Sun
+,
+Jiarui Yang
+,
+Ling Pei
+View a PDF of the paper titled IMU-HOI: A Symbiotic Framework for Coherent Human-Object Interaction and Motion Capture via Contact-Conscious Inertial Fusion, by Lizhou Lin and 5 other authors
+View PDF
+HTML (experimental)
+Abstract:
+Capturing full-body human motion with object interactions is crucial for AR/VR and robotics applications, yet it remains challenging for conventional vision-based methods due to occlusions and constrained capture volumes. Inertial measurement units (IMUs) offer a compelling alternative without line-of-sight requirements, but existing IMU-based motion capture assumes an isolated human and ignores object contacts and dynamics. To bridge this gap, we present IMU-HOI, a novel framework that jointly recovers full-body human pose and 6-DoF object trajectory from sparse IMUs on the body and object, explicitly modeling human-object interaction. Our approach first infers probabilistic hand-object contacts directly from IMU streams and uses them as a high-level signal to route between kinematic and inertial reasoning. These contact cues drive a three-stage fusion pipeline that refines human pose and root translation, and fuses hand-based forward kinematics with object-IMU integration for object motion, yielding coherent, drift-resilient trajectories for both human and object. Experiments on challenging human-object interaction scenarios demonstrate substantial accuracy gains over prior inertial motion capture methods. Moreover, IMU-HOI can be plugged into existing sparse-IMU mocap backbones with minimal changes, effectively extending the scope of purely inertial motion capture from isolated humans to full human-object interaction and joint motion estimation.
+Comments:
+10 pages, 5 figures. Accepted by CVPR 2026
+Subjects:
+Computer Vision and Pattern Recognition (cs.CV)
+Cite as:
+arXiv:2606.28604
+[cs.CV]
+(or
+arXiv:2606.28604v1
+[cs.CV]
+for this version)
+https://doi.org/10.48550/arXiv.2606.28604
+Focus to learn more
+arXiv-issued DOI via DataCite
+Journal reference:
+Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR), 2026, pp. 42901-42910
+Submission history
+From: Lizhou Lin [
+view email
+]
+[v1]
+Fri, 26 Jun 2026 20:52:54 UTC (6,351 KB)
+Full-text links:
+Access Paper:
+View a PDF of the paper titled IMU-HOI: A Symbiotic Framework for Coherent Human-Object Interaction and Motion Capture via Contact-Conscious Inertial Fusion, by Lizhou Lin and 5 other authors
+View PDF
+HTML (experimental)
+TeX Source
+view license
+Current browse context:
+cs.CV
+< prev
+|
+next >
+new
+|
+recent
+|
+2026-06
+Change to browse by:
+cs
+References & Citations
+NASA ADS
+Google Scholar
+Semantic Scholar
+export BibTeX citation
+Loading...
+BibTeX formatted citation
+×
+loading...
+Data provided by:
+Bookmark
+Bibliographic Tools
+Bibliographic and Citation Tools
+Bibliographic Explorer Toggle
+Bibliographic Explorer
+(
+What is the Explorer?
+)
+Connected Papers Toggle
+Connected Papers
+(
+What is Connected Papers?
+)
+Litmaps Toggle
+Litmaps
+(
+What is Litmaps?
+)
+scite.ai Toggle
+scite Smart Citations
+(
+What are Smart Citations?
+)
+Code, Data, Media
+Code, Data and Media Associated with this Article
+alphaXiv Toggle
+alphaXiv
+(
+What is alphaXiv?
+)
+Links to Code Toggle
+CatalyzeX Code Finder for Papers
+(
+What is CatalyzeX?
+)
+DagsHub Toggle
+DagsHub
+(
+What is DagsHub?
+)
+GotitPub Toggle
+Gotit.pub
+(
+What is GotitPub?
+)
+Huggingface Toggle
+Hugging Face
+(
+What is Huggingface?
+)
+ScienceCast Toggle
+ScienceCast
+(
+What is ScienceCast?
+)
+Demos
+Demos
+Replicate Toggle
+Replicate
+(
+What is Replicate?
+)
+Spaces Toggle
+Hugging Face Spaces
+(
+What is Spaces?
+)
+Spaces Toggle
+TXYZ.AI
+(
+What is TXYZ.AI?
+)
+Related Papers
+Recommenders and Search Tools
+Link to Influence Flower
+Influence Flower
+(
+What are Influence Flowers?
+)
+Core recommender toggle
+CORE Recommender
+(
+What is CORE?
+)
+Author
+Venue
+Institution
+Topic
+About arXivLabs
+arXivLabs: experimental projects with community collaborators
+arXivLabs is a framework that allows collaborators to develop and share new arXiv features directly on our website.
+Both individuals and organizations that work with arXivLabs have embraced and accepted our values of openness, community, excellence, and user data privacy. arXiv is committed to these values and only works with partners that adhere to them.
+Have an idea for a project that will add value for arXiv's community?
+Learn more about arXivLabs
+.
+Which authors of this paper are endorsers?
+|
+Disable MathJax
+(
+What is MathJax?
+)
+We gratefully acknowledge support from
+        our
+major funders
+,
+member institutions
+,
+,
+        and all contributors.
+Major funding support from

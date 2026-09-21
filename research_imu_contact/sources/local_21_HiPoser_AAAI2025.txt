@@ -1,0 +1,506 @@
+       HiPoser: 3D Human Pose Estimation with Hierarchical Shared Learning
+                  at Parts-Level Using Inertial Measurement Units
+       Guorui Liao1 , Chunyuan Zheng2 , Li Cheng3 , Haoyu Xie1 , Shanshan Huang1 , Jun Liao1 ,
+                                    Haoxuan Li4 , Li Liu1, *
+                             1
+                           School of Big Data & Software Engineering, Chongqing University, China
+                                 2
+                                   School of Mathematical Sciences, Peking University, China
+                      3
+                        Department of Electrical and Computer Engineering, University of Alberta, Canada
+                                      4
+                                        Center for Data Science, Peking University, China
+                 {guoruiliao,haoyuxie}@stu.cqu.edu.cn, {cyzheng,hxli}@stu.pku.edu.cn, lcheng5@ualberta.ca,
+                                         {shanshanhuang,liaojun,dcsliuli}@cqu.edu.cn
+                                                                                                                  Task 4           All Parts Information
+                            Abstract                                                                                X
+                                                                                                                                   Upper Limbs Information
+                                                                                                                        Y
+                                                                                                              Z                    Lower Limbs Information
+  This paper considers the challenging problem of 3D Human                                                     Global              Torso Information
+                                                                                                             Translation
+  Pose Estimation (HPE) from a sparse set of Inertial Measure-                       X
+                                                                                 Z           IMU             Task Head        Task 3
+  ment Units (IMUs). Existing efforts typically reconstruct a                            Y
+
+  pose sequence by either directly tackling whole-body mo-
+  tions or focusing on distinctive spatio-temporal features of lo-                            Task 2        Mamba Block
+                                                                                                                            Upper Limbs
+                                                                                                                               Pose
+  cal body parts. Unfortunately, these methods ignore existing
+  interdependent motor synergies amongst body parts, which                                                                  Task Head
+
+  may lead to pose estimation with ambiguous local parts. This                           Lower Limbs        Mamba Block       Task 1
+                                                                                            Pose
+  observation motivates us to propose a hierarchical learning-
+                                                                                         Task Head
+  based approach, HiPoser, which utilizes a hierarchical shared
+  structure using Mamba blocks as the backbone to focus on                                   Information    Mamba Block     Torso Pose
+                                                                                             Flowing
+  the following estimation tasks, involving: 1) torso pose, 2)                                                              Task Head
+  lower limbs pose, 3) upper limbs pose, and finally 4) global                               Hierarchical
+                                                                                                  Shared    Mamba Block        Motion States
+  translation. These tasks selectively incorporate body motion                                  Structure
+  states and are to be carried out sequentially in reconstructing
+  part-based poses, which are amalgamated to estimate the final       Figure 1: An overview of our Mamba-based hierarchical
+  full-body pose with the global translation that satisfies inter-    shared learning approach, which decomposes 3D HPE into
+  part consistencies. Our hierarchical structure allows HiPoser       four tasks, each focusing on a specific body part motion.
+  the flexibility in prioritizing different aspects of pose estima-   By facilitating the flowing of body parts motion informa-
+  tion, to emphasize more on detail or stability. Empirical eval-     tion among different tasks and incorporating motion states,
+  uations over three benchmark datasets demonstrate the supe-         our approach is empirically shown to produce stable results.
+  riority of HiPoser over existing state-of-the-art models, sug-
+  gesting that analyzing the synergistic movement of body parts
+  is indeed important for advancing IMU-based 3D HPE.
+                                                                      Measurement Units (IMUs) (Mollyn et al. 2023), are virtu-
+                                                                      ally unaffected by environmental factors like object occlu-
+                        Introduction                                  sion, poor lighting, and space constraints. Additionally, they
+                                                                      provide privacy protection for the user.
+3D Human Pose Estimation (HPE) is the process of deter-
+                                                                         Early works (Von Marcard et al. 2017; Huang et al. 2018;
+mining the human joint positions in a three-dimensional co-
+                                                                      Jiang et al. 2022a) attempted to achieve whole-body pose
+ordinate system using motion signals. It is crucial in vari-
+                                                                      reconstruction using a sparse IMUs configuration to capture
+ous real-world applications, including somatosensory gam-
+                                                                      dynamic human motion information have proven to be chal-
+ing (Lai, Lu, and Bi 2024), competitive sports (Tanaka et al.
+                                                                      lenging. Other complex network models (Yi, Zhou, and Xu
+2023), medical rehabilitation (Gu et al. 2023), and emer-
+                                                                      2021; Yi et al. 2022) achieved acceptable performance of
+gency rescue (Yogesh et al. 2023). These applications re-
+                                                                      whole-body pose estimation and found that the information
+quire the analysis of human pose transformations (Zheng
+                                                                      on the leaf joints is beneficial for reconstructing the human
+et al. 2023; Desmarais et al. 2021). In capturing motion sig-
+                                                                      pose. However, the contribution of articulated leaf joints lo-
+nals, compared to vision sensors (Li et al. 2023; Li, Liu, and
+                                                                      cated in different limbs remains ambiguous.
+Wu 2023; Jiang et al. 2025) and environmental sensors (Lee
+et al. 2023; Zhou et al. 2023), wearable sensors, like Inertial          The latest work (Zhang et al. 2024a) aimed to address
+                                                                      these ambiguities by classifying the leaf joints into three
+    * Corresponding author                                            parts: torso, lower limbs, and upper limbs, and achieved
+Copyright © 2025, Association for the Advancement of Artificial       state-of-the-art (SOTA) results. Nevertheless, their model-
+Intelligence (www.aaai.org). All rights reserved.                     ing may lead to negative motion information transfer among
+different parts poses reconstruction (Tang and Wu 2019).         poses, Schepers et al. (2018) used 17 IMUs to reconstruct
+Specifically, this work used a shared layer that extracted       the whole-body pose. However, such a dense IMUs config-
+whole-body information to estimate body parts poses in par-      uration can disturb the wearing sensations of users and in-
+allel. However, different parts have different motion fea-       terfere with mobility. To evaluate the effectiveness of the
+tures, which may potentially lead to conflicts among other       sparse configuration, DIP (Huang et al. 2018) regressed
+parts in pose reconstruction. Besides, this approach treated     6 IMU measurements to the pose parameters of human
+each task as equally important, inherently repeating smaller     joints. Nevertheless, DIP remains ambiguous in describing
+HPE tasks, and did not make explicit the kinematic correla-      the movement relationships of the human body. Underly-
+tions among different parts in a single HPE. A more reason-      ing the same configuration, TransPose (Yi, Zhou, and Xu
+able approach should maintain balance during movement,           2021) used a multi-stage framework based on Bidirectional
+the torso, lower limbs, and upper limbs will synergize with      Recurrent Neural Networks (Bi-RNN), which consciously
+each other to counteract the effects of inertia caused by the    estimated the position of leaf joints before regressing to the
+movement of any single part of the body.                         full body pose and achieved better performance. The fact
+   To this end, we propose a hierarchical shared learning ap-    that TransPose performed pose estimation in the sequence
+proach for 3D HPE, HiPoser, which is shown in Figure 1.          of the human joints chain illustrated that the motion of the
+It learns the motion information and characteristics of the      leaf joints contributes to the global human pose. Unfortu-
+different parts sequentially, and finally performs local parts   nately, this utility remained ambiguous for different body
+poses estimation as well as global translation estimation on     parts in which the leaf joints are located. PIP (Yi et al.
+the human body through different heads. Specifically, we de-     2022), based on TransPose, considered inertial effects under
+compose the 3D HPE process into four estimation tasks: 1)        physical constraints to improve the stability of the model.
+torso pose, 2) lower limbs pose, 3) upper limbs pose, and        TIP (Jiang et al. 2022b) introduced the concept of station-
+4) global translation, and design a hierarchical shared struc-   ary body points with zero velocity and used a Transformer
+ture to facilitate the learning and sharing of features among    structure to alleviate the estimation drift problem. However,
+the different body parts. In addition, we utilize Mamba (Dao     none of these works have effectively utilized the motion cor-
+and Gu 2024) as the backbone, which allows us to selec-          relation of different body parts, which may lead to difficul-
+tively extract or omit motion information based on the cur-      ties in reconstructing the movement details of body parts.
+rent input motion deep-level features, resulting in improved     In this paper, we decompose the whole body into different
+performance during long action processes. We also incorpo-       body parts for pose reconstruction and consider using pos-
+rate the motion states (i.e., joints poses and body position),   sible synergistic relationships among body parts to achieve
+into the hierarchical shared structure for each action win-      more stable results with global consistency.
+dow, enhancing the stable performance of HiPoser during
+the movement. Considering the motion synergies of body           Multi-Task Learning on Human Pose Estimation
+parts, HiPoser is able to adjust the task sequence to achieve    We present the design of whole-body pose in a hierarchical
+varying levels of prioritized performance (e.g., detail prior-   approach as a task decomposition in Multi-Task Learning
+ity and stability priority).                                     (MTL), which allows the model to learn and share basic fea-
+   Overall, our contributions are as follows:                    tures extracted from multiple related tasks, facilitating the
+  • We propose a novel hierarchical shared learning-based        model performance. Luvizon, Picard, and Tabia (2020) used
+    approach, HiPoser, which extracts and shares the un-         videos to perform 2D/3D HPE and action recognition, both
+    derlying motion features of different body parts (i.e.,      of which obtained performance improvements compared to
+    torso, lower limbs, and upper limbs), sequentially recon-    performing a single task. Burgermeister and Curio (2022)
+    structing the body parts poses and estimating whole-body     designed an MTL-based method for 3D human pose estima-
+    translation in the global consistency, achieving different   tion and orientation estimation, achieving competitive per-
+    priorities on 3D HPE based on different task sequences.      formance. Shi et al. (2022) explored the kinematic contri-
+  • We are the first to adopt a Mamba-based network in 3D        bution of the joints while estimating the whole-body pose,
+    human pose estimation. By incorporating motion states,       which greatly improved the performance. The success of
+    our HiPoser can effectively store the history information    these works may be due to the sets of tasks mutually rein-
+    of different body parts and extract potential motion fea-    forcing the optimization direction of their models. The lat-
+    tures for more fine-grained pose reconstruction.             est work, DynaIP (Zhang et al. 2024a), can also be consid-
+  • Extensive experiments on AMASS, DIP-IMU, and To-             ered as an MTL-based approach. They utilized RNN to ex-
+    talCapture show that our HiPoser is significantly better     tract global motion information from IMUs and shared them
+    than the competitors. Further, we have conducted suffi-      across three body parts pose estimations, achieving SOTA
+    cient experiments on various details of HiPoser to con-      performance. However, different parts have different mo-
+    firm its superiority.                                        tion paradigms, which may cause the tasks to conflict with
+                                                                 each other and degrade the model performance. For exam-
+                                                                 ple, when driving lower limbs to run, upper limbs will move
+                     Related Work                                in concert to maintain balance, whereas it can also move
+IMU-based 3D Human Pose Estimation                               independently of the lower limbs. Simultaneously, different
+The deployment position and number of different IMUs             parts are synergistic during the movement, so simply shar-
+may affect human pose reconstruction. For commercial pur-        ing body information to reconstruct parts poses may lead to
+                                               Torso Joints         time scale. Formally, we align the IMU measurements to
+              Right wrist            SMPL      Upper Limbs Joints   the spine root joint and perform normalization and splic-
+                                               Lower Limbs Joints   ing operations to obtain the input signal X ∈ RS×12 =
+                                Head                                   (1)  (2)          (S) (1)  (2)          (S)
+                                               IMUs Configuration   {xA , xA , . . . , xA , xR , xR , . . . , xR }, where xA ∈ R3
+                                                                    denotes the 3-axis acceleration measurements, xR ∈ R3×3
+                                                                    denotes the rotation matrix of the selected joints in three-
+                                                                    dimensional space. The output Y = {YP ose , YT rans },
+                                                                    where YP ose ∈ R24×3×3 is the rotation matrix integrating
+                            Pelvis           Left wrist             the 24 joints of SMPL, YT rans ∈ R3 denotes the position
+                                                                    under the global 3-axis coordinate system. Our model es-
+                                                                    timates X(t) to get the output Y (t) of t-th frame, where
+                                                                    t = {1, . . . , T }.
+                   Right knee          Left knee
+
+                                                                                          Methodology
+                                                                    The overall architecture of HiPoser is shown in Figure 3. We
+                                                                    design a hierarchical shared structure so that motion features
+                                                                    from the torso, lower limbs, and upper limbs can be shared
+Figure 2: Our IMUs configuration is aligned with the SMPL           at different hierarchies. Mamba blocks as the backbone of
+joint positions to visualize the human pose.                        the hierarchical shared structure are able to infer the cor-
+                                                                    rect pose during motion based on the input of the current
+                                                                    motion information and the motion states, which is crucial
+unstable performance. Therefore, we consider utilizing the          for reducing the pose accumulation error in IMU-based 3D
+hierarchical structure to implement the sequential motion in-       HPE problems. Lastly, simple linear functions acting as task
+formation sharing of body parts, which avoids simultaneous          heads can efficiently reconstruct the pose of each body part
+influence, effectively alleviating the problem of task conflict.    and the translation of the whole body. HiPoser with a hier-
+Moreover, the different estimation task sequences of body           archical shared structure allows flexible setting of task se-
+parts allow HiPoser to achieve different priorities on human        quence, achieving different priorities of 3D HPE.
+pose reconstruction.
+                                                                    Mamba on Action Process
+Mamba and Selective State Space Models
+                                                                    Previous works have chosen RNN (Zhang et al. 2024a),
+Mamba (Dao and Gu 2024) is a linear time series model that          Bi-RNN (Huang et al. 2018; Yi, Zhou, and Xu 2021; Yi
+can be computed in parallel at runtime, reducing memory             et al. 2022), or Transformer (Jiang et al. 2022b) to capture
+requirements and improving efficiency. It possesses Selec-          motion-related feature. However, these methods may not be
+tive State Space Models (SSM) that more efficiently capture         effective solutions for IMU-based 3D HPE in terms of re-
+relevant information over long periods. Recently, extensive         source consumption and historical inference.
+research has been done on Mamba to explore its possibili-              To satisfy the requirement of both efficient motion pose
+ties in various fields such as vision (Chen et al. 2024; Zhu        inference capability and capturing all the necessary infor-
+et al. 2024), speech (Jiang, Han, and Mesgarani 2024), large        mation from context, we consider employing Mamba (Dao
+language models (Zhao et al. 2024) and context generation           and Gu 2024) blocks based on selective SSM (S-SSM) as
+(Zhang et al. 2024b). In this paper, we use Mamba blocks            the backbone of a hierarchical shared structure. Specifically,
+as the backbone for HiPoser, which may have advantages in           S-SSM allows selective processing of motion features and
+reconstructing human poses during long-term movement.               efficiently memorizes information about the movement over
+                                                                    a long period. We set St to be the state variable of frame t in
+                       Preliminaries                                the shared layer, which is formulated as follows:
+The Skinned Multi-Person Linear (SMPL) (Loper et al.
+2023) model is capable of rendering realistic human shape                            St = A(∆) St−1 + B(∆) ht ,                (1)
+due to its linear hybrid skeletal skinning technique, and de-                        ht+1 = CSt ,                              (2)
+scribes joint motions with rotation matrices to represent dy-
+namic human pose effectively. Our IMUs configuration fol-           where h denotes the hidden feature in S-SSM. ∆ is the time
+lows the works of Huang et al. (2018); Yi, Zhou, and Xu             step and is computed on a continuous time scale for the dis-
+(2021); Yi et al. (2022), aligning with the corresponding           cretized matrices A(∆) and B(∆) . The input matrix B(∆)
+joint positions of the SMPL to efficiently capture the poses        acts directly on ht , and A(∆) is a state matrix, which stores
+of body parts during the movement, as shown in Figure 2.            all historical motion information. The output matrix C de-
+                                                                    fines a linear mapping relation from St to ht+1 , which does
+Problem Formulation                                                 not require ∆ for discretization.
+Given a dataset D containing N samples of action events             Motion Information Store. Notably, A(∆) is significant
+to S IMUs recording motion changes in human pose. Each              in the modeling of action processes due to the importance
+sample is a sequence of T frames collected at a uniform             of action state updates depending on the historical motion
+Figure 3: Overall architecture of HiPoser with task sequence: Torso→ Lower limbs→ Upper limbs→ Translation, which cor-
+responds to the kinematic force generation and has a more stable effect in reconstructing the body parts poses. The hierarchical
+shared structure with Mamba blocks as the backbone is used to extract the motion information of each part. Different tasks and
+motion states are hierarchically learned and shared to finally reconstruct the whole human pose.
+
+
+information it stores. To efficiently solve the long-range de-     where ht is projected through Linear, and the parameters
+pendency problem of action process modeling in limited             pB(∆) , pC and p∆ are determined during training. Indeed,
+storage space, A(∆) uses a High-order Polynomial Projec-           the state matrix A(∆) , storing historical motion information,
+tion Operator to compress all the current input information        is discretized by ∆ and obtains the new state St with B(∆) ,
+from St−1 , which is defined as follows:                           thus A(∆) achieves data dependent in a parameter efficient
+                                                                  way as well, i.e., A(∆) can generate new states St with ht ,
+                            0, if i < j;                          enabling our model to implement pose inference selectively.
+            A(∆) (i, j) = i + 1, if i = j;                 (3)
+                                                                  Mamba Block. To capture as much necessary informa-
+                              2i + 1, if i > j,                    tion from the context as possible, a complete Mamba Block
+where A(∆) is a matrix vector of coefficients. Remote de-          (MB) can be formulated as follows:
+pendencies can be handled by computing A(∆) St−1 to in-                Cap(X ) = S-SSM (σ(Conv(Linear(X )))),                (7)
+finitely approximate all historical states up to moment t.
+                                                                       M B(X ) = Linear(Cap(X ) × σ(Linear(X ))),            (8)
+Selective Mechanism. Practically, the model parameters
+                                                                   where X is the input of the current hierarchy, and Cap
+will remain unchanged during the motion inference, which
+                                                                   captures motion feature from S-SSM. σ denotes the SiLU
+will lead to the fact that different motion features will com-
+                                                                   function. Linear function increases the dimensionality of
+bine with the same state matrix A(∆) for computation.
+                                                                   X to capture more detailed and complex motion features in
+Therefore, the model will lose the ability to make targeted
+                                                                   a higher dimensional solution space. Convolution operation
+inferences about the current human pose and historical ac-
+                                                                   Conv enhances MB to capture localized motion features at
+tion information. To address the problem of the irrelevance
+                                                                   short distances, complementing the S-SSM to capture long-
+of the motion input to the state space, we use a simple selec-
+                                                                   term dependencies, forming a complex representation of the
+tion mechanism that dynamically computes the parameters
+                                                                   motion information.
+p of B(∆) , C, and ∆, which is calculated as follows:
+               pB(∆) (t) = LinearB(∆) (ht ),              (4)      Hierarchical Shared Learning
+               pC (t) = LinearC (ht ),                    (5)      In our hierarchical shared structure, implementing shallow
+                                                                   tasks can enhance our model to utilize more basic motion in-
+               p∆ (t) = Linear∆ (ht ),                    (6)      formation of body parts related to motion when performing
+deeper tasks. Compared to the direct regression of whole-          where Hn is the motion feature at the shared hierarchy of
+body pose using IMU measurements (Huang et al. 2018) or            task n ∈ {T orso, Lower, U pper, T rans}, and ⊕ is con-
+using the information from body parts-level movement (Yi,          catenation. Since Rinit represents the local movement vari-
+Zhou, and Xu 2021; Yi et al. 2022; Zhang et al. 2024a), we         ations of the human joints, and Pinit represents the rela-
+address the motion ambiguity of human body parts and se-           tive global position of the human body, we selectively place
+quentially exploit the correlation of part-level tasks in a more   Rinit before the parts poses estimation and Pinit before the
+fine-grained way of hierarchical shared learning, which can        translation estimation, which facilitates our model to maxi-
+further prevent the problem of conflicting estimation tasks        mize the extraction of critical information and does not have
+and improve the performance of 3D HPE in a targeted man-           local or global impacts.
+ner based on the underlying features of different body parts.
+                                                                   Loss Function. Lastly, the estimation Yn′ of each task n is
+In addition, we introduce the motion states so that the model
+                                                                   calculated as follows:
+has a more stabilizing effect in reconstructing the parts poses
+during random and complex motions.                                                Yn′ (t) = T askHead(Hn (t)),             (15)
+Task Determination. To enable hierarchical shared learn-           where T askHead is just a Linear layer, though it is ca-
+ing of parts motion information at different levels, we            pable of competently regressing the parts pose YP ose and
+categorize 3D HPE into four tasks, which are torso (6              global translation YT rans from H. Therefore, the global loss
+joints) pose estimation YT orse ∈ R6×9 , lower limbs (8            Lglobal can be formulated as:
+joints) pose estimation YLower ∈ R8×9 , upper limbs (10                                        T
+joints) pose estimation YU pper ∈ R10×9 (i.e., YP ose =                                  1 XX ′
+                                                                             Lglobal =          ∥Y (t) − Yn (t)∥2 .        (16)
+{YT orse , YLower , YU pper }); and 3-axis body translation es-                          T n t=1 n
+timation YT rans ∈ R3 . These tasks can sequentially acquire
+information from the front task and pass backward in a hier-                             Experiments
+archical shared structure, enabling flow sharing.
+                                                                   Experimental Setup
+Motion States. Determining the starting position and the           Datasets. We use AMASS (Mahmood et al. 2019), DIP-
+magnitude of pose changes of the human body can effec-             IMU (Huang et al. 2018), and TotalCapture (Trumble et al.
+tively improve the stability of the model on subsequent mo-        2017) datasets to evaluate the effectiveness of models.
+tion pose estimation tasks (Zhang et al. 2024a; Yi, Zhou,
+and Xu 2021). To obtain more details of the human body in          Baselines. We use DIP (Huang et al. 2018), TransPose (Yi,
+the global coordinate system, we extract the rotation matrix       Zhou, and Xu 2021), TIP (Jiang et al. 2022b), PIP (Yi et al.
+Rinit and global position Pinit of the human body to rep-          2022), DynaIP (Zhang et al. 2024a) as baselines to demon-
+resent the pose state and position state of the human body,        strate the superiority of HiPoser.
+which are defined as follows:                                      Metrics. Following TransPose (Yi, Zhou, and Xu 2021),
+                                                                  PIP (Yi et al. 2022), and DynaIP (Zhang et al. 2024a), we
+                0,                  if 0 ≤ t ≤ T ;
+  Rinit (t) =                                                      evaluate the estimation performance by metrics: 1) SIP er-
+                YP ose (kT − 1), if kT < t ≤ (k + 1)T,
+                                                                   ror(◦ ): the mean global rotation error of upper arms and up-
+                                                         (9)       per legs; 2) Ang error(◦ ): the mean global rotation error of
+              
+                0,                  if 0 ≤ t ≤ T ;                 all human joints; 3) Pos error(cm): the mean Euclidean dis-
+  Pinit (t) =                                                      tance error of all joints; 4) Mesh error(cm): the mean Eu-
+                YT rans (kT − 1), if kT < t ≤ (k + 1)T,
+                                                        (10)       clidean distance error of all vertices of body mesh; 5) Dist
+                                                                   error(cm): the mean Euclidean distance error of translation
+where k ∈ N+ = {1, 2, . . . , N − 1}. All joints are aligned       of whole body.
+to the spine joint and Pinit and Rinit are set to the value of     Implement Details. Following TransPose (Yi, Zhou, and
+0 at first. After that Pinit and Rinit are determined by YP ose    Xu 2021), PIP (Yi et al. 2022), and IMUPoser (Mollyn et al.
+and YT rans of the last frame of sequences, respectively.          2023), we fix the sampling frequency to 60Hz for all the
+Hierarchical Shared Structure. Considering that recent             datasets and set frame T = 300. The translation estima-
+works (Jiang et al. 2022b; Yi et al. 2022; Zhang et al. 2024a)     tion is calculated by combining the velocity and the contact-
+have focused more on pose reconstruction, we tentatively           ground probability of feet in the offline setting. We build
+use task sequence Torso→ Lower→ Upper→ Trans as an                 our model using PyTorch and PyTorch Lightning and use
+example that can better capture the motion details of body         the Adam optimizer with a learning rate of 1e-3 to update
+parts. Therefore, our pipeline of hierarchical shared structure    the parameters. The training epoch is 500. The batch size is
+can be formulated as follows:                                      256. The training and validation process is implemented on
+                                                                   an NVIDIA GeForce RTX 4090 GPU.
+             HT orso = M B(X ⊕ Rinit ),                    (11)
+             HLower = M B(HT orso ),                       (12)    Quantitative Results
+             HU pper = M B(HLower ),                       (13)    Since DIP-IMU and TotalCapture are relatively small, we
+                                                                   only train on AMASS and validate on DIP-IMU and To-
+             HT rans = M B(HU pper ⊕ Pinit ),              (14)    talCapture to evaluate the generalization performance of
+                                        DIP-IMU                                                      TotalCapture
+    Methods
+                       ◦         ◦                                              ◦             ◦
+                   SIP( )   Ang( )   Pos(cm)    Mesh(cm)       Dist(cm)   SIP( )      Ang( )      Pos(cm)       Mesh(cm)    Dist(cm)
+      DIP          18.35    10.04      7.55        8.35         55.74      18.95       10.76          7.79          9.07     59.35
+   TransPose       17.24    9.45       6.82        7.61         43.12      17.81       9.83           7.31          8.29     45.76
+      TIP          16.58    9.31       6.60        7.42         34.50      16.66        9.39          7.08          7.89     41.37
+      PIP          15.72     8.84      6.45        7.28         33.86      16.25        9.28          7.03          8.11     39.11
+    DynaIP         14.97    8.57       5.69        6.50         33.95      15.17       8.55           5.96          6.78     40.63
+ HiPoser (ours)    14.11    8.16       5.44        6.30         32.48      14.53        8.35          5.63          6.61     36.61
+
+ Table 1: Performance comparison on the state-of-the-art models on DIP-IMU and TotalCapture when trained with AMASS.
+
+
+                                                                    Methods SIP(◦ ) Ang(◦ ) Pos(cm) Mesh(cm) Dist(cm)
+                                                                    HiPoser         14.11     8.16       5.44        6.30    32.48
+                                                                    w/o Hier        14.23     8.20       5.51        6.57    37.81
+   GT                                                               w/o Parts       14.42     8.24       5.81        6.62    35.49
+                                                                    Baseline        14.90     8.41       6.02        6.91    42.48
+
+                                                                   Table 2: Comparison of with&w/o hierarchical shared learn-
+                                                                   ing and body parts on HiPoser on DIP-IMU.
+
+   HiPoser
+
+
+
+
+   TIP
+
+
+
+
+   PIP
+
+
+
+                                                                          GT        HiPoser       w/o Hier      w/o Parts   Baseline
+                                                                   Figure 5: Visualization of with&w/o hierarchical shared
+   DynaIP                                                          learning and body parts of HiPoser on DIP-IMU.
+
+
+                                                                   In-Depth Study
+                                                                   Effect on Hierarchical Sharing. To evaluate the effec-
+Figure 4: Qualitative comparison of HiPoser with SOTAs.            tiveness of the hierarchical shared structure, we compare the
+                                                                   following variants to reconstruct human pose: 1) w/o Hier-
+                                                                   archical: using global and body parts information with par-
+HiPoser. We compare the mean values of baselines on each           allel partition modeling; 2) w/o Parts: using global and body
+metric. As shown in Table 1, our HiPoser performs bet-             parts information but w/o partition modeling; 3) Baseline:
+ter than other methods. We argue that the superiority of           a Mamba-based network using body information. The com-
+HiPoser lies in the hierarchical shared learning structure,        parison results are shown in Table 2 which indicates recon-
+which can effectively utilize the information underlying the       structing parts poses based on motion information is effec-
+movement of different body parts to estimate joint rotations       tive, probably because the model can obtain stable results on
+better. Moreover, the involvement of motion states helps to        smaller estimations. Besides, sequentially sharing allows the
+maintain the continuity of motion patterns. Figure 4 shows         model to better reconstruct poses for different movements,
+the estimation results of HiPoser and SOTAs.                       which shows the rationality of setting up different task se-
+                                                                    Methods SIP(◦ ) Ang(◦ ) Pos(cm) Mesh(cm) Dist(cm)
+                                                                      All       14.11    8.16     5.44        6.30       32.48
+                                                                     Config     14.75    8.48     5.61        6.54       34.12
+                                                                     Single     15.21    8.62     5.87        6.62       39.28
+                                                                     None       15.60    8.76     6.32        7.22       47.61
+
+                                                                   Table 4: Performance of HiPoser (Seq-D) with&w/o Rinit
+                                                                   of different numbers of joints and Pinit on DIP-IMU.
+
+
+ GT    HiPoser (Seq-D)                                                  Metrics         Mamba    RNN Bi-RNN Transformer
+       HiPoser (Seq-S)                                                   SIP( ) ◦
+                                                                                        14.11   14.52     14.40        14.90
+                                                                        Pos(cm)          5.44    5.64      5.72         5.79
+Figure 6: Comparison of task sequences Seq-D and Seq-S               5s Dist(cm)        32.48   33.97     36.32        41.27
+on DIP-IMU. The red region indicates that some details of                RT(s)          0.004   0.011     0.012        0.006
+Seq-S are weaker than Seq-D on pose reconstruction.
+                                                                          SIP(◦ )       13.66   14.12     13.98        14.45
+                                                                     20s Pos(cm)         5.08    5.16      5.32         5.86
+ Methods SIP(◦ ) Ang(◦ ) Pos(cm) Mesh(cm) Dist(cm)                       Dist(cm)       62.43   75.68     84.79        89.61
+   Seq-D     14.11       8.16   5.44       6.30       32.48               RT(s)         0.012   0.024     0.029        0.015
+   Seq-S     14.42       8.24   5.26       6.13       29.75           FLOPs(G)         5.77  58.80 141.21             25.65
+                                                                      Parameters     116.76K 1.17M 2.82M             519.20K
+Table 3: Performance of HiPoser with different task se-
+quences Seq-D and Seq-S on DIP-IMU.                                Table 5: Comparison performance of different basic mod-
+                                                                   els as the backbone of HiPoser (Seq-D) on DIP-IMU. RT:
+                                                                   Inference runtime. FLOPs: Floating points per second. Pa-
+quences consistent with motion associations. The visualiza-        rameters: Number of model parameters.
+tion is shown in Figure 5 which indicates that these variants
+can collectively improve the performance of HiPoser.
+                                                                   human pose. Without inputting any state information into the
+Effect on Task Sequence. We set two representative task            variants, the model is greatly limited in its ability to reason,
+sequences, i.e., Seq-D: Torso→ Lower→ Upper→ Trans,                possibly due to the memory of movement being important
+which denotes detail priority, and Seq-S: Upper→ Lower→            for the human body regarding motor coherence.
+Torso→ Trans, which denotes stability priority. The transla-
+tion estimation task is placed at the deepest level because it     Effect on Mamba Block. To evaluate the effectiveness of
+measures the change in the position of the human body in           Mamba, we replace the backbone of the hierarchical shared
+global coordinates, laying the groundwork for pose recon-          structure with different basic models (RNN, Bi-RNN, and
+struction. Figure 6 illustrates the visualization of pose recon-   Transformer) and set the same hidden dimensions as the
+struction as well as translation estimation errors for Seq-D       MBs. Table 5 shows the performance of different backbones
+and Seq-S. Table 3 and Figure 6 indicate that Seq-D is more        of HiPoser during long-time pose inference, and the corre-
+advantageous for limbs pose reconstruction, though having a        sponding runtime and space occupation. The results indicate
+weaker performance of translation estimation than Seq-S in         that Mamba is able to perform more stably during long-time
+long-term movement. This may be due to the fact that Seq-          action, which may be due to its unique selective mechanism
+D possesses more information from the torso movement in            that efficiently utilizes historical motion information. The
+predicting upper and lower limbs pose changes, which fa-           small resource consumption of Mamba is also a great ad-
+cilitates the delimitation of the range of parts motion. While     vantage in its efficient inference ability.
+Seq-S simplifies the complexity of the estimation task by
+characterizing the range of body limbs movement, making                                    Conclusion
+the body position more stable in the global representation.
+                                                                   In this paper, we propose a hierarchical shared learning-
+Effect on Motion States. To evaluate the effectiveness of          based approach, HiPoser, which addresses 3D HPE from
+the motion states, we set Rinit of different numbers of joints     a body parts level. It considers implementing the sequen-
+and Pinit in our HiPoser by the following variants: 1) All:        tial sharing of the motion information among different body
+Rinit of all joints and Pinit ; 2) Config: Rinit of Configured     parts and incorporating motion states, achieving a stable per-
+joints and Pinit ; 3) Single: only Pinit ; 4) None: without any    formance in long-term movement. This flexible hierarchi-
+motion state. The results are shown in Table 4, which il-          cal shared structure enables our HiPoser to achieve different
+lustrates that as the number of joint points within the state      prioritized requirements of human pose reconstruction. Ex-
+increases, more fine-grained motion information can be cap-        tensive experiments demonstrate that HiPoser significantly
+tured by our model, achieving a better reconstruction of the       outperforms existing methods in all performance metrics.
+                   Acknowledgments                                  Li, J.; Liu, K.; and Wu, J. 2023. Ego-body pose estimation
+This work was supported by grants from the National Nat-            via ego-head pose estimation. In CVPR.
+ural Science Foundation of China (grant Nos. 62477004,              Loper, M.; Mahmood, N.; Romero, J.; Pons-Moll, G.; and
+62377040, 62207007, 623B2002) and Chongqing Natural                 Black, M. J. 2023. SMPL: A skinned multi-person linear
+Science Foundation Innovation and Development Joint Fund            model. In Seminal Graphics Papers: Pushing the Bound-
+(grant. No. CSTB2023NSCQ-LZX0109).                                  aries, Volume 2, 851–866.
+                                                                    Luvizon, D. C.; Picard, D.; and Tabia, H. 2020. Multi-task
+                                                                    deep learning for real-time 3D human pose estimation and
+                        References                                  action recognition. IEEE Transactions on Pattern Analysis
+Burgermeister, D.; and Curio, C. 2022. PedRecNet: Multi-            and Machine Intelligence, 2752–2764.
+task deep neural network for full 3D human pose and orien-          Mahmood, N.; Ghorbani, N.; Troje, N. F.; Pons-Moll, G.;
+tation estimation. In IV. IEEE.                                     and Black, M. J. 2019. AMASS: Archive of motion capture
+Chen, K.; Chen, B.; Liu, C.; Li, W.; Zou, Z.; and Shi, Z.           as surface shapes. In ICCV.
+2024. Rsmamba: Remote sensing image classification with             Mollyn, V.; Arakawa, R.; Goel, M.; Harrison, C.; and Ahuja,
+state space model. IEEE Geoscience and Remote Sensing               K. 2023. Imuposer: Full-body pose estimation using imus in
+Letters.                                                            phones, watches, and earbuds. In CHI.
+Dao, T.; and Gu, A. 2024. Transformers are SSMs: Gener-             Schepers, M.; Giuberti, M.; Bellusci, G.; et al. 2018. Xsens
+alized Models and Efficient Algorithms Through Structured           MVN: Consistent tracking of human motion using inertial
+State Space Duality. In ICML.                                       sensing. Xsens Technol, 1–8.
+Desmarais, Y.; Mottet, D.; Slangen, P.; and Montesinos, P.          Shi, D.; Wei, X.; Li, L.; Ren, Y.; and Tan, W. 2022. End-
+2021. A review of 3D human pose estimation algorithms               to-end multi-person pose estimation with transformers. In
+for markerless motion capture. Computer Vision and Image            CVPR.
+Understanding, 103275.
+                                                                    Tanaka, R.; Suzuki, T.; Takeda, K.; and Fujii, K. 2023. Au-
+Gu, C.; Lin, W.; He, X.; Zhang, L.; and Zhang, M. 2023.
+                                                                    tomatic edge error judgment in figure skating using 3d pose
+IMU-based motion capture system for rehabilitation appli-
+                                                                    estimation from a monocular camera and imus. In ACM
+cations: A systematic review. Biomimetic Intelligence and
+                                                                    MMSports.
+Robotics, 100097.
+                                                                    Tang, W.; and Wu, Y. 2019. Does learning specific features
+Huang, Y.; Kaufmann, M.; Aksan, E.; Black, M. J.; Hilliges,
+                                                                    for related parts help human pose estimation? In CVPR.
+O.; and Pons-Moll, G. 2018. Deep inertial poser: Learning to
+reconstruct human pose from sparse inertial measurements            Trumble, M.; Gilbert, A.; Malleson, C.; Hilton, A.; and Col-
+in real time. ACM Transactions on Graphics, 1–15.                   lomosse, J. P. 2017. Total capture: 3D human pose estima-
+Jiang, J.; Streli, P.; Meier, M.; and Holz, C. 2025. EgoPoser:      tion fusing video and inertial sensors. In BMVC. London,
+Robust Real-Time Egocentric Pose Estimation from Sparse             UK.
+and Intermittent Observations Everywhere. In ECCV.                  Von Marcard, T.; Rosenhahn, B.; Black, M. J.; and Pons-
+Springer.                                                           Moll, G. 2017. Sparse inertial poser: Automatic 3d human
+Jiang, J.; Streli, P.; Qiu, H.; Fender, A.; Laich, L.; Snape, P.;   pose estimation from sparse imus. Computer Graphics Fo-
+and Holz, C. 2022a. Avatarposer: Articulated full-body pose         rum.
+tracking from sparse motion sensing. In ECCV. Springer.             Yi, X.; Zhou, Y.; Habermann, M.; Shimada, S.; Golyanik,
+Jiang, X.; Han, C.; and Mesgarani, N. 2024.               Dual-     V.; Theobalt, C.; and Xu, F. 2022. Physical inertial poser
+path mamba: Short and long-term bidirectional selec-                (pip): Physics-aware real-time human motion tracking from
+tive structured state space models for speech separation.           sparse inertial sensors. In CVPR.
+arXiv:2403.18257.                                                   Yi, X.; Zhou, Y.; and Xu, F. 2021. Transpose: Real-time
+Jiang, Y.; Ye, Y.; Gopinath, D.; Won, J.; Winkler, A. W.;           3d human translation and pose estimation with six inertial
+and Liu, C. K. 2022b. Transformer inertial poser: Real-time         sensors. ACM Transactions On Graphics, 1–13.
+human motion reconstruction from sparse imus with simul-            Yogesh, V.; Buurke, J. H.; Veltink, P. H.; and Baten, C. T.
+taneous terrain generation. In SIGGRAPH Asia.                       2023. Integrated UWB/MIMU Sensor System for Position
+Lai, W.; Lu, T.; and Bi, H. 2024. Design and implementation         Estimation towards an Accurate Analysis of Human Move-
+of an AR sensory fruit cutting system based on monocular            ment: A Technical Review. Sensors, 7277.
+video. In EIBDCT. SPIE.                                             Zhang, Y.; Xia, S.; Chu, L.; Yang, J.; Wu, Q.; and Pei, L.
+Lee, S.-P.; Kini, N. P.; Peng, W.-H.; Ma, C.-W.; and Hwang,         2024a. Dynamic Inertial Poser (DynaIP): Part-Based Mo-
+J.-N. 2023. Hupr: A benchmark for human pose estimation             tion Dynamics Learning for Enhanced Human Pose Estima-
+using millimeter wave radar. In WACV.                               tion with Sparse Inertial Sensors. In CVPR.
+Li, H.; Shi, B.; Dai, W.; Zheng, H.; Wang, B.; Sun, Y.; Guo,        Zhang, Z.; Liu, A.; Reid, I.; Hartley, R.; Zhuang, B.; and
+M.; Li, C.; Zou, J.; and Xiong, H. 2023. Pose-oriented trans-       Tang, H. 2024b. Motion mamba: Efficient and long se-
+former with uncertainty-guided refinement for 2d-to-3d hu-          quence motion generation with hierarchical and bidirec-
+man pose estimation. In AAAI.                                       tional selective ssm. arXiv:2403.07487.
+Zhao, H.; Zhang, M.; Zhao, W.; Ding, P.; Huang, S.;
+and Wang, D. 2024.          Cobra: Extending mamba to
+multi-modal large language model for efficient inference.
+arXiv:2403.14520.
+Zheng, C.; Wu, W.; Chen, C.; Yang, T.; Zhu, S.; Shen, J.;
+Kehtarnavaz, N.; and Shah, M. 2023. Deep learning-based
+human pose estimation: A survey. ACM Computing Surveys,
+1–37.
+Zhou, Y.; Huang, H.; Yuan, S.; Zou, H.; Xie, L.; and Yang,
+J. 2023. Metafi++: Wifi-enabled transformer-based human
+pose estimation for metaverse avatar simulation. IEEE In-
+ternet of Things Journal, 14128–14136.
+Zhu, L.; Liao, B.; Zhang, Q.; Wang, X.; Liu, W.; and
+Wang, X. 2024. Vision mamba: Efficient visual repre-
+sentation learning with bidirectional state space model.
+arXiv:2401.09417.
+

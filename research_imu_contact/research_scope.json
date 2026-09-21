@@ -1,0 +1,24 @@
+{
+  "date": "2026-09-15",
+  "mode": "targeted_literature_review",
+  "question": "Can fewer than six IMUs support lightweight human motion reconstruction through lying, rolling and crawling using reliable contact-conditioned root estimation?",
+  "constraints": [
+    "No rehabilitation templates, template matching or template-derived features",
+    "Count physically required and actually consumed sensors separately",
+    "Do not equate current local implementation with historical server runs",
+    "Do not infer contact causality from aggregate benchmark errors",
+    "Treat candidate mechanisms as untested proposals, not established novelty"
+  ],
+  "claim_intent_manifests": [{
+    "manifest_id": "imu-contact-review-20260915",
+    "claims": [
+      {"claim_id": "C1", "text": "Non-foot contact, moving stationary body points and support selection already appear in TIP, PIP and GlobalPose.", "planned_refs": ["tip2022", "pip2022", "globalpose2025"]},
+      {"claim_id": "C2", "text": "Sliding and broader contact modes remain explicit limitations of several closely related methods.", "planned_refs": ["globalpose2025", "saip2025", "imuhoi2026"]},
+      {"claim_id": "C3", "text": "Recent 2026 work narrows novelty in contact fusion, four-device physics and IMU-scene estimation.", "planned_refs": ["grip2026", "imuhoi2026", "imuto4d2026", "mario2026"]},
+      {"claim_id": "C4", "text": "Local benchmark results and current implementation require protocol checks before causal or sensor-efficiency conclusions.", "planned_refs": ["local_report", "local_code"]},
+      {"claim_id": "C5", "text": "A mode-aware contact-surface correction with calibrated reliability is a candidate requiring direct comparison against the closest prior art.", "planned_refs": ["tip2022", "globalpose2025", "imuhoi2026", "hartley2018"]},
+      {"claim_id": "C6", "text": "A fixed-pose oracle-contact experiment and matched causal sensor-count protocol can test whether the proposed mechanism is worthwhile.", "planned_refs": [], "status": "proposed_experiment_not_executed"}
+    ]
+  }],
+  "workflow_note": "Standalone literature review; no academic-pipeline passport or automated integrity certification is claimed. Two parallel read-only tasks checked original papers and repository implementation."
+}

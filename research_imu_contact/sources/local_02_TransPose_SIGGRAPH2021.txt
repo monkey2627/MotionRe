@@ -1,0 +1,959 @@
+                                         TransPose: Real-time 3D Human Translation and Pose Estimation with
+                                         Six Inertial Sensors
+                                         XINYU YI, BNRist and school of software, Tsinghua University, China
+                                         YUXIAO ZHOU, BNRist and school of software, Tsinghua University, China
+                                         FENG XU, BNRist and school of software, Tsinghua University, China
+arXiv:2105.04605v1 [cs.GR] 10 May 2021
+
+
+
+
+                                         Fig. 1. We present a real-time motion capture approach that estimates poses and global translations using only six inertial measurement units. As a purely
+                                         inertial sensor-based approach, our system does not suffer from occlusion, challenging environment or multi-person ambiguities, and achieves long-range
+                                         capture with real-time performance.
+
+                                         Motion capture is facing some new possibilities brought by the inertial                 1   INTRODUCTION
+                                         sensing technologies which do not suffer from occlusion or wide-range                   Human motion capture (mocap), aiming at reconstructing 3D human
+                                         recordings as vision-based solutions do. However, as the recorded signals are
+                                                                                                                                 body movements, plays an important role in various applications
+                                         sparse and quite noisy, online performance and global translation estimation
+                                         turn out to be two key difficulties. In this paper, we present TransPose, a DNN-
+                                                                                                                                 such as gaming, sports, medicine, VR/AR, and movie production.
+                                         based approach to perform full motion capture (with both global translations            So far, vision-based mocap solutions take the majority in this topic.
+                                         and body poses) from only 6 Inertial Measurement Units (IMUs) at over 90 fps.           One category requires attaching optical markers on human bodies
+                                         For body pose estimation, we propose a multi-stage network that estimates               and leverages multiple cameras to track the markers for motion cap-
+                                         leaf-to-full joint positions as intermediate results. This design makes the pose        ture. The marker-based systems such as Vicon1 are widely applied
+                                         estimation much easier, and thus achieves both better accuracy and lower                and considered accurate enough for industrial usages. However,
+                                         computation cost. For global translation estimation, we propose a supporting-           such approaches require expensive infrastructures and intrusive
+                                         foot-based method and an RNN-based method to robustly solve for the global              devices, which make them undesirable for consumer-level usages.
+                                         translations with a confidence-based fusion technique. Quantitative and                 Recently, another category focuses on pose estimation using a few
+                                         qualitative comparisons show that our method outperforms the state-of-
+                                                                                                                                 RGB or RGB-D cameras [Chen et al. 2020; Habibie et al. 2019; Mehta
+                                         the-art learning- and optimization-based methods with a large margin in
+                                         both accuracy and efficiency. As a purely inertial sensor-based approach, our
+                                                                                                                                 et al. 2020; Tome et al. 2018; Trumble et al. 2016; Xiang et al. 2019].
+                                         method is not limited by environmental settings (e.g., fixed cameras), making           Although these methods are much more lightweight, they are sen-
+                                         the capture free from common difficulties such as wide-range motion space               sitive to the appearance of humans since distinguishable features
+                                         and strong occlusion.                                                                   need to be extracted from images. In consequence, these methods
+                                                                                                                                 usually work poorly for textureless clothes or challenging environ-
+                                         CCS Concepts: • Computing methodologies → Motion capture.
+                                                                                                                                 ment lighting. Furthermore, all vision-based approaches suffer from
+                                         Additional Key Words and Phrases: IMU, Pose Estimation, Inverse Kinemat-                occlusion. Such a problem can sometimes be solved by setting dense
+                                         ics, Real-time, RNN                                                                     cameras (which further makes the system heavy and expensive), but
+                                                                                                                                 it is often impractical in some applications. For example, it is very
+                                         Authors’ addresses: Xinyu Yi, BNRist and school of software, Tsinghua University,       difficult to arrange cameras in a common room full of furniture or
+                                         Beijing, China, yixy20@mails.tsinghua.edu.cn; Yuxiao Zhou, BNRist and school of         objects, which may occlude the subject from any direction. Another
+                                         software, Tsinghua University, Beijing, China, yuxiao.zhou@outlook.com; Feng Xu,
+                                         BNRist and school of software, Tsinghua University, Beijing, China, xufeng2003@gmail.
+                                         com.                                                                                    1 https://www.vicon.com/
+86:2 •   Xinyu Yi, Yuxiao Zhou, and Feng Xu
+
+
+limitation of vision-based approaches is that the performers are             solves for the joint rotations from positions, i.e. the inverse kine-
+usually restricted in a fixed space volume. For daily activities such        matics (IK) problem. For fusion-based global translation estimation,
+as large-range walking and running, carefully controlled moving              we combine the following two methods: 1) foot-ground contact es-
+cameras are required to record enough motion information, which              timation estimates the foot-ground contact probabilities for both
+is very hard to achieve [Xu et al. 2016]. These disadvantages are            feet from the leaf joint positions and the IMU measurements, and
+fatal flaws for many applications and thus lead to limited usability         calculates the root translations on the assumption that the foot with
+of the vision-based solutions.                                               a larger contact probability is not moving; 2) root velocity regressor
+   In contrast to vision-based systems, motion capture using body-           regresses the local velocities of the root in its own coordinate frame
+worn sensors is environment-independent and occlusion-unaware.               from all joint positions and the IMU signals.
+It does not require complicated facility setups and lays no constraint          The design of using separate steps in the pose estimation is based
+on the range of movements. Such characteristics make it more suit-           on our observation that estimating joint positions as an intermedi-
+able for customer-level usages. As a result, motion capture using            ate representation is easier than regressing the rotations directly.
+inertial sensors is gaining more and more focus in recent years. Most        We attribute this to the nonlinearity of the rotation representation,
+related works leverage Inertial Measurement Units (IMUs) to record           compared with the positional formulation. On the other hand, per-
+motion inertia, which are economical, lightweight, reliable, and com-        forming IK tasks with neural networks has already been well inves-
+monly used in a fast-growing number of wearables such as watches,            tigated by previous works [Holden 2018; Zhou et al. 2018, 2020a,b].
+wristbands, and glasses. The commercial inertial mocap system,               However, these works neglect the importance of motion history. As
+Xsens2 , uses 17 IMUs to estimate joint rotations. Although accurate,        the IK problem is ill-posed, the motion ambiguity is commonly seen,
+the dense placement of IMUs is inconvenient and intrusive, prevent-          which can only be eliminated according to motion history. Here, in
+ing performers from moving freely. On the other hand, the facility           each stage, we incorporate a bidirectional recurrent neural network
+requirements for such a system are still beyond the acceptance of            (biRNN) [Schuster and Paliwal 1997] to maintain motion history.
+normal customers. The work of SIP [Marcard et al. 2017] demon-               This is similar to [Huang et al. 2018], but due to our 3-stage design,
+strates that it is feasible to reconstruct human motions from only 6         our network is significantly smaller with higher accuracy.
+IMUs. However, as an optimization-based method, it needs to access              As for the global translation estimation, the intuition behind is to
+the entire sequence and takes a long time to process. The following          predict which foot contacts the ground and fix the contacting foot
+state-of-the-art work, DIP [Huang et al. 2018], achieves real-time           to deduce the root movement from the estimated pose. Besides, to
+performance with better quality by leveraging a bidirectional RNN,           cope with the cases where no foot is on the ground, we further use
+also using 6 IMUs. However, it still fails on challenging poses, and         an RNN to regress the root translation as a complement. Finally, our
+the frame rate of 30 fps is not sufficient to capture fast movements,        method merges these two estimations to predict the final translation
+which are very common in practical applications. More importantly,           using the fusion weight determined by the foot-ground contact
+it only estimates body poses without global movements which are              probability. The inspiration comes from [Shimada et al. 2020; Zou
+also important in many applications such as VR and AR. The IMU               et al. 2020] which leverage foot-ground contact constraints to reduce
+itself is incapable of measuring distances directly. Some previous           foot-sliding artifacts in vision-based mocap, but we have a different
+works [Liu et al. 2011; Vlasic et al. 2007] use additional ultrasonic        purpose which is to solve for the translation from the estimated
+sensors to measure global translations, which are expensive and              pose. As shown in the experiments, this method can handle most
+subject to occlusion. Other possible solutions use GPS localization,         movements like walking, running, and challenging jumping.
+which is not accurate enough and only works in outdoor capture. As              We evaluate our approach on public datasets, where we out-
+a result, super-real-time estimation of both body poses and global           perform the previous works DIP and SIP by a large margin both
+translations from sparse worn sensors is still an open problem.              qualitatively and quantitatively with various metrics, including po-
+   To this end, we introduce our approach, TransPose, which es-              sitional and rotational error, temporal smoothness, runtime, etc.
+timates global translations and body poses from only 6 IMUs at               We also present live demos that capture a variety of challenging
+unprecedented 90 fps with state-of-the-art accuracy. Performing              motions where the performer can act freely regardless of occlusion
+motion capture from sparse IMUs is extremely challenging, as the             or range. These experiments demonstrate our significant superiority
+problem is severely under-constrained. We propose to formulate the           to previous works. In conclusion, our contributions are:
+pose estimation task in a multi-stage manner including 3 subtasks,
+                                                                                 • A very fast and accurate approach for real-time motion cap-
+each of which is easier to solve, and then estimate the global transla-
+                                                                                   ture with global translation estimation using only 6 IMUs.
+tions using the fusion of two different but complementary methods.
+                                                                                 • A novel structure to perform pose estimation which explicitly
+As a result, our whole pipeline achieves lower errors but better run-
+                                                                                   estimates joint positions as intermediate subtasks, resulting
+time performance. Specifically, for multi-stage pose estimation, the
+                                                                                   in higher accuracy and less runtime.
+task of each stage is listed as follows: 1) leaf joint position estimation
+                                                                                 • The first method to explicitly estimate global translations in
+estimates the positions of 5 leaf joints from the IMU measurements;
+                                                                                   real-time from as sparse as 6 IMUs only.
+2) joint position completion regresses the positions of all 23 joints
+from the leaf joints and the IMU signals; 3) inverse kinematics solver
+                                                                             2   RELATED WORK
+                                                                             The research on human motion capture has a long history, especially
+2 https://www.xsens.com/                                                     for the vision-based motion capture. Since this is not the category of
+                                                                  TransPose: Real-time 3D Human Translation and Pose Estimation with Six Inertial Sensors •   86:3
+
+
+this work, we refer readers to the surveys [Moeslund and Granum                 take use of sparse accelerometers [Riaz et al. 2015; Slyper and Hod-
+2001; Moeslund et al. 2006] for more information. In this section,              gins 2008; Tautges et al. 2011] and leverage a prerecorded motion
+we mainly review the works using inertial sensors (or combined                  database. They search in the database for similar accelerations when
+with other sensors) which are closely related to our approach.                  predicting new poses using a lazy learning strategy [Aha 1997], and
+                                                                                demonstrate that learning with pure accelerometers is feasible. How-
+                                                                                ever, the searching-based methods cannot fully explore the input
+2.1   Combining IMUs with Other Sensors or Cameras                              information. Due to the fundamental instability of accelerometer
+Typically, a 9-axis IMU contains 3 components: an accelerometer                 measurements and their weak correlations to the poses, the perfor-
+that measures accelerations, a gyroscope that measures angular                  mance of these works is limited. Also, a trade-off between runtime
+velocities, and a magnetometer that measures directions. Based on               performance and the database size is inevitable. In [Schwarz et al.
+these direct measurements, the drift-free IMU orientations can be               2009], support vector machine (SVM) and Gaussian processes regres-
+solved [Bachmann et al. 2002; Del Rosario et al. 2018; Foxlin 1996;             sion (GPR) are used to categorize the actions and predict full-body
+Roetenberg et al. 2005; Vitali et al. 2020] leveraging Kalman filter or         poses using sparse orientation measurements. With the develop-
+complementary filter algorithms. However, reconstructing human                  ment of the sensing technique, inertial measurement units that
+poses from a sparse set of IMUs is an under-constrained problem, as             measure both accelerations and orientations become common and
+the sensors can only provide orientation and acceleration measure-              popular. Instead of using only accelerations or orientations, recent
+ments which are insufficient for accurate pose estimation. To cope              works leverage both to make full use of IMUs and achieve better
+with this difficulty, one category of works [Liu et al. 2011; Vlasic            accuracy. Convolutional neural network (CNN) is used in [Hannink
+et al. 2007] propose to utilize additional ultrasonic distance sensors          et al. 2016] to estimate gait parameters from inertial measurements
+to reduce the drift in joint positions. In the work of [Liu et al. 2011],       for medical purposes. The pioneering work, SIP [Marcard et al. 2017],
+database searching is used for similar sensor measurements, and the             presents a method to solve for the human motions with only 6 IMUs.
+results help to construct a local linear model to regress the current           As an iterative optimization-based method, it has to operate in an
+pose online. Although the global position can be determined by                  offline manner, making real-time application infeasible. The state-
+leveraging the distance sensors, subjects can only act within a fixed           of-the-art work, DIP [Huang et al. 2018], proposes to use only 6
+volume to keep that the distance can be measured by ultrasonic                  IMUs to reconstruct full body poses in real-time. The authors adopt
+sensors. Another category of works propose to combine IMUs with                 a bidirectional recurrent neural network (biRNN) [Schuster and Pali-
+videos [Gilbert et al. 2018; Henschel et al. 2020; Malleson et al. 2019,        wal 1997] to directly learn the mapping from IMU measurements to
+2017; Marcard et al. 2016; Pons-Moll et al. 2011, 2010; Zhang et al.            body joint rotations. DIP achieves satisfying capture quality and effi-
+2020], RGB-D cameras [Helten et al. 2013; Zheng et al. 2018], or                ciency, but there is still space to further improve it. In our approach,
+optical markers [Andrews et al. 2016]. Gilbert et al. [Gilbert et al.           we demonstrate that decomposing this task into multiple stages, i.e.
+2018] fuse multi-viewpoint videos with IMU signals and estimate                 estimating joint positions as an intermediate representation before
+human poses using 3D convolutional neural networks and recur-                   regressing joint angles, can significantly improve the accuracy and
+rent neural networks. Global positions can also be determined in                reduce the runtime. Equally importantly, DIP cannot estimate the
+some works [Andrews et al. 2016; Malleson et al. 2019, 2017] due                global movement of the subject, which is an indispensable part of
+to the additional information from vision. Although these works                 motion capture. In this paper, we propose a novel method to es-
+achieve great accuracy, due to the need of vision, the capture suffers          timate the global translation of the performer without any direct
+from occlusion and challenging lighting conditions, and can only                distance measurement, which is a hybrid of supporting-foot-based
+be performed within a restricted area to keep the subject inside the            deduction and network-based prediction.
+camera field of view. To this end, Marcard et al. [von Marcard et al.
+2018] propose to use a moving camera to break the limitation on                 3     METHOD
+the space volume. Nonetheless, all the methods that require visual
+                                                                                Our task is to estimate poses and translations of the subject in real-
+or distance sensor inputs are substantially limited by the capture
+                                                                                time using 6 IMUs. As shown in Figure 3, the 6 IMUs are mounted on
+environment and occlusion.
+                                                                                the pelvis, the left and right lower leg, the left and right forearm, and
+                                                                                the head. In the following, we refer to these joints as leaf joints except
+2.2   Methods Based on Pure Inertial Sensors                                    the pelvis, which is named as root joint. We divide this task into two
+                                                                                subtasks: multi-stage pose estimation (Section 3.2) and fusion-based
+As opposed to methods based on the fusion of IMUs and other sen-
+                                                                                global translation estimation (Section 3.3). The system is illustrated in
+sors, approaches using pure IMUs do not suffer from occlusion and
+                                                                                Figure 2. Detailed structures and hyper-parameters for all networks
+restricted recording environment and space. Commercial inertial
+                                                                                are presented in Appendix B.
+motion capture systems such as Xsens MVN [Schepers et al. 2018]
+use 17 body-worn IMUs which can fully determine the orientations
+of all bones of a kinematic body model. However, the large number               3.1     System Input
+of sensors are intrusive to the performer and suffer from a long                We take the rotation and acceleration measurements of each IMU as
+setup time. Though reducing the number of IMUs can significantly                the overall input of the system. We align these measurements into
+improve user experience, reconstructing human poses from a sparse               the same reference frame and normalize them to obtain the concate-
+set of IMUs is a severely underconstrained problem. Previous works              nated input vector as 𝒙 ( 0) = [𝒂 root, · · · , 𝒂 rarm, 𝑹 root, · · · , 𝑹 rarm ] ∈
+86:4 •    Xinyu Yi, Yuxiao Zhou, and Feng Xu
+
+
+
+ inertial measurements                     leaf joint positions                                        all joint positions
+
+                                                                                                                                                                             θ
+                         Pose-S1                                                    Pose-S2                                                Pose-S3
+                                                                                                                                                       joint rotations
+                         leaf joint                                                                                                         inverse
+                                                                                                                                                            θ
+                                                                                  joint position
+                          position                                                                                                        kinematics                                     mesh with
+                                                                                   completion
+                        estimation                                                                                                           solver                                       motion
+
+                                                                                                                                                                         template mesh
+                                                                                                                                     multi-stage pose estimation
+                                                                                                   θ
+
+      inertial measurements                                                     foot-ground contact
+                                                                                                         user-specific
+      joint positions
+      concatenation                                       foot-ground contact
+                                                                                    probability
+                                                                                                   θ      leg length
+
+                                      Trans-B1                 estimation                                                                              global velocity
+
+                                                                                                                                                             v
+      optional
+                                                                                                                                            fusion
+                                                                                                          θ
+                                                                                                                                                                             v
+      using RNN
+      using biRNN                                           root velocity
+                                      Trans-B2
+      unlearnable computation                                 regressor
+                                                                                                                         fusion-based global translation estimation
+
+Fig. 2. Overview of our pipeline. We divide our task into 2 subtasks: multi-stage pose estimation and fusion-based global translation estimation. The pose
+estimation subtask is formulated into 3 stages, where: 1) Pose-S1 estimates 5 leaf joint positions relative to the root from IMU signals, and its output is
+concatenated to the inertial measurements as 𝒙 ( 1) ; 2) Pose-S2 estimates all joint positions from 𝒙 ( 1) , and the output is again concatenated to the inertial
+measurements as 𝒙 ( 2) ; 3) Pose-S3 regresses the joint rotations 𝜽 from 𝒙 ( 2) . The translation estimation subtask is addressed by two parallel branches, where:
+1) Trans-B1 estimates foot-ground contact probabilities from 𝒙 ( 1) and calculates the root velocity 𝒗 𝑓 using forward kinematics assuming that the foot with a
+                                                                                        ¯𝑒 in its own coordinate frame from 𝒙 ( 2) , which is then transformed to the
+higher probability is still; 2) Trans-B2 estimates the local velocity of the root joint 𝒗
+world space as 𝒗𝑒 according to the root rotation measured by the sensor mounted on the pelvis. Such two estimated velocities are then fused to form the final
+global translation 𝒗 according to the foot-ground contact probabilities.
+
+
+                                                                                                              the pose prior is hard to model or learn. While the previous work,
+                                                                                                              DIP [Huang et al. 2018], proposes to adopt a bidirectional recur-
+                                                                                                              rent neural network (biRNN) to learn the direct mapping from IMU
+                                                                                                              measurements to joint rotations, we demonstrate that using joint
+                                                                                                              positions as an intermediate representation is significantly helpful
+                                                                                                              for the model to learn the complex motion prior. More specifically,
+                                                                                                              we first predict joint positions as an intermediate task in Pose-S1
+                                                                                                              (short for pose estimation stage 1) and Pose-S2 (Section 3.2.1), and
+                                                                                                              then solve for the joint angles in Pose-S3 (Section 3.2.2). Further, to
+                                                                                                              fully utilize the temporal information, we adopt biRNNs to leverage
+                                                                                                              the past and future frames. As shown in Section 5.2, our approach
+                                                                                                              achieves superior capture quality and runtime performance.
+Fig. 3. IMU placement. The 6 IMUs are mounted on the left and right
+forearm, the left and right lower leg, the head, and the pelvis. We require the
+                                                                                                               3.2.1 Pose-S1&S2: estimating joint positions. In Pose-S1&S2, we
+sensors to be tightly bounded around the joints with arbitrary orientations.
+                                                                                                               estimate joint positions from IMU measurements. We explicitly
+                                                                                                               separate this task into two different stages to take the hierarchy
+                                                                                                               of the human kinematic tree into consideration. Specifically, we
+R72 where 𝒂 ∈ R3 is the acceleration and 𝑹 ∈ R3×3 is the rotation                                              divide the human joints into two sets: the leaf joints and the non-
+matrix. We use 𝒙 ( 0) (𝑡) to refer to the measurements of the 𝑡th frame,                                       leaf joints. The leaf joints are mounted with sensors and have direct
+and the superscript ( 0) means it is the overall input. Please refer to                                        measurements. Usually, they have larger movements. The inner non-
+Appendix A for more details on the sensor preprocessing.                                                       leaf joints are without any direct inertial data and have relatively
+                                                                                                               smaller motions. Due to the correlation between body joints, the
+3.2      Multi-stage Pose Estimation                                                                           information of the leaf joints is helpful for predicting the coordinates
+In this section, we introduce our multi-stage method to estimate                                               of inner ones. We first regress the positions of the leaf joints in Pose-
+body poses, i.e. the rotation of each joint, from sparse IMU measure-                                          S1, and then localize the other joints in Pose-S2.
+ments. This task is very difficult due to the ambiguity of the mapping                                            The input to Pose-S1 is the inertial measurement vector 𝒙 ( 0) (𝑡),
+from extremely sparse inertial data to full body joint angles. The                                             and the output is the root-relative positions of the five leaf joints
+key to address this challenging task is the use of 1) the prior knowl-                                         𝒑 leaf (𝑡) = [𝒑 lleg (𝑡), · · · , 𝒑 rarm (𝑡)] ∈ R15 . We use a standard
+edge on human poses and 2) the temporal information. Because                                                   biRNN [Schuster and Paliwal 1997] with Long Short-Term Mem-
+of the diversity of human motions and the anatomic restrictions,                                               ory (LSTM) cells [Hochreiter and Schmidhuber 1997] to learn the
+                                                                     TransPose: Real-time 3D Human Translation and Pose Estimation with Six Inertial Sensors •   86:5
+
+
+mapping from IMU measurements to leaf joint positions. Due to the                  the root joint, i.e. the translation between the current frame and the
+very sparse measurements, it is common that the IMUs show iden-                    previous frame. We propose a fusion-based approach that comprises
+tical signals while the subject is performing different animations.                two parallel branches. In Trans-B1 (short for translation estimation
+For example, when sitting still or standing still, the acceleration                branch 1) (Section 3.3.1), we infer the root velocity based on the
+and orientation measurements of all the IMUs are almost the same.                  sequential pose estimation, in combination with the prediction of
+In such cases, the temporal information is the key to resolve this                 foot-ground contact probabilities. In Trans-B2 (Section 3.3.2), we
+ambiguity, thus using RNNs is a natural choice. We choose to use                   use an RNN to predict the root velocity from joint positions and
+biRNNs instead of vanilla RNNs because the future information is                   inertial measurements. These two branches run in a parallel style,
+also of great help in this task, as stated in DIP. The loss function               and the final estimation is a fusion of the two branches based on the
+used to train the network is defined as:                                           foot state (Section 3.3.3). The intuition behind is that by assuming
+                                                                                   the foot on the ground is not moving, the per-frame velocity can be
+                    LS1 = ∥𝒑 leaf (𝑡) − 𝒑 GT        2
+                                          leaf (𝑡)∥ 2 ,                  (1)
+                                                                                   deduced from the motion of the subject. However, this estimation is
+where superscript GT denotes the ground truth.                                     not totally accurate and inevitably fails when both feet are not on
+   The input of Pose-S2 is the concatenation of Pose-S1’s output                   the ground, e.g., jumping or running. Therefore, a neural network is
+and the inertial measurements: 𝒙 ( 1) (𝑡) = [𝒑 leaf (𝑡), 𝒙 ( 0) (𝑡)] ∈ R87 .       used here for complementary estimation. We demonstrate in Section
+Based on the input information, Pose-S2 outputs the root-relative                  5.3 that such a hybrid approach gives more accurate results than
+coordinates of all joints: 𝒑 all (𝑡) = [𝒑 𝑗 (𝑡)| 𝑗 = 1, 2, · · · , 𝐽 − 1] ∈        using either branch alone.
+R3 (𝐽 −1) , where 𝐽 is the number of joints in the human kinematic                 3.3.1 Trans-B1: supporting-foot-based velocity estimation. In Trans-
+tree. Similar to Pose-S1, we use a biRNN for Pose-S2 with L2 loss:                 B1, we estimate the velocity of the root joint based on the estimation
+                     LS2 = ∥𝒑 all (𝑡) − 𝒑 GT       2
+                                                                         (2)       of body poses. First, we use a biRNN to estimate the foot-ground
+                                          all (𝑡)∥ 2 .
+                                                                                   contact probability for each foot, i.e. the likelihood that the foot
+3.2.2 Pose-S3: estimating joint rotations. In Pose-S3, we estimate                 is on the ground, formulated as 𝒔 foot = [𝑠 lfoot, 𝑠 rfoot ] ∈ R2 . The
+joint rotations from joint positions. We concatenate the joint coordi-             input of this network is the leaf joint positions and the inertial mea-
+nates and the inertial measurements as 𝒙 ( 2) (𝑡) = [𝒑 all (𝑡), 𝒙 ( 0) (𝑡)] ∈      surements, 𝒙 ( 1) . We assume that the foot with a higher on-ground
+R3 (𝐽 −1)+72 , which is the input of Pose-S3. The input vector is fed              probability is not moving between two adjacent frames, referred to
+into a biRNN, which predicts the rotations of all non-root joints                  as the supporting foot. The corresponding probability is denoted as
+relative to the root in the 6D representation [Zhou et al. 2018]:                  𝑠 = max{𝑠 lfoot, 𝑠 rfoot }. Then, we apply the estimated pose parame-
+  ( 6D)          ( 6D)
+𝑹 all (𝑡) = [𝑹 𝑗       (𝑡)| 𝑗 = 1, 2, · · · , 𝐽 − 1] ∈ R6 (𝐽 −1) . We choose       ters 𝜽 on the kinematic model with optional user-specific leg lengths
+the 6D rotation representation over other common representations                   𝒍, and the root velocity is essentially the coordinate difference of the
+such as quaternions as the output for better continuity, as demon-                 supporting foot between two consecutive frames, denoted as 𝒗 𝑓 :
+strated in [Zhou et al. 2018]. We should note that the IMU measure-
+ments are fed into the networks as rotation matrices, while the only                                𝒗 𝑓 (𝑡) = FK(𝜽 (𝑡 − 1); 𝒍) − FK(𝜽 (𝑡); 𝒍),                   (4)
+use of the 6D representation is in the output of Pose-S3. The loss
+                                                                                   where FK(·) is the forward kinematics function that calculates the
+function is defined as:
+                                                                                   position of the supporting foot from the pose parameters. To train
+                             ( 6D)        GT,( 6D)
+                 LS3 = ∥𝑹 all (𝑡) − 𝑹 all            (𝑡)∥ 22 .           (3)       the model, we use a cross-entropy loss defined as:
+The rotation of the root joint 𝑹 root is directly measured by the sen-                               GT
+                                                                                           LB1 = − 𝑠 lfoot                      GT
+                                                                                                           log 𝑠 lfoot − (1 − 𝑠 lfoot ) log(1 − 𝑠 lfoot )
+sor placed on the pelvis. Combining all these rotations, we convert                                    GT                         GT
+                                                                                                                                                                 (5)
+them to the rotation matrix formulation and obtain the full body                                   − 𝑠 rfoot log 𝑠 rfoot − (1 − 𝑠 rfoot ) log(1 − 𝑠 rfoot ).
+pose as 𝜽 = [𝑹 𝑗 (𝑡)| 𝑗 = 0, 1, · · · , 𝐽 ] ∈ R9 𝐽 .                               3.3.2 Trans-B2: network-based velocity estimation. While the pose-
+                                                                                   based method in Trans-B1 is straightforward, it is substantially
+3.3   Fusion-based Global Translation Estimation
+                                                                                   incapable of the cases where both feet are off the ground simultane-
+In this section, we explain our method to estimate global translations             ously. Further, the errors in the pose estimation will also affect the
+from the IMU measurements and the estimated body poses. This                       accuracy. To this end, we additionally adopt a neural network to
+task is even more challenging due to the lack of direct distance                   estimate the velocity based on the predicted joint positions and the
+measurements, and the acceleration measurements are too noisy                      IMU measurements, 𝒙 ( 2) , in parallel to Trans-B1. Instead of using
+to be used directly [Marcard et al. 2017]. Previous works address                  a biRNN as in other steps, here we choose to use an RNN. This
+this task by introducing additional vision inputs [Andrews et al.                  is because we find that estimating per-frame velocity accurately
+2016; Henschel et al. 2020; Malleson et al. 2019, 2017] or distance                requires more previous frames, and a biRNN with a sufficiently
+measurements [Liu et al. 2011; Vlasic et al. 2007], which increase the             large window size cannot satisfy our runtime requirements (see the
+complexity of the system. While the work of SIP [Marcard et al. 2017]              experiments in Section 5.3). The output of the RNN is the velocity
+estimates global translations from IMUs only, it has to run in an                  𝒗¯𝑒 in the coordinate system of the root joint, and we transform it to
+offline manner. To our best knowledge, we are the first method that                the global system using the root rotation 𝑹 root in 𝜽 as:
+addresses the task of real-time prediction of global translations from
+sparse IMUs. To do so, we need to estimate the per-frame velocity of                                               𝒗 𝑒 = 𝑹 root 𝒗¯𝑒 .                            (6)
+86:6 •    Xinyu Yi, Yuxiao Zhou, and Feng Xu
+
+
+The loss function is defined as:                                                      Table 1. Dataset overview. We use DIP-IMU [Huang et al. 2018], TotalCap-
+                                                                                      ture [Trumble et al. 2017], and AMASS [Mahmood et al. 2019] dataset for
+           LB2 = Lvel (1) + Lvel (3) + Lvel (9) + Lvel (27),                    (7)   our training and evaluation. The table shows pose parameters, IMU mea-
+                                                                                      surements, global translations, foot-ground contact states, and the total
+where:                                                                                length in minutes for each dataset. "Y" means that the dataset contains such
+                                                                                      information. "N" means that the dataset does not contain such information.
+                            /𝑛⌋−1 𝑚𝑛+𝑛−
+                         ⌊𝑇 ∑︁                                         2              "S" means that the data is synthesized from other information.
+                                   ∑︁ 1
+           Lvel (𝑛) =                           𝒗 𝑒 (𝑡) − 𝒗¯𝑒GT (𝑡))
+                                               (¯                          .    (8)
+                          𝑚=0        𝑡 =𝑚                              2
+                                                                                            Dataset        Pose     IMU      Translation       Contact      Minutes
+Here, 𝑇 is the total number of frames in the training sequence.                          DIP-IMUa           Y         Y            N              N            80
+This loss measures the differences between the predicted and the
+                                                                                       TotalCapture         Yb        Y            Y              S            49
+ground truth translations in every consecutive 1, 3, 9, and 27 frames.
+                                                                                         AMASSc             Y         S            Y              S           1217
+We find that using Lvel (1) alone makes the network only focus
+on neighboring frames, resulting in unstable estimation and large                     a Some training sequences that have too many "nan" IMU measurements are discarded.
+
+errors. On the contrary, the supervision on larger frame ranges                        b The ground truth SMPL pose parameters are provided by DIP [Huang et al. 2018].
+                                                                                      c We select and sample the original AMASS motions [Mahmood et al. 2019] in 60 fps.
+helps to reduce the accumulative error.
+
+3.3.3 Fusing two branches. Lastly, we fuse the estimated velocity
+                                                                                      4.2    Training Data
+𝒗 𝑓 and 𝒗 𝑒 to get the final global translation 𝒗 based on the foot-
+ground contact likelihood. We set an upper threshold 𝑠 and a lower                    In our implementation, each network requires different types of
+threshold 𝑠 for the predicted foot-ground contact probability 𝑠. The                  data and is trained individually. The relevant datasets include: 1)
+output global velocity is then computed as:                                           DIP-IMU [Huang et al. 2018], which consists of IMU measurements
+                                                                                      and pose parameters for around 90 minutes of motions performed
+                      
+                       𝒗𝑒                         0≤𝑠 <𝑠                             by 10 subjects wearing 17 IMUs; 2) TotalCapture [Trumble et al.
+                                                                                      2017], which consists of IMU measurements, pose parameters, and
+                      
+                                    𝑠−𝑠
+                                                                                (9)
+                      
+                       𝑠−𝑠
+                 𝒗=      𝒗 + 𝑠−𝑠 𝒗 𝑓
+                      𝑠−𝑠 𝑒
+                                                   𝑠 ≤𝑠 <𝑠 .
+                                                                                     global translations for around 50 minutes of motions performed
+                     𝒗𝑓
+                                                  𝑠 ≤𝑠 ≤1
+                                                                                     by 5 subjects wearing 13 IMUs; 3) AMASS [Mahmood et al. 2019],
+We empirically set 𝑠 = 0.5 and 𝑠 = 0.9 in our model. The linear                       which is a composition of existing motion capture (mocap) datasets
+interpolation provides a smooth and automatic transition between                      and contains pose parameters and global translations for more than
+the two branches.                                                                     40 hours of motions performed by over 300 subjects. The overview
+                                                                                      of the datasets is shown in Table 1. As TotalCapture is relatively
+4     IMPLEMENTATION                                                                  small, we use it only for evaluation as an examination for cross-
+                                                                                      dataset generalization. In the following, we introduce how to use
+In this section, we provide more details on our implementation.
+                                                                                      the training data for each subtask, i.e. pose estimation (Section 4.2.1)
+Specifically, we introduce the kinematic model in Section 4.1, the
+                                                                                      and global translation estimation (Section 4.2.2).
+training data in Section 4.2, and other related details in Section 4.3.
+                                                                                      4.2.1 Training data for pose estimation. To train the networks in
+4.1      Kinematic Model                                                              Pose-S1 and Pose-S2, we need sequential IMU measurements (includ-
+We use the SMPL [Loper et al. 2015] skeleton as our kinematic                         ing rotations and accelerations) and root-relative joint coordinates.
+model, and use the corresponding mesh for visualization. The model                    While DIP-IMU contains such data, it is not diverse enough to train
+is defined as:                                                                        a model with sufficient generalization ability. Hence, we synthesize
+                                                                                      inertial data for AMASS dataset which is much larger and contains
+                          𝑀 (𝜽 ) = 𝑊 ( T̄, 𝑱 , 𝜽, W),                          (10)   more variations. To do so, we place virtual IMUs on the correspond-
+                                                                                      ing vertices of the SMPL mesh, and then the sequential positions
+where T̄ is the template mesh in the rest pose, 𝑱 is 24 body joints,
+                                                                                      and rotations of each IMU can be inferred from the pose parameters
+𝜽 is the pose parameters in terms of joint angles, W is the blend
+                                                                                      using Equation 10. We use the following method to synthesize the
+weights, and 𝑊 (·) is the linear blend skinning function. As the
+                                                                                      acceleration measurements:
+body shape is not our concern, we leave out the shape- and pose-
+blendshape terms in the original paper. We should note that the IMU                                  𝒙 𝑖 (𝑡 − 𝑛) + 𝒙 𝑖 (𝑡 + 𝑛) − 2𝒙 𝑖 (𝑡)
+                                                                                           𝒂𝑖 (𝑡) =                                       , 𝑖 = 1, 2, · · · , 6, (11)
+measurements do not contain any information about the subject’s                                                    (𝑛Δ𝑡) 2
+body shape, and the pose estimation task is also shape-agnostic.                      where 𝒙 𝑖 (𝑡) denotes the coordinate of the 𝑖th IMU at frame 𝑡, 𝒂𝑖 (𝑡) ∈
+However, in Trans-B1, leg lengths will directly affect the prediction                 R3 is the acceleration of IMU 𝑖 at frame 𝑡, and Δ𝑡 is the time interval
+of global translations which are deduced from foot movements. Here,                   between two consecutive frames. To cope with jitters in the data,
+we assume that the leg lengths of the subject can be measured in                      we do not compute the accelerations based on adjacent frames (i.e.
+advance, and the global translations are calculated based on this                     𝑛 = 1), but use relatively apart frames for smoother accelerations
+measurement. Otherwise, we use the mean SMPL model, which will                        by setting 𝑛 = 4. Please refer to Appendix C for more details. We
+give a less accurate estimation due to the disparity in leg lengths,                  synthesize a subset of AMASS dataset which consists of about 1217
+but still being plausible.                                                            minutes of motions in 60 fps, which sufficiently cover the motion
+                                                                     TransPose: Real-time 3D Human Translation and Pose Estimation with Six Inertial Sensors •   86:7
+
+
+variations. To make Pose-S2 robust to the prediction errors of leaf-               front end of our live demo is implemented using Unity3D, and
+joint positions, during training, we further add Gaussian noise to                 we use Noitom3 Legacy IMU sensors to collect our own data. We
+the leaf-joint positions with 𝜎 = 0.04. We use DIP-IMU and syn-                    separately train each network with the batch size of 256 using
+thetic AMASS as training datasets for the pose estimation task, and                an Adam [Kingma and Ba 2014] optimizer with a learning rate
+leave TotalCapture for evaluation. To train Pose-S3, we need inertial              lr = 10−3 . We follow DIP to train the models for the pose estimation
+measurements and mocap data in the form of joint angles. We again                  task using synthetic AMASS first and fine-tune them on DIP-IMU
+use DIP-IMU and synthetic AMASS dataset for Pose-S3 with addi-                     which contains real IMU measurements. To avoid the vertical drift
+tional Gaussian noise added to the joint positions, whose standard                 due to the error accumulation in the estimation of translations, we
+deviation is empirically set to 𝜎 = 0.025.                                         add a gravity velocity 𝑣𝐺 = 0.018 to the Trans-B1 output 𝒗 𝑓 to pull
+                                                                                   the body down.
+4.2.2 Training data for translation estimation. In Trans-B1, a biRNN
+is used to predict foot-ground contact probabilities, thus we need
+binary annotations for foot-ground contact states. To generate such                5     EXPERIMENTS
+data, we apply the 60-fps pose parameters and root translations on                 In this section, we first introduce the data and metrics used in our
+the SMPL model to obtain the coordinates of both feet, denoted as                  experiments in Section 5.1. Using the data and metrics, we compare
+𝒙 lfoot (𝑡) and 𝒙 rfoot (𝑡) for frame 𝑡. When the movement of one foot             our method with previous methods qualitatively and quantitatively
+between two consecutive frames is less than a threshold 𝑢, we mark                 in Section 5.2. Next, we evaluate our important design choices and
+it as contacting the ground. We empirically set 𝑢 = 0.008 meters. In               key technical components by ablative studies in Section 5.3. Finally,
+this way, we automatically label AMASS dataset using:                              to further demonstrate the power of our technique, we show various
+                                                                                  real-time results containing strong occlusion, wide range motion
+      GT            1       if ∥𝒙 lfoot (𝑡) − 𝒙 lfoot (𝑡 − 1)∥ 2 < 𝑢
+    𝑠 lfoot (𝑡) =                                                    , (12)        space, dark and outdoor environment, close interaction, and multiple
+                    0       otherwise
+                                                                                   users in Section 5.4. Following DIP [Huang et al. 2018], we adopt
+                                                                                   two settings of inference: the offline setting where the full sequence
+                  
+     GT             1       if ∥𝒙 rfoot (𝑡) − 𝒙 rfoot (𝑡 − 1)∥ 2 < 𝑢
+   𝑠 rfoot  (𝑡) =                                                     , (13)
+                    0       otherwise                                              is available at the test time, and the online (real-time) setting where
+where 𝑠 lfoot
+        GT (𝑡) and 𝑠 GT (𝑡) are the foot-ground contact state labels               our approach accesses 20 past frames, 1 current frame, and 5 future
+                     rfoot
+for frame 𝑡. For better robustness, we additionally apply Gaussian                 frames in a window sliding manner, with a tolerable latency of
+noise to the input of Trans-B1 during training, with the standard                  83ms. Please note that all the results are estimated from the real
+deviation set to 𝜎 = 0.04. Since DIP-IMU does not contain global                   IMU measurements, and no temporal filter is used in our method.
+translations, we only use synthetic 60-fps AMASS as the training                   Following DIP, we do not give rotation freedoms to the wrists and
+dataset and leave TotalCapture for evaluation.                                     ankles because we have no observation to solve them.
+   In Trans-B2, an RNN is used to predict the velocity of the root
+joint in its own coordinate system. Since the root positions are                   5.1     Data and Metrics
+already provided in AMASS dataset, we compute the velocity and                     The pose evaluations are conducted on the test split of DIP-IMU
+convert it from the global space into the root space using:                        [Huang et al. 2018] and TotalCapture [Trumble et al. 2017] dataset.
+                                 −1 GT                                             The global translation evaluations are conducted on TotalCapture
+         𝒗¯𝑒GT (𝑡) = (𝑹 GT                        GT
+                        root (𝑡)) (𝒙 root (𝑡) − 𝒙 root (𝑡 − 1)),       (14)
+                                                                                   alone, as DIP-IMU does not contain global movements. We use the
+where 𝑹 GT root (𝑡) is the ground truth root rotation at frame 𝑡 and               following metrics for quantitative evaluations of poses: 1) SIP error
+  root (𝑡) is the ground truth root position in world space at frame
+𝒙 GT                                                                               measures the mean global rotation error of upper arms and upper
+𝑡. Note that the frame rate is fixed to be 60 fps for training and                 legs in degrees; 2) angular error measures the mean global rotation
+testing, and the velocity is defined as the translation between two                error of all body joints in degrees; 3) positional error measures the
+consecutive 60-fps frames in this paper. We intend to use Trans-B2                 mean Euclidean distance error of all estimated joints in centimeters
+mainly for the cases where both feet are off the ground, thus we only              with the root joint (Spine) aligned; 4) mesh error measures the mean
+use such kind of sequences from AMASS to construct the training                    Euclidean distance error of all vertices of the estimated body mesh
+data. Specifically, we run the well-trained Trans-B1 network and                   also with the root joint (Spine) aligned. The vertex coordinates are
+collect the sequence clips where the minimum foot-ground contact                   calculated by applying the pose parameters to the SMPL [Loper et al.
+probability is lower than 𝑠, i.e. min𝑡 ∈ F 𝑠 (𝑡) < 𝑠, where F is the               2015] body model with the mean shape using Equation 10. Note
+set containing all frames of the fragment and |F | ≤ 300. During                   that the errors in twisting (rotations around the bone) cannot be
+training, Gaussian noise of 𝜎 = 0.025 is added to the input of Trans-              measured by positional error, but will be reflected in mesh error.
+B2.                                                                                5) Jitter error measures the average jerk of all body joints in the
+                                                                                   predicted motion. Jerk is the third derivative of position with respect
+4.3   Other Details                                                                to time and reflects the smoothness and naturalness of the motion
+All training and evaluation processes run on a computer with an                    [Flash and Hogan 1985]. A smaller average jerk means a smoother
+Intel(R) Core(TM) i7-8700 CPU and an NVIDIA GTX1080Ti graphics                     and more natural animation.
+card. The live demo runs on a laptop with an Intel(R) Core(TM) i7-
+10750H CPU and an NVIDIA RTX2080 Super graphics card. The
+model is implemented using PyTorch 1.7.0 with CUDA 10.1. The                       3 https://www.noitom.com/
+86:8 •    Xinyu Yi, Yuxiao Zhou, and Feng Xu
+
+
+5.2      Comparisons
+Quantitative and qualitative comparisons with DIP [Huang et al.
+2018] and SIP/SOP (SOP is a simplified version of SIP that only uses
+orientation measurements) [Marcard et al. 2017] are conducted and
+the results are shown in this section. We should note that our test
+data is slightly different from [Huang et al. 2018] for both DIP-IMU
+and TotalCapture, resulting in some inconsistency with the values
+reported by DIP. More specifically, the DIP-IMU dataset contains
+both raw and calibrated data, and the results in the DIP paper are
+based on the latter. However, the calibrated data removes the root
+inertial measurements which are required by our method to estimate
+the global motions, so we have to perform the comparisons on the
+raw data. As for the TotalCapture dataset, the ground truth SMPL
+pose parameters are acquired from the DIP authors. To evaluate DIP
+on the test data, we use the DIP model and the code released by the
+authors. No temporal filtering technique is applied.
+
+5.2.1 Quantitative comparisons. The quantitative comparisons are
+shown in Table 2 for the offline setting and Table 3 for the online
+setting. We report the mean and standard deviation for each metric
+in comparison with DIP (both offline and online) and SIP/SOP (only
+offline). As shown in the tables, our method outperforms all previous
+works in all metrics. We attribute our superiority to the multi-stage
+structure that first estimates joint coordinates in the positional space
+and then solves for the angles in the rotational space. We argue that
+human poses are easier to estimate in the joint-coordinate space,
+and with the help of the coordinates, joint rotations can be better
+estimated. A fly in the ointment is that we can see an accuracy gap
+between online and offline settings. The reason is that the offline
+setting uses much more temporal information to solve the pose of
+the current frame, while the online setting does not do this to avoid
+noticeable delay. Since our approach fully exploits such temporal
+information to resolve the motion ambiguities, there is an inevitable
+accuracy reduction when switching from the offline setting to the
+online setting. Nevertheless, we still achieve the state-of-the-art        Fig. 4. Qualitative comparisons between our method and DIP. We perform
+online capture quality which is visually pleasing as shown in the          both offline and online comparisons on DIP-IMU (top-three rows) and
+qualitative results and the live demos.                                    TotalCapture (bottom-three rows) dataset, and pick some results here. More
+                                                                           comparisons can be found in our video. Each vertex is colored by its distance
+                                                                           to the ground truth location. A complete-red vertex means a distance greater
+5.2.2 Qualitative comparisons. Here, we visually compare offline
+                                                                           than 1m.
+and online results for pose estimation between our method and
+the state-of-the-art work DIP. Some selected frames from the two
+datasets are shown in Figure 4 and more comparisons are shown in
+our video. From the top three rows in Figure 4 picked from DIP-IMU         rotations. We show a challenging case in the last row where DIP
+dataset, we see that our approach reconstructs the upper and lower         fails but we still give a satisfying estimation. Again, we attribute
+body well, while DIP does not accurately estimate the poses of the         such superiority of our method to the intermediate joint position
+upper arms and legs. Since inner joint rotations are not directly          estimation tasks which have a regularization effect on the final
+measured by any sensor, high ambiguities exist in the mapping              result.
+from leaf joint rotations to poses of the whole body. The explicit
+estimation of joint positions in our pipeline helps the network to         5.3   Evaluations
+make better use of the acceleration information, which is the key to       5.3.1 Multi-stage pose estimation. We demonstrate the superiority
+solve such ambiguities. Thus, our method shows greater accuracy in         of our three-stage pose estimation structure here. We evaluate the
+inner joint rotations. The following three rows are some challenging       following three variants of our pipeline: 1) directly regressing joint
+poses selected from the TotalCapture dataset. Our method performs          rotations from inertial inputs, without any intermediate task; 2)
+slightly better for the side-bending pose as shown in the top row.         estimating joint rotations with the help of intermediate leaf joint
+In the middle row, our method correctly estimates the rotations            coordinates regressed from inertial measurements, i.e. combining
+of upper arms where DIP fails, while both have similar forearm             Pose-S2 and Pose-S3; 3) estimating joint rotations with the help of
+                                                                                 TransPose: Real-time 3D Human Translation and Pose Estimation with Six Inertial Sensors •                                                                                                                                                                                                                           86:9
+
+
+Table 2. Offline comparison results for body poses. We compare our method with SIP/SOP [Marcard et al. 2017] and DIP [Huang et al. 2018] on TotalCapture
+[Trumble et al. 2017] and DIP-IMU [Huang et al. 2018] dataset. The mean and standard deviation (in parentheses) of the SIP error, angular error, positional
+error, mesh error, and jitter error are reported.
+
+                                             TotalCapture                                                                                                                                                                                        DIP-IMU
+         SIP Err (deg)    Ang Err (deg)     Pos Err (cm)     Mesh Err (cm)     Jitter (102 m/s3 )                                            SIP Err (deg)                                       Ang Err (deg)                           Pos Err (cm)                                                                           Mesh Err (cm)                       Jitter (102 m/s3 )
+ SOP     23.09 (±12.37)   17.14 (±8.54)     9.24 (±5.33)     10.58 (±6.04)       8.17 (±13.55)                                      24.56 (±12.75)                                                  9.83 (±5.21)                         8.17 (±4.74)                                                                            9.32 (±5.27)                           5.66 (±9.49)
+ SIP      18.54 (±9.67)   14.84 (±7.26)     7.65 (±4.32)      8.60 (±4.83)       8.27 (±17.36)                                      21.02 (±9.61)                                                   8.77 (±4.38)                         6.66 (±3.33)                                                                            7.71 (±3.80)                           3.86 (±6.32)
+ DIP     18.79 (±11.85)   17.77 (±9.51)     9.61 (±5.76)     11.34 (±6.45)       28.86 (±29.18)                                      16.36 (±8.60)                                                 14.41 (±7.90)                         6.98 (±3.89)                                                                            8.56 (±4.65)                          23.37 (±23.84)
+ Ours    14.95 (±6.90)    12.26 (±5.59)     5.57 (±3.09)     6.36 (±3.47)         1.57 (±2.93)                                      13.97 (±6.77)                                                  7.62 (±4.01)                          4.90 (±2.75)                                                                            5.83 (±3.21)                           1.19 (±1.76)
+
+
+Table 3. Online comparison results for body poses. We compare our method with DIP [Huang et al. 2018] in the real-time setting on TotalCapture [Trumble
+et al. 2017] and DIP-IMU [Huang et al. 2018] dataset.
+
+                                             TotalCapture                                                                                                                                                                                        DIP-IMU
+         SIP Err (deg)    Ang Err (deg)     Pos Err (cm)     Mesh Err (cm)      Jitter (102 m/s3 )                                              SIP Err (deg)                                    Ang Err (deg)                           Pos Err (cm)                                                                           Mesh Err (cm)                       Jitter (102 m/s3 )
+ DIP     18.93 (±12.44)   17.50 (±10.10)     9.57 (±5.95)     11.40 (±6.87)      35.94 (±34.45)                                         17.10 (±9.59)                                             15.16 (±8.53)                           7.33 (±4.23)                                                                            8.96 (±5.01)                         30.13 (±28.76)
+ Ours    16.69 (±8.79)    12.93 (± 6.15)    6.61 (± 3.93)     7.49 (± 4.35)      9.44 (±13.57)                                          16.68 (±8.68)                                             8.85 (± 4.82)                          5.95 (± 3.65)                                                                           7.09 (± 4.24)                          6.11 (±7.92)
+
+
+Table 4. Evaluation of the multi-stage design for pose estimation using                                                                                                                      2 I I O L Q H  5 H V X O W V                                                                                                                         2 Q O L Q H  5 H V X O W V
+                                                                                                                                                                                                                                                                                                                       
+DIP-IMU and TotalCapture dataset. "I" stands for IMU measurements; "LJ"                                                                                                               6 X S S R U W L Q J  ) R R W    1 H W Z R U N   2 X U V                                                                                       6 X S S R U W L Q J  ) R R W    1 H W Z R U N   2 X U V 
+
+                                                                                                      & X P X O D W L Y H  G L V W D Q F H  H U U R U   P 
+
+
+
+
+                                                                                                                                                                                                                                                           & X P X O D W L Y H  G L V W D Q F H  H U U R U   P 
+means leaf joint positions; "AJ" denotes full joint positions; and "P" indicates                                                                                                   6 X S S R U W L Q J  ) R R W                                                                                                                     6 X S S R U W L Q J  ) R R W
+                                                                                                                                                                                      1 H W Z R U N                                                                                                                                        1 H W Z R U N
+body poses. We demonstrate the superiority (judging from the SIP error                                                                                               
+                                                                                                                                                                                      1 H W Z R U N   Z  R  $ F F X P X O D W L Y H  / R V V 
+                                                                                                                                                                                                                                                                                                                          
+                                                                                                                                                                                                                                                                                                                                           1 H W Z R U N   Z  R  $ F F X P X O D W L Y H  / R V V 
+and jitter error) of our multi-stage method which estimates leaf and full                                                                                                                                                                                                                                              
+
+joint positions as intermediate tasks.                                                                                                                                                                                                                                                                                 
+
+                                                                                                                                                                                                                                                                                                                       
+
+                             DIP-IMU                            TotalCapture                                                                                                                                                                                                                                           
+
+                  SIP Err (deg)   Jitter (102 m/s3 )   SIP Err (deg)   Jitter (102 m/s3 )                                                                                                                                                                                                                              
+
+     I→P         14.43 (±7.77)      2.50 (±3.42)        23.16(±9.00)     3.34 (±5.72)                                                                                                                                                                                                                                  
+   I→LJ→P        14.35 (±7.75)      2.22 (±3.32)       17.71 (±7.89)     2.90 (±5.09)                                                                                                                                                                                                                                                                                                         
+   I→AJ→P        14.29 (±7.30)      1.23 (±1.82)       19.76 (±8.05)     1.60 (±2.94)                                                                                            ( U U R U  D F F X P X O D W L R Q  W L P H   V                                                                                                 ( U U R U  D F F X P X O D W L R Q  W L P H   V 
+ I→LJ→AJ→P       13.97 (±6.77)      1.19 (±1.76)       14.95 (±6.90)     1.57 (±2.93)
+                                                                                                           Fig. 5. Evaluation of global translation estimation. Here we evaluate cu-
+                                                                                                           mulative distance errors with respect to time. The error of each solution
+intermediate all joint positions, which are directly regressed from                                        is plotted as a curve. A lower curve means better translation accuracy. We
+inertial measurements, i.e. combining Pose-S1 and Pose-S2. We                                              demonstrate the superiority of our fusion-based method and also the effec-
+compare these variations with our original three-stage method on                                           tiveness of the accumulative loss terms (Equation 7) used in the training of
+DIP-IMU and TotalCapture dataset in the offline setting. As shown                                          Trans-B2.
+in Table 4, estimating joint positions greatly helps with the pose
+estimation task, which leads to better accuracy and a significant
+                                                                                                           the advantages of our hybrid supporting-foot- and network-based
+reduction of jitters. We attribute this to the nonlinearity of human
+                                                                                                           approach. Each alternative method is evaluated and compared with
+poses in the joint rotation representation, which makes it hard to
+                                                                                                           our fusion-based implementation. Specifically, we evaluate: 1) the
+learn how to extract useful information from the linear accelerations
+                                                                                                           supporting-foot-based method in Trans-B1, which means that we
+of body joints, resulting in an automatic discard of acceleration data
+                                                                                                           only estimate foot-ground contact states and compute the global
+as reported in DIP [Huang et al. 2018]. Hence, by estimating joint
+                                                                                                           translations from poses; 2) using the neural network to regress
+positions as an intermediate task, we make better use of acceleration
+                                                                                                           translations in Trans-B2, which means that we only estimate global
+information due to its linear correlation with positions, and as a
+                                                                                                           translations from an RNN; 3) running both branches and fusing them
+result, we do not need any special loss for accelerations where
+                                                                                                           according to the estimated foot-ground contact probabilities, i.e. our
+DIP does. Another observation from Table 4 is that the leaf joint
+                                                                                                           hybrid method. Additionally, we evaluate 4) running only the RNN
+positions are helpful for the estimation of other joints. We think this
+                                                                                                           in Trans-B2, but trained with a simple L2 loss that measures the
+is because estimating leaf joint positions is easier than inner ones
+                                                                                                           mean square error of the predicted velocities, i.e. using only Lvel (1)
+as their inertia is directly measured by IMUs. Then, with the help
+                                                                                                           rather than the accumulative loss (Equation 7). All the methods
+of the leaf joints, it is easier to estimate the inner ones, as the leaf
+                                                                                                           above are evaluated on TotalCapture dataset in both offline and
+joints are affected by inner ones. So breaking down such a complex
+                                                                                                           online settings. We draw the cumulative error curve with respect
+task into easier ones helps to achieve better results.
+                                                                                                           to time in Figure 5, i.e. the mean Euclidean distance between the
+5.3.2 Fusion-based global translation estimation. We conduct an                                            estimated and ground truth global positions with predefined error
+evaluation on the global translation estimation task to demonstrate                                        accumulation time ranging from 0 to 10 seconds. This mean distance
+86:10 •    Xinyu Yi, Yuxiao Zhou, and Feng Xu
+
+
+Table 5. Evaluation of the network of Trans-B2 on TotalCapture dataset.           Table 6. Evaluation of the cross-layer connections of IMU measurements
+RNN and biRNN are compared using the cumulative distance errors with 1s           using DIP-IMU and TotalCapture dataset. We compare our original pose
+(left) and 5s (right) accumulation time. We demonstrate that RNN is better        estimation pipeline with removing the inertial inputs in Pose-S2 and Pose-
+suited for the velocity estimation task.                                          S3. We demonstrate the superiority of the cross-layer connections of IMU
+                                                                                  measurements which help with full joint position estimation and IK solving.
+                   Dist Err@1s (cm)                   Dist Err@5s (cm)
+ Subject
+                biRNN             RNN              biRNN             RNN                                    DIP-IMU                       TotalCapture
+                                                                                                  SIP Err (deg)   Mesh Err (cm)   SIP Err (deg)   Mesh Err (cm)
+    s1       14.20 (±7.51)   11.34 (±5.49)      47.74 (±20.29)   40.07 (±16.73)
+    s2       12.75 (±7.41)    9.38 (±7.09)      41.64 (±17.41)   30.04 (±17.23)    S2 w/o IMUs   17.06 (±7.29)    6.44 (±3.38)    18.51 (±7.31)   6.84 (±3.61)
+    s3       15.76 (±8.38)   12.15 (±6.79)      52.45 (±21.05)   41.32 (±18.12)    S3 w/o IMUs   15.66 (±7.53)    6.50 (±3.51)    15.75 (±7.18)   6.83 (±3.67)
+    s4      22.18 (±17.13)   20.09 (±14.54)     72.18 (±42.15)   68.40 (±34.31)        Ours      13.97 (±6.77)    5.83 (±3.21)    14.95 (±6.90)   6.36 (±3.47)
+    s5      18.54 (±10.53)   13.31 (±6.59)      55.42 (±27.53)   46.93 (±17.81)
+   total     15.50 (±9.05)   12.18 (±7.36)      50.77 (±22.80)   41.49 (±19.28)
+
+                                                                                  inputs in Pose-S2 and Pose-S3. Specifically, we evaluate two varia-
+                                                                                  tions of our pose estimation pipeline: 1) removing the IMU measure-
+                                                                                  ments in the input of Pose-S2, i.e. estimating full joint positions only
+is calculated by first aligning the root of the estimated and ground
+                                                                                  from the leaf joint positions; 2) removing the IMU measurements in
+truth body in one frame, then recording the distance errors in the
+                                                                                  the input of Pose-S3, i.e. solving the IK problem only from full joint
+following 𝑡 (ranging from 0 to 10) seconds, and finally averaging
+                                                                                  positions. As shown in Table 6, knowing leaf joint inertia helps with
+the errors over all frames in the test dataset. We should note that
+                                                                                  the estimation of inner joint positions and rotations. We attribute
+there are five subjects in TotalCapture dataset and their leg lengths
+                                                                                  this to the kinematic structure of human bodies, where leaf joints
+are acquired by averaging the ground truth lengths of all frames.
+                                                                                  are affected by the movements of inner joints. Thus, by leveraging
+As shown in Figure 5, our hybrid approach outperforms all the
+                                                                                  the leaf joint inertia via skip connections, Pose-S2 and Pose-S3 can
+other methods in both offline and online tests. It indicates that our
+                                                                                  achieve better accuracy.
+hybrid method, which computes global motions majorly using the
+supporting foot and deals with the remaining unsolved movements
+                                                                                  5.4   Live Demo
+using a network trained on complementary data, makes up the
+flaws of both branches and thus shows better results. However, this               We implement a real-time live mocap system and show its results
+benefit is not significant comparing with the method in Trans-B1                  in the accompanying video. Concretely, we attach six IMUs onto
+because the supporting foot can be detected in most of the test                   the corresponding body parts and read the raw inertial measure-
+datasets. So the result is dominated by Trans-B1. In addition, the                ments via wireless transmission. We calibrate the received data (see
+RNN trained without the accumulative loss performs worse than                     Appendix A) and predict the poses and global translations, which
+the one with such a loss term. It demonstrates the effectiveness of               are finally used to drive a 3D human model in real-time. From the
+the accumulative terms which benefit the estimation of long-range                 live demos, we can see that our system handles strong occlusion,
+movements. Finally, the errors caused by jittering will be canceled               wide range motion space, dark and outdoor environment, close
+out somehow in the long run, resulting in the flattening trend of                 interaction, and multiple users with high accuracy and real-time
+the curves.                                                                       performance.
+
+5.3.3 The network for velocity estimation. We conduct an evaluation               5.5   Limitations
+of the network structure used for global translation estimation. We               5.5.1 On the hardware side. In the inertial sensor, a magnetometer
+compare 1) a unidirectional RNN and 2) a biRNN using 20 past, 1                   is used to measure directions. However, the magnetometer is easily
+current, and 5 future frames on TotalCapture dataset in the online                affected by the magnetic field of the environment. As a result, it
+setting. As shown in Table 5, RNN outperforms biRNN on distance                   cannot work in an environment with spatially or temporally varying
+errors for both 1 and 5 seconds of accumulation time. Due to the                  magnetic fields. Our current sensor uses wireless transmission to
+long-term historical dependency of human movements, RNN can                       deliver signals to our laptop, which does not allow the sensor to be
+utilize all historical information while biRNN can only acquire a                 far from the laptop (10 meters at most in our experiments). Hence,
+limited number of past frames when running in an online manner.                   to record wide range motions, we still need to carry the laptop
+On the other hand, RNN only takes one forward pass for a new                      and follow the performer. The transmission problem should also
+frame, while biRNN needs to process all the 26 frames in the window               be solved to extend the usage of the techniques based on inertial
+forward and backward, which is about 50 times slower. To increase                 sensors.
+the estimation accuracy, more frames are needed for biRNN, which
+further reduce the runtime performance. Hence, RNN is a more                      5.5.2 On the software side. As a data-driven method, our approach
+suitable choice for the global translation estimation.                            also suffers from the generalization problem. It cannot handle mo-
+                                                                                  tions that are largely different from the training dataset, e.g., splits
+5.3.4 Cross-layer connections of IMU measurements. We demon-                      and other complex motions that can only be performed by pro-
+strate the effectiveness of the cross-layer connections of IMU mea-               fessional dancers and players. Our supporting-foot-based method
+surements in the pose estimation task, i.e. the impact of the inertial            relies on the assumption that the supporting foot has no motion
+                                                                             TransPose: Real-time 3D Human Translation and Pose Estimation with Six Inertial Sensors •       86:11
+
+
+in the world coordinate space, which is not true for motions like                            Thomas Helten, Meinard Müller, Hans-Peter Seidel, and Christian Theobalt. 2013. Real-
+skating and sliding.                                                                            Time Body Tracking with One Depth Camera and Inertial Sensors. Proceedings of
+                                                                                                the IEEE International Conference on Computer Vision, 1105–1112.
+                                                                                             Roberto Henschel, Timo Marcard, and Bodo Rosenhahn. 2020. Accurate Long-Term
+                                                                                                Multiple People Tracking using Video and Body-Worn IMUs. IEEE Transactions on
+6    CONCLUSION                                                                                 Image Processing PP (08 2020), 1–1.
+This paper proposes TransPose, a 90-fps motion capture technique                             Sepp Hochreiter and Jürgen Schmidhuber. 1997. Long Short-term Memory. Neural
+                                                                                                computation 9 (12 1997), 1735–80.
+based on 6 inertial sensors, which reconstructs full human motions                           Daniel Holden. 2018. Robust solving of optical motion capture data by denoising. ACM
+including both body poses and global translations. In this technique,                           Transactions on Graphics (TOG) 37, 4 (2018), 1–12.
+                                                                                             Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael Black, Otmar Hilliges, and
+a novel multi-stage method is proposed to estimate body poses based                             Gerard Pons-Moll. 2018. Deep inertial poser: Learning to reconstruct human pose
+on the idea of reformulating the problem with two intermediate                                  from sparse inertial measurements in real time. ACM Transactions on Graphics 37,
+tasks of leaf and full joint position estimations, which leads to a                             1–15.
+                                                                                             Diederik Kingma and Jimmy Ba. 2014. Adam: A Method for Stochastic Optimization.
+large improvement over the state-of-the-art on accuracy, temporal                               International Conference on Learning Representations (12 2014).
+consistency, and runtime performance. For global translation esti-                           Huajun Liu, Xiaolin Wei, Jinxiang Chai, Inwoo Ha, and Taehyun Rhee. 2011. Realtime
+mation, a fusion technique is used to leverage a purely data-driven                             human motion control with a small number of inertial sensors. 133–140.
+                                                                                             Matthew Loper, Naureen Mahmood, Javier Romero, Gerard Pons-Moll, and Michael J.
+method and a method involving the motion rules of the supporting                                Black. 2015. SMPL: A Skinned Multi-Person Linear Model. ACM Trans. Graphics
+foot and a kinematic body model. By combining data-driven and                                   (Proc. SIGGRAPH Asia) 34, 6 (Oct. 2015), 248:1–248:16.
+                                                                                             Naureen Mahmood, Nima Ghorbani, Nikolaus F. Troje, Gerard Pons-Moll, and Michael J.
+motion-rule-driven, the challenging problem of global translation es-                           Black. 2019. AMASS: Archive of Motion Capture as Surface Shapes. In The IEEE
+timation from noisy sparse inertial sensors is solved in real-time for                          International Conference on Computer Vision (ICCV).
+the first time to the best of our knowledge. Extensive experiments                           Charles Malleson, John Collomosse, and Adrian Hilton. 2019. Real-Time Multi-person
+                                                                                                Motion Capture from Multi-view Video and IMUs. International Journal of Computer
+with strong occlusion, wide range motion space, dark and outdoor                                Vision (12 2019).
+environment, close interaction, and multiple users demonstrate the                           Charles Malleson, Andrew Gilbert, Matthew Trumble, John Collomosse, Adrian Hilton,
+robustness and accuracy of our technique.                                                       and Marco Volino. 2017. Real-Time Full-Body Motion Capture from Video and IMUs.
+                                                                                                449–457.
+                                                                                             Timo Marcard, Gerard Pons-Moll, and Bodo Rosenhahn. 2016. Human Pose Estimation
+                                                                                                from Video and IMUs. IEEE Transactions on Pattern Analysis and Machine Intelligence
+ACKNOWLEDGMENTS                                                                                 38 (02 2016), 1–1.
+We would like to thank Yinghao Huang and the other DIP authors                               Timo Marcard, Bodo Rosenhahn, Michael Black, and Gerard Pons-Moll. 2017. Sparse
+                                                                                                Inertial Poser: Automatic 3D Human Pose Estimation from Sparse IMUs. Computer
+for providing the SMPL parameters for TotalCapture dataset and the                              Graphics Forum 36(2), Proceedings of the 38th Annual Conference of the European
+SIP/SOP results. We would also like to thank Associate Professor                                Association for Computer Graphics (Eurographics), 2017 36 (02 2017).
+Yebin Liu for the support on the IMU sensors. We also appreciate                             Dushyant Mehta, Oleksandr Sotnychenko, Franziska Mueller, Weipeng Xu, Mohamed
+                                                                                                Elgharib, Pascal Fua, Hans-Peter Seidel, Helge Rhodin, Gerard Pons-Moll, and Chris-
+Hao Zhang, Dong Yang, Wenbin Lin, and Rui Qin for the exten-                                    tian Theobalt. 2020. XNect: real-time multi-person 3D motion capture with a single
+sive help with the live demos. We thank Chengwei Zheng for the                                  RGB camera. ACM Transactions on Graphics 39 (07 2020).
+                                                                                             Thomas B Moeslund and Erik Granum. 2001. A survey of computer vision-based human
+proofreading, and the reviewers for their valuable comments. This                               motion capture. Computer vision and image understanding 81, 3 (2001), 231–268.
+work was supported by the National Key R&D Program of China                                  Thomas B Moeslund, Adrian Hilton, and Volker Krüger. 2006. A survey of advances
+2018YFA0704000, the NSFC (No.61822111, 61727808) and Beijing                                    in vision-based human motion capture and analysis. Computer vision and image
+                                                                                                understanding 104, 2-3 (2006), 90–126.
+Natural Science Foundation (JQ19015). Feng Xu is the corresponding                           Gerard Pons-Moll, Andreas Baak, Juergen Gall, Laura Leal-Taixé, Meinard Müller,
+author.                                                                                         Hans-Peter Seidel, and Bodo Rosenhahn. 2011. Outdoor human motion capture
+                                                                                                using inverse kinematics and von mises-fisher sampling. Proceedings of the IEEE
+                                                                                                International Conference on Computer Vision 0, 1243–1250.
+REFERENCES                                                                                   Gerard Pons-Moll, Andreas Baak, Thomas Helten, Meinard Müller, Hans-Peter Seidel,
+                                                                                                and Bodo Rosenhahn. 2010. Multisensor-Fusion for 3D Full-Body Human Motion
+David Aha. 1997. Lazy Learning.                                                                 Capture. IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 663–
+Sheldon Andrews, Ivan Huerta, Taku Komura, Leonid Sigal, and Kenny Mitchell. 2016.              670.
+    Real-time Physics-based Motion Capture with Sparse Sensors. 1–10.                        Qaiser Riaz, Tao Guanhong, Björn Krüger, and Andreas Weber. 2015. Motion Recon-
+E.R. Bachmann, Robert Mcghee, Xiaoping Yun, and Michael Zyda. 2002. Inertial and                struction Using Very Few Accelerometers and Ground Contacts. Graphical Models
+    Magnetic Posture Tracking for Inserting Humans Into Networked Virtual Environ-              (04 2015).
+    ments. (01 2002).                                                                        Daniel Roetenberg, Hendrik Luinge, Chris Baten, and Peter Veltink. 2005. Compensa-
+Long Chen, Haizhou Ai, Rui Chen, Zijie Zhuang, and Shuang Liu. 2020. Cross-View                 tion of Magnetic Disturbances Improves Inertial and Magnetic Sensing of Human
+    Tracking for Multi-Human 3D Pose Estimation at Over 100 FPS. 3276–3285.                     Body Segment Orientation. Neural Systems and Rehabilitation Engineering, IEEE
+Michael Del Rosario, Heba Khamis, Phillip Ngo, and Nigel Lovell. 2018. Computationally-         Transactions on 13 (10 2005), 395 – 405.
+    Efficient Adaptive Error-State Kalman Filter for Attitude Estimation. IEEE Sensors       Martin Schepers, Matteo Giuberti, and G. Bellusci. 2018. Xsens MVN: Consistent
+    Journal PP (08 2018), 1–1.                                                                  Tracking of Human Motion Using Inertial Sensing. (03 2018).
+Tamar Flash and Neville Hogan. 1985. The Coordination of Arm Movements: An                   Mike Schuster and Kuldip K Paliwal. 1997. Bidirectional recurrent neural networks.
+    Experimentally Confirmed Mathematical Model. The Journal of neuroscience : the              IEEE transactions on Signal Processing 45, 11 (1997), 2673–2681.
+    official journal of the Society for Neuroscience 5 (08 1985), 1688–703.                  Loren Schwarz, Diana Mateus, and Nassir Navab. 2009. Discriminative Human Full-
+Eric Foxlin. 1996. Inertial Head-Tracker Sensor Fusion by a Complementary Separate-             Body Pose Estimation from Wearable Inertial Sensor Data. 159–172.
+    Bias Kalman Filter. 185 – 194, 267.                                                      Soshi Shimada, Vladislav Golyanik, Weipeng Xu, and Christian Theobalt. 2020. PhysCap:
+Andrew Gilbert, Matthew Trumble, Charles Malleson, Adrian Hilton, and John Collo-               physically plausible monocular 3D motion capture in real time. ACM Transactions
+    mosse. 2018. Fusing Visual and Inertial Sensors with Semantics for 3D Human Pose            on Graphics 39 (11 2020), 1–16.
+    Estimation. International Journal of Computer Vision (09 2018), 1–17.                    Ronit Slyper and Jessica Hodgins. 2008. Action Capture with Accelerometers. ACM
+Ikhsanul Habibie, Weipeng Xu, Dushyant Mehta, Gerard Pons-Moll, and Christian                   SIGGRAPH/Eurographics Symposium on Computer Animation, 193–199.
+    Theobalt. 2019. In the Wild Human Pose Estimation Using Explicit 2D Features and         Jochen Tautges, Arno Zinke, Björn Krüger, Jan Baumann, Andreas Weber, Thomas
+    Intermediate 3D Representations. 10897–10906.                                               Helten, Meinard Müller, Hans-Peter Seidel, and Bernhard Eberhardt. 2011. Motion
+Julius Hannink, Thomas Kautz, Cristian Pasluosta, Jochen Klucken, and Bjoern Eskofier.          Reconstruction Using Sparse Accelerometer Data. ACM Transactions on Graphics 30
+    2016. Sensor-Based Gait Parameter Extraction With Deep Convolutional Neural                 (05 2011), 18.
+    Networks. IEEE Journal of Biomedical and Health Informatics PP (09 2016).
+86:12 •   Xinyu Yi, Yuxiao Zhou, and Feng Xu
+
+
+Denis Tome, Matteo Toso, Lourdes Agapito, and Chris Russell. 2018. Rethinking Pose in    frame 𝐹 𝑀 , i.e. to place the IMU with its 𝑥-axis left, 𝑦-axis up and
+   3D: Multi-stage Refinement and Recovery for Markerless Motion Capture. 474–483.       𝑧-axis forward in the real world. Then, the orientation measurement
+Matthew Trumble, Andrew Gilbert, Adrian Hilton, and John Collomosse. 2016. Deep
+   Convolutional Networks for Marker-less Human Pose Estimation from Multiple            𝑷 𝐼 𝑀 can be regarded as the transition matrix from 𝐹 𝐼 to 𝐹 𝑀 :
+   Views. 1–9.
+Matthew Trumble, Andrew Gilbert, Charles Malleson, Adrian Hilton, and John Collo-                                                 𝑩𝑀 = 𝑩𝐼 𝑷 𝐼 𝑀 .                                      (15)
+   mosse. 2017. Total Capture: 3D Human Pose Estimation Fusing Video and Inertial
+   Sensors.                                                                              Next, we put each IMU onto the corresponding body part with
+Rachel Vitali, Ryan McGinnis, and Noel Perkins. 2020. Robust Error-State Kalman Filter   arbitrary orientations and keep still in a predefined pose (such as the
+   for Estimating IMU Orientation. IEEE Sensors Journal (10 2020).                                                                                     bone [𝑖 ]
+Daniel Vlasic, Rolf Adelsberger, Giovanni Vannucci, John Barnwell, Markus Gross,         T-pose) with known leaf-joint and pelvis orientations 𝑹 𝑀               (𝑖 =
+   Wojciech Matusik, and Jovan Popovic. 2007. Practical motion capture in everyday       0, 1, · · · , 5) (relative to 𝐹 ) for several seconds. We read the IMU
+                                                                                                                        𝑀
+   surroundings. ACM Trans. Graph. 26 (07 2007), 35.
+Timo von Marcard, Roberto Henschel, Michael J. Black, Bodo Rosenhahn, and Gerard
+                                                                                         measurements and calculate the average acceleration (relative to
+                                                                                                                                                     sensor [𝑖 ]
+   Pons-Moll. 2018. Recovering Accurate 3D Human Pose in the Wild Using IMUs and a       𝐹 𝑆 ) and orientation (relative to 𝐹 𝐼 ) of each sensor as 𝒂𝑆           and
+   Moving Camera. In Computer Vision - ECCV 2018 - 15th European Conference, Munich,       sensor [𝑖 ]
+   Germany, September 8-14, 2018, Proceedings, Part X (Lecture Notes in Computer         𝑹𝐼              respectively. We represent the rotation offsets between
+   Science), Vittorio Ferrari, Martial Hebert, Cristian Sminchisescu, and Yair Weiss                                                                                     offset [𝑖 ]
+   (Eds.), Vol. 11214. 614–631.                                                          the sensors and the corresponding bones as 𝑹 𝐼             due to the
+Donglai Xiang, Hanbyul Joo, and Yaser Sheikh. 2019. Monocular Total Capture: Posing      arbitrarily oriented placement of the sensors and the assumption
+   Face, Body, and Hands in the Wild. 10957–10966.
+Lan Xu, Lu Fang, Wei Cheng, Kaiwen Guo, Guyue Zhou, Qionghai Dai, and Yebin
+                                                                                         that the angles between muscles and bones are constants. We then
+   Liu. 2016. FlyCap: Markerless Motion Capture Using Multiple Autonomous Flying         have:
+   Cameras. IEEE Transactions on Visualization and Computer Graphics PP (10 2016).                           bone [𝑖 ]    sensor [𝑖 ] offset [𝑖 ]
+                                                                                                           𝑹𝐼          = 𝑹𝐼          𝑹𝐼           ,       (16)
+Zhe Zhang, Chunyu Wang, Wenhu Qin, and Wenjun Zeng. 2020. Fusing Wearable
+   IMUs With Multi-View Images for Human Pose Estimation: A Geometric Approach.          where 𝑹 𝐼
+                                                                                                   bone [𝑖 ]
+                                                                                                          is the absolute orientation of bone 𝑖 in the coordinate
+   2197–2206.
+Zerong Zheng, Yu Tao, Hao Li, Kaiwen Guo, Qionghai Dai, Lu Fang, and Yebin Liu.          frame 𝐹 𝐼 . For any given pose, the absolute orientation of bone 𝑖 is
+   2018. HybridFusion: Real-Time Performance Capture Using a Single Depth Sensor         equivalent in two coordinate frames 𝐹 𝑀 , 𝐹 𝐼 :
+   and Sparse IMUs: 15th European Conference, Munich, Germany, September 8–14, 2018,
+   Proceedings, Part IX. 389–406.                                                                                               bone [𝑖 ]                bone [𝑖 ]
+Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and Hao Li. 2018. On the Continuity
+                                                                                                                      𝑩𝑀 𝑹 𝑀                 = 𝑩𝐼 𝑹 𝐼                .                 (17)
+   of Rotation Representations in Neural Networks. CoRR abs/1812.07035 (2018).           Combining Equation 15, 16, and 17, we can get:
+   arXiv:1812.07035
+Yuxiao Zhou, Marc Habermann, Ikhsanul Habibie, Ayush Tewari, Christian Theobalt,                               offset [𝑖 ]          sensor [𝑖 ] −1 𝐼 𝑀           bone [𝑖 ]
+   and Feng Xu. 2020a. Monocular Real-time Full Body Capture with Inter-part Corre-
+                                                                                                              𝑹𝐼             = (𝑹 𝐼                )      𝑷    𝑹𝑀               .      (18)
+   lations.                                                                              For accelerations, we first transform the measurements in the sensor
+Yuxiao Zhou, Marc Habermann, Weipeng Xu, Ikhsanul Habibie, Christian Theobalt,
+   and Feng Xu. 2020b. Monocular Real-Time Hand Shape and Motion Capture Using           local frame 𝐹 𝑆 to the global inertial frame 𝐹 𝐼 as:
+   Multi-Modal Data. 5345–5354.                                                                           bone [𝑖 ]           sensor [𝑖 ]          sensor [𝑖 ] sensor [𝑖 ]
+Yuliang Zou, Jimei Yang, Duygu Ceylan, Jianming Zhang, Federico Perazzi, and Jia-Bin                     𝒂𝐼            = 𝒂𝐼                   = 𝑹𝐼            𝒂𝑆           ,           (19)
+   Huang. 2020. Reducing Footskate in Human Motion Reconstruction with Ground
+   Contact Constraints. 448–457.                                                                   bone [𝑖 ]                sensor [𝑖 ]
+                                                                                         where 𝒂 𝐼         and 𝒂 𝐼         are the accelerations of bone 𝑖 and
+                                                                                         the IMU attached to it in 𝐹 𝐼 , respectively. They are equal because
+A     SENSOR PREPROCESSING                                                               we assume the IMUs do not move relatively once mounted. Due
+Since each inertial sensor has its own coordinate system, we need                        to the sensor error and the inaccuracy of 𝑷 𝐼 𝑀 , there is a constant
+to 1) firstly transform the raw inertial measurements into the same                                                                                  offset [𝑖 ]
+                                                                                         offset in the global acceleration. Thus, we add an offset 𝒂 𝑀           to
+reference frame, which is referred to as calibration, and then 2)                        the coordinate frame 𝐹 as:𝑀
+transform the leaf joint inertia into the root’s space and rescale                                                   bone [𝑖 ]            offset [𝑖 ]            bone [𝑖 ]
+it to a suitable size for the network input, which is referred to as                                          𝑩 𝑀 (𝒂 𝑀            + 𝒂𝑀                  ) = 𝑩𝐼 𝒂𝐼               .      (20)
+normalization. The sensors can be placed with arbitrary rotations                                                                            bone [𝑖 ]
+                                                                                         Since the subject keeps still during calibration, 𝒂 𝑀         = 0. We
+during setup, and our method automatically computes the transition
+                                                                                         then combine Equation 15, 19, and 20 to get:
+matrices for each sensor before capturing the motion. This process
+                                                                                                              offset [𝑖 ]    sensor [𝑖 ] sensor [𝑖 ]
+requires the subject to keep in T-pose for a few seconds. In this                                         𝒂𝑀                 = (𝑷 𝐼 𝑀 ) −1 𝑹 𝐼
+                                                                                                                                         𝒂𝑆             .         (21)
+section, we explain the details of the sensor preprocessing in our                                                      offset [𝑖 ]         offset [𝑖 ]
+method, including the calibration (Section A.1) and the normaliza-                       Leveraging the known 𝑷 𝐼 𝑀 , 𝑹 𝐼           , and 𝒂 𝑀             estimated in
+tion (Section A.2).                                                                      the pre-computation step, we can now perform motion capture.
+                                                                                                                      bone [𝑖 ]       bone [𝑖 ]
+                                                                                         Specifically, we calculate 𝑹 𝑀         and 𝒂 𝑀         (denoted as 𝑹¯𝑖 and
+A.1     Calibration                                                                      𝒂¯𝑖 in short) per frame, and feed them into our model after the
+An inertial measurement unit (IMU) outputs acceleration data rela-                       normalization process described in Section A.2.
+tive to the sensor coordinate frame 𝐹 𝑆 and orientation data relative
+to the global inertial coordinate frame 𝐹 𝐼 . We define the coordinate
+                                                                                         A.2     Normalization
+frame of the SMPL [Loper et al. 2015] body model as 𝐹 𝑀 , and the                        We explain our normalization process in this section. For each frame,
+basis matrix of 𝐹 𝑆 , 𝐹 𝐼 , 𝐹 𝑀 as 𝑩𝑆 , 𝑩𝐼 , 𝑩 𝑀 respectively, where each                the raw inputs are accelerations [˜𝒂 root , 𝒂˜lleg , 𝒂˜rleg , 𝒂˜head , 𝒂˜larm ,
+consists of three column basis vectors. Before capturing motions,                        𝒂˜rarm ] ∈ R3×6 and rotations [ 𝑹˜root , 𝑹˜lleg , 𝑹˜rleg , 𝑹˜head , 𝑹˜larm ,
+we firstly put an IMU with the axes of its sensor coordinate frame                       𝑹˜rarm ] ∈ R3×3×6 measured by the IMUs. We transfer these mea-
+𝐹 𝑆 aligned with the corresponding axes of the SMPL coordinate                           surements from their own coordinate frames to the SMPL reference
+                                                                       TransPose: Real-time 3D Human Translation and Pose Estimation with Six Inertial Sensors •                                                                                                      86:13
+
+
+
+
+Fig. 6. Detailed structures for each network of our pipeline. "L1" · · · "L5" represent the output widths of the layers. "F" represents the additional function
+applied after the last linear layer. Values of these parameters for each network are shown in Table 7.
+
+
+Table 7. Details of each network in our pipeline. "L1" · · · "L5" are the output                                 3 H U F H Q W D J H  R I  & R U U H F W  $ F F H O H U D W L R Q V                                    ( U U R U  ' L V W U L E X W L R Q
+widths of the corresponding layers as shown in Figure 6. "F" is the function                                    
+applied after the output layer. "Bidirectional" represents whether the two                                                                                                                                                                               n=1
+LSTM layers are bidirectional.                                                                                                                                                                                                                           n=4
+                                                                                                                                                                                                          
+
+
+
+
+                                                                                       3 H U F H Q W D J H
+                                                                                                                                                                                                       
+
+
+
+
+                                                                                                                                                                                       ' H Q V L W \
+                L1      L2     L3      L4     L5        F      Bidirectional
+                                                                                                                                                                                                          
+    Pose-S1     72     256     256    256     15       -            true
+                                                                                                                                                                  n=1
+    Pose-S2     87     64      64     64      69       -            true                                                                                             n=2                                  
+                                                                                                                                                                  n=4
+    Pose-S3     141    128     128    128     90       -            true                                                                                             n=8                                  
+    Trans-B1     87     64      64     64      2    sigmoid         true                                        
+                                                                                                                                                                                                          
+    Trans-B2    141    256     256    256      3       -            false                                                                                                                                                                            
+                                                                                                                                ( U U R U  W K U H V K R O G  m/s2                                                $ F F H O H U D W L R Q  H U U R U  m/s2 
+
+
+frame, obtaining 𝒂¯ and 𝑹¯ as described in Section A.1. Then, we align                 Fig. 7. Influences of the smoothing factor 𝑛 in Equation 11. We evaluate
+leaf joint inertial measurements with respect to the root as:                          the percentage of correct synthetic accelerations on TotalCapture dataset
+                                                                                       using different smoothing factors 𝑛 and demonstrate that a value of 𝑛 = 4
+                      𝒂 leaf = 𝑹¯−1
+                                 root ( 𝒂
+                                        ¯leaf − 𝒂¯root ),                   (22)       produces accelerations with the closest distribution to the measurements
+                                                                                       of real sensors.
+                             𝑹 leaf = 𝑹¯− 1 ¯
+                                        root 𝑹 leaf ,                       (23)
+and normalize root joint measurements as:                                             the purpose of the smoothing factor, we re-synthesize accelera-
+                             𝒂 root = 𝑹¯− 1
+                                                                            (24)      tions for TotalCapture dataset using the ground truth poses and
+                                        root 𝒂
+                                             ¯root,
+                                                                                      translations, and compare the synthetic accelerations with real IMU
+                               𝑹 root = 𝑹¯root .                            (25)      measurements. We evaluate the percentage of correct accelerations
+Finally, we rescale the accelerations to a suitable size for neural                   under some selected error thresholds and plot the curves and the
+networks.                                                                             error distributions in Figure 7. The results show that a smoothing
+                                                                                      factor of 𝑛 = 4 produces accelerations most similar to real sensor
+B     NETWORK DETAILS                                                                 measurements, while the classical finite difference method where
+                                                                                      𝑛 = 1 produces less accurate results due to the jitters of leaf joints.
+We introduce the detailed structures for all the networks in our
+                                                                                      Therefore, we take 𝑛 = 4 in our work.
+pipeline here. As shown in Figure 6, each network contains a direct
+20% dropout on the input, followed by a linear and a ReLU operation
+that map the input to the dimension of the LSTM layers. Then two
+LSTM layers with the same width process the data and a linear
+operation maps it to the output dimension. Particularly, we apply
+a sigmoid function on the output in the network of Trans-B1 that
+estimates foot-ground contact probabilities. The output widths of
+the layers for each network are listed in Table 7.
+
+C     ACCELERATION SYNTHESIS
+We need to synthesize leaf joint inertia for AMASS dataset as stated
+in Section 4.2. Here we show the influence of the smoothing factor
+𝑛 in Equation 11 and demonstrate our advantages to use 𝑛 = 4
+over other works [Huang et al. 2018; Malleson et al. 2019, 2017;
+Marcard et al. 2017] which assume 𝑛 = 1. In order to demonstrate
+

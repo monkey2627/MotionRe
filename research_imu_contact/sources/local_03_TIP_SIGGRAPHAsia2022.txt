@@ -1,0 +1,1042 @@
+                                                Transformer Inertial Poser: Real-time Human Motion
+                                             Reconstruction from Sparse IMUs with Simultaneous Terrain
+                                                                     Generation
+                                                              Yifeng Jiang                                                      Yuting Ye                                Deepak Gopinath
+                                                        Stanford University                                         Meta Reality Labs Research                       Meta Reality Labs Research
+                                                      United States of America                                       United States of America                         United States of America
+                                                       yifengj@stanford.edu                                             yuting.ye@fb.com                                dgopinath@fb.com
+
+                                                            Jungdam Won                                             Alexander W. Winkler                                    C. Karen Liu
+arXiv:2203.15720v3 [cs.CV] 8 Dec 2022
+
+
+
+
+                                                    Meta Reality Labs Research                                      Meta Reality Labs Research                           Stanford University
+                                                     United States of America                                        United States of America                         United States of America
+                                                        jungdam@fb.com                                                  winklera@fb.com                               karenliu@cs.stanford.edu
+
+                                        ABSTRACT                                                                                        Generation. In SIGGRAPH Asia 2022 Conference Papers (SA ’22 Conference
+                                        Real-time human motion reconstruction from a sparse set of (e.g.                                Papers), December 6–9, 2022, Daegu, Republic of Korea. ACM, New York, NY,
+                                                                                                                                        USA, 12 pages. https://doi.org/10.1145/3550469.3555428
+                                        six) wearable IMUs provides a non-intrusive and economic ap-
+                                        proach to motion capture. Without the ability to acquire position
+                                        information directly from IMUs, recent works took data-driven                                   1    INTRODUCTION
+                                        approaches that utilize large human motion datasets to tackle this                              Real-time reconstruction of 3D human motion is crucial for ap-
+                                        under-determined problem. Still, challenges remain such as tem-                                 plications in various domains, such as biomechanics and sports
+                                        poral consistency, drifting of global and joint motions, and diverse                            analysis, motion-based video games, and virtual presence in VR/AR
+                                        coverage of motion types on various terrains. We propose a novel                                systems. While marker-based optical motion capture systems [Vi-
+                                        method to simultaneously estimate full-body motion and generate                                 con n d] remain an ideal option for research labs and professional
+                                        plausible visited terrain from only six IMU sensors in real-time. Our                           studios due to the superior accuracy, more and more applications
+                                        method incorporates 1. a conditional Transformer decoder model                                  demand a portable, less costly, and minimally-intrusive mocap sys-
+                                        giving consistent predictions by explicitly reasoning prediction his-                           tem that reconstructs human movements in real-time and can be
+                                        tory, 2. a simple yet general learning target named "stationary body                            used anywhere by everyone.
+                                        points” (SBPs) which can be stably predicted by the Transformer
+                                        model and utilized by analytical routines to correct joint and global
+                                        drifting, and 3. an algorithm to generate regularized terrain height
+                                        maps from noisy SBP predictions which can in turn correct noisy
+                                        global motion estimation. We evaluate our framework extensively
+                                        on synthesized and real IMU data, and with real-time live demos,
+                                        and show superior performance over strong baseline methods.
+
+                                        CCS CONCEPTS
+                                        • Computing methodologies → Motion capture.
+
+                                        KEYWORDS
+                                        Wearable Devices, Inertial Measurement Units, Human Motion
+                                        ACM Reference Format:
+                                        Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W.
+                                        Winkler, and C. Karen Liu. 2022. Transformer Inertial Poser: Real-time Hu-
+                                        man Motion Reconstruction from Sparse IMUs with Simultaneous Terrain
+
+                                        Permission to make digital or hard copies of all or part of this work for personal or
+                                        classroom use is granted without fee provided that copies are not made or distributed
+                                        for profit or commercial advantage and that copies bear this notice and the full citation
+                                        on the first page. Copyrights for components of this work owned by others than the
+                                        author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or          Figure 1: We develop an attention-based deep learning
+                                        republish, to post on servers or to redistribute to lists, requires prior specific permission
+                                        and/or a fee. Request permissions from permissions@acm.org.                                     method to reconstruct full-body motion from six IMU sen-
+                                        SA ’22 Conference Papers, December 6–9, 2022, Daegu, Republic of Korea                          sors in real-time. Our method simultaneously generates
+                                        © 2022 Copyright held by the owner/author(s). Publication rights licensed to ACM.               plausible terrain maps that can explain the reconstructed
+                                        ACM ISBN 978-1-4503-9470-3/22/12. . . $15.00
+                                        https://doi.org/10.1145/3550469.3555428                                                         motions, for a variety of motion types.
+SA ’22 Conference Papers, December 6–9, 2022, Daegu, Republic of Korea   Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W. Winkler, and C. Karen Liu
+
+
+   Among many sensing modalities, such as RGB cameras [Cao                            for training or testing, we qualitatively evaluate our reconstructed
+et al. 2019; Güler et al. 2018; Kanazawa et al. 2019], depth cameras                  motions along with the simultaneously generated terrains both in
+[Taylor et al. 2012; Wei et al. 2012], or wearable electromagnetic sen-               simulation and with our own live demos. We additionally show
+sors [Kaufmann et al. 2021], inertial measurement sensors (IMUs)                      real-time live demos covering a wide variety of motion types, many
+[Huang et al. 2018; von Marcard et al. 2017] provide many unique                      of which unseen in previous works.
+advantages. IMU-based mocap is self-contained, egocentric, and
+untethered, applicable to both indoor and outdoor activities in all
+lighting conditions. For example, an IMU system can capture long-                     2     RELATED WORK
+distance motion of a hiker or a mountain climber, but third-person                    Human motion reconstruction from various sensor inputs has been
+cameras would be limited by their field of view. In addition, IMU-                    studied for a long time particularly in Computer Graphics and
+based mocap is unsusceptible to occlusion and is less sensitive to                    Computer Vision communities. We mainly review prior works that
+privacy issues. Recent works [Huang et al. 2018; Yi et al. 2021]                      use IMU sensors as part of or the sole input modality. We also review
+have advanced the field from commercial systems using 17 IMUs                         motion generation models based on the Transformer [Vaswani et al.
+[Xsens n d] to machine-learning-based systems using only six IMUs,                    2017] as it constitutes the core of our reconstruction model.
+demonstrating the great potential of the IMU-based approach as a                         A typical IMU sensor includes an accelerometer measuring 3-axis
+practical and reliable solution to "everyday motion capture".                         linear acceleration, a gyroscope measuring 3-axis angular veloc-
+   With all the recent progress, there are still a few critical issues,               ity, and a magnetometer identifying the vector pointing Earth’s
+such as temporal inconsistency of prediction, and global transla-                     magnetic north. From these raw signals, sensor fusion algorithms
+tional drifts, that prevent IMU-based mocap systems to achieve                        based on Kalman filter or its extended version are used to provide
+their full potential. In response to these challenges, we propose a                   more robust measures of the orientation [Bachmann et al. 2001;
+novel method to enhance the reconstruction of full-body human                         Del Rosario et al. 2018; Foxlin 1996; Vitali et al. 2021]. IMU sensors
+motion in real-time from only six IMU sensors. First, inspired by re-                 have been used along with vision-based sensors such as RGB or
+cent success of Transformer models for free-form natural language                     RGB-D cameras for motion estimation. Some work regard IMU
+generation [Radford et al. 2018], we cast the IMU reconstruction                      signals as extra constraints to regularize motions predicted from
+as a constrained motion generation problem and solve it by learn-                     vision, where those constraints are formulated either in offline op-
+ing a conditioned Transformer decoder model. Comparing with                           timizations [Helten et al. 2013; Pons-Moll et al. 2011, 2010; von
+RNN-based models used by previous methods, our model is able to                       Marcard et al. 2018, 2016; Zheng et al. 2018], online (often per-
+achieve more accurate joint angle estimation, especially for those                    frame) optimizations [Charles Malleson 2020; Malleson et al. 2017;
+motions with almost identical IMU signals such as sitting and stand-                  Zhang et al. 2020], or learning deep neural networks [Gilbert et al.
+ing, thanks to Transformer’s improved ability to reason about its                     2019; Trumble et al. 2017]. There have also been works combining
+own past predictions by taken them explicitly as input.                               IMUs with other modalities such as optical markers [Andrews et al.
+   Second, we introduce a general technique to address the gradual                    2016] or ultrasonic [Liu et al. 2011; Vlasic et al. 2007]. Although
+drift of global translation and joint motion in a unified way. We                     these systems can produce plausible motions, they also suffer from
+train our Transformer decoder model to additionally predict the                       inherent limitations of vision-based sensors such as narrow capture
+points on the character that have near-zero velocity, which we call                   region, occlusion, or sensitivity to the light condition.
+"Stationary Body Points" (SBPs). Once learned, SBPs can be used by                       With IMU sensors getting more compact and inexpensive, they
+analytical routines to counteract drifts in motion, which is particu-                 have received increasing attentions from both industry and research
+larly helpful when there is a distribution mismatch between test                      communities for a standalone body tracking solution. Popular com-
+and training sets due to noisy or corrupted IMU sensors, or unseen                    mercial products such as [Xsens n d] and [Rokoko n d] can generate
+motions. Concurrent to our work, [Yi et al. 2022] also tackles the                    high-quality human motions ready to be used in real-time game
+drifting problems using a combination of physics-based optimiza-                      engines. However, requiring a sophisticated full-body setup with
+tion and improved initialization techniques for RNNs. Our work is                     at least 17 IMUs hinders their accessibility to everyday users. Re-
+interestingly complementary to [Yi et al. 2022] on this front.                        searchers have therefore proposed body tracking systems with a
+   The IMU-based approach opens the door to motion capture in                         small number of IMUs sparsely placed on the body, usually uti-
+large environments with a variety of terrains, posing a new research                  lizing statistical body models and/or high quality optical mocap
+challenge of terrain reconstruction in real-time. As our aforemen-                    data as prior to mitigate input signals being under-specified. Mar-
+tioned motion estimators are terrain-agnostic, by leveraging the                      card et al. [2017] developed an offline system (SIP) with only six
+predicted SBPs, our method can be used to generate plausible height                   IMUs, which optimizes poses and the parameters of the SMPL body
+maps of the terrain traversed by the human. Moreover, instead of                      model [Loper et al. 2015] to fit the sparse sensor input. Huang
+treating terrain reconstruction as a byproduct of our method, we                      et al. [2018] learned a deep neural-net model (DIP) from a large
+simultaneously estimate the human motion and the correspond-                          amount of motion capture data to directly map the IMU signals
+ing terrains such that the generated terrains can also be used to                     to poses. Their model is based on bidirectional recurrent neural
+regularize the reconstructed global motion in real-time.                              networks (BRNN), so the system can run in an online manner while
+   We evaluate our system, which we call "Transformer Inertial                        considering both the past and future sensor inputs with a negligible
+Poser" (TIP), extensively on synthetic and real datasets, and show-                   latency, outperforming previous non-learning online methods. An
+case clear improvement over recent state-of-the-art methods on                        ensemble of BRNNs was further adopted by Nagaraj et al. [2020]
+flat terrains. As no real IMU datasets with non-flat terrains exist                   to improve upon the results. However, the two real-time solutions
+Transformer Inertial Poser                                                         SA ’22 Conference Papers, December 6–9, 2022, Daegu, Republic of Korea
+
+
+mostly focus on reconstructing the local joint motion without global       analytical drift stabilizer to refine the estimation. In addition to
+translation. Yi et al. [2021] proposed a new neural model (Trans-          𝒒 and 𝒗, the Transformer decoder also predicts stationary body
+Pose) where the progressive upscaling of joint position estimation         points (SBPs) 𝒄 which are used by the drift stabilizer during run
+showed more accurate pose estimation. The model can additionally           time to improve the accuracy of the reconstructed motion. The drift
+generate accurate global root motions by combining a supporting-           stabilizer utilizes the predicted SBPs to mitigate drifts in motion
+foot heuristics and a small learned deep network, similar to [Rempe        over time and a non-learning terrain update module estimates the
+et al. 2021]. Recently, an extension of this system (PIP) [2022] has       corresponding terrain while further improving motion reconstruc-
+been introduced, which is concurrent to our paper, where the pre-          tion. A plausible terrain height map is generated and updated in
+dicted motions are further optimized to reduce violations of physics       real time, as an additional product of our algorithm.
+laws [Shimada et al. 2020]. We explore this problem domain with
+a set of drastically different techniques, and with much more re-
+laxed assumptions on the environment geometry, while producing
+comparable or better reconstruction results.
+    The blooming AR/VR industry draws attention to full-body mo-
+tion synthesis, using IMUs on headsets and controllers. With no
+senors available on the lower body, utilizing deep reinforcement
+learning, Luo et al. [2021] is able to synthesize physically valid loco-
+motion from only the 6D egocentric headset pose. Cha et al. [2021]
+complements pose estimation from headset cameras with IMUs
+when the hands are out-of-view. Choutas et al. [2021] and Dittadi et
+al. [2021] experimented with deep generative models conditioned
+on headset and controllers poses to synthesize full-body poses.
+More similar to our work is LoBSTR [Yang et al. 2021], where they
+include an IMU on the waist in addition to IMUs on the headset and         Figure 2: Overview of our pose estimation algorithm.
+controllers. Using a recurrent network, they can synthesize both           Thicker arrows are "pipes" flowing multi-timestep informa-
+sitting and running motions from only 4 sensors. We opt to use             tion at each model step, while thinner arrows flow current-
+6 IMUs with lower body information for accurate motion recon-              step information.
+struction rather than synthesis, but these sparser setups are fruitful
+future directions.
+    Since the inception of the Transformer, attention-based mod-
+els have become the state-of-the-art on many problems involving
+sequence data, such as language translation [Brown et al. 2020]
+and audio generation [Dhariwal et al. 2020]. It is natural to also
+apply Transformer models to synthesizing human motion. Aksan
+et al. [2021] developed a generative model using dual attention
+mechanism to capture spatial and temporal correlations, which
+predicts future full-body locomotion given a short history. Petro-
+vich et al. [2021] used a Transformer and a variational autoenoder
+conditioned on action labels, such as walking or jumping, to gener-        Figure 3: Our conditional Transformer decoder architecture
+ate full body motions. Valle-Pérez et al. [2021] instead combined          during training, showing 𝑀 = 39. Following GPT training
+a Transformer with normalizing flows to synthesize dancing mo-             conventions, during training, input and output contain the
+tion from music, building on a similar prior work [Li et al. 2021].        same (but time-shifted by 1) ground-truth motion (𝒒 & 𝒄).
+For motion reconstruction, Kim et al. [2021] experimented with a           During testing, output from 𝑡 −39 to 𝑡 −1 are discarded and the
+Transformer encoder-decoder model with sparse synthetic input              last ones 𝒗𝑡 , 𝒄𝑡 , 𝒒𝑡 are used as current prediction, and input
+features, and found it more effective than recurrent networks. In          (𝒒 & 𝒄, i.e. the history buffers in Figure 2) is autoregressively
+our case, we face the additional challenge of handling noise from          updated by most recent outputs 𝒗𝑡 , 𝒄𝑡 at each step.
+real IMU sensors.
+
+                                                                           3.1    Transformer Motion Estimator
+3    TRANSFORMER INERTIAL POSER (TIP)                                      To simplify the notations, consider the problem of reconstructing
+We introduce a real-time human motion reconstruction technique             only the joint angles 𝒒. The standard learning-based approach can
+from six IMU sensors placed on the user’s legs, wrists, head, and          be summarized as max 𝑃 (𝒒𝑡 |𝑹𝑡 −𝑁 :𝑡 , 𝑨𝑡 −𝑁 :𝑡 ), where a neural net-
+waist. Our approach combines a learning-based model and an an-             work is trained to output the most probable current joint angle
+alytical routine to estimate full-body joint angles 𝒒 and the root         given the IMU readings. Note that since 6 noisy IMUs do not pro-
+velocity 𝒗 from a real-time stream of IMU orientation 𝑹 and accel-         vide enough signals to fully determine the whole-body motion, we
+eration 𝑨 signals. Summarized in Figure 2, our method depends              follow previous work [Huang et al. 2018] to include a time window
+on a learned Transformer decoder to estimate the motion and an             from 𝑡 − 𝑁 to 𝑡, mitigating under-specification.
+SA ’22 Conference Papers, December 6–9, 2022, Daegu, Republic of Korea   Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W. Winkler, and C. Karen Liu
+
+
+   Such models could still have trouble distinguishing motions with                   4 frames out of 5. We also found that excluding 𝒗 from history is
+similar IMU readings over the entire window, such as sitting vs.                      important to prevent test-time autoregressive divergence, possibly
+standing, and the transition in between (if slow). To principally                     because 𝒗 is usually nearly constant in a time window, and the
+address the issue, we draw an analogy between motion generation                       model could easily exploit and overfit to history 𝒗 without truly
+and language modeling: max 𝑃 (𝒒𝑡 −𝑀:𝑡 ), where the goal is to free-                   reasoning about IMUs or history joint angles.
+form generate all motion (language) sequences that are natural.
+Applying recursively, a neural network can be used to generate                        3.2     Stabilizing Drift with SBPs
+plausible 𝒒𝑡 conditioned on all the previous generations from itself:                 Combating drifts is one of the biggest challenges for IMU-based
+max 𝑃 (𝒒𝑡 −𝑀:𝑡 ) = max 𝑃 (𝒒𝑡 |𝒒𝑡 −𝑀:𝑡 −1 )𝑃 (𝒒𝑡 −1 |𝒒𝑡 −𝑀:𝑡 −2 ) · · · 𝑃 (𝒒𝑡 −𝑀 ).    motion reconstruction. Unlike motion estimation methods using ex-
+                                                                                      ternal cameras, IMUs have no direct sense of relative position, and
+A Transformer decoder model [Radford et al. 2018; Vaswani et al.                      learning or optimization based algorithms can all to some extent
+2017] excels at this task as it explicitly takes previous predictions as              be seen as relying on double integration of the noisy acceleration
+input and is capable of reasoning about such contexts fast enough                     readings to estimate position. If there is any biased error due to cal-
+in parallel with temporal attention mechanisms. The Transformer                       ibration or environment interference, the drifts of root translation
+decoder model is able to take variable-sized history as input but in                  or joint angles over time will result in artifacts, such as frequent
+practice, a maximum window length 𝑀 is usually set.                                   foot skating or locking, or erroneous motion transitions.
+   Unlike free-form language generation [Radford et al. 2018], we                        We present a simple and general technique, combining learned
+have additional constraints from the IMU sensors. As such, we                         and analytical components, which does not require body-part-
+model our constrained motion generation problem with a con-                           specific heuristics, nor rely on assumptions of the environment
+ditional Transformer decoder, i.e. max 𝑃 (𝒒𝑡 −𝑀:𝑡 |𝑹𝑡 −𝑀:𝑡 , 𝑨𝑡 −𝑀:𝑡 ),               terrains. Besides motion predicting, our model will also predict Sta-
+where we feed the model the sequences of IMU readings 𝑹 and 𝑨                         tionary Body Points (SBPs) 𝒄𝑡 on the character, the representative
+in parallel to its past predictions, with the same sequence length at                 locations on the human body with near-zero velocity. For example,
+each step, up to a maximum of 𝑀.                                                      the heel-to-toe rolling contact during walking results in moving
+                                                                                      SBPs across the foot, and rolling on the floor motion results in SBPs
+   Model. The input to our model includes the IMU acceleration                        moving across the lower back and pelvis (Figure 4). Once learned,
+readings after smoothing filtering or integration 𝑨˜ ∈ R36×(𝑀+1)                      SBPs could be used for analytical correction of the predicted motion.
+(Appendix A), and the IMU orientations 𝑹 ∈ R54×(𝑀+1) represented                      Though the learning of SBPs could also be subject to inaccuracies,
+as flattened rotation matrix (length 9) from 6 sensors (Figure 3).                    the analytical usage of the SBPs constrains the amount of errors
+The output includes 18 joint angles 𝒒𝑡 ∈ R108 defined in the SMPL                     they can produce.
+[Loper et al. 2015] human model (excluding joints such as toes
+following previous works), the root linear velocity, 𝒗𝑡 ∈ R3 , and the
+stationary body points (SBPs) 𝒄𝑡 ∈ R20 . Each joint in 𝒒𝑡 is repre-
+sented redundantly as first two columns of its local rotation matrix
+for unique and numerically stable ground-truth labels [Zhou et al.
+2019]. The root orientation is given directly by one of the IMUs
+placed on the waist. We empirically found that adding an recur-
+rent layer to "summarize" output embedding of the Transformer                         Figure 4: During heel-to-toe contact in locomotion, contact
+accelerates convergence during training.                                              patch is stationary but the foot link velocity is not zero. Sim-
+   Following the standard practice of Transformers (GPT [Radford                      ilarly, a person rolling on the ground can be seen as rotating
+et al. 2018]) training, given the shifted ground-truth sequences                      around changing stationary points.
+from 𝑡 − 𝑀 − 1 to 𝑡 − 1, the model learns to predict in parallel
+the whole sequence from 𝑡 − 𝑀 to 𝑡 for efficiency (Figure 3). To
+prevent the model from learning simply to shift the input by one                         Discover Ground-truth SBPs for Learning. SBPs can be discovered
+timestep, a causal mask [Vaswani et al. 2017] is added to hide future                 on any body part, but in practice we choose the hands, feet, and
+attention information, mimicking the test-time setting. During test                   pelvis to be the only candidate regions for SBPs in our implementa-
+time, since we only care about the most recent prediction, output                     tion. We parameterize each SBP location as a vector offset 𝒓𝑡 ∈ R3
+from 𝑡 − 𝑀 to 𝑡 − 1 will be discarded at each prediction step.                        from the center of mass of the body part it belongs to. We use one
+   There is still a large asymmetry between training and testing                      additional bit for each SBP 𝑏𝑡 ∈ {0, 1} to indicate the existence
+times. During training, the model sees ground-truth motion as the                     of SBP at the current moment. Therefore, SBP is represented as
+history input, but during testing, the history is noisily accumulated                                         (𝑖) (𝑖)
+                                                                                      𝒄 ∈ R20 , where 𝒄 𝒕 = [𝑏𝑡 , 𝒓𝑡 ]𝑖=1,··· ,5 .
+from its own predictions. Previous works, such as [Radford et al.
+                                                                                         We devise an efficient sampling-based method to search for the
+2018], found in practice that such "teacher-forcing" training will
+                                                                                      point on the rigid body with minimal velocity,
+not cause overfitting to the clean history. In our case, different
+from language where neighboring words are distinct, neighboring                                                 argmin ∥𝝎 × 𝑹 𝐵 𝒓 + 𝒗 ∥ ,
+poses are usually similar to each other, providing much duplicate                                                  𝒓
+information more susceptible to overfitting. We add a 80% dropout                     where 𝝎 and 𝒗 are angular and linear velocities of the body part, and
+[Srivastava et al. 2014] to the history of 𝒄 and 𝒒, effectively dropping              𝑹 𝐵 is the orientation of the body, which can all be easily obtained
+Transformer Inertial Poser                                                          SA ’22 Conference Papers, December 6–9, 2022, Daegu, Republic of Korea
+
+
+from ground-truth 𝒒𝑡 , 𝒗𝑡 in training data. If the minimal velocity is     𝒗𝑡,𝑧 , and outputs a height map 𝑯 ∈ R𝐿×𝐿 and the proposed vertical
+below a small threshold, a SBP for that body part is found.                root correction 𝑝 ∈ R (𝒗˜𝑡,𝑧 = 𝒗𝑡,𝑧 + 𝑝). We do not consider hand
+   We evaluate the velocity of every points in a 3D grid that encloses     SBPs here because in most cases it is hard to know if hand rests on
+the body part of interest and find the point with the minimal velocity.    something or simply stays stationary in the air.
+For example, the 3D grid for a foot is a 6cm-thick box covering the            This algorithm is based on two mild assumptions, albeit crucial
+bottom of the foot and that for the pelvis covers a larger region on       to regularizing noisy SBPs from real IMU data. First, if two SBPs are
+the back. Evaluation for all candidate points can be done in parallel      horizontally nearby (< 1m) and have sufficiently similar heights
+efficiently using matrix operations.                                       (< 0.1m), we assume they have the same height on the terrain. As
+   In practice, directly searching for the point with minimal velocity     such, we assume there is no gradual slope in the scene, since under
+can lead to jittery SBPs over time, due to noise in motion capture         sensor drifting it is extremely difficult to distinguish mild slopes
+data [Le Callennec and Boulic 2006] and approximating human                from flat ground. By this assumption, we cluster nearby SBPs with
+body parts with rigid bodies. We thus add a temporal regularizer to        similar heights into buckets and store the mean height for each
+the search criteria:                                                       bucket. When a new SBP is detected, if an existing nearby cluster
+                                                                           is similar in height, this SBP will join that cluster and update its
+                𝑙 (𝒓) = ∥𝝎 × 𝑹 𝐵 𝒓 + 𝒗 ∥ + 0.3 ∥𝒓 − 𝒓𝑡 −1 ∥ ,              mean height. 𝑝 = −𝑘 ∗ 𝑑 will be proposed to drag the root so that
+                                                                           the SBP is closer to the updated mean height, where 𝑘 is a constant
+where 𝒓𝑡 −1 is the solution in the previous frame, if existing. If
+                                                                           correction coefficient and 𝑑 is the difference between SBP height
+minimal 𝑙 (𝒓 ∗ ) is less than a manually chosen threshold (0.25), we
+                                                                           and cluster mean height.
+label 𝒄𝑡 (𝑘) = [1, 𝒓 ∗ ]. Otherwise, 𝒄𝑡 (𝑘) = [0, (0, 0, 0)].
+                                                                               Second, the terrain is assumed to be a Voronoi diagram with
+   We did not find our results sensitive to the choices of regulariza-
+                                                                           different vertical levels. That is, we assign each unvisited grid to the
+tion weight (0.3) or threshold, and use the same formula for all five
+                                                                           same height as its closest SBP-visited neighbor. To build Voronoi
+SBPs, across the entire training dataset with various terrains.
+                                                                           online, upon each new SBP visitation, we need to check if each
+   Run-time Root Correction. The predicted SBPs provide constraints        unvisited grid is now closer to the new SBP than all existing SBPs.
+to correct the root velocity. We set the corrected root velocity to be     Instead of storing all distances, we only need to store the closest dis-
+                 (𝑖)               (𝑖)                                     tance up to now, which we call (inverse) confidence map 𝑪 ∈ R𝐿×𝐿 .
+the average of 𝒗˜𝑡 , where each 𝒗˜𝑡 is the root velocity that makes
+𝑖-th (active) SBP exactly stationary in world space at current step.       If the new SBP is closer, the height map 𝑯 at the unvisited grid will
+In practice, we only use this technique to correct root translation        be updated to the new SBP’s height (precisely, the corresponding
+in the horizontal plane, and leave root correction in the height           SBP cluster’s height, from the first assumption).
+direction to the terrain estimation module described in Sec. 3.3.              Further implementation details can be found in Appendix C.
+
+   Run-time Joint Correction. We can also modify the joint angle es-
+                                                                           4     EVALUATIONS
+timation 𝒒𝑡 using SBPs. When a pair of SBPs are on for consecutive
+frames, we can solve for the joint angle correction that maintains         We organize our experiments in this section to demonstrate that:
+the distance vector between the SBPs. We adopt two-bone inverse                  • Using the same held-out datasets of real or synthesized
+kinematics (IK) [Holden et al. 2020], which gives numerically stable               sparse IMU signals as benchmarks, our method improves
+solutions and changes only a minimal number of joints, 𝒒˜ 𝑡 . Directly             over recent works quantitatively by a significant margin.
+replacing the joint angles 𝒒𝑡 estimated by the Transformer decoder               • Without training on any real non-flat-terrain IMU data, and
+with 𝒒˜ 𝑡 can result in discontinuity in motion when SBPs switch on                without any ground-truth terrain supervision, our method
+and off. The problem is more visible as SBP onsets are imperfect                   can reconstruct motions on different terrains both in simula-
+model predictions. We adopt a new "soft-IK" technique utilizing the                tion and on real sensor data.
+Transformer decoder’s dependency on its own history of prediction.               • Both real-time motion correction and terrain reconstruction
+Intuitively, next model predictions will be improved if the history                using SBPs contribute to our ability to stably mitigating root
+buffer is filled with more accurate motion. As such, our idea is to                drift during a variety of human activities.
+accept the current prediction 𝒒𝑡 from the Transformer, but feed the              • Modifying joint history with SBP correction mitigates drift
+corrected joint angles, 𝒒˜ 𝑡 , back to the Transformer’s history buffer.           between joints and qualitatively improves motion recon-
+This essentially creates a soft-IK constraint which does not enforce               struction in challenging motions.
+SBP pairs immediately in the current time step, but do so gradually              • Our Transformer decoder model taking history as input
+in subsequent frames.                                                              facilities stable and consistent learning of the SBPs.
+
+3.3     Plausible Terrain Generation                                       4.1     Quantitative Evaluation on Flat Terrain
+Inspired by SLAM (Simultaneous Localization And Mapping) al-               We evaluate our results on existing IMU datasets that cover di-
+gorithms [Durrant-Whyte and Bailey 2006; Guzov et al. 2021], our           verse types of motions and are paired with ground-truth full-body
+method generates a plausible terrain consistent with the recon-            motions, for quantitative comparisons.
+structed motion. In our case, simultaneously predicting the terrain
+and the motion is mutually beneficial in achieving improved results           Datasets. Following previous works, evaluation datasets include
+for both. The algorithm takes as input current pelvis and feet SBP         DIP and TotalCapture of real IMU data. We match the exact train-
+locations, as well as Transformer-estimated vertical root velocity         ing data and evaluation settings of baseline methods. This mainly
+SA ’22 Conference Papers, December 6–9, 2022, Daegu, Republic of Korea            Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W. Winkler, and C. Karen Liu
+
+
+serves to test the sim-to-real transfer of the models, which are all                            Comparing to results from concurrent PIP work [Yi et al. 2022],
+    SA ’22 Conference Papers, December 6–9, 2022, Daegu, Republic of Korea   Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W. Winkler, and C. Karen Liu
+predominantly (∼95%) trained on synthesized AMASS data (Appen-                              our method achieves a similar level of improvement over TransPose.
+dix A). Additionally, we hold out a synthetic IMU dataset, DanceDB,                         On flat terrain activities, our work complements the PIP model
+    serves tocross-motion-type
+to evaluate    test the sim-to-realgeneralization.
+                                       transfer of the models, which are all                    exploring to
+                                                                                            byComparing         results from
+                                                                                                              drastically       concurrent
+                                                                                                                            different        PIP workWe
+                                                                                                                                        techniques.    [Yiare
+                                                                                                                                                            et al. 2022],
+                                                                                                                                                                 not  able to
+    predominantly (∼95%) trained on synthesized AMASS data (Appen-                          our  method
+                                                                                            compare       achieves
+                                                                                                        with  this  a
+                                                                                                                   new similar
+                                                                                                                          work level of  improvement
+                                                                                                                                 quantitatively   as   over
+                                                                                                                                                     the     TransPose.
+                                                                                                                                                           code  and   model
+     • DIPEval
+    dix             (real heldout):
+         A). Additionally,           Data synthetic
+                            we hold out      from twoIMU  held-out
+                                                              dataset,subjects  in
+                                                                         DanceDB,           On flat terrain activities, our work complements the PIP model
+        the ten-subject DIP dataset.                                                        have not been released yet.
+     to evaluate cross-motion-type generalization.                                             by exploring drastically different techniques. We are not able to
+     • TotalCapture (real heldout): We held out real IMU measure-                              compare with this new work quantitatively as the code and model
+        • DIPEval (real heldout): Data from two held-out subjects in                           4.2 Quality of Simultaneously Generated
+       ments from the TotalCapture dataset [Trumble et al. 2017]                               have not been released yet.
+           the ten-subject DIP dataset.
+       for evaluation, but(real
+        • TotalCapture              use its ground
+                              stillheldout):  We heldtruth    andIMU
+                                                        out real  synthesized
+                                                                        measure-
+                                                                                                       Terrains
+             readings
+       IMUments    fromas   part
+                          the     of the AMASS
+                              TotalCapture           training
+                                                dataset         set, et
+                                                         [Trumble     following
+                                                                        al. 2017]              4.2     Quality
+                                                                                               Since our         of Simultaneously
+                                                                                                         reconstructed                      Generated
+                                                                                                                         terrains are only one plausible result among
+            same
+       the for               as previous
+                   practice but
+               evaluation,       still use itsworks.
+                                               ground truth and synthesized                    infiniteTerrains
+                                                                                                        possibilities, we perform the following two qualitative ex-
+     • DanceDB      (synthetic
+           IMU readings          heldout):
+                            as part           A large training
+                                     of the AMASS      dataset ofset,contempo-
+                                                                       following               periments
+                                                                                               Since         to evaluate terrains
+                                                                                                      our reconstructed              are only onewith
+                                                                                                                           their consistency             the human
+                                                                                                                                                   plausible          motion:
+                                                                                                                                                              result among
+             dances,
+       rarythe         therefore
+                same practice       containing
+                                as previous        unique motion types to
+                                                works.                                         infinite  possibilities, we
+                                                                                                                        weperform
+                                                                                                     • Simulation:           evaluatetheourfollowing    two qualitative
+                                                                                                                                             terrain generation          ex-
+                                                                                                                                                                     algorithm
+       any   other training
+        • DanceDB              dataset.
+                        (synthetic        Note
+                                    heldout):     largeDanceDB
+                                                A that                is part of
+                                                         dataset of contempo-                  perimentsby to  evaluate
+                                                                                                            running      their
+                                                                                                                       our      consistency
+                                                                                                                             system           with navigation
+                                                                                                                                       on terrain    the human motion:
+                                                                                                                                                                   motions in-
+       AMASS               intentionally
+                  but we therefore
+           rary dances,                               out fromotion
+                                            hold itunique
+                                       containing                our training
+                                                                        types to                        cluded in thewe
+                                                                                                    • Simulation:       AMASS
+                                                                                                                           evaluate   our terrainIMU
+                                                                                                                                   synthesized                    data. (Video
+                                                                                                                                                         trainingalgorithm
+                                                                                                                                                    generation
+       data.
+           anyPrevious   works likely
+                 other training          didNote
+                                   dataset.    not include   them inistraining
+                                                    that DanceDB          part of                       1m10s,
+                                                                                                       by              AMASS
+                                                                                                                 noteour
+                                                                                                           running         system   onnot
+                                                                                                                                 does       provide
+                                                                                                                                        terrain        terrain ground-truths.)
+                                                                                                                                                 navigation    motions in-
+               sincebut
+           AMASS
+       either         theywepredate
+                              intentionally    hold itrelease
+                                       DanceDB’s        out from  our training
+                                                               in AMASS.                             • cluded   in the AMASS
+                                                                                                        Live Demos:       though synthesized
+                                                                                                                                    our model  IMUhas training
+                                                                                                                                                         neverdata.
+                                                                                                                                                                seen(Video
+                                                                                                                                                                      any real
+             data. Previous works likely did not include them in training                              1m10s,   note AMASS     does notweprovide
+            We use    thethey
+                            following                                                                   IMU signals     on terrains,         pushterrain    ground-truths.)
+                                                                                                                                                     its limit  and showcase
+   Metrics.either since         predate metrics common
+                                        DanceDB’s  releasefor  evaluating
+                                                            in AMASS.                               • Live    Demos: though
+motion reconstruction quality. We randomly sample 600 consec-                                           simultaneous     motion our     model has never
+                                                                                                                                   reconstruction            seen any
+                                                                                                                                                       and terrain      real
+                                                                                                                                                                    generation
+                We use
+       Metrics.(10s)           following
+                          theeach        metrics common     for evaluating                             IMU    signals  on  terrains,  we  push   its  limit  and
+                                                                                                        for walking on stairs (Video 1m56s), and climbing/jumpingshowcase
+utive frames          from          motion  in the  evaluation    datasets,
+    motion very
+            reconstruction     quality. We randomly   sample   600toconsec-                            simultaneous    motion
+                                                                                                        off chairs (Video        reconstruction and terrain generation
+                                                                                                                             2m23s).
+to prevent        long motions      biasing the statistics,  and     avoid                             for walking on stairs (Video 1m56s), and climbing/jumping
+    utive frames
+evaluation  of root(10s)  from eacherror
+                      translation     motion  in the
+                                          in the     evaluation
+                                                  beginning        datasets,
+                                                               of motions                         Theoff supplementary      video demonstrates plausible terrains both
+    to prevent very long motions biasing the statistics, and to avoid                                      chairs (Video 2m23s).
+where they mostly start from a stationary standing pose.                                       in live demos and on the AMASS dataset. Figure 5 presents one
+     evaluation of root translation error in the beginning of motions                             The supplementary video demonstrates plausible terrains both
+      • Mean                                                                                   of the generated terrains from simulation. Although we do not
+     where theyJoint
+                mostlyAngle    Error
+                        start from    (in degrees):
+                                   a stationary     Joint pose.
+                                                standing  angle (repre-                        in live demos and on the AMASS dataset. Figure 5 presents one
+       sented   in axis-angles) difference between reconstruction and                          have access to the ground truth terrain, our Voronoi-graph based
+        • Mean Joint Angle Error (in degrees): Joint angle (repre-                             of the generated terrains from simulation. Although we do not
+       ground-truth,       averaged difference
+                                       over all joints.                                        algorithm generates plausible staircases that are consistent with the
+                                                                                               have access to the ground truth terrain, our Voronoi-graph based
+           sented in axis-angles)                    between reconstruction and                human motion.        Body   parts staircases
+                                                                                                                                   may still that
+                                                                                                                                              penetrate     the terrain  briefly
+     • Mean      Root-Relative
+           ground-truth,      averagedJoint
+                                          overPosition
+                                                 all joints. Error (in centime-                algorithm   generates   plausible                   are consistent  with the
+       ters):
+        • MeanGlobal     joint Cartesian
+                    Root-Relative               Positiondifference
+                                        Jointposition                   (Euclidean
+                                                             Error (in centimeters):
+       norm)         joint the
+                between
+           Global                reconstruction
+                            Cartesian                and ground-truth
+                                         position difference               by norm)
+                                                                  (Euclidean  align-           Table 1:
+                                                                                               Table     Comparisonofofmodel
+                                                                                                     1: Comparison       model  performance
+                                                                                                                              performance   on on evaluation
+                                                                                                                                               evaluation
+            at the root,
+       ing between          averaged over and
+                       the reconstruction       all joints.
+                                                     ground-truth by aligning at                         Boldnumbers
+                                                                                               datasets.Bold
+                                                                                               datasets.               indicate
+                                                                                                              numbersindicate   the
+                                                                                                                              the   best
+                                                                                                                                  best   performing
+                                                                                                                                       performing    entries.
+                                                                                                                                                  entries.
+     • RoottheError      2s/5s/10s
+                root, averaged                joints. Root translation error
+                                       (inallmeters):
+                                    over
+       measured
+        • Root Error in Euclidean
+                             2s/5s/10snorm      meters):a Root
+                                          (in during       continuous     period
+                                                                  translation      of
+                                                                               error                                      Our TIP Model
+           measured
+       2s/5s/10s.    Note   Euclidean
+                         in that         norm
+                                  existing       during
+                                              works    havea continuous    periodthe
+                                                               no errors from      of                                           DIPEval TotalCapture             DanceDB
+           2s/5s/10s.
+       vertical   axis asNote
+                            theythat
+                                   arexisting
+                                       designed      for have
+                                                 works           no errors
+                                                         flat-ground       from the
+                                                                         motions.                joint angle errors (degree) 12.09586 8.91642                    15.57031
+     • Mean     Jointaxis
+           vertical         as they are
+                         Position         designed
+                                     Jitter             3 ):flat-ground
+                                               (in 𝑚/𝑠for                motions.
+                                                              Joint position  jitter             joint position errors (𝑐𝑚)     5.82242 5.14566                  8.50089
+        •  Mean      Joint   Position    Jitter  (in       3 ): Joint position jitter
+       computed using the same formula as in TransPose,
+                                                      𝑚/𝑠                 averaged               root errors in 2s (meter)              0.08031                  0.20295
+              all joints.using the same formula as in TransPose, averaged
+       overcomputed                                                                              root errors in 5s (meter)              0.1351                   0.29681
+     • Rootover   all joints.
+               Jitter   (in 𝑚/𝑠 3 ):3Root position jitter computed using                         root errors in 10s (meter)             0.19446                  0.35759
+           same Jitter
+        • Root
+       the          formula (in as
+                                𝑚/𝑠   ): Root position jitter computed using
+                                   above.                                                        joint position jitter (𝑚/𝑠 3 ) 0.8823  0.75075                  1.43867
+             the same formula as above.                                                          root jitter (𝑚/𝑠 3 )           0.66211 0.61108                  0.98474
+   Results. We present quantitative metrics on the evaluation datasets
+         Results. We present quantitative metrics on the evaluation datasets                                             TransPose Model
+between our model, TransPose, and DIP in Table 1. We used the best
+     between our model, TransPose, and DIP in Table 1. We used the best                                                         DIPEval TotalCapture             DanceDB
+performing
+     performing  models
+                     modelspublished
+                               published   byby thetheauthors
+                                                        authorsininthisthiscomparison.
+                                                                            comparison.
+Overall,    ouroursystem    achieves      better   accuracy                                      joint angle errors (degree) 13.10898   11.37459                 17.42089
+     Overall,        system    achieves     better   accuracyininalmost
+                                                                      almostallallevalua-
+                                                                                   evalua-       joint position errors (𝑐𝑚)     6.28771  5.60905                 8.46368
+     tions. Our system does not have an offline mode, and allreported
+tions.   Our   system    does   not   have     an  offline  mode,     and  all  reported         root errors in 2s (meter)               0.16928                 0.20812
+metrics    reported
+     metrics           areare
+                reported    fromfromonline
+                                       online inference       (i.e.pretending
+                                                 inference(i.e.     pretendingexisting
+                                                                                  existing       root errors in 5s (meter)               0.32677                 0.31241
+       filesfiles
+datadata      as streaming
+                  as streaming in).in).
+                                                                                                 root errors in 10s (meter)              0.35323                 0.46058
+   We We       most
+         see see     significant
+                   most  significant     improvementsfrom
+                                     improvements                    previousworks
+                                                             fromprevious       works on on      joint position jitter (𝑚/𝑠 3 ) 0.63113  0.66816                 1.49544
+      translation,
+rootroot               on on
+            translation,   both       TotalCapureand
+                                  TotalCapure
+                               both                           DanceDBdatasets.
+                                                        andDanceDB         datasets. Sec.
+                                                                                       Sec.
+                                                                                                 root jitter (𝑚/𝑠 3 )           0.53972  0.63572                 1.31713
+4.3 shows
+    4.3 shows       effects
+               thethe         of of
+                        effects   ourour keykey             choiceson
+                                                   designchoices
+                                                design                  onroot
+                                                                           root drifting
+                                                                                  drifting
+     mitigation.
+mitigation.         Thanks
+                Thanks        to our
+                          to our      prepossessingfiltering
+                                    prepossessing                     (AppendixA),
+                                                          filtering(Appendix        A), we
+                                                                                        we                                    DIP Model
+can can
+     treattreat
+             the the
+                  DIPDIP   training
+                       training       split
+                                   split   as as  ordinary∼5%
+                                               ordinary      ∼5%subset         thewhole
+                                                                    subsetofofthe   whole                                       DIPEval        TotalCapture      DanceDB
+     training
+training     datadata
+                   withwithetherestrest
+                                      ∼95%∼95%     beingpurely
+                                                being     purelysynthetic        IMU. By
+                                                                     syntheticIMU.       By
+                                                                                                 joint angle errors (degree) 14.14957          16.54206          23.27462
+usingusing    a simple
+         a simple        one-stage
+                     one-stage          training
+                                    training        procedure,instead
+                                                  procedure,        insteadofofthe
+                                                                                 the two-
+                                                                                      two-
+                                                                                                 joint position errors (𝑐𝑚)     7.79099        9.36553           13.83818
+stagestage   training-then-finetuning
+        training-then-finetuning               inin
+                                           as as     previousworks,
+                                                   previous      works,we     reduce the
+                                                                          wereduce      the
+                                                                                                 joint position jitter (𝑚/𝑠 3 ) 1.85047        1.74527           2.15585
+risk risk  of overfitting
+      of overfitting        to activities
+                        to activities         thethe
+                                          in in    DIPDIPdataset      duringfinetuning.
+                                                           datasetduring      finetuning.
+Transformer Inertial Poser                                                         SA ’22 Conference Papers, December 6–9, 2022, Daegu, Republic of Korea
+
+
+                              Table 2: Comparison of ablation models on TotalCapture evaluation dataset.
+
+                                    No history, w/ SBP    No SBPs    Predict SBPs wo/ usage    wo/ terrain corrections           TIP
+               root errors in 2s         0.15833          0.16987            0.13927                  0.07817                  0.08031
+               root errors in 5s         0.28575          0.32543            0.32972                   0.15462                 0.13509
+               root errors in 10s        0.41114           0.5051            0.51706                   0.24196                 0.19445
+
+while it is being generated (Figure 5, second to the left), because        4.4    Qualitative Comparisons of Run-time Joint
+the algorithm ignores each newly active SBP for a short period of                 IK Correction
+time (Appendix C). Final terrain should see little penetration when
+                                                                           Introduced in Sec. 3.2, we use IK to correct joint prediction histories
+playing back the motion.
+                                                                           with a pair of active SBPs. We showcase its usage in one of the most
+                                                                           common joint drifting scenarios of long sitting [Yi et al. 2022, 2021],
+                                                                           where the character may easily transition to standing over an ex-
+                                                                           tended period of time due to similar orientations and accelerations
+                                                                           on legs and waist IMUs. With our SBP IK correction, we can sta-
+                                                                           bly reconstruct a two-minute sitting sequence, both with our own
+                                                                           sensors (Video 0m42s) or using public real-IMU sequences (Video
+                                                                           3m10s) in DIP dataset, showing the value of correcting history
+                                                                           buffer with IK to be consistent with predicted SBPs.
+
+
+                                                                           4.5    Live Demo
+Figure 5: Generated terrain. Many equally plausible solu-                  We test our system live with 6 Xsens IMU sensors. Our video visu-
+tions exist for same motion, the solution from our algorithm               alizes live performance side-by-side with real-time reconstructions,
+being one of them.                                                         with a slight latency caused by our pre-processing filter. Besides
+                                                                           the aforementioned tasks, we cover a variety of motion tasks in
+                                                                           our demos, both common ones such as locomotion and whole-body
+4.3     Ablation Studies on Root Drifting                                  manipulation, and more challenging ones such as jumping from a
+Multiple key design choices improved our root translation accuracy,        high place, "swimming" on a stool, dancing, hand on floor move-
+which is also crucial to the success of terrain generation. To gain a      ments, or swirl kicks. We tested our system on one male and one
+better understanding, we created the following ablation models:            female subjects, and observed degraded performance on the female
+      • No history, with SBP: a Transformer encoder can be used            subject which we did not expect (Appendix F).
+        as a sequence summarizing model, taking time windows of
+        IMU signals and output only the current full-body pose 𝒒𝑡 ,        5     CONCLUSION
+        𝒗𝑡 and SBPs 𝒄𝑡 , with no consideration of its past predictions.
+                                                                           This paper presents a new data-driven method for human motion
+        We still used the SBPs to correct the root in this case.
+                                                                           reconstruction from six wearable IMUs, with simultaneous plau-
+      • No SBPs: same network as Ours without learning SBPs.
+                                                                           sible terrain generation. By combining a conditional Transformer
+      • Predict SBPs without Usage: no test-time usage of the pre-
+                                                                           decoder model for consistent prediction, a hybrid drift stabilizer
+        dicted SBPs. This is different from "No SBPs" since learning
+                                                                           utilizing learned stationary information across human body, and an
+        an unused auxiliary task may help the main task learning.
+                                                                           algorithm to simultaneously generate regularized terrain and cor-
+      • Without Terrain Corrections: Do not use terrain algo-
+                                                                           rect noisy global motion estimation, new downstream applications
+        rithm for vertical drift correction.
+                                                                           can be made possible with this self-contained and economic setup
+   Table. 2 summarizes the models’ performances on the real-IMU            of motion capture. For future work, our method could be largely
+TotalCapture dataset. Both "no SBPs" and "predicting SBPs without          improved by collecting real IMU datasets with motions on various
+usage" rely on the model’s raw prediction of 𝒗𝑡 , and perform the          terrains. Personalized finetuning or calibration may also improve
+worst in this test, showing the importance of both learning the            reconstruction for each individual user.
+SBPs and enforcing them at run time. "No history, with SBP" also
+fails, interestingly because the SBPs predicted by a Transformer
+encoder becomes intermittent in this case and therefore less helpful       ACKNOWLEDGMENTS
+during run time. This shows the importance of explicitly including         To members of the Stanford Movement Lab, the Stanford Human
+output history as input. Intuitively, the onset history of SBPs are        Performance Lab, Meta Reality Labs Research, and to Josh Coo-
+important information for next SBP onset prediction.                       ley, Yinghao Huang, Manuel Kaufmann, Ari Tamari, Xia Wu, Di
+   Finally, without terrain-based root drifting correction, in some        Xia, Xinyu Yi, Eris Zhang, for helpful discussions and technical
+testing motions, vertical drift may be large for reasons such as bi-       assistance. To anonymous reviewers whose feedback substantially
+ased sensor error from calibrations. Such errors in vertical direction     helped refine this work. Yifeng Jiang is partially supported by the
+also negatively affects generated terrains if not corrected in time.       Wu Tsai Human Performance Alliance at Stanford University.
+SA ’22 Conference Papers, December 6–9, 2022, Daegu, Republic of Korea          Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W. Winkler, and C. Karen Liu
+
+
+REFERENCES                                                                                   Seong Uk Kim, Hanyoung Jang, Hyeonseung Im, and Jongmin Kim. 2021. Human
+Emre Aksan, Manuel Kaufmann, Peng Cao, and Otmar Hilliges. 2021. A Spatio-temporal               motion reconstruction using deep transformer networks. Pattern Recognition Letters
+    Transformer for 3D Human Motion Prediction. International Conference on 3D                   150 (2021), 162–169.
+    Vision (3DV) (2021).                                                                     Diederik P Kingma and Jimmy Ba. 2014. Adam: A method for stochastic optimization.
+Sheldon Andrews, Ivan Huerta, Taku Komura, Leonid Sigal, and Kenny Mitchell. 2016.               arXiv preprint arXiv:1412.6980 (2014).
+    Real-Time Physics-Based Motion Capture with Sparse Sensors. In Proceedings of            Benoît Le Callennec and Ronan Boulic. 2006. Robust kinematic constraint detection for
+    the 13th European Conference on Visual Media Production (CVMP 2016) (CVMP 2016).             motion data. In Proceedings of the 2006 ACM SIGGRAPH/Eurographics symposium
+    Article 5.                                                                                   on Computer animation. 281–290.
+Eric R. Bachmann, Robert B. McGhee, Xiaoping Yun, and Michael J. Zyda. 2001. Inertial        Ruilong Li, Shan Yang, David A. Ross, and Angjoo Kanazawa. 2021. AI Choreographer:
+    and Magnetic Posture Tracking for Inserting Humans into Networked Virtual                    Music Conditioned 3D Dance Generation with AIST++.
+    Environments. In Proceedings of the ACM Symposium on Virtual Reality Software            Huajun Liu, Xiaolin Wei, Jinxiang Chai, Inwoo Ha, and Taehyun Rhee. 2011. Realtime
+    and Technology (VRST ’01). 9–16.                                                             Human Motion Control with a Small Number of Inertial Sensors. In Symposium on
+Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared Kaplan, Pra-                     Interactive 3D Graphics and Games (I3D ’11). 133–140.
+    fulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell,          Matthew Loper, Naureen Mahmood, Javier Romero, Gerard Pons-Moll, and Michael J.
+    Sandhini Agarwal, Ariel Herbert-Voss, Gretchen Krueger, Tom Henighan, Rewon                  Black. 2015. SMPL: A Skinned Multi-Person Linear Model. ACM TOG 34, 6 (Oct.
+    Child, Aditya Ramesh, Daniel M. Ziegler, Jeffrey Wu, Clemens Winter, Christo-                2015), 248:1–248:16.
+    pher Hesse, Mark Chen, Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin Chess,          Ilya Loshchilov and Frank Hutter. 2016. Sgdr: Stochastic gradient descent with warm
+    Jack Clark, Christopher Berner, Sam McCandlish, Alec Radford, Ilya Sutskever,                restarts. arXiv preprint arXiv:1608.03983 (2016).
+    and Dario Amodei. 2020. Language Models are Few-Shot Learners. (2020).                   Zhengyi Luo, Ryo Hachiuma, Ye Yuan, and Kris Kitani. 2021. Dynamics-Regulated
+    arXiv:2005.14165 [cs.CL]                                                                     Kinematic Policy for Egocentric Pose Estimation. In NeurIPS.
+Z. Cao, G. Hidalgo Martinez, T. Simon, S. Wei, and Y. A. Sheikh. 2019. OpenPose: Real-       Naureen Mahmood, Nima Ghorbani, Nikolaus F. Troje, Gerard Pons-Moll, and Michael J.
+    time Multi-Person 2D Pose Estimation using Part Affinity Fields. IEEE Transactions           Black. 2019. AMASS: Archive of Motion Capture as Surface Shapes. In ICCV. 5442–
+    on Pattern Analysis and Machine Intelligence (2019).                                         5451.
+Young-Woon Cha, Husam Shaik, Qian Zhang, Fan Feng, Andrei State, Adrian Ilie, and            Charles Malleson, Marco Volino, Andrew Gilbert, Matthew Trumble, John Collomosse,
+    Henry Fuchs. 2021. Mobile. Egocentric Human Body Motion Reconstruction Using                 and Adrian Hilton. 2017. Real-time Full-Body Motion Capture from Video and
+    Only Eyeglasses-mounted Cameras and a Few Body-worn Inertial Sensors. In 2021                IMUs. In Int. Conf. 3D Vis.
+    IEEE Virtual Reality and 3D User Interfaces (VR).                                        Deepak Nagaraj, Erik Schake, Patrick Leiner, and Dirk Werth. 2020. An RNN-Ensemble
+Adrian Hilton Charles Malleson, John Collomosse. 2020. Real-Time Multi-person                   Approach for Real Time Human Pose Estimation from Sparse IMUs. In Proceedings
+    Motion Capture from Multi-view Video and IMUs. International Journal of Computer             of the 3rd International Conference on Applications of Intelligent Systems (Las Palmas
+    Vision 128 (06 2020).                                                                        de Gran Canaria, Spain) (APPIS 2020). Article 32, 6 pages.
+Vasileios Choutas, Federica Bogo, Jingjing Shen, and Julien Valentin. 2021. Learning         Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory
+    to Fit Morphable Models. CoRR abs/2111.14824 (2021). arXiv:2111.14824 https:                 Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, et al. 2019.
+    //arxiv.org/abs/2111.14824                                                                   Pytorch: An imperative style, high-performance deep learning library. Advances in
+Erwin Coumans and Yunfei Bai. 2016. Pybullet, a python module for physics simulation             neural information processing systems 32 (2019), 8026–8037.
+    for games, robotics and machine learning. (2016).                                        Mathis Petrovich, Michael J. Black, and Gül Varol. 2021. Action-Conditioned 3D Human
+Michael B. Del Rosario, Heba Khamis, Phillip Ngo, Nigel H. Lovell, and Stephen J.                Motion Synthesis with Transformer VAE. In International Conference on Computer
+    Redmond. 2018. Computationally Efficient Adaptive Error-State Kalman Filter for              Vision (ICCV). 10985–10995.
+    Attitude Estimation. IEEE Sensors Journal 18, 22 (2018), 9332–9342.                      Gerard Pons-Moll, Andreas Baak, Juergen Gall, Laura Leal-Taixé, Meinard Müller, Hans-
+Prafulla Dhariwal, Heewoo Jun, Christine Payne, Jong Wook Kim, Alec Rad-                         Peter Seidel, and Bodo Rosenhahn. 2011. Outdoor human motion capture using
+    ford, and Ilya Sutskever. 2020. Jukebox: A Generative Model for Music.                       inverse kinematics and von mises-fisher sampling. In 2011 International Conference
+    arXiv:2005.00341 [eess.AS]                                                                   on Computer Vision. 1243–1250.
+Andrea Dittadi, Sebastian Dziadzio, Darren Cosker, Ben Lundell, Tom Cashman, and             Gerard Pons-Moll, Andreas Baak, Thomas Helten, Meinard Müller, Hans-Peter Seidel,
+    Jamie Shotton. 2021. Full-Body Motion From a Single Head-Mounted Device:                     and Bodo Rosenhahn. 2010. Multisensor-fusion for 3D full-body human motion
+    Generating SMPL Poses From Partial Observations. In International Conference on              capture. In 2010 IEEE Computer Society Conference on Computer Vision and Pattern
+    Computer Vision 2021.                                                                        Recognition. 663–670.
+H. Durrant-Whyte and T. Bailey. 2006. Simultaneous localization and mapping: part I.         Alec Radford, Karthik Narasimhan, Tim Salimans, and Ilya Sutskever. 2018. Improving
+    IEEE Robotics Automation Magazine 13, 2 (2006), 99–110. https://doi.org/10.1109/             language understanding by generative pre-training. (2018).
+    MRA.2006.1638022                                                                         Davis Rempe, Tolga Birdal, Aaron Hertzmann, Jimei Yang, Srinath Sridhar, and
+E. Foxlin. 1996. Inertial head-tracker sensor fusion by a complementary separate-bias            Leonidas J Guibas. 2021. Humor: 3d human motion model for robust pose es-
+    Kalman filter. In Proceedings of the IEEE 1996 Virtual Reality Annual International          timation. In Proceedings of the IEEE/CVF International Conference on Computer
+    Symposium. 185–194.                                                                          Vision. 11488–11499.
+Andrew Gilbert, Matthew Trumble, Charles Malleson, Adrian Hilton, and John Col-              Rokoko. n d. Rokoko https://www.rokoko.com/. Last visited: 08/26/2022.
+    lomosse. 2019. Fusing Visual and Inertial Sensors with Semantics for 3D Human            Soshi Shimada, Vladislav Golyanik, Weipeng Xu, and Christian Theobalt. 2020.
+    Pose Estimation. International Journal of Computer Vision 127 (04 2019), 1–17.               PhysCap: Physically Plausible Monocular 3D Motion Capture in Real Time. ACM
+Rıza Alp Güler, Natalia Neverova, and Iasonas Kokkinos. 2018. Densepose: Dense hu-               TOG 39, 6 (12 2020).
+    man pose estimation in the wild. In Proceedings of the IEEE Conference on Computer       Nitish Srivastava, Geoffrey Hinton, Alex Krizhevsky, Ilya Sutskever, and Ruslan
+    Vision and Pattern Recognition. 7297–7306.                                                   Salakhutdinov. 2014. Dropout: A Simple Way to Prevent Neural Networks from
+Vladimir Guzov, Aymen Mir, Torsten Sattler, and Gerard Pons-Moll. 2021. Human                    Overfitting. The Journal of Machine Learning Research 15, 1 (2014), 1929–1958.
+    POSEitioning System (HPS): 3D Human Pose Estimation and Self-localization in                 http://dl.acm.org/citation.cfm?id=2627435.2670313
+    Large Scenes from Body-Mounted Sensors. In CVPR.                                         Jonathan Taylor, Jamie Shotton, Toby Sharp, and Andrew Fitzgibbon. 2012. The
+Thomas Helten, Meinard Müller, Hans-Peter Seidel, and Christian Theobalt. 2013.                 Vitruvian manifold: Inferring dense correspondences for one-shot human pose
+    Real-Time Body Tracking with One Depth Camera and Inertial Sensors. In 2013                  estimation. In 2012 IEEE Conference on Computer Vision and Pattern Recognition.
+    IEEE International Conference on Computer Vision. 1105–1112.                                 103–110.
+Daniel Holden, Oussama Kanoun, Maksym Perepichka, and Tiberiu Popa. 2020. Learned            Matt Trumble, Andrew Gilbert, Charles Malleson, Adrian Hilton, and John Collomosse.
+    Motion Matching. ACM Trans. Graph. 39, 4, Article 53 (jul 2020), 13 pages. https:            2017. Total Capture: 3D Human Pose Estimation Fusing Video and Inertial Sensors.
+    //doi.org/10.1145/3386569.3392440                                                            In BMVC.
+Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J. Black, Otmar Hilliges,                Guillermo Valle-Pérez, Gustav Eje Henter, Jonas Beskow, Andre Holzapfel, Pierre-Yves
+    and Gerard Pons-Moll. 2018. Deep Inertial Poser: Learning to Reconstruct Human               Oudeyer, and Simon Alexanderson. 2021. Transflower: Probabilistic Autoregressive
+    Pose from Sparse Inertial Measurements in Real Time. ACM TOG 37, 6 (12 2018).                Dance Generation with Multimodal Attention. ACM Trans. Graph. 40, 6, Article
+Rudolph Emil Kalman et al. 1960. A new approach to linear filtering and prediction               195 (dec 2021), 14 pages. https://doi.org/10.1145/3478513.3480570
+    problems [J]. Journal of basic Engineering 82, 1 (1960), 35–45.                          Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N
+Angjoo Kanazawa, Jason Y. Zhang, Panna Felsen, and Jitendra Malik. 2019. Learning 3D             Gomez, Ł ukasz Kaiser, and Illia Polosukhin. 2017. Attention is All you Need. In
+    Human Dynamics from Video. In Computer Vision and Pattern Recognition (CVPR).                Advances in Neural Information Processing Systems, Vol. 30.
+Manuel Kaufmann, Yi Zhao, Chengcheng Tang, Lingling Tao, Christopher Twigg,                  Vicon. n d. Vicon Motion Systems https://www.vicon.com/. Last visited: 08/26/2022.
+    Jie Song, Robert Wang, and Otmar Hilliges. 2021. EM-POSE: 3D Human Pose                  Rachel V. Vitali, Ryan S. McGinnis, and Noel C. Perkins. 2021. Robust Error-State
+    Estimation from Sparse Electromagnetic Trackers. In International Conference on              Kalman Filter for Estimating IMU Orientation. IEEE Sensors Journal 21, 3 (2021),
+    Computer Vision (ICCV).                                                                      3561–3569.
+                                                                                             Daniel Vlasic, Rolf Adelsberger, Giovanni Vannucci, John Barnwell, Markus Gross,
+                                                                                                Wojciech Matusik, and Jovan Popović. 2007. Practical Motion Capture in Everyday
+Transformer Inertial Poser                                                                     SA ’22 Conference Papers, December 6–9, 2022, Daegu, Republic of Korea
+
+
+   Surroundings. ACM Trans. Graph. 26, 3 (2007).                                        Forum (2021). https://doi.org/10.1111/cgf.142631
+Timo von Marcard, Roberto Henschel, Michael Black, Bodo Rosenhahn, and Gerard        Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada, Vladislav Golyanik, Christian
+   Pons-Moll. 2018. Recovering Accurate 3D Human Pose in The Wild Using IMUs            Theobalt, and Feng Xu. 2022. Physical Inertial Poser (PIP): Physics-aware Real-time
+   and a Moving Camera. In European Conference on Computer Vision (ECCV).               Human Motion Tracking from Sparse Inertial Sensors. In IEEE/CVF Conference on
+Timo von Marcard, Gerard Pons-Moll, and Bodo Rosenhahn. 2016. Human Pose                Computer Vision and Pattern Recognition (CVPR).
+   Estimation from Video and IMUs. Transactions on Pattern Analysis and Machine      Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2021. TransPose: Real-time 3D Human Translation
+   Intelligence (PAMI) (jan 2016).                                                      and Pose Estimation with Six Inertial Sensors. ACM TOG 40, 4 (8 2021).
+Timo von Marcard, Bodo Rosenhahn, Michael Black, and Gerard Pons-Moll. 2017.         Zhe Zhang, Chunyu Wang, Wenhu Qin, and Wenjun Zeng. 2020. Fusing Wearable
+   Sparse Inertial Poser: Automatic 3D Human Pose Estimation from Sparse IMUs.          IMUs with Multi-View Images for Human Pose Estimation: A Geometric Approach.
+   Computer Graphics Forum 36(2), Proceedings of the 38th Annual Conference of the      In CVPR.
+   European Association for Computer Graphics (Eurographics) (2017), 349–360.        Zerong Zheng, Tao Yu, Hao Li, Kaiwen Guo, Qionghai Dai, Lu Fang, and Yebin Liu.
+Xiaolin Wei, Peizhao Zhang, and Jinxiang Chai. 2012. Accurate Realtime Full-Body        2018. HybridFusion: Real-Time Performance Capture Using a Single Depth Sensor
+   Motion Capture Using a Single Depth Camera. ACM Trans. Graph. 31, 6, Article         and Sparse IMUs. In European Conference on Computer Vision (ECCV), Vittorio
+   188 (nov 2012).                                                                      Ferrari, Martial Hebert, Cristian Sminchisescu, and Yair Weiss (Eds.). 389–406.
+Xsens. n d. Xsens https://www.xsens.com/. Last visited: 08/26/2022.                  Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and Hao Li. 2019. On the continuity
+Dongseok Yang, Doyeon Kim, and Sung-Hee Lee. 2021. LoBSTr: Real-time Lower-body         of rotation representations in neural networks. In Proceedings of the IEEE/CVF
+   Pose Prediction from Sparse Upper-body Tracking Signals. Computer Graphics           Conference on Computer Vision and Pattern Recognition. 5745–5753.
+SA ’22 Conference Papers, December 6–9, 2022, Daegu, Republic of Korea   Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W. Winkler, and C. Karen Liu
+
+
+A     ACCELERATION READINGS AND                                                       sum up the raw IMU acceleration readings within a small window
+      SIM-TO-REAL                                                                     of recent history (e.g. past 0.5s), similar to "integrating" accelera-
+                                                                                      tion to delta velocities, we could observe a more different signal
+   Moving Average Filtering. Since real IMU data paired with ground-                  shape between stairs and normal steps. Empirically, we find adding
+truth full-body motions are small in size, following previous work                    this additional history sum features for each channel, increasing
+[Huang et al. 2018], we place virtual IMU sensors on virtual charac-                  acceleration features from R18 to R36 (concatenating with filtered
+ters driven by captured motions to synthesize IMU orientation and                     accelerations), improves stair recognition on real hardware.
+acceleration readings. Using the AMASS [Mahmood et al. 2019]
+motion dataset (a collection of smaller motion capture datasets), we                  B     MODEL DETAILS
+create a large-scale synthetic IMU dataset for training our model.
+                                                                                      We use the AMASS dataset to generate synthetic training data fol-
+   However, synthetic and real IMU data exhibit vastly different
+                                                                                      lowing the smoothing procedure in Appendix A. It consists of over
+noise profiles. Acceleration data in the real dataset are noisy, but
+                                                                                      a dozen different motion capture datasets performing a variety of
+not in the same way as the noise in the synthetic dataset, which
+                                                                                      activities. In addition, we include 8 out of 10 subjects’ data from the
+is caused by double differentiation of mocap data (Figure 6 Top).
+                                                                                      DIP dataset. We use pyBullet [Coumans and Bai 2016] for calculat-
+On the other hand, orientation data are usually less noisy because
+                                                                                      ing forward kinematics during data synthesis, SBP label generation,
+they are processed by the in-sensor Kalman filter [Kalman et al.
+                                                                                      root correction, and final visualizations. As the DIP real IMU data
+1960]. Previous work [Huang et al. 2018; Yi et al. 2021] recognized
+                                                                                      do not have root motion, we use a pre-trained model to label pseudo
+this distribution mismatch problem and proposed to first train the
+                                                                                      ground-truth SBPs for the DIP motions.
+model exclusively on the synthetic data and then finetune it on a
+                                                                                         We use standard loss functions for the model outputs, i.e., mean-
+smaller real dataset. This two-step solution leads to a more complex
+                                                                                      squared error for joint rotations, mean-squared error for 𝒗𝑡 and
+training procedure that requires careful tuning to avoid overfitting
+                                                                                      Cartesian elements of 𝒄𝑡 , and binary cross-entropy for binary ele-
+the real dataset.
+                                                                                      ments of 𝒄𝑡 , (i.e. 𝑏𝑡 ). Specifically, for joint rotations,
+                                                                                                                     L 𝐽 = ∥𝒒𝑡 − 𝒒¯𝑡 ∥ 22 ,
+                                                                                      where 𝒒¯𝑡 is the ground-truth full-body joint rotations, represented
+                                                                                      as first two columns (6D) of each rotation matrix as noted previously
+                                                                                      in the main text. Similarly for root velocities,
+                                                                                                                     L𝑅 = ∥𝒗𝑡 − 𝒗¯𝑡 ∥ 22 ,
+                                                                                      and for the SBP predictions 𝒄𝑡 ,
+                                                                                               5                          5
+                                                                                                     (𝑖)       (𝑖) 2              (𝑖)    (𝑖)      (𝑖)           (𝑖)
+                                                                                              ∑︁                         ∑︁
+                                                                                      L𝐶 =          𝒓𝑡     − 𝒓¯𝑡     +         (−𝑏¯𝑡 log 𝑏𝑡 −(1−𝑏¯𝑡 ) log(1−𝑏𝑡 )).
+                                                                                                                   2
+                                                                                              𝑖=1                        𝑖=1
+Figure 6: Example of synthesized (orange) and real (blue) ac-                         Since our model during training time predicts a whole trajectory
+celeration data, before (top) and after (bottom) moving aver-                         window, we experimented with a jerk loss penalizing deviation of
+age filtering.                                                                        neighboring frames, but it did not produce visible improvements.
+    We found that simply running an average filter on both synthetic                  This might be due to the fact that during test time we still only
+and real acceleration data (with window length of 11 in our imple-                    use the last prediction at each step. Instead, we pass our output
+mentation) would bring the two data sources sufficiently close to                     through an exponential moving average filter as post processing,
+each other (Fig. 6 Bottom). We then train the model only once on the                  at the expense of slight increase in joint accuracy errors (Appendix
+combined dataset. Combining both data sources simplifies training                     F).
+from two stages to one stage, and avoids the risk of catastrophic                         Our model is trained in PyTorch [Paszke et al. 2019] using the
+forgetting during finetuning.                                                         Adam optimizer [Kingma and Ba 2014], with a batch size of 256
+    In practice, filtering causes latency during real-time inference,                 and a learning rate of 0.0001 multiplied with a cosine schedule
+as computing moving average requires future IMU readings. We                          [Loshchilov and Hutter 2016]. We perform training for 1000 epochs,
+use 5 times steps (83ms) of future readings, the same requirement                     which takes around 6 hours with a GeForce GTX 2080Ti GPU. Once
+as [Huang et al. 2018; Yi et al. 2021], though they require future                    trained, our model is small enough to run at 60 fps on a 2080Ti
+readings as part of model input while we merely use them for                          machine, with bottleneck being the python wrapper of pyBullet.
+filtering.                                                                            Our model uses max window size 𝑀 = 39. It contains a total number
+                                                                                      of 3, 677, 315 parameters, comparing to 4, 798, 771 in TransPose and
+   Summing Up (Integrate) Past Accelerations. Another issue we dis-
+                                                                                      10, 801, 934 in DIP.
+cover for non-flat terrain motions is that the sensor readings (both
+                                                                                          Note that our model requires an initial full-body pose given in
+orientation and acceleration) during a stair step is much similar to
+                                                                                      the first step of prediction. In practice this is always the case since
+a normal flat-ground step, especially in the case of real, noisy IMU
+                                                                                      the sensors need to be calibrated with a T pose before each use, as
+data. Note that pelvis also accelerates up and down in a normal
+                                                                                      they are allowed to be slightly differently worn. See Appendix D
+walking step resembling an inverted pendulum. However, if we
+                                                                                      for more details.
+Transformer Inertial Poser                                                          SA ’22 Conference Papers, December 6–9, 2022, Daegu, Republic of Korea
+
+
+C     TERRAIN GENERATION DETAILS                                           where we note that 𝒂¯𝑆𝑡 is the constant acceleration bias in global
+Grid size is empirically set to 0.1m, and number of grids 𝐿 × 𝐿 is set     frame, usually just the gravitational acceleration. From these re-
+so that terrain is large enough. We initialize the height map 𝑯 with       lations, it should be clear that the goal of calibration is simply to
+                                                                                     𝐺𝑛
+all zero values, where zero is set to the initial root height minus a      obtain 𝑹𝐺     and 𝑹𝑆𝐵𝑡 before each system run.
+                                                                                       𝑝         𝑡
+constant height 𝑤. 𝑤 represents the lower bound of how low the                In the first calibration step, we place all sensors to align with the
+subject could possibly reach in this capture. We assume no cluster         specified global frame so that 𝑹𝐺   𝑆 = 𝑹𝐺𝑝 , and obtain 𝑹𝐺𝑛 which
+                                                                                                                      𝐺                  𝐺
+means are below this value. If the user can provide a tighter 𝑤 (e.g.                                              𝑛         𝑛
+                                                                                         𝑆 }𝑇 . Following [Yi et al. 2021], we keep all sensors
+                                                                                                                                                 𝑝
+
+starting the capture on the lowest ground plane), we can generate          is simply {𝑹𝐺
+                                                                                           𝑛
+a more visually pleasing terrain by producing no dents lower than          still on ground for three seconds and take the average reading.
+the specified ground plane. During real-time demos, w is set to be             Next, to obtain 𝑹𝑆𝐵𝑡 , the user wears all six sensors and stand in a T
+                                                                                                  𝑡
+tight, to indicate that we know the motion will not go lower than          pose, facing the same "front" as 𝐺𝑝 . We assume that the sensor will
+the starting ground plane.                                                 stay static with respect to the bone throughout the entire system
+    If there were only two SBPs with different heights, Voronoi dia-       run, therefore 𝑹𝑆𝐵𝑡 = 𝑹𝑆𝐵0 . Since the orientation of each bone at a
+                                                                                               𝑡         0
+gram will render a 1-step stair that is infinitely wide. For aesthetics,                     𝐵0
+                                                                           standard T pose, 𝑹𝐺  , is known, we are able to obtain 𝑹𝑆𝐵0 from the
+we limit the area each new SBP can influence to 1m ×1m, which                                      𝑝                                         0
+                                                                                                      𝑆0
+could be nevertheless still wider than the real stairs in scene. While     T-pose raw sensor reading 𝑹𝐺  using:
+                                                                                                               𝑛
+we can arbitrarily make this influence region narrower, we note
+                                                                                                                𝑆 0 𝑇 𝐺𝑝 𝐵0
+that, without additional information, both are equally plausible,                                      𝑹𝑆𝐵0 = {𝑹𝐺   } 𝑹𝐺 𝑹𝐺 ,
+                                                                                                          0       𝑛     𝑛  𝑝
+and new SBPs can always crop the terrain narrower with more                where same as the first step, T pose is maintained for three seconds
+information streaming in (Video 1m40s).                                    and we use the average reading for 𝑹𝐺   𝑆0
+                                                                                                                      .
+    For a newly active SBP, we ignore it for 𝑡 0 seconds before using                                                    𝑛
+
+it for the terrain algorithm, to allow it to settle in height. 𝑡 0 is 50   E    ADDITIONAL ANALYSIS
+frames or the the moment SBP becomes inactive, whichever comes
+                                                                           We present results of two additional experiments in this section.
+earlier. The pelvis SBP is only used in terrain generation if it is
+                                                                           First to showcase how much the performance our autoregressive
+> 0.2m away from the feet, to avoid building terrains at the pelvis
+                                                                           model will degrade over time, we repeat the quantitative experi-
+height when the subject is standing still.
+                                                                           ment of Table 1 but on random 3000-frame (50s) windows of each
+D     SENSOR CALIBRATION                                                   motion, instead of 600 frames (10s). Note that since many test mo-
+                                                                           tions are shorter than 50s, this experiment setting may unevenly
+When testing on real hardware, as the raw sensor readings are              bias statistics. For brevity, the DIP model is not included in this
+in different coordinate frames from the frame of system input,             comparison:
+calibration is needed to obtain the offset transforms between the
+coordinate frames beforehand. We adopt a slightly different IMU            Table 3: Comparison of model performance on evaluation
+calibration procedure from previous works that is nevertheless still       motion segments of maximum length 50 seconds. Bold num-
+straightforward to explain.                                                bers indicate the best performing entries.
+    We start from defining a few coordinate frames. Let 𝐺𝑛 be the
+base (i.e. identity) frame of each of the 6 sensors (for the Xsens                                   Our TIP Model
+sensors we used, identity orientation could mean different poses                                           DIPEval TotalCapture                  DanceDB
+per sensor). Let 𝐺𝑝 be any fixed global frame the user specifies,           joint angle errors (degree) 12.33555 9.46942                         15.28491
+whose 𝑥 axis indicates the specified front, 𝑦 axis corresponds to           joint position errors (𝑐𝑚)     5.86926 5.40289                       8.23641
+the left, and 𝑧 axis corresponds to the upwards. (Note this axis            root errors in 2s (meter)              0.08545                       0.09504
+definition is different from DIP and TransPose models.) Let 𝑆𝑡 be           root errors in 5s (meter)              0.16679                       0.20369
+the sensor frame, while 𝑆 0 defines the sensor frame during T-pose          root errors in 10s (meter)             0.20338                       0.38935
+calibration. Let 𝐵𝑡 be the bone frame, while 𝐵 0 defines the bone
+                                                                            joint position jitter (𝑚/𝑠 3 ) 0.84848 0.80672                       1.39043
+frame during T-pose calibration. We omit the sensor indices 𝑗 (e.g.
+  ( 𝑗) ( 𝑗)                                                                 root jitter (𝑚/𝑠 3 )           0.64593 0.64609                       0.95740
+𝐺𝑛 , 𝑆𝑡 ) since calibration is agnostic to each sensor.
+                            𝑆𝑡
+    Using these notations, 𝑹𝐺   represents the raw sensor orientation                               TransPose Model
+                              𝑛
+reading based from frame 𝐺𝑛 , and 𝒂𝑆𝑡 represents the raw acceler-                                          DIPEval TotalCapture                  DanceDB
+ation reading which is always local in sensor frame. The system             joint angle errors (degree) 12.78403   11.56577                      17.22182
+however expects both bone orientation and acceleration reading in           joint position errors (𝑐𝑚)     6.16507  5.76287                      8.35314
+            𝐵𝑡                                                              root errors in 2s (meter)               0.18543                      0.14899
+𝐺𝑝 , i.e., 𝑹𝐺  and 𝒂𝐺𝑝 . We have the following relations:
+             𝑝
+                                                                            root errors in 5s (meter)               0.32042                      0.28216
+                              𝐵𝑡    𝐺 𝑛 𝑆 𝑡 𝐵𝑡                              root errors in 10s (meter)              0.32111                      0.45332
+                             𝑹𝐺  = 𝑹𝐺  𝑹𝐺 𝑹𝑆 ,
+                               𝑝     𝑝   𝑛   𝑡                              joint position jitter (𝑚/𝑠 3 ) 0.57619  0.76578                      1.44662
+                                𝐺𝑛 𝑆𝑡
+                         𝒂𝐺𝑝 = 𝑹𝐺  𝑹 𝒂𝑆𝑡 − 𝒂¯𝑆𝑡 ,                           root jitter (𝑚/𝑠 3 )           0.49804  0.70235                      1.29385
+                                  𝑝 𝐺𝑛
+
+
+                                                                              Reading the numbers from Table 3, degradation of model per-
+                                                                           formance is minimal on longer motions, and the statistics trends
+SA ’22 Conference Papers, December 6–9, 2022, Daegu, Republic of Korea   Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W. Winkler, and C. Karen Liu
+
+
+                                                                                         From Table 4, We see a visible improvement from preprocess-
+                                                                                      ing the raw acceleration readings on real-IMU datasets (DIPEval
+                                                                                      & TotalCapture). As expected, preprocessing is unimportant for
+                                                                                      synthesized IMU data (DanceDB).
+                                                                                         Qualitative comparisons between our method and TransPose are
+                                                                                      presented using the following two representative motions (Figure 7,
+                                                                                      Video 3m33s). Our TIP model can generate a more stable sitting
+                                                                                      posture by making better use of its own past predictions and utiliz-
+                                                                                      ing run-time IK correction (Figure 7 Top). Figure 7 Bottom shows
+                                                                                      that our algorithm is terrain agnostic while TransPose assumes
+                                                                                      a flat ground and uses this assumption to correct the algorithm’s
+                                                                                      vertical root prediction.
+
+                                                                                      F     DISCUSSIONS
+                                                                                      Though we have shown clear improvement on existing challenges of
+                                                                                      temporal consistency due to ambiguity, dynamic motion coverage,
+                                                                                      and terrain coverage, our system still has a few drawbacks for future
+                                                                                      work. First, it tends to underestimate the terrain height rather than
+Figure 7: Motion reconstruction for sitting on a chair (from                          overestimate (e.g. Video 3m52s) - collecting more annotated real
+real IMU data, top) and climbing steps (from synthesized                              IMU data on various terrain types, and increasing training samples
+IMU data, bottom). Our character is shown in yellow, Trans-                           with uneven terrains through data upsampling, could both help
+Pose in purple and Ground-Truth motion is shown in green.                             improve terrain reconstruction. Second, terrain height estimations
+The red spheres are predicted SBPs. Playing back motion on                            remain challenging since they solely depend on motion prediction,
+reconstructed terrains.                                                               and are susceptible to sensor noises. For example, locomotion on
+                                                                                      a slightly bumpy ground versus on a flat ground is theoretically
+between our model and TransPose remain unchanged. As a side                           near-ambiguous given IMU’s noise level (Video 4m6s). Third, our
+note, the DanceDB dataset contains more short motions, making                         motion reconstruction quality on real hardware can degrade on
+the sampling a random 50s segment more likely to cover the be-                        motion types that are rare in training, thus affecting the quality of
+ginnings of motions. We therefore see both TIP and TransPose                          generated terrains (Video 4m21s). Finally, though our work does
+have improved root errors in 2s since the motions usually start from                  not claim contribution over the jitter level of reconstructed motions,
+standing and are less dynamic in the first two seconds.                               the smoothing filter during post-processing is far from ideal and
+   Second, to showcase the benefit of acceleration preprocessing,                     hurts our motion accuracy by effectively increasing latency.
+we perform an ablation study where we remove the average filter-                         Another very visible problem we observe is the model’s bias
+ing and summation operations from our TIP system, both during                         to body types. Our synthesized data were generated from virtual
+training and test time.                                                               characters with random heights sampled from 1.6m to 1.8m. We
+                                                                                      observed that the algorithm generalizes better to taller users than
+Table 4: Ablation of model performance on evaluation mo-                              shorter ones. We hypothesize that this phenomenon is due to the
+tion segments of 10s. Bold numbers indicate the best per-                             magnitude of acceleration, as the model might be more easily con-
+forming entries.                                                                      fused by smaller signals from a shorter user. Similarly, existing
+                                                                                      real IMU datasets might have a bias in human shapes. Some per-
+                          Our TIP Model                                               sonalized training and finetuning of the model may eventually be
+                                DIPEval TotalCapture                 DanceDB          necessary for reconstructing more accurate and detailed motion
+ joint angle errors (degree) 12.09586 8.91642                        15.57031         for each individual user.
+ joint position errors (𝑐𝑚)     5.82242 5.14566                      8.50089             The terrain generated from our algorithm is "plausible" in the
+ root errors in 2s (meter)              0.08031                      0.20295          sense that it cannot distinguish, sorely from IMU readings, if the
+ root errors in 5s (meter)              0.1351                       0.29681          foot is resting on a terrain or simply staying stationary in air (Video
+ root errors in 10s (meter)             0.19446                      0.35759          4m58s). An algorithm that takes the distribution of commonly seen
+ joint position jitter (𝑚/𝑠 3 ) 0.8823  0.75075                      1.43867          environments into consideration could guide our system to generate
+ root jitter (𝑚/𝑠 3 )           0.66211 0.61108                      0.98474          more likely terrains in such ambiguous cases.
+
+       Our TIP Model, w/o Acceleration Preprocessing
+                                DIPEval TotalCapture DanceDB
+ joint angle errors (degree) 13.02724   9.18290      15.67625
+ joint position errors (𝑐𝑚)     6.35219 5.29268      8.58611
+ root errors in 2s (meter)              0.09096      0.16825
+ root errors in 5s (meter)              0.18015      0.25855
+ root errors in 10s (meter)             0.20726      0.34444
+ joint position jitter (𝑚/𝑠 3 ) 0.85845 0.79335      1.44460
+ root jitter (𝑚/𝑠 3 )           0.64661 0.63560      1.00417
+

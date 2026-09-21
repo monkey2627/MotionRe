@@ -1,0 +1,943 @@
+                                             Dynamic Inertial Poser (DynaIP): Part-Based Motion Dynamics Learning for
+                                                  Enhanced Human Pose Estimation with Sparse Inertial Sensors
+
+                                                 Yu Zhang1 * Songpengcheng Xia 1∗ Lei Chu 2 † Jiarui Yang1 Qi Wu1 Ling Pei1†
+                                         1
+                                             Shanghai Key Laboratory of Navigation and Location Based Services, Shanghai Jiao Tong University
+                                                    2
+                                                      Wireless Devices and Systems Group (WiDeS), University of Southern California
+arXiv:2312.02196v2 [cs.CV] 7 Mar 2024
+
+
+
+
+                                                                       Abstract
+
+                                           This paper introduces a novel human pose estimation ap-
+                                        proach using sparse inertial sensors, addressing the short-
+                                        comings of previous methods reliant on synthetic data. It
+                                        leverages a diverse array of real inertial motion capture
+                                        data from different skeleton formats to improve motion di-
+                                        versity and model generalization. This method features two
+                                        innovative components: a pseudo-velocity regression model
+                                        for dynamic motion capture with inertial sensors, and a
+                                        part-based model dividing the body and sensor data into
+                                        three regions, each focusing on their unique characteristics.
+                                        The approach demonstrates superior performance over
+                                        state-of-the-art models across five public datasets, notably
+                                        reducing pose error by 19% on the DIP-IMU dataset, thus
+                                        representing a significant improvement in inertial sensor-             Figure 1. Our innovative data-driven approach for robust full-body
+                                        based human pose estimation. Our codes are available at                pose estimation using six IMUs: unifying inertial mocap datasets
+                                        https://github.com/dx118/dynaip                                        across skeleton formats and enhancing challenging motion capture
+                                                                                                               with local body region modeling and pseudo-velocity estimation.
+
+
+                                        1. Introduction                                                        which utilizes Inertial Measurement Units (IMUs) for full-
+                                                                                                               body estimation. Vision-based HPE, despite its success,
+                                        Human Pose Estimation (HPE) has emerged as a critical                  struggles with occlusion, privacy, and perspective issues.
+                                        field of study, attracting considerable interest for its applica-      Wireless-based methods [3, 50] mitigate some of these is-
+                                        tions in various domains [15, 51], like aiding in sports train-        sues but face performance inconsistencies. Our study cen-
+                                        ing and analysis, and enriching interactions in Virtual and            ters on wearable-based HPE, harnessing wearables with
+                                        Augmented Reality (VR/AR) environments. This growing                   sensors for joint orientation and acceleration tracking. This
+                                        relevance underscores the importance of advancing HPE                  IMU-based method excels by being occlusion-resistant, en-
+                                        technologies to meet the diverse needs of these applications.          vironmentally stable, and privacy-conscious, thus address-
+                                            Our paper examines HPE, a field marked by varied sens-             ing the drawbacks of other HPE approaches.
+                                        ing modalities and methodologies [2, 6, 10], divided into                 Recent studies [14, 26, 45] have concentrated on mini-
+                                        three categories: 1) Vision-based HPE [35, 39], using sin-             mizing the number of IMU sensors for human motion re-
+                                        gle or multi-view images, known for its significant advance-           construction, balancing user convenience with less intru-
+                                        ments; 2) Wireless-based HPE [3, 50], which addresses                  siveness. While this has shown potential, the limited sensor
+                                        some vision-based challenges but is limited by environmen-             placement leads to uncertainties in estimating unseen joint
+                                        tal factors; 3) Wearable-based HPE [14, 17, 46], our focus,            rotations. The integration of complex network structures
+                                                                                                               [16] and physical constraints [46] has been proven effective
+                                             * Equal contribution
+                                             † Corresponding authors                                           in reducing ambiguities. Despite these developments, chal-
+                                        This work was supported by the National Nature Science Foundation of   lenges persist, especially in complex motions. Our research
+                                        China (NSFC) under Grant 62273229.                                     aims to enhance the robustness of sparse sensor-based full-
+body pose reconstruction by identifying three key areas for       various domains [23, 30, 31, 42], a notable discrepancy re-
+potential improvements.                                           mains between virtual and real IMU measurements, hinder-
+    Multi-modal Sensor Information Utilization: The pri-          ing further advancements in IMU-based HPE tasks.
+mary challenge in IMU-based HPE lies in optimally uti-                As human pose estimation research gains traction, the
+lizing multi-modal sensor data, especially acceleration, to       availability of motion capture datasets with real IMU mea-
+diminish motion ambiguity. Sole reliance on IMU orienta-          surements is increasing. However, a significant challenge in
+tion data for full-body pose estimation can result in ambi-       utilizing these real datasets is the variation in skeleton for-
+guities, particularly in movements like hand or leg raises.       mats they present. Our work introduces a straightforward
+Acceleration data, with its dynamic motion features, is cru-      yet efficient mapping strategy to reconcile different skeleton
+cial for reducing such ambiguities. However, existing mod-        formats, allowing the incorporation of additional real-world
+els inadequately leverage acceleration due to two main fac-       motion capture datasets with actual IMU measurements into
+tors: 1) Acceleration data is noisier than rotation measure-      the training of IMU-based HPE models. This integration
+ments, while IMUs provide accurate orientation estimates          results in improved accuracy and generalization in pose es-
+via Kalman filters; 2) Raw acceleration measurements fail         timation. The contributions of this paper are summarized as
+to effectively capture continuous joint motion states, as ex-     follows:
+emplified during transitions from stationary to constant ve-      • Our research introduces an innovative two-stage deep
+locity, where accelerometers record peak values only at mo-         learning model designed for real-time and robust human
+tion onset. To address these issues, we propose a two-stage         pose estimation utilizing sparse IMU sensors, called Dy-
+model that estimates joint velocities with IMUs in the first        naIP (Dynamic Inertial Poser). This method uniquely ad-
+stage, enhancing the utilization of acceleration data.              dresses motion ambiguity by learning pseudo velocities,
+    Spatial Relationship Exploitation of Human Body                 which allows for the full utilization of acceleration data
+Parts and Wearable Sensors: In IMU-based HPE, pre-                  and leverage the strengths of sparse sensor data.
+vious studies have focused on using temporal information          • Our approach divides the human body and associated
+to reconstruct complex motions, such as the ambiguity be-           IMU sensors into three local regions, forming the basis
+tween sitting and standing or long-sitting [16, 46]. How-           for our part-based human pose estimation model. This
+ever, there has been less exploration into the varied dis-          model incorporates low-dimensional global motion infor-
+tributions within IMU-based HPE datasets. For instance,             mation to avoid the full-body pose inconsistencies. By
+certain upper limb motions are exclusively associated with          focusing on individual body parts, the model minimizes
+standing in the training data, leading to potential mistak-         the influence of less associated joints, thereby enhancing
+enly reconstructed in scenarios where similar motions oc-           the robustness and reliability of motion tracking.
+cur while sitting during testing. To tackle this issue, our       • We incorporate more real-world Mocap data with IMU
+model draws inspiration from two key observations noted             measurements across different skeleton formats and ap-
+in recent research [20, 36, 36]: 1) globally rare poses of-         plied them uniformly in IMU-based HPE model training.
+ten comprise local joint configurations that are frequently         The extensive experimental results demonstrate that our
+represented in training datasets; 2) there is a significant de-     approach significantly outperforms competitors and ex-
+pendency among nearby joints, which decreases as the dis-           hibits good generalization performance.
+tance between joints increases. Considering these insights,
+we propose a part-based HPE model that divides the hu-            2. Related Work
+man body into three regions: upper limbs, torso, and lower        HPE has been widely explored using different methods, in-
+limbs, which allows the model to concentrate on the distinct      cluding visual [8, 18, 35, 39], inertial [14, 17, 46], wire-
+characteristics of different body regions. By acknowledg-         less [3, 43], and various hybrid approaches [32, 49]. Our
+ing the spatial relationships of body parts and sensor dis-       paper specifically concentrates on IMU-based human pose
+tribution, our model aims to enhance accuracy in pose es-         estimation solutions, delving into their unique advantages
+timation, especially in scenarios where similar motions are       and potential applications.
+performed in different postures.                                      Human Pose Estimation with IMU sensors. Inertial
+    Human Pose Estimation Model Generalization: The               motion capture (mocap) systems, known for their freedom
+scarcity of motion capture data with inertial measurement         from occlusion and lighting limitations, have witnessed sig-
+in the Skinned Multi-Person Linear (SMPL) model for-              nificant progress in recent years. Commercial systems like
+mat [22] restricts the performance of IMU-based models.           Xsens [34] are accurate but require numerous sensors, mak-
+To address this, earlier research, beginning with DIP [14],       ing them less practical. Early attempts [37, 38] to address
+utilized virtual IMU data generated from the AMASS                sensor noise and observation gaps in sparse setups involved
+dataset [24] to increase the diversity of training samples.       reconstructing human motion from sparse accelerometers
+While this virtual-to-reality approach has shown efficacy in      by referencing pre-recorded databases. Subsequent work
+                                                                                                                                                          VRN      Velocity Regression Network
+     DynaIP: Part-based Motion Dynamics                                                                                                                                                                                                    Pseudo Velocity
+
+ Learning for Enhanced Human Pose Estimation                                                                                                              PRN       Pose Regression Network                                               IMU Measurements
+
+                                                                              Full-body Motion Information                                                GFE       Global Feature Extractor                                             Estimated Human Pose
+                                      𝑿𝑿𝑯𝑯
+
+                                       𝜽𝜽𝑵𝑵                                                                                                                  VRN
+                      𝜽𝜽𝑳𝑳𝑳𝑳                        𝜽𝜽𝑹𝑹𝑹𝑹                                        𝑿𝑿𝑼𝑼𝑼𝑼𝒓𝒓
+                                                                                                                                                                                                                               PRN                � 𝑼𝑼𝑼𝑼𝒓𝒓
+                                                                                                                                                                                                                                                  𝜽𝜽
+  𝜽𝜽𝑳𝑳𝑳𝑳𝑳𝑳                            𝜽𝜽𝑻𝑻𝑻𝑻                                                                                         𝑿𝑿 𝟏𝟏 𝑼𝑼𝑼𝑼𝒓𝒓
+                                                                                                                                                                                                        𝑿𝑿 𝟐𝟐 𝑼𝑼𝑼𝑼𝒓𝒓
+                                                                   𝜽𝜽𝑹𝑹𝑹𝑹𝑹𝑹
+                                      𝜽𝜽𝑻𝑻𝑻𝑻𝑻𝑻                                       GFE
+                                                                                                             𝒁𝒁𝒈𝒈𝒈𝒈𝒈𝒈
+                                      𝜽𝜽𝑳𝑳𝑳𝑳
+
+   𝑿𝑿𝑳𝑳𝑳𝑳                             𝜽𝜽𝑳𝑳𝑳𝑳                 𝑿𝑿𝑹𝑹𝑹𝑹
+                                                                                                                                                    VRN
+                                                                                     𝑿𝑿𝑻𝑻𝒓𝒓
+                               𝑿𝑿𝑹𝑹
+
+
+                                                                                                                                                                                                  PRN
+                                                                               GFE                                      𝑿𝑿 𝟏𝟏 𝑻𝑻𝒓𝒓
+                                                                                                                                                                                     𝑿𝑿 𝟐𝟐 𝑻𝑻𝒓𝒓
+             𝜽𝜽𝑳𝑳𝑳𝑳𝑳𝑳                                                                             𝒁𝒁𝒈𝒈𝒈𝒈𝒈𝒈                                                                                                                  � 𝑻𝑻𝒓𝒓
+                                                                                                                                                                                                                            𝜽𝜽
+                                                        𝜽𝜽𝑹𝑹𝑹𝑹𝑹𝑹
+
+
+                                                                                  𝑿𝑿𝑳𝑳𝑳𝑳𝒓𝒓
+                                                                                                                                            VRN
+             𝑿𝑿𝑳𝑳𝑳𝑳                        𝑿𝑿𝑹𝑹𝑹𝑹
+                                                                                                                                                                                     PRN
+                                                                              GFE                            𝑿𝑿 𝟏𝟏 𝑳𝑳𝑳𝑳𝒓𝒓
+                                                                                                                                                                                                                 � 𝑳𝑳𝑳𝑳𝒓𝒓
+                                                                                                                                                                                                                 𝜽𝜽
+                                                                                              𝒁𝒁𝒈𝒈𝒈𝒈𝒈𝒈
+                                                                                                                                                                      𝑿𝑿 𝟐𝟐 𝑳𝑳𝑳𝑳𝒓𝒓
+                                                             Stage I: Velocity Estimation                                                                 Stage II: Pose Estimation                                                  Human Pose with SMPL
+
+
+Figure 2. Overview of our proposed method, a part-based human pose estimation model with pseudo-velocity regression. Our model
+incorporates a two-stage structure. The first stage predicts joint velocities using IMU measurements, while the second stage focuses on
+predicting the entire body’s joints rotation. Additionally, we partition the human body and the attached IMU sensors into three local regions.
+These regions are input into our proposed part-based human pose estimation model, designed to estimate each local region’s pose while
+maintaining global coherency. This multi-stage and part-based approach enhances the accuracy and consistency of our pose estimation.
+
+by Marcard et al. [41] introduced an offline optimization                                                                                                        AMASS dataset to generate a wealth of virtual sensor data.
+method using the SMPL model to fit sparse IMU data.                                                                                                              They have employed a virtual-to-reality transfer learning
+Huang et al. [14] made strides by applying deep learning to                                                                                                      approach during model training. While virtual IMU data
+real-time regression of SMPL pose parameters from IMUs,                                                                                                          has been valuable in augmenting training samples, there re-
+though they did not fully leverage acceleration information.                                                                                                     mains a noticeable gap between virtual and real measure-
+Yi et al. [45, 46] improved upon this with a multi-stage                                                                                                         ment noise. This gap has hindered further improvements in
+birnn structure, hierarchically regressing joint locations and                                                                                                   performance [19, 42]. In contrast to SMPL pose parameters,
+integrating a physical optimizer. Jiang et al. [16] introduced                                                                                                   ground truth obtained through mocap systems with their
+stationary body points (SBP) as an additional training tar-                                                                                                      native skeleton representation is more convenient. There
+get, utilizing zero-velocity information to address motion                                                                                                       are datasets available that provide inertial mocap data with
+drift. However, existing methods have not effectively har-                                                                                                       Xsens ground truth, such as [4, 7, 9, 25, 29]. However,
+nessed the multi-modal information within IMUs and the                                                                                                           it’s worth noting that these datasets use different skeleton
+spatial information of the human body. In our paper, we di-                                                                                                      formats for their ground truth. For example, the skeleton
+vide the human body and the worn IMU sensors into three                                                                                                          formats of SMPL and Xsens differ, shown in Fig. 1. While
+regions and devise a two-stage structure with three part-                                                                                                        vision-based solutions have addressed this issue by combin-
+based branches for human pose estimation.                                                                                                                        ing multiple datasets with varying ground truth representa-
+   Handling Data Scarcity in Inertial Motion Capture.                                                                                                            tions and using novel autoencoders to mitigate positional
+Large-scale training data plays a crucial role in the devel-                                                                                                     disparities in ground truth [33], our approach takes a sim-
+opment of learning-based methods. In previous IMU-based                                                                                                          pler yet effective route. We introduce a mapping strategy
+research, the SMPL model has been commonly used to rep-                                                                                                          that enables us to seamlessly incorporate additional real-
+resent human pose. However, datasets that provide SMPL                                                                                                           world MoCap datasets with different skeleton formats into
+ground truth, such as those used in works like [14, 40],                                                                                                         our training process. This strategy allows us to harness the
+are limited in size and diversity. The acquisition of SMPL                                                                                                       rich diversity of available data for improved performance.
+ground truth data, whether through marker-based systems
+with the Mosh++ [21] algorithm or offline optimizations,                                                                                                         3. Method
+is prohibitively expensive, which has restricted dataset
+availability. To address this limitation, IMU-based meth-                                                                                                        Our objective is to accurately estimate human pose, denoted
+ods like [14, 16, 45, 46] have predominantly utilized the                                                                                                        as θ̂, using data from six sensors worn on different body
+                                                                     formats, offering a promising solution to enhance pose esti-
+                                                                     mation accuracy.
+                                                                        The SMPL [22] and Xsens [34] skeletons are two widely
+                                                                     used skeleton representations. While they share overall
+                                                                     structural similarities, one notable difference lies in the
+                                                                     number of torso joints, as depicted in Fig. 1. Previous re-
+                                                                     search efforts [5, 11] have achieved success in mapping hu-
+                                                                     man poses captured using commercial inertial mocap sys-
+                                                                     tems onto the SMPL skeleton. This mapping process in-
+                                                                     volves replicating relative joint rotations and excluding re-
+                                                                     dundant torso joints. In the skeleton model, each 3D rigid
+                                                                     bone’s motion can be denoted by a homogeneous matrix
+                                                                     Mbone ∈ SE(3) [28].
+                                                                                                             
+                                                                                                 Rb        pb
+                                                                                        Mbone =                 ,                (1)
+                                                                                                01×3       1
+Figure 3. The evaluation of the end-effector velocity across vari-
+ous motions. With the mapping of joint’s global orientations from    where Rb ∈ SO(3) is a global rotation matrix and pb ∈
+Xsens to SMPL, there is no significant discrepancy in the end-       R3 is a predefined bone displacement. For inertial-based
+effector velocities.                                                 mocap, IMUs, attached to the human body, offer sen-
+parts. The corresponding IMU data can be represented by              sor’s global orientation Rs ∈ SO(3). After calibra-
+X ∈ RT ×72 = [X R , X LL , X RL , X H , X LA , X RA ],               tion [14, 45, 46], the sensor orientation Rs serves as a direct
+marked in Fig. 2, where T is the length of data samples.             representation of the respective bone’s orientation Rb . As
+Additionally, our model predicts the pseudo velocity (V̂ )           such, although specific bone displacements pbone can be
+of the joints with IMU measurements. As shown in Fig. 2,             defined differently within SMPL and Xsens skeleton, the
+our model comprises three modules: 1) A method for uni-              bone orientations would be consistent with the IMU read-
+fying training data across different skeleton formats using a        ings because they correspond to the same location on human
+global orientation mapping strategy. 2) A two-stage human            body. Therefore, we’ve established a one-to-one ground
+pose estimation structure with pseudo velocity regression.           truth mapping across skeletons, e.g., wrists to wrists, legs to
+3) A part-based 3D human dynamics learning module with               legs, and so on. For the torso, we eliminate this redundant
+low-dimensional full-body motion information.                        joint to maintain the consistency of our mapping. With this
+                                                                     mapping strategy, we could unify the inertial mocap data
+3.1. Training Data Unified across Skeleton Formats                   across different skeleton formats.
+Early learning-based methods [14, 45] for IMU-based HPE                 In line with previous tasks related to human motion re-
+encountered a significant challenge: the lack of datasets            targeting [1, 27], we utilize the velocity of end-effectors as
+that contain real IMU data alongside corresponding ground            a qualitative measure to demonstrate the practicality of our
+truths. To address this challenge, these methods have taken          mapping process. As depicted in Fig. 3, our global ori-
+an innovative approach by generating virtual IMU data us-            entation mapping strategy consistently maintains accuracy
+ing the AMASS dataset [24], improving the model’s gen-               across various motions. This serves as a robust foundation
+eralization capabilities due to its diversity. Fine-tuning           for unifying a more extensive dataset of real IMU mocap
+the model with a small amount of collected real data re-             data. By training the model with this unified dataset, we
+sulted in impressive pose estimation results. However, re-           enable it to fully leverage real IMU data, resulting in im-
+cent studies [16, 19, 42] have highlighted a performance             proved generalization performance compared to the tradi-
+degradation issue stemming from differences in noise dis-            tional virtual-to-reality approach.
+tributions between virtual and real IMU data. This issue
+                                                                     3.2. Two-stage Human pose estimation with Pseudo
+has been discussed in various tasks [13, 48], indicating the
+                                                                           Velocity Regression
+need for a solution. As interest in IMU-based HPE grows,
+several datasets containing real IMU measurements have               Given our approach’s reliance on sparse IMUs attached to
+emerged [7, 9, 25, 29]. These datasets represent human               limb ends for estimating full-body pose, there is an inher-
+pose ground truths but use different skeleton formats. In-           ent challenge in accurately estimating joint rotations with-
+stead of solely addressing the gap between virtual and real          out direct IMU measurements. Previous models [14, 16]
+domains [14, 19], our approach takes a novel direction. We           often overlook the rich multi-modal information contained
+propose a training method that initially integrates motion           in the IMUs, primarily relying on global orientation mea-
+capture datasets with real IMU data from various skeleton            surements. Therefore, it is essential to effectively integrate
+the dynamic information provided by acceleration into our           ics over subsequent frames. For the intermediate variable
+learning-based method. To address this, we introduce a              V̂ to be supervised, we obtain the velocity ground-truth
+two-stage HPE model that estimates, in two distinct stages,         V = (F K(θt )−F K(θt−1 ))/∆t through the ground-truth
+the velocity of joints with IMUs and the global rotation of         of human pose θ and forward kinematics F K(·) for super-
+each joint in the full-body. Our method comprises two pri-          vision. The pseudo-velocity loss Lvel could be represented
+mary stages: Pseudo velocity regression (Stage I) and hu-           by:
+man pose estimation (Stage II). This two-stage approach al-
+lows us to leverage both acceleration and orientation data to               Lvel = ∥V − V̂ ∥2
+                                                                                 F K(θt ) − F K(θt−1 )                         (3)
+enhance pose estimation accuracy.                                           =∥                         − SV RN (X, V 0 )∥2 ,
+                                                                                          ∆t
+3.2.1   Stage I: pseudo velocity regression                         where ∆t represents the time interval and θt the ground-
+                                                                    truth of human pose at time t. For the velocity of the root
+As previously mentioned in Sec. 1, relying on raw accel-            joint, we only preserve its vertical component.
+eration data may not effectively capture the continuous mo-
+tion states of joints due to its sensitivity to instantaneous dy-
+                                                                    3.2.2   Stage II: human pose estimation
+namics. In response to this challenge, Stage I of our model
+is dedicated to regressing the pseudo velocity of the joints        Building upon the dynamic information extracted by the
+with IMUs. This step is crucial for effectively extracting the      VRN module, our model proceeds to Stage II, where the
+dynamic information contained in acceleration data. The             primary goal is to achieve robust human pose estimation.
+underlying principles guiding this design are twofold:              For Stage II, we design a Pose Regression Network (PRN)
+• Velocity as a Motion Indicator: Velocity has been                 module, denoted by SP RN (·), to estimate the joint ro-
+   demonstrated to better reflect the joints motion dynam-          tations θ̂ from the IMU measurements X and estimated
+   ics, as supported by previous research [12, 44]. It plays        leaf joints velocities V̂ , which are concatenated as input
+   a crucial role in compensating for the motion ambiguity          X (2) = [V̂ , X] to the Stage II. Based on the initialization
+   that can arise from underutilizing different modalities.         strategy and the PRN module, our model could output the
+• Velocity Estimation: Velocity can be obtained by inte-            estimated human pose θ̂:
+   grating acceleration and ensure that the dynamic infor-
+   mation remains accurate and reliable, unlike raw acceler-                             θ̂ = SP RN (X (2) , θ0 ),             (4)
+   ation. We employ a neural network to estimate the veloc-         where the θ0 is the initial human pose, and the PRN
+   ities of joints with IMUs, thereby harnessing the IMU’s          SP RN (·) is applied with a two-layers LSTM.
+   potential to express continuous body dynamics.                      With the predicted human pose θ̂ and the ground-truth
+    Our model’s Stage-I takes the raw IMU measurements              θ, we could get the loss Lpose represented by:
+X = [X R , X LL , X RL , X H , X LA , X RA ] as input,
+the velocity V̂ = [V̂ R , V̂ LL , V̂ RL , V̂ H , V̂ LA , V̂ RA ]            Lpose = ∥θ − θ̂∥2 = ∥θ − SP RN (X (2) , θ0 )∥2 ,   (5)
+as output via the model’s Velocity Regression Network
+(VRN) module, denoted by SV RN (·). Following the                   Our two-stage network, which includes velocity regres-
+advanced learning-based RNN initialization strategy pro-            sion, successfully addresses the ambiguities arising from
+posed by PIP [46], our model additionally takes the initial         the under-utilization of acceleration. However, consider-
+velocitiesV0 of leaf joints as the model’s input. After that,       ing the distinctive motion patterns of the upper and lower
+we get the predicted pseudo velocity V̂ , represented by            limbs, as well as the infrequent motion combinations, it is
+                                                                    crucial to harness the spatial information of the human body
+                   V̂ = SV RN (X (1) , V 0 ),                 (2)   to ensure robust motion tracking.
+          (1)
+where X        = X represents the input of the first stage.
+                                                                    3.3. Learning Part-based 3D Human Dynamics with
+    The VRN module is comprised of two main compo-
+                                                                          Three Local Body Regions
+nents: a Multi-Layer Perceptron (MLP) and a two-layer
+Long Short-Term Memory (LSTM) network. The MLP                      Directly using all six IMU measurements as the model’s
+takes the initial velocity as input. Its primary purpose is         input, as done in previous approaches [14, 46], without
+to process and transform this initial velocity information.         considering the inherent spatial relationship of the human
+The outputs generated by the MLP are then assigned to               body, can lead to motion ambiguity due to weak associa-
+serve as the hidden state and cell state inputs for the first       tions between body parts. In this section, drawing inspira-
+frame of the LSTM network. This design allows for the               tion from [20, 36], we introduce local region modeling to
+initial velocity information to be effectively processed and        mitigate this issue. Our model divides the entire body into
+used as a starting point for the LSTM, which can then con-          three local regions: upper limbs region (U Lr ), torso region
+tinue to capture and predict the velocity and motion dynam-         (Tr ), and lower limbs region (LLr ), as shown in Fig. 2.
+    Correspondingly, the IMU measurements and the es-                  between local and global information, resulting in robust
+timated human pose in our proposed model are parti-                    and accurate pose estimation.
+tioned into three local regions. To create the model’s in-                With the technical analysis provided above, we can for-
+put, we group the IMU sensors on our bodies into three                 mulate the final objective function for training our model as
+sets, denoted as X l , l ∈ {U Lr , Tr , LLr }, which can be            follows:
+represented by X U Lr = [X R , X LA , X RA ], X Tr =                                           X
+[X R , X H ], X LLr = [X R , X LL , X RL , X H ].                                   L=                    (Llpose + Llvel )      (8)
+                                                                                         l∈{U Lr ,Tr ,LLr }
+    Following the previously mentioned two-stage human
+pose estimation structure, we establish three sub-models
+to acquire the three groups of inputs, and estimate the                4. Experiments
+part-based pseudo velocity Vˆl , l ∈ {U Lr , Tr , LLr }                Experiment Setup. Our experimental evaluation is struc-
+and the joint rotation outputs θˆl , l ∈ {U Lr , Tr , LLr }.           tured into three main parts: Firstly, we illustrate the ben-
+Our estimated joints of full-body are also output in                   efits of using unified inertial mocap data compared with a
+three sub-modules, specifically expressed as θ U Lr =                  virtual-to-real training scheme. Secondly, we show the ef-
+[θ LS , θ LU A , θ RS , θ RU A ], θ Tr = [θ LU L , θ RU L ],           fectiveness of our proposed model with other state-of-the-
+θ LLr = [θ L5 , θ L3 , θ T 12 , θ T 8 , θ N ]. The representation      art methods on our unified mocap data. Finally, we conduct
+of the joints is shown in Fig. 2.                                      ablation studies on key components of our model.
+    With our part-based two-stage structure, our model                     Datasets. We utilized a combination of datasets for both
+achieves a comprehensive representation of full-body joint             training and evaluation in our experiments. The datasets
+rotations by synthesizing the outputs from three sub-                  include DIP-IMU [14] and Xsens datasets, which encom-
+models. This part-based design, relying on local inputs                pass AnDy [25], Emokine [4], Virginia Natural Motion [7],
+and features, effectively learns unique pose configurations            UNIPD [9], and CIP [29]. Additionally, we used the
+for each body part and minimizes the negative impact of                AMASS [24] dataset for evaluating the effectiveness of vir-
+weakly associated joints. However, one challenge we face               tual and real mocap data. Detailed information about these
+with this part-based approach is the potential lack of global          datasets can be found in the supplementary document.
+coherence in the estimated poses. Furthermore, to address                  Metrics. Following [45, 46], we use the following met-
+this, we incorporate global body motion information into               rics for evaluation: 1) SIP error [°]: the mean global ro-
+our part-based HPE model, drawing inspiration from pre-                tation difference of upper arms and upper legs between the
+vious work [20, 47]. Our model utilizes a global feature               estimation and ground truth; 2) Global Angular error [°]:
+extractor, denoted as SGLB , to coarsely capture the full-             the mean global rotation error between estimated joints and
+body motion information Zglb from all six IMUs X. Sub-                 ground truth; 3) Position error [cm]: the mean Euclidean
+sequently, the global representation is concatenated with the          distance error between all joints and ground truth, root po-
+inputs of the two-stage network featuring three local region           sition is aligned. 4) Mesh error [cm]: the mean vertex dis-
+branches. The input of Stage I (X (1)l ) and Stage II (X (2)l )        tance between estimated meshes and ground truth.
+could be re-represented by
+                                                                       4.1. Impact of the Unified Inertial Mocap Data and
+        X (1)l = [X l , Zglb ],                                              Virtual-to-Real Training Scheme
+                                                                 (6)
+        X (2)l = [V̂ l , X l , Zglb ], l ∈ {U Lr , Tr , LLr },         Comparing performance of our model using different
+where the V̂ l = SVl RN (X (1)l , V l0 ) is the local pseudo ve-       training settings. To evaluate the impact of unified train-
+locity estimated by the local VRN module SVl RN (·), and               ing data and virtual dataset, we conducted an experiment on
+V l0 means the initial velocities of the local regions. There-         these four training settings: 1) Synthetic AMASS data only;
+fore, we get the loss function for two stages:                         2) Synthetic AMASS data with DIP-IMU Fine-tuning; 3)
+                                                                       Real Xsens data only (DynaIP); 4) Combined DIP-IMU and
+         Llvel = ∥V l − V̂ l ∥2 , Llpose = ∥θ l − θˆl ∥2 ,       (7)   Xsens data (DynaIP*). With these four settings, we evalu-
+              l   l
+where the V , θ , l ∈ {U Lr , Tr , LLr } are the ground-truth          ated our model on the DIP-IMU test set. Furthermore, for
+of the velocity and human pose for three local regions, and            models only trained on AMASS or Xsens data, additional
+the θ l is the local human pose estimated by the local PRN             evaluations were conducted on the full DIP-IMU dataset
+module SPl RN (X (2)l , θ0l ) of three local branches. By in-          (includes the training set defined by the previous methods)
+tegrating local regions with global information, our model             and specifically on DIP-IMU challenging sitting sequences.
+ensures that while each part-based branch effectively learns              The experiment results are presented in Tab. 1. Compar-
+localized motion dynamics, the overall pose estimation re-             ing the performance of models 1) and 3) on the DIP-IMU
+mains coherent and consistent with the global motion pat-              full set, it becomes evident that while synthetic data from
+terns of the human body. This approach strikes a balance               AMASS demonstrates some transferability, real mocap data
+                                                DIP IMU Test                                                                   DIP IMU Test
+                          SIP Err(°)   Ang Err(°)    Pos Err(cm)   Mesh Err(cm)                          SIP Err(°)   Ang Err(°)    Pos Err(cm)   Mesh Err(cm)
+   1)AMASS                  23.80        8.25           6.04           7.18             DIP [14]           17.10        15.16          7.33           8.96
+   2)AMASS+DIP              14.41        5.90           5.03           6.05             TransPose [45]     16.68        8.85           5.95           7.09
+   3)Xsens(DynaIP)          17.31        7.66           5.79           7.01             TIP [16]           16.20        9.17           5.49           6.61
+   4)Xsens+DIP(DynaIP*)     13.67        5.83           4.84           5.82             PIP [46]           15.02         8.73          5.04           5.95
+                                                DIP IMU Full                            DynaIP             17.43        8.90           5.93           7.71
+                          SIP Err(°)   Ang Err(°)    Pos Err(cm)   Mesh Err(cm)         DynaIP*            13.78        7.07           4.98           5.99
+   1)AMASS                  24.50        8.16           6.87           7.82
+   3)Xsens                  18.98        7.85           6.73           7.80       Table 2. The performance comparison between our model with
+                                             DIP IMU Sitting                      the SOTAs reported in their papers on DIP-IMU [14] test set. For
+                          SIP Err(°)   Ang Err(°)    Pos Err(cm)   Mesh Err(cm)
+                                                                                  a fair comparison, we transform each result into a local rotation
+   1)AMASS                  40.72        11.98         13.85          14.56
+   3)Xsens                  29.28        10.76         12.52          13.60
+                                                                                  representation, consistent with the PIP [46].
+
+Table 1. The performance comparison with different training data
+settings on our model.
+
+
+
+
+  Figure 4. Qualitative comparisons on DIP-IMU [14] test set.
+                                                                                  Figure 5. Qualitative results of SIP error box plot for three com-
+                                                                                  peting methods and DynaIP on Natural Motion [7] dataset.
+from Xsens exhibits significantly better performance and
+generalization ability, resulting in a 22% reduction in the                       narios, our method shows superior performance, effectively
+SIP error. This improvement is particularly pronounced in                         capturing the nuances of these motions where the utiliza-
+the DIP-IMU sitting sequence, where there is a 28% reduc-                         tion of acceleration is crucial, highlighting the excellence
+tion in the SIP error. Additionally, when the DIP training set                    of subtle motion dynamics understanding.
+is integrated into our model training, two noteworthy obser-
+vations emerge: First, the inclusion of the DIP training set                      4.2. Overall Performance Comparison on the Uni-
+enhances the performance of models 1) and 3). Second, a                                 fied Inertial Mocap Data
+comparison between models 2) and 4) reveals a clear ad-                           For fair and meaningful evaluation, we retrained previous
+vantage in using a more comprehensive unified real mocap                          models [14, 16, 45, 46] using Xsens data and evaluated their
+dataset over the virtual-to-real scheme. The additional di-                       performance on both the Xsens and DIP-IMU test sets, and
+versity and realism provided by the real mocap data con-                          compared their results to our model’s performance.
+tribute to enhancing the model’s generalization capabilities.                        The evaluation results in Tab. 3 demonstrate the superior
+    Comparing performance of our method and previ-                                performance of our method compared to competing meth-
+ous virtual-to-real SOTAs. We further compare the re-                             ods on various datasets. Notably, our model achieves a
+sults trained on the unified real mocap dataset with previous                     relative 28% reduction in SIP error on the Natural Motion
+virtual-to-real transfer approaches. In Tab. 8, when trained                      dataset and an 18% reduction in global pose error on the CIP
+with the DIP-IMU training set, DynaIP* demonstrates an                            dataset compared to the state-of-the-art structure PIP [46].
+8% reduction in SIP error and a 19% reduction in global                           These significant improvements in performance highlight
+pose error compared to PIP [46], highlighting the accu-                           the robustness and generalization capability of our model,
+racy and robustness of our approach. Furthermore, DynaIP,                         which can be attributed to our effective velocity estimation
+which only uses Xsens data, achieves comparable perfor-                           strategy and part-based modeling modules.
+mance to TransPose [45], which employs DIP-IMU for fine-                             Fig. 5 presents a box plot of the SIP error for various
+tuning. This illustrates that having access to abundant real                      models [16, 45, 46] and our model on the Natural Mo-
+inertial mocap data is beneficial for generalizing to new sub-                    tion dataset [7]. It’s worth noting that our model not only
+jects and unconstrained motions. Fig. 4 provides a visual                         achieves the lowest maximum SIP error but also has fewer
+comparison of our model’s performance on the DIP-IMU                              outliers, indicating that our method consistently produces
+test set against state-of-the-art methods trained with the                        more robust performance across various motions. This fur-
+AMASS and DIP-IMU. We specifically focus on challeng-                             ther emphasizes the effectiveness of our approach in han-
+ing poses within the DIP-IMU test set, particularly hand-                         dling challenging and diverse pose estimation tasks. In
+raising motions with relatively low velocities. In these sce-                     Fig. 6, we provide a visualization comparison between our
+                                  DIP IMU                                      AnDy                                   UNIPD                                     CIP                                 Natural Motion
+                    SIP Err(°)   Ang Err(°)    Pos Err(cm)     SIP Err(°)   Ang Err(°)   Pos Err(cm)   SIP Err(°)   Ang Err(°)   Pos Err(cm)   SIP Err(°)   Ang Err(°)   Pos Err(cm)   SIP Err(°)    Ang Err(°)   Pos Err(cm)
+  DIP [14]            21.71        10.14          7.92           11.39        5.73          4.34         12.02        5.47          4.22         19.13        8.61          6.86         33.43         11.91         13.33
+  TransPose [45]      22.53        10.28          8.42           12.15        6.29          4.91         15.11        6.05          4.82         20.06        8.75          6.86         30.62         11.26         11.99
+  TIP [16]            19.22         8.94          6.91           10.11        4.55          3.56          9.85        4.06          2.78         13.05        5.67          4.30         22.06         7.90           7.92
+  PIP [46]            17.62         8.33          6.21            9.49        4.09          3.29         8.90         3.59          2.66         12.68        5.52          4.12         19.62         7.49          6.93
+  DynaIP              17.31         7.66          5.79           8.93         3.45          3.41         7.29         2.77          2.21         11.42        4.54          3.69         15.78         7.18          5.83
+
+
+Table 3. Evaluation results of the state-of-the-art models on DIP-IMU [14], AnDy [25], UNIPD [9], CIP [29] and Natural Motion [7] when
+trained only with real inertial mocap data. All models run in real-time setting.
+
+
+
+
+                                                                                                                      Figure 7. Visualization of upper leg orientation error over time on
+                                                                                                                      a test sequence from Natural Motion [7].
+
+                                                                                                                      method: ①Baseline: a naive LSTM network with RNN-
+                                                                                                                      initialization [46]; ②w/o Part: same as DynaIP* but with-
+                                                                                                                      out partition modeling; ③w/o Vel: same as DynaIP* but
+                                                                                                                      without learning velocity. The results of these variants on
+                                                                                                                      CIP, DIP-IMU, and Natural Motion in Tab. 4 demonstrate
+                                                                                                                      a clear increase in testing errors as each component is pro-
+Figure 6. Qualitative comparisons of different model from                                                             gressively removed. This trend emphasizes the significance
+CIP [29] (Left) and Natural Motion [7] (Right) test set.
+                                                                                                                      of both pseudo velocity learning and part-based modeling
+                       DIP IMU                           CIP                     Natural Motion                       for achieving robust human pose estimation. These compo-
+              SIP Err(°)      Ang Err(°)      SIP Err(°)     Ang Err(°)     SIP Err(°)    Ang Err(°)
+                                                                                                                      nents work in synergy to improve the overall performance
+ ①Baseline         15.26         6.17           13.18           5.13          33.22          11.20
+ ②w/o Part         14.97         6.02           13.00           4.86          31.62           9.60                    of our model. The visualization of a test sequence from
+ ③w/o Vel          14.87         6.11           12.54           4.89          29.15          10.49
+ DynaIP*           13.67         5.83           11.67           4.63          18.88          8.03
+                                                                                                                      Natural Motion in Fig. 7 highlights the performance dif-
+                                                                                                                      ferences between the variants. Variant③ initially struggles
+Table 4. The ablation study on pseudo-velocity estimation and the                                                     to perform a sitting-down motion, while variant②, which
+part-based modeling approach.                                                                                         includes velocity modeling, can perform the sitting mo-
+                                                                                                                      tion but experiences gradual drift over time due to sensor
+reconstructed poses and those inferred by state-of-the-art                                                            noise. In contrast, our complete model (DynaIP*) combines
+methods using selected frames from CIP and Natural Mo-                                                                both velocity and part-based modeling, resulting in accurate
+tion datasets. Our model accurately maintains the sitting                                                             and robust pose estimation throughout the sequence. This
+or standing pose, even during arm movements or prolonged                                                              demonstrates the effectiveness of our approach in handling
+periods of crossed legs. In contrast, methods like Trans-                                                             complex and dynamic motions.
+Pose [45] and PIP [46] intermittently oscillate between sit-
+ting and standing poses. The superior performance of our                                                              5. Conclusions
+model in these instances can be attributed to two factors:
+firstly, the retention of root vertical velocity information,                                                         This study focuses on improving the robustness and accu-
+which helps capture motion pattern transitions; and sec-                                                              racy of learning-based HPE utilizing sparse inertial sensors.
+ondly, the effectiveness of our part-based modeling ap-                                                               The methodology involves the integration of real-world mo-
+proach. This approach proves particularly advantageous for                                                            tion capture data from diverse skeleton formats. It employs
+un/rare-seen poses, as it is less influenced by imbalanced                                                            pseudo-velocity as an intermediary and introduces a novel
+training distributions and better at resolving ambiguities.                                                           part-based approach. This method effectively leverages ac-
+                                                                                                                      celeration data and local body correlations, leading to en-
+4.3. Ablations on the Components of our Model                                                                         hanced pose estimation results. As evidenced in the case
+                                                                                                                      studies, this method significantly outperforms existing tech-
+To evaluate the effectiveness of key components in our
+                                                                                                                      niques on all performance metrics across five datasets.
+model, we compared three additional variants with our
+References                                                            [12] Sachini Herath, Hang Yan, and Yasutaka Furukawa. Ronin:
+                                                                           Robust neural inertial navigation in the wild: Benchmark,
+ [1] Kfir Aberman, Peizhuo Li, Dani Lischinski, Olga Sorkine-              evaluations, & new methods. In 2020 IEEE International
+     Hornung, Daniel Cohen-Or, and Baoquan Chen. Skeleton-                 Conference on Robotics and Automation (ICRA), pages
+     aware networks for deep motion retargeting. ACM Transac-              3146–3152. IEEE, 2020. 5
+     tions on Graphics (TOG), 39(4):62–1, 2020. 4
+                                                                      [13] Lukas Hoyer, Dengxin Dai, and Luc Van Gool. Daformer:
+ [2] Sizhe An, Yin Li, and Umit Ogras. mri: Multi-modal 3d                 Improving network architectures and training strategies for
+     human pose estimation dataset using mmwave, rgb-d, and                domain-adaptive semantic segmentation. In Proceedings of
+     inertial sensors. Advances in Neural Information Processing           the IEEE/CVF Conference on Computer Vision and Pattern
+     Systems(NeurIPS), 35:27414–27426, 2022. 1                             Recognition(CVPR), pages 9924–9935, 2022. 4
+ [3] Anjun Chen, Xiangyu Wang, Shaohao Zhu, Yanxu Li, Jim-            [14] Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J
+     ing Chen, and Qi Ye. mmbody benchmark: 3d body recon-                 Black, Otmar Hilliges, and Gerard Pons-Moll. Deep iner-
+     struction dataset and analysis for millimeter wave radar. In          tial poser: Learning to reconstruct human pose from sparse
+     Proceedings of the 30th ACM International Conference on               inertial measurements in real time. ACM Transactions on
+     Multimedia (ACM MM), pages 3501–3510, 2022. 1, 2                      Graphics (TOG), 37(6):1–15, 2018. 1, 2, 3, 4, 5, 6, 7, 8
+ [4] Julia F. Christensen, Andres Fernandez, Rebecca Smith,           [15] Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa
+     Georgios Michalareas, Sina H. N. Yazdi, Fahima Farahi,                Laich, Patrick Snape, and Christian Holz. Avatarposer: Ar-
+     Eva-Madeleine Schmidt, Nasimeh Bahmanian, and Gemma                   ticulated full-body pose tracking from sparse motion sens-
+     Roig. Emokine: A kinematic dataset and computational                  ing. In Proceedings of European Conference on Computer
+     framework for scaling up the creation of highly controlled            Vision(ECCV). Springer, 2022. 1, 5
+     emotional full-body movement datasets. https://doi.              [16] Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won,
+     org/10.5281/zenodo.7821844, 2023. 3, 6, 1                             Alexander W Winkler, and C Karen Liu. Transformer inertial
+ [5] Yudi Dai, Yitai Lin, Chenglu Wen, Siqi Shen, Lan Xu,                  poser: Real-time human motion reconstruction from sparse
+     Jingyi Yu, Yuexin Ma, and Cheng Wang. Hsc4d: Human-                   imus with simultaneous terrain generation. In SIGGRAPH
+     centered 4d scene capture in large-scale indoor-outdoor               Asia 2022 Conference Papers(SA’ 22), pages 1–9, 2022. 1,
+     space using wearable imus and lidar. In Proceedings of                2, 3, 4, 7, 8
+     the IEEE/CVF Conference on Computer Vision and Pattern           [17] Manuel Kaufmann, Yi Zhao, Chengcheng Tang, Lingling
+     Recognition(CVPR), pages 6792–6802, 2022. 4, 5                        Tao, Christopher Twigg, Jie Song, Robert Wang, and Otmar
+ [6] Yudi Dai, YiTai Lin, XiPing Lin, Chenglu Wen, Lan Xu,                 Hilliges. Em-pose: 3d human pose estimation from sparse
+     Hongwei Yi, Siqi Shen, Yuexin Ma, and Cheng Wang.                     electromagnetic trackers. In Proceedings of the IEEE/CVF
+     Sloper4d: A scene-aware dataset for global 4d human pose              international conference on computer vision(ICCV), pages
+     estimation in urban environments. In Proceedings of the               11510–11520, 2021. 1, 2
+     IEEE/CVF Conference on Computer Vision and Pattern               [18] Muhammed Kocabas, Nikos Athanasiou, and Michael J
+     Recognition(CVPR), pages 682–692, 2023. 1, 5                          Black. Vibe: Video inference for human body pose and
+ [7] Jack H Geissinger and Alan T Asbeck. Motion inference                 shape estimation. In Proceedings of the IEEE/CVF con-
+     using sparse inertial sensors, self-supervised learning, and a        ference on computer vision and pattern recognition(CVPR),
+     new dataset of unscripted human motion. https://doi.                  pages 5253–5263, 2020. 2
+     org/10.7294/2v3w-sb92, 2020. 3, 4, 6, 7, 8, 1                    [19] Hyeokhyen Kwon, Catherine Tong, Harish Haresamudram,
+ [8] Zigang Geng, Ke Sun, Bin Xiao, Zhaoxiang Zhang, and                   Yan Gao, Gregory D Abowd, Nicholas D Lane, and Thomas
+     Jingdong Wang. Bottom-up human pose estimation via                    Ploetz. Imutube: Automatic extraction of virtual on-body ac-
+     disentangled keypoint regression. In Proceedings of the               celerometry from video for human activity recognition. Pro-
+     IEEE/CVF conference on computer vision and pattern                    ceedings of the ACM on Interactive, Mobile, Wearable and
+     recognition(CVPR), pages 14676–14686, 2021. 2                         Ubiquitous Technologies(IMWUT), 4(3):1–29, 2020. 3, 4
+ [9] Mattia Guidolin, Emanuele Menegatti, and Monica Reg-             [20] Gun-Hee Lee and Seong-Whan Lee. Uncertainty-aware hu-
+     giani. Unipd-bpe: Synchronized rgb-d and inertial data for            man mesh recovery from video by learning part-based 3d dy-
+     multimodal body pose estimation and tracking. https:                  namics. In Proceedings of the IEEE/CVF International Con-
+     //doi.org/10.17605/OSF.IO/YJ9Q4, 2022. 3, 4,                          ference on Computer Vision(ICCV), pages 12375–12384,
+     6, 8, 1                                                               2021. 2, 5, 6
+[10] Vladimir Guzov, Aymen Mir, Torsten Sattler, and Gerard           [21] Matthew Loper, Naureen Mahmood, and Michael J Black.
+     Pons-Moll. Human poseitioning system (hps): 3d human                  Mosh: motion and shape capture from sparse markers. ACM
+     pose estimation and self-localization in large scenes from            Trans. Graph. (TOG), 33(6):220–1, 2014. 3
+     body-mounted sensors. In Proceedings of the IEEE/CVF             [22] Matthew Loper, Naureen Mahmood, Javier Romero, Gerard
+     Conference on Computer Vision and Pattern Recogni-                    Pons-Moll, and Michael J Black. Smpl: A skinned multi-
+     tion(CVPR), pages 4318–4329, 2021. 1                                  person linear model. In Seminal Graphics Papers: Pushing
+[11] Vladimir Guzov, Torsten Sattler, and Gerard Pons-Moll. Vi-            the Boundaries, Volume 2, pages 851–866. 2023. 2, 4
+     sually plausible human-object interaction capture from wear-     [23] Xiaoxuan Ma, Jiajun Su, Chunyu Wang, Wentao Zhu, and
+     able sensors. arXiv preprint arXiv:2205.02830, 2022. 4                Yizhou Wang. 3d human mesh estimation from virtual mark-
+     ers. In Proceedings of the IEEE/CVF Conference on Com-              on Computer Vision and Pattern Recognition(CVPR), pages
+     puter Vision and Pattern Recognition (CVPR), pages 534–             17038–17047, 2023. 1, 2
+     543, 2023. 2                                                   [36] Hui Shuai, Lele Wu, and Qingshan Liu. Adaptive multi-view
+[24] Naureen Mahmood, Nima Ghorbani, Nikolaus F Troje, Ger-              and temporal fusing transformer for 3d human pose estima-
+     ard Pons-Moll, and Michael J Black. Amass: Archive                  tion. IEEE Transactions on Pattern Analysis and Machine
+     of motion capture as surface shapes. In Proceedings of              Intelligence(TPAMI), 45(4):4122–4135, 2022. 2, 5
+     the IEEE/CVF international conference on computer vi-          [37] Ronit Slyper and Jessica K Hodgins. Action capture with
+     sion(ICCV), pages 5442–5451, 2019. 2, 4, 6, 1                       accelerometers. In Proceedings of the 2008 ACM SIG-
+[25] Pauline Maurice, Adrien Malaisé, Clélie Amiot, Nico-              GRAPH/Eurographics symposium on computer animation,
+     las Paris, Guy-Junior Richard, Olivier Rochel, and Serena           pages 193–199, 2008. 2
+     Ivaldi. Human movement and ergonomics: An industry-            [38] Jochen Tautges, Arno Zinke, Björn Krüger, Jan Baumann,
+     oriented dataset for collaborative robotics. The Interna-           Andreas Weber, Thomas Helten, Meinard Müller, Hans-
+     tional Journal of Robotics Research(IJRR), 38(14):1529–             Peter Seidel, and Bernd Eberhardt. Motion reconstruction
+     1537, 2019. 3, 4, 6, 8, 1                                           using sparse accelerometer data. ACM Transactions on
+[26] Vimal Mollyn, Riku Arakawa, Mayank Goel, Chris Harri-               Graphics(TOG), 30(3):1–12, 2011. 2
+     son, and Karan Ahuja. Imuposer: Full-body pose estimation      [39] Shashank Tripathi, Lea Müller, Chun-Hao P Huang, Omid
+     using imus in phones, watches, and earbuds. In Proceedings          Taheri, Michael J Black, and Dimitrios Tzionas. 3d hu-
+     of the 2023 CHI Conference on Human Factors in Comput-              man pose estimation via intuitive physics. In Proceedings
+     ing Systems(CHI), pages 1–12, 2023. 1, 5                            of the IEEE/CVF Conference on Computer Vision and Pat-
+[27] Lucas Mourot, Ludovic Hoyet, François Le Clerc, and                tern Recognition(CVPR), pages 4713–4725, 2023. 1, 2
+     Pierre Hellier. Humor: Human motion representation us-         [40] Matthew Trumble, Andrew Gilbert, Charles Malleson,
+     ing topology-agnostic transformers for character animation          Adrian Hilton, and John Collomosse. Total capture: 3d
+     retargeting. arXiv preprint arXiv:2305.18897, 2023. 4               human pose estimation fusing video and inertial sensors.
+[28] Richard M Murray, Zexiang Li, and S Shankar Sastry. A               In Proceedings of 28th British Machine Vision Confer-
+     mathematical introduction to robotic manipulation. CRC              ence(BMVC), pages 1–13, 2017. 3
+     press, 2017. 4                                                 [41] Timo Von Marcard, Bodo Rosenhahn, Michael J Black, and
+[29] Manuel Palermo, Sara M Cerqueira, João André, António            Gerard Pons-Moll. Sparse inertial poser: Automatic 3d
+     Pereira, and Cristina P Santos. From raw measurements to            human pose estimation from sparse imus. In Computer
+     human pose-a dataset with low-cost and high-end inertial-           graphics forum(CGF), pages 349–360. Wiley Online Li-
+     magnetic sensor data. Scientific Data, 9(1):591, 2022. 3, 4,        brary, 2017. 3
+     6, 8, 1                                                        [42] Songpengcheng Xia, Lei Chu, Ling Pei, Zixuan Zhang,
+[30] Ling Pei, Songpengcheng Xia, Lei Chu, Fanyi Xiao, Qi Wu,            Wenxian Yu, and Robert C Qiu. Learning disentangled rep-
+     Wenxian Yu, and Robert Qiu. Mars: Mixed virtual and real            resentation for mixed-reality human activity recognition with
+     wearable sensors for human activity recognition with mul-           a single imu sensor. IEEE Transactions on Instrumentation
+     tidomain deep learning model. IEEE Internet of Things Jour-         and Measurement, 70:1–14, 2021. 2, 3, 4
+     nal, 8(11):9383–9396, 2021. 2                                  [43] Hongfei Xue, Qiming Cao, Yan Ju, Haochen Hu, Haoyu
+[31] Qucheng Peng, Ce Zheng, and Chen Chen. Source-free do-              Wang, Aidong Zhang, and Lu Su. M4esh: mmwave-based
+     main adaptive human pose estimation. In Proceedings of              3d human mesh construction for multiple subjects. In Pro-
+     the IEEE/CVF International Conference on Computer Vision            ceedings of the 20th ACM Conference on Embedded Net-
+     (ICCV), pages 4826–4836, 2023. 2                                    worked Sensor Systems(SenSys), pages 391–406, 2022. 2
+[32] Yiming Ren, Chengfeng Zhao, Yannan He, Peishan Cong,           [44] Dongseok Yang, Doyeon Kim, and Sung-Hee Lee. Lobstr:
+     Han Liang, Jingyi Yu, Lan Xu, and Yuexin Ma. Lidar-aid              Real-time lower-body pose prediction from sparse upper-
+     inertial poser: Large-scale human motion capture by sparse          body tracking signals. In Computer Graphics Forum(CGF),
+     inertial and lidar sensors. IEEE Transactions on Visualiza-         pages 265–275. Wiley Online Library, 2021. 5
+     tion and Computer Graphics, 29(5):2337–2347, 2023. 2           [45] Xinyu Yi, Yuxiao Zhou, and Feng Xu. Transpose: Real-time
+[33] István Sárándi, Alexander Hermans, and Bastian Leibe.            3d human translation and pose estimation with six inertial
+     Learning 3d human pose estimation from dozens of datasets           sensors. ACM Transactions on Graphics (TOG), 40(4):1–13,
+     using a geometry-aware autoencoder to bridge between                2021. 1, 3, 4, 6, 7, 8
+     skeleton formats. In Proceedings of the IEEE/CVF Win-          [46] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada,
+     ter Conference on Applications of Computer Vision(WACV),            Vladislav Golyanik, Christian Theobalt, and Feng Xu. Phys-
+     pages 2956–2966, 2023. 3                                            ical inertial poser (pip): Physics-aware real-time human mo-
+[34] Martin Schepers, Matteo Giuberti, Giovanni Bellusci, et al.         tion tracking from sparse inertial sensors. In Proceedings of
+     Xsens mvn: Consistent tracking of human motion using in-            the IEEE/CVF Conference on Computer Vision and Pattern
+     ertial sensing. Xsens Technol, 1(8):1–8, 2018. 2, 4                 Recognition(CVPR), pages 13167–13178, 2022. 1, 2, 3, 4,
+[35] Zehong Shen, Zhi Cen, Sida Peng, Qing Shuai, Hujun Bao,             5, 6, 7, 8
+     and Xiaowei Zhou. Learning human mesh recovery in              [47] Ailing Zeng, Xiao Sun, Fuyang Huang, Minhao Liu, Qiang
+     3d scenes. In Proceedings of the IEEE/CVF Conference                Xu, and Stephen Lin. Srnet: Improving generalization in
+     3d human pose estimation with a split-and-recombine ap-
+     proach. In Proceedings of European Conference on Com-
+     puter Vision(ECCV), pages 507–523. Springer, 2020. 6
+[48] Lei Zhang and Xinbo Gao. Transfer adaptation learning: A
+     decade survey. IEEE Transactions on Neural Networks and
+     Learning Systems, 2022. 4
+[49] Zhe Zhang, Chunyu Wang, Wenhu Qin, and Wenjun Zeng.
+     Fusing wearable imus with multi-view images for human
+     pose estimation: A geometric approach. In Proceedings of
+     the IEEE/CVF Conference on Computer Vision and Pattern
+     Recognition(CVPR), pages 2200–2209, 2020. 2
+[50] Mingmin Zhao, Tianhong Li, Mohammad Abu Alsheikh,
+     Yonglong Tian, Hang Zhao, Antonio Torralba, and Dina
+     Katabi. Through-wall human pose estimation using radio
+     signals. In Proceedings of the IEEE conference on com-
+     puter vision and pattern recognition(CVPR), pages 7356–
+     7365, 2018. 1
+[51] Ce Zheng, Wenhan Wu, Chen Chen, Taojiannan Yang, Si-
+     jie Zhu, Ju Shen, Nasser Kehtarnavaz, and Mubarak Shah.
+     Deep learning-based human pose estimation: A survey. ACM
+     Computing Surveys, 56(1):1–37, 2023. 1
+   Dynamic Inertial Poser (DynaIP): Part-Based Motion Dynamics Learning for
+        Enhanced Human Pose Estimation with Sparse Inertial Sensors
+                                                    Supplementary Material
+   This supplementary material provides additional infor-           Datasets             Motion types                                      Subjects   Minutes
+                                                                    DIP-IMU [14]         jumping, sitting, walking, lifting arm            10         86
+mation to complement our main paper. Sec. A outlines the            CIP [29]             grabbing, reaching, sitting                       10         288
+network architecture and training details of our approach.          Natural Motion [7]   long time sitting, exercising, walking            17         692
+                                                                    Emokine [4]          upper body motion                                 1          12
+Sec. B offers an overview of the datasets utilized in our re-       AnDy [25]            walking, kneeling, manipulating loads             13         421
+                                                                    UNIPD [9]            sitting, pointing, bending, walking and jogging   15         162
+search. Sec. C presents extended ablation studies, encom-
+                                                                    Real IMU data        -                                                 -          1661
+passing various training data settings and further analysis         AMASS [24]           -                                                 -          2122
+of component design. Sec. D features additional qualita-
+tive comparisons between our model and existing state-of-                                      Table 5. Dataset Overview
+the-art methods. Finally, Sec. E summarizes our work, dis-
+cusses its limitations, and proposes potential directions for       Mocap dataset. The following part will briefly introduce
+future research.                                                    these public datasets we used.
+                                                                        1) AnDy [25]: The Inertial Mocap data from AnDy were
+                                                                    collected from 13 participants in an industry environment.
+A. Implementation Details                                           A total number of 195 trails consist of commonly seen mo-
+Network Details Our model architecture comprises dis-               tions like raising arms, walking, bending torso, crouching
+tinct sub-networks, each equipped with a Multilayer Per-            and etc.. We use the last two subject’s data (ID: 9266 and
+ceptron (MLP) layer for initializing hidden states, followed        9857) for evaluation and the others for training.
+by the Long Short-Term Memory (LSTM) networks. The                      2) CIP [29]: The sensing data of the CIP dataset were
+first two-layer LSTM network is designed for regressing the         collected from 10 participants for 6 different types of move-
+pseudo-velocity of joints, and the second two-layer LSTM            ment sequences. These sequence types involve motions
+network focuses on the final pose estimation. An additional         such as factory assembly tasks, office dynamics and ran-
+LSTM layer is used to extract global context from all six           dom free movements. We select data from the subject 4 and
+sensors, which is shared by all three sub-networks. No-             8 for evaluation and the rest data for training.
+tably, the output for each joint is represented as a global 6D-         3) Natural Motion [7]: The dataset consists of motions
+rotation relative to the root joint [45], and this relational ap-   from 17 participants, with 13 performing unscripted daily
+proach is also applied to intermediate pseudo-velocity pre-         activities like walking, working at a computer, exercising,
+dictions.                                                           etc., and the remaining 4 executing actions within industrial
+    Specifically, we directly regress the orientations of 11        settings. Notably, an essential characteristic of this dataset
+joints on the Xsens skeleton that lack IMU measurements.            is the exceptional duration of each raw capture sequence,
+To align with the SMPL model during evaluation (on DIP-             varying from half an hour up to three hours. This allows
+IMU) and visualization, we remove one redundant torso               for a wealth of extended long-time sitting or standing se-
+joint (labeled as ’L3’ in our implementation) and map the           quences to be incorporated. Nevertheless, we find some raw
+remaining predicted results. When integrating with the              data may exhibit certain drift due to prolonged capture times
+DIP-IMU dataset, we duplicate the ’Spine1’ joint in the             and lack of precise re-calibration. We manually selected 9
+SMPL model to correspond with our model’s output dimen-             (ID: 1, 2, 3, 4, 5, 6, 10, 11 and 13) out of the 13 partic-
+sions.                                                              ipants engaged in daily activities and extracted clean data
+    A difference from prior methodologies in our work is            segments to be utilized for training and testing.
+the treatment of joints such as the head, root, forearms, and           4) Emokine [4]: This dataset contains 63 sequences cap-
+forelegs, which are directly attached to IMUs. Rather than          tured from a dancer performing different body movements
+predicting their orientations, we directly utilize the orienta-     with emotions like anger, contentment, fear, joy, neutrality,
+tions provided by their respective IMU measurements, en-            and sadness, this includes a variety of rapid and slow move-
+suring a more straightforward and accurate representation.          ments of the upper and lower limbs. Since the total duration
+                                                                    of this data only amounts to 12 minutes, we have decided to
+B. Datasets Details                                                 use it solely for training purposes.
+                                                                        5) UNIPD [9]: This dataset captures detailed body poses
+We use a subset of AMASS [24] to generate synthetic IMU             from 15 participants performing 12 scripted activities in la-
+as previous works. Simultaneously, we train and evaluate            borious environment, such as walking, sitting, jogging and
+our model using several publicly available Xsens Inertial           bending. We use data from last two subjects (ID: 14 and 15)
+                                   DIP IMU                          AnDy                         UNIPD                        CIP                   Natural Motion
+                            SIP Err(°)     Ang Err(°)    SIP Err(°)    Ang Err(°)    SIP Err(°)     Ang Err(°)      SIP Err(°)   Ang Err(°)     SIP Err(°)   Ang Err(°)
+ 1)AMASS                      23.80          8.25           20.80          7.72          14.98           5.64         25.27         9.08          40.58         13.56
+ 2)AMASS+DIP                  14.41          5.90           18.79          8.10          14.29           5.49         18.65         7.51          20.72         9.26
+ 3)Xsens                      17.62          8.33            8.93          3.45          7.29            2.77         11.42         4.54          15.78          7.18
+ 4)Xsens+DIP                  13.67          5.83            9.17          3.56           7.60           2.83         11.67         4.63          18.88          8.03
+ 5)AMASS+Xsens+DIP            13.77          5.92            8.84          3.42           7.08           2.67         12.01         4.66          19.89          8.39
+
+                                         Table 6. Performance Comparison on Different Training Data Settings.
+
+                      DIP IMU                            AnDy                            UNIPD                            CIP                     Natural Motion
+               SIP Err(°)     Ang Err(°)       SIP Err(°)     Ang Err(°)      SIP Err(°)     Ang Err(°)         SIP Err(°)    Ang Err(°)      SIP Err(°)     Ang Err(°)
+ ①Baseline       15.26            6.17            9.89              3.76          9.05            3.24            13.18          5.13           33.22          11.20
+ ②w/o Part       14.97            6.02            9.62              3.85          7.63            2.92            13.00          4.86           31.62          9.60
+ ③w/o Vel        14.87            6.11            9.27              3.50          7.61            2.81            12.54          4.89           29.15          10.49
+ ④CP             14.64            6.35           10.74              4.14          7.54            2.88            12.52          4.87           20.58           7.90
+ ⑤DynaIP*        13.67            5.83            9.17              3.56          7.60            2.83            11.67          4.63           18.88           8.03
+
+                                                Table 7. Performance Comparison of Ablation Variants.
+
+
+                                                                                         similarity may stem from the test set’s focus on everyday
+                                                                                         motions, which are well-represented in the current real-
+                                                                                         world training data. However, the gap between virtual and
+                                                                                         real IMU data remains a concern and could be further inves-
+                                                                                         tigated. Virtual data’s potential may lie in capturing more
+                                                                                         diverse and uncommon motions, such as those found in
+                                                                                         sports like basketball, swimming, parkour, or specific dance
+Figure 8. CDF of the largest upper leg orientation error. Complete                       styles, which are not adequately covered by existing real
+partition model predicts unnatural result for excessive separation.                      datasets.
+                                                                                             Additional Ablation Study. We show the comparison
+as test set and the rest for training.                                                   results of ablation models on more datasets in Tab. 7. Along
+    The overview of these dataset along with DIP-IMU [14]                                with aforementioned variants (①, ②, ③), We additionally
+is shown in Tab. 5                                                                       evaluate a variant of our model denotes as ”④ Complete par-
+                                                                                         tition (CP)”, which further divides body into left and right
+C. Additional Analysis                                                                   sides: four limb groups and one torso group, as it is inter-
+                                                                                         esting to examine whether more local parts can bring better
+In this section, we present more experimental results of our                             performance.
+proposed method (DyanIP).                                                                    The results, detailed in Tab. 7, demonstrate that Dy-
+   Additional Comparison on Unified Mocap Data and                                       naIP* maintains the best overall performance on the most
+Virtual-to-Real (V-to-R) Training Scheme. We extend                                      test set, particularly on the DIP-IMU, Natural Motion, and
+our analysis by including results from the Xsens test set for                            CIP datasets. These datasets include more complex motion
+the four training settings previously discussed in Sec. 4 on                             scenarios, where the unique benefits of pseudo-velocity es-
+more real mocap datasets. Additionally, we report a extra                                timation and part-based modeling are most evident.
+setting marked as model 5): AMASS+Xsens+DIP. This set-                                       In our experiments, the complete partition model,
+ting involves pretrain on AMASS synthetic data and then                                  marked as ④, reveals a subtle decline in SIP error perfor-
+retrain with a mix of Xsens and DIP-IMU data.                                            mance, as indicated in Tab. 7. Additionally, we present
+   The findings, as shown in Tab. 6, reveal that relying                                 the Cumulative Distribution Function (CDF) of the largest
+solely on AMASS (model 1)) leads to subpar performance                                   orientation error between the two upper legs on the Nat-
+in real-world scenarios. Fine-tuning with a smaller real                                 ural Motion test set in Fig. 8. While the introduction of
+dataset, such as DIP-IMU, offers limited improvements                                    more sensors and joint groups theoretically enhances the
+(model 2)).                                                                              model’s capacity to capture local motion information, over-
+   A notable observation is that the performance of mod-                                 segmentation of the body into numerous parts may inadver-
+els 4) and 5) is quite similar, indicating that pre-training                             tently compromise the inter-connectivity between the sub-
+on AMASS does not significantly affect the outcome. This                                 networks. This disconnect is not entirely compensated by
+Figure 9. Additional qualitative results on DIP-IMU with previous virtual-to-real SOTAs. From left to right: TIP [16], PIP [46], DynaIP
+and GT.
+
+
+
+
+Figure 10. Additional visualization when models all trained using Xsens mocap data. Left: results from CIP sequence, Right: results from
+Natural Motion sequence.
+
+the incorporation of low-dimensional global context. As a              formance negatively in certain challenging scenarios.
+result, this can lead to inconsistencies in the pose estimates,           Additional Comparison on Model performance. To
+manifesting as increased errors in complex motions, as de-             isolate data impact and assess model performance, we pro-
+picted in Fig. 8. Our observations suggest that while seg-             vide a additional comparison with our model marked as
+menting the body into local parts enhances local correlation,          DynaIP† using a data set consistent with PIP (combined
+an excessive division may inadvertently weaken the model’s             with AMASS and DIP data) in Tab. 8. The performance
+ability to maintain global coherence, thus impacting its per-          enhancement highlights our architecture’s efficiency.
+                        Dataset                Method                       SIP Err(°)                            Ang Err(°)             Pos Err(cm)                                          Mesh Err(cm)
+                                               PIP                                             15.02                         8.73                              5.04                                           5.95
+                        DIP IMU
+                                               DynaIP†                                         14.11                         7.00                              4.97                                           5.97
+                        Total                  PIP                                             12.93                    12.04                                  5.61                                           6.51
+                        Capture                DynaIP†                                         12.42                    11.06                                  5.11                                           5.79
+
+
+Table 8. The performance comparison on DIP-IMU and Totalcap-
+ture. DynaIP† ia trained on AMASS and DIP-IMU, same as PIP.
+
+                   0                                                                           0                                                                                  0
+                                                      0.6                                                                                1.0
+                  25                                                                          25                                                                                                                          2.0
+                                                      0.4                                                                                                                        50
+                                                                                                                                                                                                                          1.5
+                  50                                                                          50                                         0.5
+                                                      0.2                                                                                                                                                                 1.0
+Output Features
+
+
+
+
+                  75
+                                                                            Output Features
+
+
+
+
+                                                                                              75
+
+
+
+
+                                                                                                                                                               Output Features
+                                                                                                                                                                                 100
+                                                            Weight Values
+
+
+
+
+                                                                                                                                               Weight Values
+
+
+
+
+                                                                                                                                                                                                                                Weight Values
+                                                      0.0                                                                                0.0                                                                              0.5
+                  100                                                                         100
+                                                                                                                                                                                 150                                      0.0
+                  125                                  0.2                                    125
+                                                                                                                                          0.5
+                  150                                  0.4                                    150
+                                                                                                                                                                                                                           0.5
+                                                                                                                                                                                 200
+                                                                                                                                          1.0                                                                              1.0
+                  175                                  0.6                                    175
+
+                                                                                                                                                                                 250                                       1.5
+                          9
+                         10
+                         11
+
+
+
+
+                                        21
+                                        22
+                                        23
+
+
+
+
+                                                 33
+                                                 34
+                                                 35
+
+
+
+
+                                                                                                        9
+                                                                                                       10
+                                                                                                       11
+
+
+
+
+                                                                                                                      21
+                                                                                                                      22
+                                                                                                                      23
+
+
+
+
+                                                                                                                                    33
+                                                                                                                                    34
+                                                                                                                                    35
+
+
+
+
+                                                                                                                                                                                        17
+
+
+
+
+                                                                                                                                                                                                                     71
+                              Input Features                                                                Input Features                                                                   Input Features
+
+
+                         (a) DynaIP*                                                    (b) DynaIP*-Position                                                                           (c) PIP-official
+
+Figure 11. Visualization of first linear layer weights, Accs on
+marked cols while the rest are Oris. (PIP Accs on col 0 to 17)
+
+D. Additional Qualitative Results
+In this section, We show more visualization results of our
+                                                                                                                                                                                                                                                Figure 12. We’ve selected four timestamps with relatively high up-
+method compared to the state-of-the-art methods
+                                                                                                                                                                                                                                                per leg orientation errors from a 50,000 frame sitting sequence and
+    Additional Qualitative Comparison with the V-to-R                                                                                                                                                                                           have visualized their respective mesh representations with ground
+SOTAs. We present a comprehensive qualitative compar-                                                                                                                                                                                           truth.
+ison between our method, DynaIP*, and previous state-
+of-the-art models using virtual-to-real (V-to-R) training
+scheme, such as TIP [16] and PIP [46]. Additional frames                                                                                                                                                                                        localized region modeling. However, DynaIP’s part-based
+from the DIP-IMU dataset are visualized in Fig. 9, where                                                                                                                                                                                        approach allows for a more focused and accurate interpre-
+our approach, DynaIP*, displays marked improvements                                                                                                                                                                                             tation of motions within each region.
+over the previous V-to-R models in various situations, high-                                                                                                                                                                                        Effect of using velocity as intermediate outputs. Pre-
+lighting the advantages of incorporating real inertial mocap                                                                                                                                                                                    vious works, such as DIP, identified a trend where networks
+data.                                                                                                                                                                                                                                           tend to discard much of the acceleration, and introduced an
+    This comparison points out that past V-to-R models                                                                                                                                                                                          auxiliary task to reconstruct the acceleration for alleviating
+mainly focused on real IMU datasets with SMPL ground                                                                                                                                                                                            this problem. To better utilize acceleration, we first regress
+truths. As a result, the proportion of ’real’ components in                                                                                                                                                                                     the pseudo velocity as an intermediary output, supervised
+these models was limited, which constrained their overall                                                                                                                                                                                       by the ground-truth velocity obtained from the human pose.
+performance. By contrast, as shown in Fig. 9, our approach                                                                                                                                                                                      Compared with PIP/Transpose that uses leaf joints positions
+is built on a wide array of real inertial data, which enhances                                                                                                                                                                                  as intermediate outputs, our method has certain advantages
+the model’s adaptability and precision across various mo-                                                                                                                                                                                       in terms of using acceleration. Since noise in acceleration
+tion contexts.                                                                                                                                                                                                                                  easily diverges with quadratic integration, it’s more difficult
+    Additional Qualitative Comparison on network                                                                                                                                                                                                to capture the spatial relationship in noisy acceleration. In-
+structure. This visualization presents a deeper qualitative                                                                                                                                                                                     stead, the network learns to infer the position more from the
+analysis that compares the performance of our model, Dy-                                                                                                                                                                                        orientation input due to human kinematic relationship. Fol-
+naIP, with state-of-the-art models (TIP [16] and PIP [46])                                                                                                                                                                                      lowing DIP’s explanation, we visualize the weights of the
+trained solely on Xsens data. In Fig. 10, we exhibit more in-                                                                                                                                                                                   first linear layer of the network in the Fig. 11, where both
+stances to highlight the enhanced capabilities of our model.                                                                                                                                                                                    the weights of PIP and ours-w.position in the corresponding
+    On the left side of the image, DynaIP’s shows better abil-                                                                                                                                                                                  dimension of the acceleration input is almost zero.
+ity to capture the movements of the upper leg and arm. This                                                                                                                                                                                         Tracking robustness of long-time sitting motion. In
+precision can be attributed to our model’s advanced network                                                                                                                                                                                     assessing the robustness of our model, DynaIP, particularly
+structure, which effectively integrates dynamic motion in-                                                                                                                                                                                      in prolonged motion scenarios, we conducted a qualitative
+formation and spatial correlations within the body.                                                                                                                                                                                             analysis using a real sitting sequence from the Natural Mo-
+    Turning to the right side of the image, our model demon-                                                                                                                                                                                    tion dataset. This sequence, lasting for 14 minutes, is show-
+strates its robust in tracking a sitting pose, even when it in-                                                                                                                                                                                 cased in Fig. 12 and exemplifies the model’s capability in
+volves complex hand movements. This scenario often poses                                                                                                                                                                                        long-time motion tracking.
+a challenge for other models due to their limited capacity in                                                                                                                                                                                       The accurate modeling of a real seating posture is no-
+tably challenging. It entails not only managing the inherent
+noise in IMU readings but also addressing the subtle and
+occasional body movements humans exhibit in unscripted
+situations, as opposed to a perfectly stationary posture. Our
+model’s part-based approach plays a crucial role in its suc-
+cess in this context.
+    Furthermore, to reinforce our findings and demonstrate
+the practical applicability of our model, we have also evalu-
+ated DynaIP in real-world scenarios using an inertial mocap
+device. Please refer to the supplementary videos for more
+details.
+
+E. Discussions and Future Works
+To our knowledge, we are the first to utilize pre-existing
+publicly available inertial mocap datasets in learning-based
+sparse inertial mocap with the global orientation mapping
+strategy across skeleton formats. Despite our efforts to
+expand the training data with real IMU readings, we ac-
+knowledge a challenge: the model’s accuracy dips when it
+encounters poses that are underrepresented in the training
+set. To address this, we recognize the potential of integrat-
+ing additional datasets featuring real IMUs, which cover a
+broader spectrum of motion types. Recently, there comes
+several multi-modality datasets such as [5, 6] that make ex-
+tensive use of IMU data as part of their sensor modality. Re-
+grettably, raw IMU data synchronized with these resources
+aren’t presently available for public access. We are of the
+strong belief that, once made available, these datasets could
+offer immense value for inertial sensor-based motion cap-
+ture.
+    At present, our system does not incorporate improve-
+ments in global root translation and operates based on the
+assumption of flat ground conditions. This limitation stems
+from the inherent tendency of purely inertial-based global
+trajectory estimation methods to experience drift. Addi-
+tionally, the accuracy of our current methods for estimat-
+ing translation can be adversely impacted by inaccuracies
+in pose prediction, a problem also linked to the suscepti-
+bility of inertial-based systems to drift. Looking ahead, we
+aim to tackle the issue of long-term drift in IMU-based so-
+lutions by integrating environmental constraint information
+or by incorporating additional sensor modalities.
+    In summary, our research points towards exciting av-
+enues for future work in sparse IMU-based human pose es-
+timation. Expanding the dataset diversity, dividing distinct
+body regions, and enhancing velocity estimation are key ar-
+eas that hold the potential to advance this field significantly.
+As we continue to explore these possibilities, we would also
+be committed to using widely used smart devices containing
+IMUs, such as VR [15, 44], mobile phones, smart-watches
+[26], etc., to develop robust and accurate motion capture so-
+lutions that can thrive in a variety of real-world applications.
+

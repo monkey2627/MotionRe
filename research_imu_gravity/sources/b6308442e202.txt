@@ -1,0 +1,192 @@
+URL: https://arxiv.org/abs/2102.04024
+
+[2102.04024] IDOL: Inertial Deep Orientation-Estimation and Localization
+Skip to main content
+Search arXiv
+Press Enter to search ·
+Advanced search
+Computer Science > Robotics
+arXiv:2102.04024
+(cs)
+[Submitted on 8 Feb 2021]
+Title:
+IDOL: Inertial Deep Orientation-Estimation and Localization
+Authors:
+Scott Sun
+,
+Dennis Melamed
+,
+Kris Kitani
+View a PDF of the paper titled IDOL: Inertial Deep Orientation-Estimation and Localization, by Scott Sun and 2 other authors
+View PDF
+HTML (experimental)
+Abstract:
+Many smartphone applications use inertial measurement units (IMUs) to sense movement, but the use of these sensors for pedestrian localization can be challenging due to their noise characteristics. Recent data-driven inertial odometry approaches have demonstrated the increasing feasibility of inertial navigation. However, they still rely upon conventional smartphone orientation estimates that they assume to be accurate, while in fact these orientation estimates can be a significant source of error. To address the problem of inaccurate orientation estimates, we present a two-stage, data-driven pipeline using a commodity smartphone that first estimates device orientations and then estimates device position. The orientation module relies on a recurrent neural network and Extended Kalman Filter to obtain orientation estimates that are used to then rotate raw IMU measurements into the appropriate reference frame. The position module then passes those measurements through another recurrent network architecture to perform localization. Our proposed method outperforms state-of-the-art methods in both orientation and position error on a large dataset we constructed that contains 20 hours of pedestrian motion across 3 buildings and 15 subjects.
+Comments:
+To be published in AAAI 2021
+Subjects:
+Robotics (cs.RO)
+; Computer Vision and Pattern Recognition (cs.CV); Machine Learning (cs.LG)
+Cite as:
+arXiv:2102.04024
+[cs.RO]
+(or
+arXiv:2102.04024v1
+[cs.RO]
+for this version)
+https://doi.org/10.48550/arXiv.2102.04024
+Focus to learn more
+arXiv-issued DOI via DataCite
+Submission history
+From: Scott Sun [
+view email
+]
+[v1]
+Mon, 8 Feb 2021 06:41:47 UTC (3,379 KB)
+Full-text links:
+Access Paper:
+View a PDF of the paper titled IDOL: Inertial Deep Orientation-Estimation and Localization, by Scott Sun and 2 other authors
+View PDF
+HTML (experimental)
+TeX Source
+view license
+Current browse context:
+cs.RO
+< prev
+|
+next >
+new
+|
+recent
+|
+2021-02
+Change to browse by:
+cs
+cs.CV
+cs.LG
+References & Citations
+NASA ADS
+Google Scholar
+Semantic Scholar
+DBLP
+- CS Bibliography
+listing
+|
+bibtex
+Kris Kitani
+export BibTeX citation
+Loading...
+BibTeX formatted citation
+×
+loading...
+Data provided by:
+Bookmark
+Bibliographic Tools
+Bibliographic and Citation Tools
+Bibliographic Explorer Toggle
+Bibliographic Explorer
+(
+What is the Explorer?
+)
+Connected Papers Toggle
+Connected Papers
+(
+What is Connected Papers?
+)
+Litmaps Toggle
+Litmaps
+(
+What is Litmaps?
+)
+scite.ai Toggle
+scite Smart Citations
+(
+What are Smart Citations?
+)
+Code, Data, Media
+Code, Data and Media Associated with this Article
+alphaXiv Toggle
+alphaXiv
+(
+What is alphaXiv?
+)
+Links to Code Toggle
+CatalyzeX Code Finder for Papers
+(
+What is CatalyzeX?
+)
+DagsHub Toggle
+DagsHub
+(
+What is DagsHub?
+)
+GotitPub Toggle
+Gotit.pub
+(
+What is GotitPub?
+)
+Huggingface Toggle
+Hugging Face
+(
+What is Huggingface?
+)
+ScienceCast Toggle
+ScienceCast
+(
+What is ScienceCast?
+)
+Demos
+Demos
+Replicate Toggle
+Replicate
+(
+What is Replicate?
+)
+Spaces Toggle
+Hugging Face Spaces
+(
+What is Spaces?
+)
+Spaces Toggle
+TXYZ.AI
+(
+What is TXYZ.AI?
+)
+Related Papers
+Recommenders and Search Tools
+Link to Influence Flower
+Influence Flower
+(
+What are Influence Flowers?
+)
+Core recommender toggle
+CORE Recommender
+(
+What is CORE?
+)
+Author
+Venue
+Institution
+Topic
+About arXivLabs
+arXivLabs: experimental projects with community collaborators
+arXivLabs is a framework that allows collaborators to develop and share new arXiv features directly on our website.
+Both individuals and organizations that work with arXivLabs have embraced and accepted our values of openness, community, excellence, and user data privacy. arXiv is committed to these values and only works with partners that adhere to them.
+Have an idea for a project that will add value for arXiv's community?
+Learn more about arXivLabs
+.
+Which authors of this paper are endorsers?
+|
+Disable MathJax
+(
+What is MathJax?
+)
+We gratefully acknowledge support from
+        our
+major funders
+,
+member institutions
+,
+,
+        and all contributors.
+Major funding support from

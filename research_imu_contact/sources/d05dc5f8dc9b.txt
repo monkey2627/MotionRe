@@ -1,0 +1,2880 @@
+URL: https://arxiv.org/html/2606.28604v1
+
+IMU-HOI: A Symbiotic Framework for Coherent Human-Object Interaction and Motion Capture via Contact-Conscious Inertial Fusion
+Report GitHub Issue
+×
+Title:
+Content selection saved. Describe the issue below:
+Description:
+Submit without GitHub
+Submit in GitHub
+arXiv is now an independent nonprofit!
+Learn more
+×
+Back to arXiv
+License: arXiv.org perpetual non-exclusive license
+arXiv:2606.28604v1 [cs.CV] 26 Jun 2026
+IMU-HOI: A Symbiotic Framework for Coherent Human-Object Interaction and Motion Capture via Contact-Conscious Inertial Fusion
+Lizhou Lin
+†
+†
+thanks:
+Equal contribution
+Affiliation:
+Shanghai Jiao Tong University
+Songpengcheng Xia
+Zengyuan Lai
+Affiliation:
+Shanghai Jiao Tong University
+Lan Sun
+Affiliation:
+Shanghai Jiao Tong University
+Jiarui Yang
+Affiliation:
+Shanghai Jiao Tong University
+Ling Pei
+†
+†
+thanks:
+Corresponding authors
+This work was supported by the National Nature Science Foundation of China (NSFC) under Grant 62273229.
+Affiliation:
+Shanghai Jiao Tong University
+Abstract
+Capturing full-body human motion with object interactions is crucial for AR/VR and robotics applications, yet it remains challenging for conventional vision-based methods due to occlusions and constrained capture volumes. Inertial measurement units (IMUs) offer a compelling alternative without line-of-sight requirements, but existing IMU-based motion capture assumes an isolated human and ignores object contacts and dynamics. To bridge this gap, we present IMU-HOI, a novel framework that jointly recovers full-body human pose and 6-DoF object trajectory from sparse IMUs on the body and object, explicitly modeling human-object Interaction.
+Our approach first infers probabilistic hand–object contacts directly from IMU streams and uses them as a high-level signal to route between kinematic and inertial reasoning. These contact cues drive a three-stage fusion pipeline that refines human pose and root translation, and fuses hand-based forward kinematics with object-IMU integration for object motion, yielding coherent, drift-resilient trajectories for both human and object. Experiments on challenging human-object interaction scenarios demonstrate substantial accuracy gains over prior inertial motion capture methods. Moreover, IMU-HOI can be plugged into existing sparse-IMU mocap backbones with minimal changes, effectively extending the scope of purely inertial motion capture from isolated humans to full human–object interaction and joint motion estimation.
+1
+Introduction
+The capture of full-body human motion
+together with
+object interactions is a cornerstone for advancing embodied AI applications, such as immersive AR/VR and seamless human–robot collaboration
+[
+33
+,
+35
+,
+4
+,
+7
+,
+19
+,
+41
+,
+40
+]
+. While vision-based motion capture has been the predominant approach, its efficacy diminishes in natural environments due to persistent challenges such as occlusions, limited capture volume, and viewpoint dependence, which are exacerbated during dynamic motions and object manipulations
+[
+5
+,
+52
+,
+14
+]
+.
+Inertial Measurement Units (IMUs) offer a compelling alternative: they enable 3D human pose estimation (HPE) from a sparse set of wearable sensors, unshackled from line-of-sight and lighting constraints
+[
+23
+,
+42
+,
+26
+,
+1
+,
+43
+,
+12
+,
+16
+]
+. Pioneering systems (e.g., DIP
+[
+9
+]
+, TransPose
+[
+47
+]
+, TIP
+[
+13
+]
+) have demonstrated remarkable performance by leveraging learned kinematic priors and simplistic physical constraints (e.g., foot-ground contact) to mitigate inherent sensor noise and drift.
+Figure 1
+:
+IMU-HOI
+recovers full-body human motion and 6-DoF object trajectories from a sparse set of stick-on IMUs attached to both the body and the object, without using cameras.
+However, a fundamental limitation persists: existing inertial motion capture methods operate under the assumption of an
+isolated
+human body
+[
+9
+,
+51
+]
+. They ignore the rich context of human–object interactions (HOI), neither modeling contact nor estimating the object’s state. This overlooks a critical dimension of real-world activities, where interactions with tools, sports equipment, and everyday objects are ubiquitous
+[
+3
+,
+50
+,
+53
+,
+21
+,
+22
+,
+6
+]
+. Consequently, there remains a significant gap between the output of these systems and the true dynamics of embodied interaction.
+Intriguingly, the form factor of IMUs makes them uniquely suited to bridge this gap. Just as they are worn on the body, IMUs can be flexibly attached to everyday objects, enabling instrumented HOI in settings where cameras are impractical or undesirable, as shown in Fig.
+1
+. This opens the door to robust, in-the-wild motion capture of interactive scenes using only sparse inertial sensors. Yet, this direction remains largely unexplored: existing IMU-based methods disregard manipulated objects altogether, while vision-based HOI capture typically relies on complex multi-view rigs, pre-scanned meshes, or carefully controlled environments
+[
+3
+,
+50
+,
+53
+,
+21
+,
+22
+,
+6
+]
+To address this critical gap, we propose
+IMU-HOI
+, a symbiotic framework that jointly infers full-body human pose and 6-DoF object trajectory from sparse IMUs affixed to both the body and the object, with explicit reasoning about human-object contacts. Concretely, our pipeline proceeds in three stages. First, a learning-based module estimates short-horizon motion cues and probabilistic contact events from body- and object-IMUs, identifying when and which hand is in contact and producing calibrated contact priors. Second, we refine the human pose and root translation using a multi-path inertial fusion module: building on a state-of-the-art sparse-IMU poser, we adopt a part-based design and a two-branch root-translation head that exploits both foot contact and trunk dynamics, yielding stable full-body joints and wrist trajectories. Third, we estimate the object trajectory via a contact-conditioned, three-branch fusion: two kinematic branches reconstruct object motion from hand forward kinematics (FK) under a quasi-rigid contact model, while an IMU branch integrates object accelerations with a residual network to correct for drift. A contact-gated fusion module combines these hypotheses in a Bayesian-style manner, anchoring the object to the hand when contact is confident and falling back to IMU when it is not. This closed-loop design yields coherent, physically plausible motion capture for both human and object.
+In summary, our main contributions are threefold:
+•
+We introduce, to our knowledge, the first purely inertial framework for coherent human–object motion capture: IMU-HOI formulates HOI tracking from sparse body- and object-IMUs as a unified problem, and treats hand–object contact as a first-class probabilistic signal that routes between kinematic and inertial reasoning throughout the pipeline.
+•
+We develop a three-stage, contact-conscious inertial fusion architecture that seamlessly integrates object interaction cues into both human pose estimation and object translation, combining a part-based human module with a contact-gated FK–IMU fusion module for robust, drift-resistant HOI tracking.
+•
+Extensive experiments on three challenging HOI benchmarks demonstrate that IMU-HOI consistently improves object translation and interaction fidelity over strong IMU-based baselines. Moreover, we show that our contact-gated fusion is modular and plug-and-play: when instantiated with existing sparse-IMU pose estimators, it systematically upgrades them with interaction-aware object dynamics tracking at minimal additional cost.
+2
+Related Work
+2.1
+Human Pose Estimation with Wearables
+Inertial motion capture (mocap) avoids issues like occlusion and lighting, evolving from early database-driven reconstruction with sparse accelerometers
+[
+28
+,
+31
+]
+to SMPL-based optimization and real-time learning. Commercial systems like Xsens
+[
+27
+]
+deliver high accuracy but require many sensors, limiting scalability. A key milestone was sparse IMU-to-SMPL fitting
+[
+32
+]
+, followed by learning-based regression of SMPL parameters from IMUs
+[
+9
+]
+. Hierarchical BiRNN pipelines with physics-aware refinement improved robustness
+[
+47
+,
+46
+]
+, and stationary body point (SBP) reasoning reduced drift
+[
+13
+]
+. Recent advances improve priors and robustness: DynaIP
+[
+51
+]
+learns part-aware motion and uses pseudo-velocity cues; Fast Inertial Poser
+[
+36
+]
+achieves real-time tracking with causal modeling and shape conditioning; PNP
+[
+48
+]
+models fictitious forces to leverage accelerations; and recent works
+[
+23
+,
+42
+,
+29
+]
+reduce sensor count using commodity wearables. Recent state-space models
+[
+15
+,
+55
+,
+54
+]
+further improve tracking robustness and uncertainty estimation from sparse inputs.
+Despite these advances, all the above methods focus solely on reconstructing the human body: the manipulated objects, their states and contacts remain unobserved, and global alignment is only weakly constrained. In this work, we explicitly model the object side and human–object interaction, extending purely inertial motion capture from body-only tracking to coherent human–object motion capture.
+2.2
+Multi-Modal HOI Datasets and Capture
+3D HOI is widely studied under external-camera and simulation setups.
+On the data side, multi-view datasets
+[
+3
+,
+50
+,
+10
+]
+, simulation-based datasets
+[
+34
+]
+, and hand–object grasp collections
+[
+30
+]
+provide high-fidelity supervision.
+However, they typically rely on dense camera rigs, markers, or controlled studios, and often assume static scenes or pre-scanned CAD models
+[
+8
+]
+, limiting deployment in everyday environments with movable or unknown objects.
+To move beyond studio capture, recent methods estimate HOI from monocular RGB in the wild.
+PHOSA
+[
+49
+]
+recovers static human–object configurations via contact and collision cues, while learning-based approaches
+[
+37
+,
+38
+]
+model dynamic interactions using motion priors, visibility-aware tracking, or generative diffusion
+[
+17
+]
+.
+Yet camera-based solutions remain sensitive to occlusions, often require calibrated external hardware and known object geometry, and raise privacy and scalability concerns in real-world deployments
+[
+3
+,
+50
+,
+49
+,
+37
+,
+38
+,
+17
+]
+.
+These challenges have motivated sensor-assisted HOI capture that moves sensing onto the actor.
+Egocentric HOI has grown with AR/VR, leading to first-person datasets
+[
+39
+]
+and head-mounted capture methods: EgoChoir
+[
+44
+]
+infers 3D contacts and affordances from head motion and egocentric video, and Lost&Found
+[
+2
+]
+tracks scene-graph changes from wearable sensors.
+In parallel, sparse IMU-based pose estimation
+[
+9
+,
+13
+]
+has advanced but largely ignores objects, while hybrid methods combine vision and inertial data: I’M HOI
+[
+53
+]
+fuses an object IMU with monocular video, and HybridCap
+[
+18
+]
+uses body IMUs to stabilize monocular motion capture.
+Most closely related to our setting, Interaction Replica
+[
+6
+]
+shows that full-body mocap suits can infer object trajectories from human motion alone, and ECHO
+[
+25
+]
+reconstructs body, object, and contact from head and wrist sensors with a diffusion transformer.
+In contrast to these methods, which often rely on visual input, detailed object models, or extensive sensor suites, our work demonstrates that accurate full HOI pose can be recovered from a sparse set of only six body IMUs and a single object IMU, without any visual cues.
+Figure 2
+:
+Overview of our three-stage HOI pipeline from sparse human–object IMUs: Stage I (mid-bottom) predicts hand/foot contacts and object velocity, Stage II (mid-top) estimates part-based human pose and root translation, and Stage III (mid-right) contact-gates FK and IMU branches to recover object translation.
+3
+Method
+3.1
+Problem Formulation and Overview
+We address human–object interaction (HOI) reconstruction from sparse body and object IMUs with a three-stage architecture. Stage I estimates a calibrated hand–object contact prior and short-horizon object velocity from local inertial cues; Stage II predicts a temporally consistent full-body pose and root translation using a DynaIP-style part-based backbone with a TransPose-inspired, contact-aware translation head; Stage III recovers global object translation by fusing two contact-conditioned FK branches with an IMU-integrated trajectory. Across all stages, contact is modeled as an explicit probabilistic signal that gates kinematic versus inertial hypotheses at each frame and is optimized in a staged curriculum, yielding an interpretable and drift-resistant HOI estimator.
+At time
+t
+t
+, we observe human IMUs
+𝐗
+t
+hum
+∈
+ℝ
+N
+hum
+×
+9
+\mathbf{X}^{\text{hum}}_{t}\in\mathbb{R}^{N_{\text{hum}}\times 9}
+and an object IMU
+𝐗
+t
+obj
+∈
+ℝ
+9
+\mathbf{X}^{\text{obj}}_{t}\in\mathbb{R}^{9}
+, together with an initial state
+𝒮
+0
+=
+{
+𝐩𝐨𝐬𝐞
+0
+,
+𝐩
+root
+​
+(
+0
+)
+,
+R
+O
+W
+​
+(
+0
+)
+,
+𝐩
+O
+​
+(
+0
+)
+}
+,
+\mathcal{S}_{0}=\big\{\mathbf{pose}_{0},\ \mathbf{p}_{\mathrm{root}}(0),\ {}^{W}\!R_{O}(0),\ \mathbf{p}_{O}(0)\big\},
+(1)
+where
+R
+O
+W
+​
+(
+t
+)
+∈
+S
+​
+O
+​
+(
+3
+)
+{}^{W}\!R_{O}(t)\in SO(3)
+denotes the object orientation in the world frame and
+𝐩
+root
+​
+(
+t
+)
+,
+𝐩
+O
+​
+(
+t
+)
+∈
+ℝ
+3
+\mathbf{p}_{\mathrm{root}}(t),\mathbf{p}_{O}(t)\in\mathbb{R}^{3}
+denote the world-space root and object positions.
+Our model outputs, for each frame, full-body joints
+𝐉
+^
+t
+∈
+ℝ
+24
+×
+3
+\hat{\mathbf{J}}_{t}\in\mathbb{R}^{24\times 3}
+, a root position trajectory
+𝐩
+^
+root
+​
+(
+t
+)
+\hat{\mathbf{p}}_{\mathrm{root}}(t)
+, and an object position trajectory
+𝐩
+^
+O
+​
+(
+t
+)
+\hat{\mathbf{p}}_{O}(t)
+obtained by fusing three hypotheses with contact-gated weights
+w
+t
+,
+k
+w_{t,k}
+:
+𝐩
+^
+O
+​
+(
+t
+)
+=
+∑
+k
+∈
+{
+L
+,
+R
+,
+I
+​
+M
+​
+U
+}
+w
+t
+,
+k
+​
+𝐩
+^
+O
+(
+k
+)
+​
+(
+t
+)
+,
+\hat{\mathbf{p}}_{O}(t)=\sum_{k\in\{L,R,IMU\}}w_{t,k}\,\hat{\mathbf{p}}^{(k)}_{O}(t),
+(2)
+where
+𝐩
+^
+O
+F
+​
+K
+−
+L
+​
+(
+t
+)
+\hat{\mathbf{p}}^{FK\!-\!L}_{O}(t)
+and
+𝐩
+^
+O
+F
+​
+K
+−
+R
+​
+(
+t
+)
+\hat{\mathbf{p}}^{FK\!-\!R}_{O}(t)
+denote the object positions predicted via forward kinematics from the left- and right-hand kinematic chains, respectively, and
+𝐩
+^
+O
+I
+​
+M
+​
+U
+​
+(
+t
+)
+\hat{\mathbf{p}}^{IMU}_{O}(t)
+is the object position inferred from the object IMU branch.
+Unless otherwise stated, all reported metrics are computed on
+𝐉
+^
+t
+\hat{\mathbf{J}}_{t}
+,
+𝐩
+^
+root
+​
+(
+t
+)
+\hat{\mathbf{p}}_{\mathrm{root}}(t)
+,
+and
+𝐩
+^
+O
+​
+(
+t
+)
+\hat{\mathbf{p}}_{O}(t)
+.
+3.2
+Stage I: Contact and Velocity Estimation
+Contact representation.
+We model the momentary contact state as a categorical distribution over
+{
+L
+,
+R
+,
+0
+}
+\{L,R,0\}
+(left hand, right hand, no contact). Instead of a standard
+3-way softmax, we parameterize
+𝝅
+t
+=
+[
+p
+L
+​
+(
+t
+)
+,
+p
+R
+​
+(
+t
+)
+,
+1
+−
+max
+⁡
+(
+p
+L
+​
+(
+t
+)
+,
+p
+R
+​
+(
+t
+)
+)
+]
+∈
+Δ
+2
+,
+\boldsymbol{\pi}_{t}=\big[p_{L}(t),\ p_{R}(t),\ 1-\max(p_{L}(t),p_{R}(t))\big]\in\Delta^{2},
+(3)
+where
+p
+L
+​
+(
+t
+)
+p_{L}(t)
+and
+p
+R
+​
+(
+t
+)
+p_{R}(t)
+denote the marginal probabilities of left-hand and right-hand contact at time
+t
+t
+. It (i) preserves probability mass when neither hand is in contact, (ii) avoids double counting during transitions or bimanual touches by collapsing shared mass into the complement, and (iii) maps directly to the three object-translation sources used in Stage III (left-FK, right-FK, IMU).
+A compact recurrent head (LSTM) takes a short temporal window of human and object IMUs together with intermediate motion cues and outputs logits for
+p
+L
+​
+(
+t
+)
+p_{L}(t)
+and
+p
+R
+​
+(
+t
+)
+p_{R}(t)
+. We train this head with focal cross-entropy
+[
+20
+]
+to handle long no-contact stretches and short contact spikes, and calibrate
+𝝅
+t
+\boldsymbol{\pi}_{t}
+as a prior for fusion using temperature scaling plus a light regularization term (details in the supplement).
+Object velocity estimation.
+In parallel, a second head regresses the object linear velocity
+𝐯
+^
+O
+​
+(
+t
+)
+\hat{\mathbf{v}}_{O}(t)
+from the object IMU sequence and orientation increments
+Δ
+​
+R
+O
+W
+​
+(
+t
+)
+\Delta{}^{W}\!R_{O}(t)
+. We use a robust regression loss (Huber)
+[
+11
+]
+together with a short-horizon integral consistency term that ties predicted velocity to observed displacement over small windows, improving temporal smoothness without sacrificing responsiveness. A differentiable object-stationarity gate further down-weights both
+‖
+𝐯
+^
+O
+​
+(
+t
+)
+‖
+\|\hat{\mathbf{v}}_{O}(t)\|
+and spurious contact logits when the object IMU indicates near-zero motion, reducing false positives in quiescent segments.
+Stage I thus provides two key signals for downstream reasoning:
+(i) a calibrated contact prior
+𝝅
+t
+\boldsymbol{\pi}_{t}
+, and
+(ii) a drift-aware, short-horizon object velocity
+𝐯
+^
+O
+​
+(
+t
+)
+\hat{\mathbf{v}}_{O}(t)
+.
+3.3
+Stage II: Part-Based Human Pose and Root Translation Estimation
+Stage II estimates a temporally consistent human pose and root translation from human IMUs. As illustrated in Fig.
+2
+(mid-top), the module is implemented as a unified Human-Pose-Module that combines a part-based pose backbone with a two-branch translation head.
+Part-based pose backbone.
+Following DynaIP
+[
+51
+]
+, we decompose the body into three regions (lower limbs, trunk, upper limbs) and partition the IMUs accordingly. A lightweight global RNN first summarizes the sequence
+𝐗
+hum
+1
+:
+T
+\mathbf{X}^{\text{hum}}_{1:T}
+into a per-frame context feature. For each region, a dedicated
+SubPoser
+then takes the region-specific IMUs and global context as input and outputs (i) local joint velocities and (ii) a reduced set of global joint rotations for that region. Concatenating the three SubPosers yields a reduced global pose.
+To obtain a full 24-joint body, we insert the reduced rotations into a standard SMPL body model, complement them with calibrated sensor orientations for the remaining bones, and apply differentiable forward kinematics (FK). This produces world-space joint positions
+𝐉
+^
+t
+\hat{\mathbf{J}}_{t}
+, which serve as both the final pose output of Stage II and an intermediate representation for root translation and wrist trajectories
+𝐩
+^
+H
+(
+L
+)
+​
+(
+t
+)
+,
+𝐩
+^
+H
+(
+R
+)
+​
+(
+t
+)
+\hat{\mathbf{p}}^{(L)}_{H}(t),\hat{\mathbf{p}}^{(R)}_{H}(t)
+.
+Two-branch root translation.
+For root translation, we follow the spirit of TransPose
+[
+47
+]
+, which estimates global motion from six IMUs via two complementary branches: a contact-driven branch and an IMU-driven branch. Building on this design, we introduce targeted modifications that further improve the accuracy of root translation estimation.
+Lower-limb contact branch.
+The Lower-limb contact branch reuses the lower-limb velocities predicted by the corresponding SubPoser. We extract the velocities of both feet and the root, and feed them, together with foot IMUs and global context, into an RNN that outputs foot-contact probabilities. Following TransPose, we derive a contact-driven root-velocity hypothesis by selecting the more likely contacting foot and mapping its FK velocity to root motion, with a small learned bias to account for residual modeling errors.
+Trunk-velocity branch.
+Instead of feeding all joint positions to Local-root-velocity branch as in TransPose, we construct a compact
+trunk-velocity descriptor
+from the DynaIP outputs by selecting trunk joints (hips, spine, neck, head) and computing finite-difference velocities. Trunk-velocity branch takes this descriptor, together with IMUs around the root/head and the global context, and predicts a local root velocity that is rotated into world coordinates using the root IMU orientation. Using velocities rather than positions provides a cleaner signal and is closer to the prediction target.
+Contact-aware fusion.
+Given the world-space root velocities from the two branch, we compute a scalar contact confidence from the maximum foot-contact probability and convert it into a fusion weight
+w
+t
+∈
+[
+0
+,
+1
+]
+w_{t}\in[0,1]
+. The two hypotheses are blended in a convex combination and integrated over time with floor constraints to prevent penetration. Adding this translation back to FK joint positions yields world-space joint trajectories and, in particular, stable wrist positions that are passed to Stage III.
+Stage II uses standard losses from DynaIP and TransPose for supervision, including joint rotation/position, velocity of each part, foot contact probability, and root velocity/translation, which we will describe in detail in the supplementary material.
+3.4
+Stage III: Object Translation via Contact-Gated FK–IMU Fusion
+Stage III estimates the global object translation by fusing two kinematic (FK) branches, conditioned on the left/right hands, with an IMU-driven branch. The design is built around a
+quasi-rigid contact
+assumption.
+Quasi-rigid contact model.
+Once a hand
+s
+∈
+{
+L
+,
+R
+}
+s\in\{L,R\}
+establishes contact with the object, we assume that the corresponding contact point on the object remains fixed in the object frame over the interaction segment. Let
+𝐩
+H
+(
+s
+)
+W
+​
+(
+t
+)
+{}^{W}\!\mathbf{p}^{(s)}_{H}(t)
+be the world-space position of hand
+s
+s
+and
+𝐩
+O
+W
+​
+(
+t
+)
+{}^{W}\!\mathbf{p}_{O}(t)
+the object IMU position. Then
+𝐝
+(
+s
+)
+O
+=
+R
+O
+W
+​
+(
+t
+)
+⊤
+​
+(
+𝐩
+O
+W
+​
+(
+t
+)
+−
+𝐩
+H
+(
+s
+)
+W
+​
+(
+t
+)
+)
+,
+{}^{O}\!\mathbf{d}^{(s)}={}^{W}\!R_{O}(t)^{\top}\big({}^{W}\!\mathbf{p}_{O}(t)-{}^{W}\!\mathbf{p}^{(s)}_{H}(t)\big),
+(4)
+is constant over time, and
+𝐩
+O
+W
+​
+(
+t
+)
+=
+𝐩
+H
+(
+s
+)
+W
+​
+(
+t
+)
++
+R
+O
+W
+​
+(
+t
+)
+​
+𝐝
+(
+s
+)
+O
+.
+{}^{W}\!\mathbf{p}_{O}(t)={}^{W}\!\mathbf{p}^{(s)}_{H}(t)+{}^{W}\!R_{O}(t)\,{}^{O}\!\mathbf{d}^{(s)}.
+(5)
+In our setting, no object mesh is available; hence we cannot refine the contact point geometrically and instead learn an object-frame offset that implicitly encodes the contact configuration.
+Kinematic FK branches.
+For each hand
+s
+∈
+L
+,
+R
+s\in{L,R}
+, a lightweight recurrent head takes as input the hand kinematics and object orientation, and predicts an object-frame unit direction
+𝐮
+^
+t
+(
+s
+)
+O
+∈
+𝕊
+2
+{}^{O}\hat{\mathbf{u}}^{(s)}_{t}\in\mathbb{S}^{2}
+and a non-negative reach length
+ℓ
+^
+t
+(
+s
+)
+≥
+0
+\hat{\ell}^{(s)}_{t}\geq 0
+. We interpret
+𝐮
+^
+t
+(
+s
+)
+O
+​
+ℓ
+^
+t
+(
+s
+)
+{}^{O}\hat{\mathbf{u}}^{(s)}_{t}\,\hat{\ell}^{(s)}_{t}
+as an approximation of the constant offset
+𝐝
+(
+s
+)
+O
+{}^{O}\!\mathbf{d}^{(s)}
+, and obtain a kinematic object-translation hypothesis
+𝐩
+^
+O
+F
+​
+K
+−
+s
+​
+(
+t
+)
+=
+𝐩
+^
+H
+(
+s
+)
+​
+(
+t
+)
++
+R
+O
+W
+​
+(
+t
+)
+​
+𝐮
+^
+t
+(
+s
+)
+O
+​
+ℓ
+^
+t
+(
+s
+)
+.
+\hat{\mathbf{p}}^{FK\!-\!s}_{O}(t)=\hat{\mathbf{p}}^{(s)}_{H}(t)+{}^{W}\!R_{O}(t)\,{}^{O}\hat{\mathbf{u}}^{(s)}_{t}\,\hat{\ell}^{(s)}_{t}.
+(6)
+Predicting offsets in the object frame factors out global rotation and stabilizes learning across viewpoints and grasp orientations. During training, we supervise these offsets whenever hand–object contact is annotated, using separate length/direction losses and a hand–object offset loss in the object frame.
+IMU branch with residual integration.
+In parallel, given the object velocity sequence
+𝐯
+^
+O
+​
+(
+t
+)
+\hat{\mathbf{v}}_{O}(t)
+from Stage-I, we construct an IMU-integrated trajectory
+𝐩
+~
+O
+I
+​
+M
+​
+U
+​
+(
+t
+)
+\tilde{\mathbf{p}}^{IMU}_{O}(t)
+by applying a residual update to the previous fused position:
+𝐩
+~
+O
+I
+​
+M
+​
+U
+​
+(
+t
+)
+=
+𝐩
+^
+O
+​
+(
+t
+−
+1
+)
++
+𝐯
+^
+O
+​
+(
+t
+)
+​
+Δ
+​
+t
+,
+\tilde{\mathbf{p}}^{IMU}_{O}(t)=\hat{\mathbf{p}}_{O}(t-1)+\hat{\mathbf{v}}_{O}(t)\,\Delta t,
+(7)
+where
+Δ
+​
+t
+=
+1
+/
+fps
+\Delta t=1/\text{fps}
+. This branch is supervised by an object translation loss.
+Contact-gated fusion and consistency.
+The final object trajectory is obtained via contact-aware fusion of the left/right FK branches and the IMU branch. A causal LSTM observes object IMU features and outputs fusion logits
+𝐳
+t
+∈
+ℝ
+3
+\mathbf{z}_{t}\in\mathbb{R}^{3}
+. The Stage-I contact prior
+𝝅
+t
+\boldsymbol{\pi}_{t}
+is injected as a multiplicative bias:
+𝐰
+t
+=
+softmax
+⁡
+(
+1
+τ
+​
+[
+𝐳
+t
++
+β
+​
+log
+⁡
+𝝅
+t
+]
+)
+,
+\mathbf{w}_{t}=\mathrm{softmax}\!\Big(\tfrac{1}{\tau}\big[\mathbf{z}_{t}+\beta\,\log\boldsymbol{\pi}_{t}\big]\Big),
+(8)
+where
+τ
+>
+0
+\tau>0
+is a temperature hyperparameter controlling the sharpness of the gating, and
+β
+\beta
+balances the influence of the contact prior
+𝝅
+t
+\boldsymbol{\pi}_{t}
+, and the fused position is
+𝐩
+^
+O
+​
+(
+t
+)
+=
+∑
+k
+∈
+{
+L
+,
+R
+,
+I
+​
+M
+​
+U
+}
+w
+t
+,
+k
+​
+𝐩
+^
+O
+(
+k
+)
+​
+(
+t
+)
+.
+\hat{\mathbf{p}}_{O}(t)=\sum_{k\in\{L,R,IMU\}}w_{t,k}\,\hat{\mathbf{p}}^{(k)}_{O}(t).
+(9)
+This Bayesian-style routing yields interpretable behavior: confident left-hand contact amplifies the left-FK branch, while no-contact naturally shifts weight to the IMU branch. We regularize rapid changes in
+𝐰
+t
+\mathbf{w}_{t}
+and lightly smooth FK outputs to stabilize fusion during contact transitions, without over-smoothing sharp corrections.
+Finally, we enforce kinematic–inertial consistency between the fused positions
+𝐩
+^
+O
+​
+(
+t
+)
+\hat{\mathbf{p}}_{O}(t)
+, Stage-I velocities
+𝐯
+^
+O
+​
+(
+t
+)
+\hat{\mathbf{v}}_{O}(t)
+, and IMU accelerations via simple finite-difference losses on first- and second-order differences, which suppress jitter and constrain drift.
+3.5
+Optimization and training schedule
+We adopt a staged curriculum and freeze earlier modules once trained.
+Stage I
+is first trained in isolation with
+ℒ
+(
+1
+)
+=
+ℒ
+hands
++
+λ
+vel
+​
+ℒ
+vel
++
+λ
+cal
+​
+ℒ
+cal
+,
+\mathcal{L}^{(1)}=\mathcal{L}_{\text{hands}}+\lambda_{\text{vel}}\mathcal{L}_{\text{vel}}+\lambda_{\text{cal}}\mathcal{L}_{\text{cal}},
+(10)
+where
+ℒ
+hands
+\mathcal{L}_{\text{hands}}
+and
+ℒ
+vel
+\mathcal{L}_{\text{vel}}
+are the focal-contact and velocity losses defined above, and
+ℒ
+cal
+\mathcal{L}_{\text{cal}}
+denotes the light calibration regularization (temperature scaling, KL prior and the object-stationarity gate). After convergence, Stage I is frozen for all subsequent training.
+Stage II
+is then trained on top of the frozen Stage I. Its loss could be represented by
+ℒ
+(
+2
+)
+=
+ℒ
+pose
++
+λ
+root
+​
+ℒ
+root
++
+λ
+part
+​
+ℒ
+vel-part
++
+λ
+feet
+​
+ℒ
+feet
+.
+\mathcal{L}^{(2)}=\mathcal{L}_{\text{pose}}+\lambda_{\text{root}}\mathcal{L}_{\text{root}}+\lambda_{\text{part}}\mathcal{L}_{\text{vel-part}}+\lambda_{\text{feet}}\mathcal{L}_{\text{feet}}.
+(11)
+It combines standard supervision on joint rotations/positions (
+ℒ
+pose
+\mathcal{L}_{\text{pose}}
+), root velocity/translation (
+ℒ
+root
+\mathcal{L}_{\text{root}}
+), per-part velocities (
+ℒ
+vel-part
+\mathcal{L}_{\text{vel-part}}
+) and feet-contact probabilities (
+ℒ
+feet
+\mathcal{L}_{\text{feet}}
+). This yields stable human pose, root trajectory and wrist positions that are kept fixed when training Stage III (unless explicitly stated otherwise).
+Table 1
+:
+Comparison on three HOI datasets. Numbers are lower-is-better. Best in
+bold
+.
+OMOMO
+I
+​
+M
+​
+H
+​
+D
+2
+IMHD^{2}
+BEHAVE
+Methods
+Obj Err
+HOI Err
+Ang Err
+Pos Err
+Jitter
+Obj Err
+HOI Err
+Ang Err
+Pos Err
+Jitter
+Obj Err
+HOI Err
+Ang Err
+Pos Err
+Jitter
+DIP*
+25.84
+26.79
+3.05
+3.34
+2.74
+90.37
+93.09
+7.36
+8.97
+9.57
+38.91
+39.31
+4.79
+4.70
+7.04
+TIP*
+44.41
+48.01
+5.48
+8.55
+5.77
+92.75
+106.74
+10.84
+49.23
+66.88
+26.43
+30.24
+7.86
+11.97
+8.47
+TransPose*
+32.54
+32.73
+4.48
+3.15
+2.47
+90.37
+90.61
+7.76
+5.27
+9.57
+40.39
+40.40
+6.71
+3.71
+8.58
+GlobalPose*
+39.34
+39.51
+4.13
+3.69
+4.04
+101.27
+102.03
+6.61
+8.31
+8.17
+40.14
+40.21
+6.00
+4.73
+6.88
+Ours (Fusion)
+14.15
+14.94
+2.84
+2.27
+2.75
+49.76
+51.09
+4.51
+3.85
+10.57
+22.26
+22.62
+4.52
+2.72
+8.20
+Table 2
+:
+Main comparison with root-translation and jitter. Numbers are lower-is-better. Best in
+bold
+.
+OMOMO
+I
+​
+M
+​
+H
+​
+D
+2
+IMHD^{2}
+BEHAVE
+Methods
+Obj Err
+HOI Err
+Pos Err
+Trans Err
+Jitter
+Obj Err
+HOI Err
+Pos Err
+Trans Err
+Jitter
+Obj Err
+HOI Err
+Pos Err
+Trans Err
+Jitter
+TransPose*
+32.09
+40.43
+6.36
+19.36
+6.09
+94.57
+100.65
+5.87
+37.79
+10.66
+50.70
+55.83
+6.05
+23.52
+11.76
+GlobalPose*
+39.31
+40.35
+3.67
+10.80
+3.94
+103.27
+108.33
+8.29
+58.36
+8.15
+42.38
+45.47
+4.71
+16.05
+6.63
+Ours (Fusion)
+11.31
+17.44
+2.35
+11.07
+2.77
+43.97
+43.39
+3.69
+18.37
+10.38
+20.90
+25.74
+2.77
+11.14
+8.19
+Stage III
+is optimized in two phases. In the first phase we freeze both Stage I and Stage II and train only the object-translation module with
+ℒ
+(
+3
+)
+=
+ℒ
+trans
++
+λ
+cons
+​
+ℒ
+cons
++
+λ
+HOI
+​
+ℒ
+HOI
++
+λ
+smooth
+​
+ℒ
+smooth
+,
+\mathcal{L}^{(3)}=\mathcal{L}_{\text{trans}}+\lambda_{\text{cons}}\mathcal{L}_{\text{cons}}+\lambda_{\text{HOI}}\mathcal{L}_{\text{HOI}}+\lambda_{\text{smooth}}\mathcal{L}_{\text{smooth}},
+(12)
+where
+ℒ
+trans
+\mathcal{L}_{\text{trans}}
+is the object position regression (obj_trans),
+ℒ
+cons
+\mathcal{L}_{\text{cons}}
+collects the velocity/acceleration consistency terms (obj_vel_cons, obj_acc_cons),
+ℒ
+HOI
+\mathcal{L}_{\text{HOI}}
+aggregates the length and direction losses on the hand–object offsets for both hands as well as an HOI error term that directly supervises the hand–object relative pose, and
+ℒ
+smooth
+\mathcal{L}_{\text{smooth}}
+regularizes the temporal variation of fusion weights and FK outputs. After Stage III has converged, we
+unfreeze Stage II but keep Stage I frozen
+, and perform a short joint fine-tuning of Stage II+III with a reduced learning rate and total loss
+ℒ
+(
+2
++
+3
+)
+=
+ℒ
+(
+2
+)
++
+λ
+joint
+​
+ℒ
+(
+3
+)
+,
+\mathcal{L}^{(2+3)}=\mathcal{L}^{(2)}+\lambda_{\text{joint}}\mathcal{L}^{(3)},
+(13)
+which slightly adjusts human pose and root translation to better support object translation, while preserving the calibrated contact priors from Stage I. In all experiments, Stage I is only updated in its dedicated first stage and remains frozen thereafter.
+4
+Experiment
+We organize our experimental analysis as follows:
+(1)
+Experimental setup
+: datasets, metrics, and implementation details;
+(2)
+Comparison with state-of-the-art
+: quantitative and qualitative benchmarking;
+(3)
+Ablation studies
+: analysis of each proposed component.
+4.1
+Experimental Setup
+Datasets.
+We evaluate on three public HOI benchmarks: OMOMO
+[
+17
+]
+, BEHAVE
+[
+3
+]
+, and IMHD
+2
+[
+53
+]
+.
+To match temporal statistics, IMHD
+2
+is downsampled from 60 fps to 30 fps.
+Since IMHD
+2
+and BEHAVE contain many long (
+≥
+60
+\geq 60
+s) sequences whereas OMOMO clips are about 5 s, we randomly crop IMHD
+2
+and BEHAVE into 5–10 s windows during training and evaluation, which balances sequence length and increases sample diversity.
+Unless otherwise stated, we adopt an 80/20 train/test split at the sequence level; for IMHD
+2
+and BEHAVE, cropping is performed
+after
+the split to avoid leakage.
+Figure 3
+:
+Cumulative root-translation error vs. time for OMOMO (left) and BEHAVE (right).
+Figure 4
+:
+Qualitative comparison of motion estimation on four sequences from the BEHAVE test set.
+Competing methods.
+We compare against four IMU-based motion capture baselines:
+DIP
+[
+9
+]
+,
+TIP
+[
+13
+]
+,
+TransPose
+[
+47
+]
+,
+and GlobalPose
+[
+45
+]
+.
+For a fair HOI comparison, we also report “*” variants (e.g., DIP*), where each backbone is augmented with an object-IMU branch and an object-velocity head trained under our HOI losses.
+Each method is adapted to the HOI setting using its official backbone and training recipe, with our HOI-specific heads and losses applied in a consistent way across all baselines.
+Metrics.
+Following prior work
+[
+47
+,
+24
+]
+, we report six metrics:
+Ang Err
+[
+∘
+] and
+Pos Err
+[cm] measure joint rotation and position accuracy;
+Jitter
+[mm/s
+3
+] quantifies motion smoothness via mean joint jerk;
+Trans Err
+[cm] evaluates root translation accuracy;
+Obj Err
+[cm] measures object trajectory error;
+and
+HOI Err
+[cm] captures hand–object interaction accuracy on contact frames.
+Detailed information about datasets, competing methods and metrics can be found in the supplementary material.
+Table 3
+:
+Ablation of our object-translation heads. Lower is better. Best in
+bold
+.
+OMOMO
+IMHD
+2
+BEHAVE
+Methods
+Obj Err
+HOI Err
+Obj Err
+HOI Err
+Obj Err
+HOI Err
+Our Method – FK
+31.06
+32.51
+61.58
+57.64
+23.68
+24.58
+Our Method – IMU Only
+11.52
+18.07
+68.59
+72.58
+22.99
+28.03
+Our Method – Fusion
+11.31
+17.44
+43.97
+43.39
+20.90
+25.74
+4.2
+Comparison with State-of-the-Art
+We categorize prior methods
+[
+47
+,
+51
+]
+into two training–evaluation protocols, reflecting that most contemporary approaches do not estimate global/root translation:
+(i)
+w/o root translation
+(Tab.
+1
+); and
+(ii)
+with root translation
+(Tab.
+2
+).
+Under protocol (i), for methods that originally include a translation head, we ablate that component and substitute the root translation with ground truth (GT) to isolate pose quality; the resulting models are re-trained and evaluated on the target datasets for fair comparison.
+Under protocol (ii), translation-capable baselines are kept intact and trained/evaluated end-to-end.
+This setup yields apples-to-apples comparisons across methods, regardless of whether they explicitly model root translation.
+Quantitative analysis.
+We first consider the setting where root translation estimation is disabled.
+Across all three datasets in Tab.
+1
+, our method attains the lowest Obj Err and HOI Err in nearly every case, e.g., on OMOMO (
+14.15
+/
+14.94
+14.15/14.94
+for Obj / HOI), IMHD
+2
+(
+49.76
+/
+51.09
+49.76/51.09
+), and BEHAVE (
+22.26
+/
+22.62
+22.26/22.62
+).
+Compared to GlobalPose*, our method achieves substantial Obj Err reductions of
+25.19
+25.19
+(
+64.0
+%
+64.0\%
+) /
+51.51
+51.51
+(
+50.9
+%
+50.9\%
+) /
+17.88
+17.88
+(
+44.5
+%
+44.5\%
+), and HOI Err reductions of
+24.57
+24.57
+(
+62.2
+%
+62.2\%
+) /
+50.94
+50.94
+(
+49.9
+%
+49.9\%
+) /
+17.59
+17.59
+(
+43.7
+%
+43.7\%
+) on OMOMO / IMHD
+2
+/ BEHAVE, respectively.
+These two metrics directly reflect the fidelity of the estimated object trajectory and human–object relations; the consistent gains show that explicitly modeling contact and jointly reasoning over human- and object-IMUs is crucial even when root translation is not evaluated.
+Beyond interaction-centric scores, our method also achieves state-of-the-art Ang Err and Pos Err across all datasets, e.g., Ang Err of
+2.84
+/
+4.51
+/
+4.52
+2.84/4.51/4.52
+and Pos Err of
+2.27
+/
+3.85
+/
+2.72
+2.27/3.85/2.72
+on OMOMO / IMHD
+2
+/ BEHAVE.
+When root translation is evaluated (Tab.
+2
+), our method maintains clear advantages on Obj Err and HOI Err, while also delivering competitive root-translation accuracy.
+On OMOMO, our Trans Err is on par with GlobalPose*, within
+0.27
+0.27
+(
+2.5
+%
+2.5\%
+) of its score; on the smaller IMHD
+2
+set we reduce Trans Err by
+39.99
+39.99
+(
+68.5
+%
+68.5\%
+), and on BEHAVE by
+4.91
+4.91
+(
+30.6
+%
+30.6\%
+).
+This contrast suggests that GlobalPose* benefits strongly from large-scale training, whereas our contact-gated, RNN-based estimator generalizes better under limited data.
+Notably, under the
+with root translation
+setting, we focus on position metrics, so Tab.
+2
+omits angular pose errors, even though our method still maintains an advantage in those metrics.
+Fig.
+3
+plots cumulative root-translation error over time.
+On BEHAVE our curve stays consistently below both TransPose* and GlobalPose*, and on OMOMO we clearly outperform TransPose* and remain on par with GlobalPose*.
+Beyond accuracy, our model runs an order of magnitude faster than GlobalPose*: the latter relies on per-frame physical optimization in its forward pass, whereas our network is a lightweight causal RNN that performs a single feed-forward pass per step, enabling practical deployment.
+Qualitative analysis.
+Fig.
+4
+visualizes results on untrimmed sequences from the BEHAVE test set.
+We keep the original sequence lengths to stress-test
+generalization
+and
+long-horizon stability
+— a regime in which body- and object-IMUs inevitably accumulate drift.
+Each column corresponds to a method (DIP*, TIP*, TransPose*, GlobalPose*, IMU-HOI, and GT), and rows show different interaction sequences ordered from earlier to later in time (indicated by the arrow in the GT column).
+Across the first three rows (typical daily interactions), the extended baselines progressively lose hand–object alignment:
+the object gradually slides away from the hand, contact is intermittently broken, and the relative human–object placement becomes inconsistent with the scene.
+In contrast, IMU-HOI preserves the grasp configuration and the hand–object distance over time, matching the ground-truth progression.
+The fourth row is a particularly challenging long-horizon case.
+Here, methods that rely purely on IMUs for object pose (all baselines) suffer pronounced
+global drift
+: the object trajectory deviates substantially and the interaction collapses after a long run.
+IMU-HOI remains stable for the entire sequence, keeping the object consistently attached to the interacting hand and maintaining a plausible human–object relative pose.
+We attribute this robustness to the proposed
+contact-gated fusion
+: when confident hand contact is detected, the FK branch anchors the object to the hand; when contact weakens, the IMU branch provides complementary motion, and the gate mediates smooth transitions.
+Overall, the qualitative trends in Fig.
+4
+echo our quantitative gains:
+on long sequences where IMU drift is unavoidable, IMU-HOI suppresses drift and preserves interaction semantics, whereas the extended HPE baselines eventually lose contact or accumulate large trajectory errors.
+Table 4
+:
+Fusion on off-the-shelf IMU HPE backbones. Lower is better. Best in
+bold
+.
+OMOMO
+IMHD
+2
+BEHAVE
+Methods
+Obj Err
+HOI Err
+Obj Err
+HOI Err
+Obj Err
+HOI Err
+DIP*
+25.84
+26.79
+90.37
+93.09
+38.91
+39.31
+DIP*  –  Fusion
+13.95
+15.59
+46.11
+50.64
+22.41
+24.96
+TransPose*
+32.54
+32.73
+90.37
+90.61
+40.39
+40.40
+TransPose*  –  Fusion
+14.03
+29.52
+47.16
+52.55
+22.44
+35.07
+GlobalPose*
+39.34
+39.51
+101.27
+102.03
+40.14
+40.21
+GlobalPose*  –  Fusion
+14.22
+20.60
+46.70
+53.69
+22.69
+27.98
+Effectiveness of the object-translation heads.
+Tab.
+3
+compares three variants:
+FK only
+,
+IMU only
+, and our full
+Fusion
+.
+Fusion consistently yields the best Obj Err on all datasets and the best (or near-best) HOI Err on two out of three datasets.
+Concretely, relative to the stronger single head on each dataset, Fusion reduces Obj Err by
+0.21
+0.21
+(
+1.8
+%
+1.8\%
+) and HOI Err by
+0.63
+0.63
+(
+3.5
+%
+3.5\%
+) on OMOMO (vs. IMU-only);
+by a much larger margin on the smaller IMHD
+2
+set, Obj Err drops
+17.61
+17.61
+(
+28.6
+%
+28.6\%
+) and HOI Err drops
+14.25
+14.25
+(
+24.7
+%
+24.7\%
+) (vs. FK-only);
+and on BEHAVE our Fusion improves Obj Err by
+2.09
+2.09
+(
+9.1
+%
+9.1\%
+) over IMU-only while achieving the second-best HOI Err, within
+4.7
+%
+4.7\%
+of FK-only.
+These gains indicate that neither IMU-only (accurate but drifting) nor FK-only (anchored but locally biased) suffices alone; combining them under contact gating is crucial for robust object estimation and interaction fidelity.
+Error–time curves and crossover behavior.
+To further probe the dynamics, we plot cumulative errors for the three heads and mark four reference times
+A–D
+(Fig.
+5
+); the right-hand panels show the corresponding visualizations (each with four people–object pairs).
+At
+A
+(short horizon), the
+IMU-only
+branch exhibits the lowest error—its raw inertial integration excels at capturing high-frequency, short-range motion with high instantaneous accuracy.
+By
+B
+(longer horizon),
+FK-only
+becomes preferable: anchoring the object to the hand through kinematics/contact prevents early drift, so its curve grows more slowly than IMU-only.
+At
+C
+, our
+Fusion
+overtakes both—contact-gated routing leverages FK when hand–object contact is confident (to avoid slippage) while still injecting IMU cues for short-term precision, producing a curve below both single heads.
+Finally, by
+D
+(sequence end,
+≈
+120
+\approx 120
+s), neither IMU-only nor FK-only preserves attachment—the object has clearly separated from the hand on both, which we attribute to accumulated errors caused by occasional contact-label inaccuracies that shift the interaction point and compound over time.
+In contrast,
+Fusion
+remains stable and attached by reweighting branches when contact confidence changes and by enforcing kinematic–inertial consistency, explaining the large long-horizon advantage observed in Tab.
+3
+.
+Figure 5
+:
+Visualization of error–time curves and reference frames (A–D) for the three object-translation heads.
+4.3
+Ablation Studies
+Backbone-agnostic plug-in study.
+Because the human module in our pipeline is replaceable, we compare simply augmenting each HPE backbone with an object head against plugging the same backbone into our contact-gated Fusion (Tab.
+4
+).
+Across all datasets, the Fusion plug-in yields clear improvements on object-centric metrics over the dimension-augmented baselines.
+In particular, for GlobalPose* on IMHD
+2
+, Obj Err is reduced by
+54.57
+54.57
+(
+53.9
+%
+53.9\%
+) and HOI Err by
+48.34
+48.34
+(
+47.4
+%
+47.4\%
+), highlighting that our plug-and-play fusion substantially upgrades existing HPE models for HOI.
+5
+Conclusion
+We presented
+IMU-HOI
+, a con
+tact-conscious inertial fusion framework that jointly estimates full-body human pose and 6-DoF object trajectories from only sparse IMUs mounted on the body and a single manipulated object. By treating hand–object contact as a first-class probabilistic signal and routing between kinematic and inertial branches, our three-stage pipeline yields coherent, drift-resistant reconstructions of both human and object motion. Extensive experiments on three challenging HOI benchmarks demonstrate that IMU-HOI consistently improves object translation and interaction fidelity (Obj Err and HOI Err) over strong IMU-based baselines, while also achieving state-of-the-art human pose accuracy. Moreover, our design is modular: the human module can be instantiated by off-the-shelf HPE backbones (e.g., DIP, TransPose, GlobalPose), and our contact-gated fusion can be plugged in to equip them with robust object tracking capabilities.
+Limitations.
+Our interaction model relies on a quasi-rigid, single-contact abstraction and does not explicitly handle complex phenomena such as sliding contacts, multiple simultaneous contact points, or interactions with deformable objects.
+References
+[1]
+R. Armani, C. Qian, J. Jiang, and C. Holz
+(2024)
+Ultra inertial poser: scalable motion capture and tracking from sparse inertial sensors and ultra-wideband ranging
+.
+In
+ACM SIGGRAPH 2024 Conference Papers
+,
+Cited by:
+§1
+.
+[2]
+T. Behrens, R. Zurbrügg, M. Pollefeys, Z. Bauer, and H. Blum
+(2025)
+Lost & found: tracking changes from egocentric observations in 3d dynamic scene graphs
+.
+IEEE Robotics and Automation Letters
+.
+Cited by:
+§2.2
+.
+[3]
+B. L. Bhatnagar, X. Xie, I. A. Petrov, C. Sminchisescu, C. Theobalt, and G. Pons-Moll
+(2022)
+BEHAVE: dataset and method for tracking human object interactions
+.
+In
+CVPR
+,
+pp. 15935–15946
+.
+External Links:
+Link
+Cited by:
+§1
+,
+§1
+,
+§2.2
+,
+§2.2
+,
+§4.1
+.
+[4]
+P. Dai, Y. Zhang, T. Liu, Z. Fan, T. Du, Z. Su, X. Zheng, and Z. Li
+(2024)
+HMD-poser: on-device real-time human motion tracking from scalable sparse observations
+.
+In
+CVPR
+,
+pp. 874–884
+.
+Cited by:
+§1
+.
+[5]
+A. Gilbert, M. Trumble, C. Malleson, A. Hilton, and J. Collomosse
+(2019)
+Fusing visual and inertial sensors with semantics for 3d human pose estimation
+.
+IJCV
+127
+(
+4
+),
+pp. 381–397
+.
+Cited by:
+§1
+.
+[6]
+V. Guzov, J. Chibane, R. Marin, Y. He, Y. Saracoglu, T. Sattler, and G. Pons-Moll
+(2024)
+Interaction replica: tracking human–object interaction and scene changes from human motion
+.
+In
+3DV
+,
+External Links:
+Link
+Cited by:
+§1
+,
+§1
+,
+§2.2
+.
+[7]
+V. Guzov, A. Mir, T. Sattler, and G. Pons-Moll
+(2021)
+Human poseitioning system (hps): 3d human pose estimation and self-localization in large scenes from body-mounted sensors
+.
+In
+CVPR
+,
+pp. 4318–4329
+.
+Cited by:
+§1
+.
+[8]
+M. Hassan, V. Choutas, D. Tzionas, and M. J. Black
+(2019)
+Resolving 3d human pose ambiguities with 3d scene constraints
+.
+In
+ICCV
+,
+Note:
+Often referred to as the PROX dataset/paper
+External Links:
+Link
+Cited by:
+§2.2
+.
+[9]
+Y. Huang, M. Kaufmann, E. Aksan, M. J. Black, O. Hilliges, and G. Pons-Moll
+(2018)
+Deep inertial poser: learning to reconstruct human pose from sparse inertial measurements in real time
+.
+ACM TOG
+37
+(
+6
+),
+pp. 1–15
+.
+Cited by:
+§1
+,
+§1
+,
+§2.1
+,
+§2.2
+,
+§4.1
+.
+[10]
+Y. Huang, O. Taheri, M. J. Black, and D. Tzionas
+(2024)
+InterCap: joint markerless 3d tracking of humans and objects in interaction from multi-view rgb-d images
+.
+IJCV
+,
+pp. 2551–2566
+.
+Cited by:
+§2.2
+.
+[11]
+P. J. Huber
+(1992)
+Robust estimation of a location parameter
+.
+In
+Breakthroughs in Statistics: Methodology and Distribution
+,
+pp. 492–518
+.
+Cited by:
+§3.2
+.
+[12]
+A. Ilic, J. Jiang, P. Streli, X. Liu, and C. Holz
+(2025)
+Human motion capture from loose and sparse inertial sensors with garment-aware diffusion models
+.
+In
+IJCAI
+,
+Cited by:
+§1
+.
+[13]
+Y. Jiang, Y. Ye, D. Gopinath, J. Won, A. W. Winkler, and C. K. Liu
+(2022)
+Transformer inertial poser: real-time human motion reconstruction from sparse imus with simultaneous terrain generation
+.
+In
+SIGGRAPH Asia 2022 Conference Papers
+,
+pp. 1–9
+.
+Cited by:
+§1
+,
+§2.1
+,
+§2.2
+,
+§4.1
+.
+[14]
+T. Kaichi, T. Maruyama, M. Tada, and H. Saito
+(2020)
+Resolving position ambiguity of IMU-based human pose with a single RGB camera
+.
+Sensors
+20
+(
+19
+),
+pp. 5453
+.
+Cited by:
+§1
+.
+[15]
+M. Kim, Y. Jeon, and S. Jo
+(2025)
+Probabilistic inertial poser (probip): uncertainty-aware human motion modeling from sparse inertial sensors
+.
+In
+ICCV
+,
+pp. 25893–25902
+.
+Cited by:
+§2.1
+.
+[16]
+J. Lee and H. Joo
+(2024)
+Mocap everyone everywhere: lightweight motion capture with smartwatches and a head-mounted camera
+.
+In
+CVPR
+,
+pp. 1091–1100
+.
+Cited by:
+§1
+.
+[17]
+J. Li, J. Wu, and C. K. Liu
+(2023)
+Object motion guided human motion synthesis
+.
+ACM TOG
+42
+(
+6
+),
+pp. 1–11
+.
+Cited by:
+§2.2
+,
+§4.1
+.
+[18]
+H. Liang, Y. He, C. Zhao, M. Li, J. Wang, J. Yu, and L. Xu
+(2023)
+Hybridcap: inertia-aid monocular capture of challenging human motions
+.
+In
+AAAI
+,
+Vol.
+37
+,
+pp. 1539–1548
+.
+Cited by:
+§2.2
+.
+[19]
+K. Lin and S. X. Yu
+(2025)
+Let humanoids hike! integrative skill development on complex trails
+.
+In
+CVPR
+,
+pp. 22498–22507
+.
+Cited by:
+§1
+.
+[20]
+T. Lin, P. Goyal, R. Girshick, K. He, and P. Dollár
+(2017)
+Focal loss for dense object detection
+.
+In
+ICCV
+,
+pp. 2980–2988
+.
+Cited by:
+§3.2
+.
+[21]
+Y. Liu, Y. Liu, C. Jiang, K. Lyu, W. Wan, H. Shen, B. Liang, Z. Fu, H. Wang, and L. Yi
+(2022)
+HOI4D: a 4d egocentric dataset for category-level human-object interaction
+.
+In
+CVPR
+,
+pp. 21013–21022
+.
+Cited by:
+§1
+,
+§1
+.
+[22]
+J. Lu, C. P. Huang, U. Bhattacharya, Q. Huang, and Y. Zhou
+(2025)
+HUMOTO: a 4d dataset of mocap human object interactions
+.
+In
+ICCV
+,
+pp. 10886–10897
+.
+Cited by:
+§1
+,
+§1
+.
+[23]
+V. Mollyn, R. Arakawa, M. Goel, C. Harrison, and K. Ahuja
+(2023)
+Imuposer: full-body pose estimation using imus in phones, watches, and earbuds
+.
+In
+Proceedings of the 2023 CHI Conference on Human Factors in Computing Systems
+,
+pp. 1–12
+.
+Cited by:
+§1
+,
+§2.1
+.
+[24]
+I. A. Petrov, R. Marin, J. Chibane, and G. Pons-Moll
+(2023)
+Object pop-up: can we infer 3d objects and their poses from human interactions alone?
+.
+In
+CVPR
+,
+pp. 4726–4736
+.
+Cited by:
+§4.1
+.
+[25]
+I. A. Petrov, V. Guzov, R. Marin, E. Aksan, X. Chen, D. Cremers, T. Beeler, and G. Pons-Moll
+(2025)
+ECHO: ego-centric modeling of human-object interactions
+.
+arXiv preprint arXiv:2508.21556
+.
+External Links:
+Link
+Cited by:
+§2.2
+.
+[26]
+Y. Ren, C. Zhao, Y. He, P. Cong, H. Liang, J. Yu, L. Xu, and Y. Ma
+(2023)
+LiDAR-aid inertial poser: large-scale human motion capture by sparse inertial and LiDAR sensors
+.
+IEEE TVCG
+29
+(
+5
+),
+pp. 2337–2347
+.
+Cited by:
+§1
+.
+[27]
+M. Schepers, M. Giuberti, G. Bellusci,
+et al.
+(2018)
+Xsens mvn: consistent tracking of human motion using inertial sensing
+.
+Xsens Technol
+1
+(
+8
+),
+pp. 1–8
+.
+Cited by:
+§2.1
+.
+[28]
+R. Slyper and J. K. Hodgins
+(2008)
+Action capture with accelerometers
+.
+In
+Proceedings of the 2008 ACM SIGGRAPH/Eurographics Symposium on Computer Animation
+,
+pp. 193–199
+.
+Cited by:
+§2.1
+.
+[29]
+L. Sun, S. Xia, J. Deng, J. Yang, Z. Lai, Q. Wu, and L. Pei
+(2025)
+Suite-in: aggregating motion features from apple suite for robust inertial navigation
+.
+In
+ICRA
+,
+pp. 3625–3631
+.
+Cited by:
+§2.1
+.
+[30]
+O. Taheri, N. Ghorbani, M. J. Black, and D. Tzionas
+(2020)
+GRAB: a dataset of whole-body human grasping of objects
+.
+In
+ECCV
+,
+External Links:
+Link
+Cited by:
+§2.2
+.
+[31]
+J. Tautges, A. Zinke, B. Krüger, J. Baumann, A. Weber, T. Helten, M. Müller, H. Seidel, and B. Eberhardt
+(2011)
+Motion reconstruction using sparse accelerometer data
+.
+ACM TOG
+30
+(
+3
+),
+pp. 1–12
+(
+en-US
+).
+External Links:
+Link
+,
+Document
+Cited by:
+§2.1
+.
+[32]
+T. Von Marcard, B. Rosenhahn, M. J. Black, and G. Pons-Moll
+(2017)
+Sparse inertial poser: automatic 3d human pose estimation from sparse imus
+.
+Computer Graphics Forum
+36
+(
+2
+),
+pp. 349–360
+.
+Cited by:
+§2.1
+.
+[33]
+J. Wang, R. Dabral, D. Luvizon, Z. Cao, L. Liu, T. Beeler, and C. Theobalt
+(2025)
+Ego4o: egocentric human motion capture and understanding from multi-modal input
+.
+In
+CVPR
+,
+pp. 22668–22679
+.
+Cited by:
+§1
+.
+[34]
+R. Wang, L. Zuo, Z. Lin, Q. Wang, Z. Cheng, R. Xie, J. Ling, and L. Song
+(2025)
+PA-hoi: a physics-aware human and object interaction dataset
+.
+arXiv preprint arXiv:2508.06205
+.
+External Links:
+Link
+Cited by:
+§2.2
+.
+[35]
+S. Xia, Y. Zhang, Z. Su, X. Zheng, Z. Lv, G. Wang, Y. Zhang, Q. Wu, L. Chu, and L. Pei
+(2025)
+Envposer: environment-aware realistic human motion estimation from sparse observations with uncertainty modeling
+.
+In
+CVPR
+,
+pp. 1839–1849
+.
+Cited by:
+§1
+.
+[36]
+X. Xiao, J. Wang, P. Feng, A. Gong, X. Zhang, and J. Zhang
+(2024)
+Fast human motion reconstruction from sparse inertial measurement units considering the human shape
+.
+Nature Communications
+15
+(
+1
+),
+pp. 2423
+.
+Cited by:
+§2.1
+.
+[37]
+X. Xie, B. L. Bhatnagar, and G. Pons-Moll
+(2022)
+Chore: contact, human and object reconstruction from a single rgb image
+.
+In
+ECCV
+,
+pp. 125–145
+.
+Cited by:
+§2.2
+.
+[38]
+X. Xie, B. L. Bhatnagar, and G. Pons-Moll
+(2023)
+Visibility aware human-object interaction tracking from single rgb camera
+.
+In
+CVPR
+,
+pp. 4757–4768
+.
+Cited by:
+§2.2
+.
+[39]
+L. Xu, C. Yang, Z. Lin,
+et al.
+(2025)
+Perceiving and acting in first-person: a dataset and benchmark for egocentric human-object-human interactions
+.
+arXiv preprint arXiv:2508.04681
+.
+Note:
+ICCV 2025
+External Links:
+Link
+Cited by:
+§2.2
+.
+[40]
+S. Xu, D. Li, Y. Zhang, X. Xu, Q. Long, Z. Wang, Y. Lu, S. Dong, H. Jiang, A. Gupta,
+et al.
+(2025)
+Interact: advancing large-scale versatile 3d human-object interaction generation
+.
+In
+CVPR
+,
+pp. 7048–7060
+.
+Cited by:
+§1
+.
+[41]
+S. Xu, H. Y. Ling, Y. Wang, and L. Gui
+(2025)
+Intermimic: towards universal whole-body control for physics-based human-object interactions
+.
+In
+CVPR
+,
+pp. 12266–12277
+.
+Cited by:
+§1
+.
+[42]
+V. Xu, C. Gao, H. Hoffmann, and K. Ahuja
+(2024)
+Mobileposer: real-time full-body pose estimation and 3d human translation from imus in mobile consumer devices
+.
+In
+Proceedings of the 37th Annual ACM Symposium on User Interface Software and Technology
+,
+pp. 1–11
+.
+Cited by:
+§1
+,
+§2.1
+.
+[43]
+Y. Xue, J. Jiang, R. Armani, D. Hollidt, Y. Liao, and C. Holz
+(2025)
+Group inertial poser: multi-person pose and global translation from sparse inertial sensors and ultra-wideband ranging
+.
+arXiv e-prints
+arXiv:2510.21654
+.
+Cited by:
+§1
+.
+[44]
+Y. Yang, W. Zhai, C. Wang, C. Yu, Y. Cao, and Z. Zha
+(2024)
+EgoChoir: capturing 3d human-object interaction regions from egocentric views
+.
+In
+NeurIPS
+,
+External Links:
+Link
+Cited by:
+§2.2
+.
+[45]
+X. Yi, S. Pan, and F. Xu
+(2025)
+Improving global motion estimation in sparse imu-based motion capture with physics
+.
+ACM TOG
+44
+(
+4
+).
+External Links:
+ISSN 0730-0301
+,
+Link
+,
+Document
+Cited by:
+§4.1
+.
+[46]
+X. Yi, Y. Zhou, M. Habermann, S. Shimada, V. Golyanik, C. Theobalt, and F. Xu
+(2022)
+Physical inertial poser (pip): physics-aware real-time human motion tracking from sparse inertial sensors
+.
+In
+CVPR
+,
+pp. 13167–13178
+.
+Cited by:
+§2.1
+.
+[47]
+X. Yi, Y. Zhou, and F. Xu
+(2021)
+Transpose: real-time 3d human translation and pose estimation with six inertial sensors
+.
+ACM TOG
+40
+(
+4
+),
+pp. 1–13
+.
+Cited by:
+§1
+,
+§2.1
+,
+§3.3
+,
+§4.1
+,
+§4.1
+,
+§4.2
+.
+[48]
+X. Yi, Y. Zhou, and F. Xu
+(2024)
+Physical non-inertial poser (pnp): modeling non-inertial effects in sparse-inertial human motion capture
+.
+In
+ACM SIGGRAPH 2024 Conference Papers
+,
+pp. 1–11
+.
+Cited by:
+§2.1
+.
+[49]
+J. Y. Zhang, S. Pepose, H. Joo, D. Ramanan, J. Malik, and A. Kanazawa
+(2020)
+Perceiving 3d human-object spatial arrangements from a single image in the wild
+.
+In
+ECCV
+,
+pp. 34–51
+.
+Cited by:
+§2.2
+.
+[50]
+J. Zhang, J. Zhang, Z. Song, Z. Shi, C. Zhao, Y. Shi, J. Yu, L. Xu, and J. Wang
+(2024)
+HOI-mˆ 3: capture multiple humans and objects interaction within contextual environment
+.
+In
+CVPR
+,
+pp. 516–526
+.
+Cited by:
+§1
+,
+§1
+,
+§2.2
+,
+§2.2
+.
+[51]
+Y. Zhang, S. Xia, L. Chu, J. Yang, Q. Wu, and L. Pei
+(2024)
+Dynamic inertial poser (dynaip): part-based motion dynamics learning for enhanced human pose estimation with sparse inertial sensors
+.
+In
+CVPR
+,
+pp. 1889–1899
+.
+Cited by:
+§1
+,
+§2.1
+,
+§3.3
+,
+§4.2
+.
+[52]
+Z. Zhang, C. Wang, W. Qin, and W. Zeng
+(2020)
+Fusing wearable IMUs with multi-view images for human pose estimation: a geometric approach
+.
+In
+CVPR
+,
+Cited by:
+§1
+.
+[53]
+C. Zhao, J. Zhang, J. Du, Z. Shan, J. Wang, J. Yu, J. Wang, and L. Xu
+(2024)
+I’m hoi: inertia-aware monocular capture of 3d human-object interactions
+.
+In
+CVPR
+,
+pp. 729–741
+.
+Cited by:
+§1
+,
+§1
+,
+§2.2
+,
+§4.1
+.
+[54]
+S. Zhao, L. Bai, L. Shao, Y. Zhang, and X. Chen
+(2025)
+SSD-poser: avatar pose estimation with state space duality from sparse observations
+.
+In
+Proceedings of the 2025 International Conference on Multimedia Retrieval
+,
+pp. 1849–1857
+.
+Cited by:
+§2.1
+.
+[55]
+S. Zhao, Z. Xiao, and X. Chen
+(2026)
+KineST: a kinematics-guided spatiotemporal state space model for human motion tracking from sparse signals
+.
+In
+AAAI
+,
+pp. 13244–13252
+.
+Cited by:
+§2.1
+.
+Experimental support, please
+view the build logs
+for errors. Generated by
+L
+A
+T
+E
+xml
+.
+Instructions for reporting errors
+We are continuing to improve HTML versions of papers, and your feedback helps enhance accessibility and mobile
+      support. To report errors in the HTML that will help us improve conversion and rendering, choose any of the
+      methods listed below:
+Click the "Report Issue"
+(
+)
+button, located in the page header.
+Tip:
+You can select the relevant text first, to include it in your report.
+Our team has already identified
+the following issues
+. We appreciate your time reviewing and reporting rendering errors we
+      may not have found yet. Your efforts will help us improve the HTML versions for all readers, because disability
+      should not be a barrier to accessing research. Thank you for your continued support in championing open access for
+      all.
+Have a free development cycle? Help support accessibility at arXiv! Our collaborators at LaTeXML maintain a
+list of packages that need conversion
+, and welcome
+developer contributions
+.
+We gratefully acknowledge support from
+        our
+major funders
+,
+member institutions
+,
+,
+        and all contributors.
+Major funding support from

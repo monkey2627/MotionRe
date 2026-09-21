@@ -1,0 +1,1022 @@
+                                         DragPoser: Motion Reconstruction from Variable Sparse Tracking
+                                                     Signals via Latent Space Optimization
+
+                                                                    J. L. Ponton1    E. Pujol1    A. Aristidou2,3      C. Andujar1      and N. Pelechano1
+                                                                                      1 Universitat Politècnica de Catalunya, Barcelona, Spain
+                                                                                              2 University of Cyprus, Nicosia, Cyprus
+                                                                                         3 CYENS Centre of Excellence, Nicosia, Cyprus
+arXiv:2406.14567v3 [cs.GR] 1 Jun 2025
+
+
+
+
+                                        Figure 1: Our approach reconstructs complete full-body poses using only a few sensors (highlighted in green). Our technique achieves
+                                        high-quality animation while precisely locating end-effector constraints (left). Furthermore, it seamlessly incorporates additional real-time
+                                        constraints, enabling handling scenarios such as missing sensor data (middle). Notably, our versatile one-for-all architecture can adapt to
+                                        arbitrary combinations of sensors (right), eliminating the need to modify the network’s architecture or retrain.
+
+                                              Abstract
+                                              High-quality motion reconstruction that follows the user’s movements can be achieved by high-end mocap systems with many
+                                              sensors. However, obtaining such animation quality with fewer input devices is gaining popularity as it brings mocap closer
+                                              to the general public. The main challenges include the loss of end-effector accuracy in learning-based approaches, or the lack
+                                              of naturalness and smoothness in IK-based solutions. In addition, such systems are often finely tuned to a specific number of
+                                              trackers and are highly sensitive to missing data, e.g., in scenarios where a sensor is occluded or malfunctions. In response
+                                              to these challenges, we introduce DragPoser, a novel deep-learning-based motion reconstruction system that accurately repre-
+                                              sents hard and dynamic constraints, attaining real-time high end-effectors position accuracy. This is achieved through a pose
+                                              optimization process within a structured latent space. Our system requires only one-time training on a large human motion
+                                              dataset, and then constraints can be dynamically defined as losses, while the pose is iteratively refined by computing the gra-
+                                              dients of these losses within the latent space. To further enhance our approach, we incorporate a Temporal Predictor network,
+                                              which employs a Transformer architecture to directly encode temporality within the latent space. This network ensures the
+                                              pose optimization is confined to the manifold of valid poses and also leverages past pose data to predict temporally coherent
+                                              poses. Results demonstrate that DragPoser surpasses both IK-based and the latest data-driven methods in achieving precise
+                                              end-effector positioning, while it produces natural poses and temporally coherent motion. In addition, our system showcases
+                                              robustness against on-the-fly constraint modifications, and exhibits adaptability to various input configurations and changes.
+                                              The complete source code, trained model, animation databases, and supplementary material used in this paper can be found at
+                                              https://upc-virvig.github.io/DragPoser
+                                              CCS Concepts
+                                              • Computing methodologies → Motion capture; Motion processing; Animation; Learning paradigms;
+2 of 14           J. L. Ponton et al. / DragPoser: Motion Reconstruction from Variable Sparse Tracking Signals via Latent Space Optimization
+
+1. Introduction                                                               viding increased generality and improved accuracy when enforcing
+                                                                              rigid constraints on end effector positions.
+Human motion reconstruction and editing have gained significant
+attention in diverse industries such as entertainment, sports, and               We extensively tested and compared our method against state-
+rehabilitation, with applications spanning virtual reality (VR), aug-         of-the-art methods in a variety of challenging motion sequences
+mented reality (AR), training, education, simulations, and collab-            from public datasets, with different sensor configurations. Our re-
+orative work. In professional settings, motion reconstruction typ-            sults show that DragPoser outperforms both traditional IK-based
+ically relies on high-quality optical motion capture (mocap) sys-             methods and the newest data-driven approaches in nearly all er-
+tems or Inertial Measurement Unit (IMU)-based systems equipped                ror metrics. DragPoser excels at providing accurate end-effector
+with numerous sensors. Although effective, these systems come                 positioning (as in traditional IK systems) but at the same time, it
+with significant costs and require extensive calibrations and tech-           generates natural poses and temporally coherent motion, a feat that
+nical expertise. Consequently, recent trends indicate a growing de-           data-driven methods typically achieve only in the absence of hard
+mand for cost-effective and minimally intrusive mocap systems that            constraints. DragPoser, however, boasts another distinct advantage:
+leverage consumer-grade hardware for motion reconstruction. This              its adaptability to hardware changes. We showcase this adaptabil-
+shift in focus aims to cater to applications in the Metaverse, target-        ity by demonstrating DragPoser’s robust capability to effectively
+ing affordability and accessibility. Motion editing often involves            handle missing input data caused by occlusions, faulty sensors, or
+the use of non-learned inverse kinematics (IK) methods such as                communication problems. Additionally, users can dynamically add
+CCD [Ken12] or FABRIK [AL11]. While IK enables the rapid cre-                 constraints in real-time to target specific types of motions. This dual
+ation of animations using end-effectors, it frequently leads to time-         adaptability not only reinforces the system’s resilience but also en-
+incoherent or unnatural human motion due to the inherently under-             hances its performance in real-world applications.
+determined nature of the problem.
+
+   With the growing availability of extensive repositories of motion          2. Related Work
+capture data and the rapid advancements in deep learning, various
+data-driven methodologies have emerged to grapple with the in-                This section briefly reviews methods utilizing sparse sensor signals
+tricacies and challenges of human motion reconstruction. Recent               to reconstruct full-body poses. We first discuss methods focusing
+studies have focused on the reconstruction of poses from sparse               on motion capture from diverse sensor information, and then we
+input [PYA*23; YZH*23; WWY22], aiming to reduce reliance                      focus on data-driven methods overcoming the limitations of tradi-
+on expensive motion capture suits. These methodologies, lever-                tional inverse kinematics.
+aging their learning from vast and precise mocap datasets, recon-
+struct human motion that is characterized by both temporal coher-
+ence and naturalness, overcoming the shortcomings of traditional              2.1. Motion Capture with Sparse Input
+IK [OBH*21; AGB*23]. However, they often encounter limita-
+                                                                              Motion Capture with IMU sensors Recent research in human
+tions arising from their rigid neural network architectures, restrict-
+                                                                              motion reconstruction has focused on utilizing fewer Inertial Mea-
+ing users to a specific set of sparse inputs or constraints. Addition-
+                                                                              surement Units (IMUs) attached to the body. This approach elimi-
+ally, they are sensitive to faulty sensors or tracking losses. Despite
+                                                                              nates the need for external sensors or cameras, requires no line-of-
+their capacity to reconstruct smooth animations, deep learning-
+                                                                              sight, and operates seamlessly in diverse environments and light-
+based methods commonly face challenges in dealing with hard con-
+                                                                              ing conditions. Early methods [vMRBP17] used six IMUs for
+straints, often requiring the fallback to traditional IK methods for
+                                                                              an optimization-based offline pose reconstruction, while later ad-
+refining final poses [JSQ*22; PYAP22], which can inadvertently
+                                                                              vancements [HKA*18; YZX21] employed deep learning-based
+compromise the naturalness of the data-driven results.
+                                                                              models for real-time accuracy. A key challenge with IMUs is
+   This paper introduces DragPoser, an innovative deep-learning-              their lack of positional data, leading to inaccuracies in global
+based system designed for motion reconstruction. Unlike conven-               position estimation. Recent studies [JYG*22], have introduced
+tional methods that rely on direct full-body pose prediction from             Transformer-based models to address this issue, whereas Yi et
+sparse inputs or optimize short motion sequences within a latent              al. [YZH*22] employs physics-based approaches to achieve more
+space, DragPoser leverages a structured latent space and employs              realistic motion. However, IMU methods frequently encounter root
+a pose optimization process to represent both hard and dynamic                positional drift over time [ASA24]. In efforts to mitigate drift, re-
+constraints accurately. The key difference lies in utilizing an op-           searchers [GMSP21; YZH*23; LJ24] have integrated monocular
+timization process within the learned latent space, enabling dy-              cameras with SLAM algorithms, aiming for more precise localiza-
+namic guidance in the pose search. The system undergoes a sin-                tion.
+gular training phase on an extensive human motion dataset. Sub-
+sequently, constraints are dynamically defined as losses, and the             Motion Capture with VR 6-DoF Sensors The increasing acces-
+pose is iteratively refined by computing gradients within the latent          sibility of commercial VR devices has led to significant progress
+space. To ensure temporal coherence and constrain pose optimiza-              in reconstructing full-body poses using 6-DoF trackers, which cap-
+tion within the valid pose manifold, we integrate a Temporal Pre-             ture both position and rotation. These trackers, utilizing external
+dictor network, which directly encodes temporality into the latent            sensors or computer vision, ensure accurate global information.
+space. This departure from traditional direct pose prediction meth-           Early work [DDC*21] used a variational autoencoder for pose
+ods enables a more precise and versatile exploration of poses, pro-           reconstruction from three tracking points, though without global
+            J. L. Ponton et al. / DragPoser: Motion Reconstruction from Variable Sparse Tracking Signals via Latent Space Optimization           3 of 14
+
+translation estimates. Subsequent studies [AOG*21; PYAP22] ex-                  2.2. Learned Inverse Kinematics
+plored matching user poses to a motion dataset, similar to the ap-
+                                                                                In computer animation, IK solvers are essential for determining
+proach in Motion Matching [Cla16]. Adding another tracker on the
+                                                                                the positions and orientations of intermediate joints in a kinematic
+pelvis, Yang et al. [YKL21] developed a model using Gated Re-
+                                                                                chain, given the target positions and orientations of end-effectors.
+current Units (GRUs) to predict lower-body movements with ve-
+                                                                                Aristidou et al. [ALCS18] offers a comprehensive review of popu-
+locity data. To capture the continuous nature of motion, Jiang et
+                                                                                lar IK approaches for human motion reconstruction. Yet, traditional
+al. [JSQ*22] and Zheng et al. [ZSW*23] employed Transformer
+                                                                                IK solvers often face scalability issues for multi-chain characters
+encoders for real-time pose estimation. Similarly, various genera-
+                                                                                and a balance must be struck between computational efficiency and
+tive AI-based methods have been proposed, including conditional
+                                                                                pose naturalness [CGK*19].
+flow-based models [ACB*22] and diffusion models [DKP*23;
+CEJ*23]. Autoencoders have played a pivotal role in develop-                       Early work [GMHP04; WTR11] introduced a data-driven IK
+ing structured latent spaces for pose reconstruction. In this con-              system using Gaussian processes for versatile pose modeling. The
+text, Milef et al. [MSK23] introduced new interpolation and pose                work by Huang et al. [HWF*17] further enhanced the idea of us-
+anomaly detection methods to avoid traversing invalid regions of                ing Gaussian models with a traditional Jacobian-based solver for
+the latent space. Additionally, Ponton et al. [PYA*23] combined                 real-time pose generation. With the augmented capabilities of mod-
+a skeleton-aware autoencoder with learned inverse kinematics for                ern deep-learning-based architectures, Victor et al. [VMB21] pro-
+precise full-body pose reconstruction, ensuring better accuracy in              posed an autoencoder-based IK solver. A common issue in deep
+end-effectors. Other techniques [WWY22; YLHX22] involved the                    learning-based IK methods is their fixed network structure, which
+development of reinforcement learning frameworks to create natu-                limits their use to a specific number of sparse inputs. To address
+ral and realistic movements. Lee et al. [LSY*23] extended this to               this, Oreshkin et al. [OBH*21] implemented prototype encoding
+include environment interactions. These techniques have demon-                  and residual connections (ProtoRes), which enables dynamic ad-
+strated their ability to reconstruct high-quality, smooth motion.               justments on the number of end-effectors. Building on this, Voleti
+However, they are often constrained by the rigidity of their deep-              et al. [VOB*22] adapted the method for SMPL models [LMR*15]
+learning architectures, which limits their adaptability to varying              and incorporated initial pose estimation from images. Further ad-
+numbers of sparse inputs or constraints. Furthermore, these meth-               vancements were made by Agrawal et al. [AGB*23], who refined
+ods frequently face challenges in accurately representing hard con-             the technique to ensure pose consistency across changes. They
+straints, such as precise end-effector positioning.                             utilized a skeletal graph structure, enabling the encoding of hard
+                                                                                constraints by restricting information flow at certain joints. This
+                                                                                adaptation significantly enhances the workflow for artists by al-
+                                                                                lowing them to maintain base poses while editing specific body
+                                                                                parts. However, protores-based systems still contain predefined
+Motion priors for Motion Capture Leveraging compressed la-                      constraints embedded within the network structure, limiting the
+tent space representations has become essential for human mo-                   ability to modify these constraints dynamically. Moreover, as both
+tion synthesis due to the challenges of working directly with large             constraints and end-effectors variability are encoded as inputs, the
+amounts of mocap data. Early work [AHK*16] used a physics-                      network requires training across all possible permutations of sparse
+based model and a motion prior to reconstruct poses from a set of               input and constraints, posing scalability challenges.
+IMUs and optical markers. Subsequent work [LZCV20; PGH*22]
+explored VAEs for encoding and decoding poses, thereby enabling                 3. Background
+deep reinforcement learning in the latent space. In the context of
+learning neural representations as priors, Liu et al. [LWJ*22] intro-           In this section, we provide an overview of Variational Autoencoders
+duced Lipschitz regularization to enforce continuity and facilitate             (VAE), the core concept behind our Pose Autoencoder design, de-
+smooth interpolation and extrapolation operations. Motion priors                tailed in Section 4.3. This design is key in creating a structured
+have proven valuable for handling noisy or faulty pose data. For                latent space, which is subsequently utilized in the Pose Optimizer
+instance, Rempe et al. [RBH*21] achieved impressive results by                  step outlined in Section 4.4.
+training a motion prior on the AMASS dataset, later refined by
+Shi et al. [SSY*23] with a periodic autoencoder [SMK22]. Once                   Variational Autoencoders Unlike traditional autoencoders,
+their latent space is trained, pose transition sequences are optimized          which generate a latent space with no continuity guarantee, VAEs
+to satisfy some given constraints, such as end-effector positions               explicitly aim to construct a latent space that is continuous,
+or fitting a point cloud. However, challenges remain in reproduc-               enabling the generation of data through the interpolation of latent
+ing high-frequency details and real-time processing. Working with               representations, as well as generating random data by sampling
+transitions limits the ability to make targeted adjustments to indi-            randomly the latent space. More formally, given a set of continuous
+vidual poses within the latent space, as each pose is dependent on              observations {x(i) }Ni=1 let us assume that an observation can be
+the entire preceding sequence. Our approach addresses these limi-               reconstructed from an unobserved continuous random variable
+tations by representing full poses directly in the latent space. Direct         z, which follows a gaussian distribution p(z) = N (0, I). Next,
+pose optimization in the latent space allows our method to have a               the objective is to find a decoder Dθ with parameters θ which
+more fine-grained control while being performant, and ensures con-              maximize the marginal log-likelihood as follows:
+straints are met frame by frame instead of optimizing large motion                                                     Z
+sequences.                                                                                      log pθ (x(i) ) = log       pθ (x(i) |z)p(z) dz      (1)
+                                                                                                                       z
+4 of 14            J. L. Ponton et al. / DragPoser: Motion Reconstruction from Variable Sparse Tracking Signals via Latent Space Optimization
+
+However, optimizing the marginal log-likelihood is not feasible due            4.2. Overview
+to the intractability of the integral. Therefore, the Evidence Lower
+                                                                               This section outlines our method for synthesizing continuous full-
+Bound (Eq. 2) can be used to obtain a feasible lower bound of
+                                                                               body motion from sparse input. DragPoser is comprised of a Pose
+log pθ (x(i) ).                                                                Autoencoder and a Temporal Predictor. These components are used
+                                             h                i              in the pose optimizer step to generate the final motion, as depicted
+    −DKL qφ (z|x(i) ) || p(z) + Ez∼qφ (z|x(i) ) log pθ (x(i) |z)  (2)          in Figure 4. Our pose optimizer method relies on having a struc-
+                                                                               tured and continuous latent space generated by the pose autoen-
+where qφ (z|x(i) ) is an approximation of the posterior pθ (z|x(i) )           coder (see Figure 2). During the optimization process, we start with
+with the learned parameters φ. The approximation of the posterior              an initial pose and a set of sparse tracking signals. We then con-
+qφ can be represented as a diagonal Gaussian, with means and vari-             duct an optimization-based search within the latent space to iden-
+ance predicted by the encoder Eφ = (µφ , σφ ), as follows:                     tify a feasible pose that meets our specified constraints. This di-
+                                                                             rect optimization in the latent space enables us to accurately fulfill
+               qφ (z|x(i) ) = N µφ (x(i) ), I σφ (x(i) )       (3)             hard constraints and generate human-like poses similar to those the
+                                                                               pose autoencoder was trained on. Additionally, a temporal predic-
+To optimize the parameters (θ, φ) the goal is to maximize Eq. 2. The           tor guides the optimization process to ensure temporal consistency
+first term is the KL divergence, denoted as LKLD in the following              between poses.
+sections. This term encourages the qφ distribution to closely resem-
+ble the normal distribution N (0, I). Additionally, it structures the          4.3. Architecture
+latent space effectively, ensuring that when sampling z ∼ N (0, I)
+and passing it through the decoder Dθ (z) a valid observation x̂ is            Pose Autoencoder Our motion synthesis method relies on an op-
+generated. The second term of Eq.2 is the autoencoder reconstruc-              timization process in a latent space (explained in Section 4.4).
+tion loss. We will define it later as a combination of losses specifi-         The Pose Autoencoder component is used to construct this latent
+cally crafted for our problem.                                                 space from motion capture data. Autoencoders rely on the idea
+                                                                               of having a bottleneck between two networks—Encoder and De-
+                                                                               coder—which allows the networks to effectively project the sup-
+                                                                               plied data to a space with fewer dimensions, known as latent space.
+4. Method                                                                      However, this latent space is not explicitly structured and, thus,
+In this section, we first state the problem in Section 4.1, and then we        may have regions with invalid points. To address this, we based
+provide an overview of the proposed solution (refer to Section 4.2).           our Pose Autoencoder on the Variational Autoencoder (VAE) ar-
+Subsequently, we present the architecture designed for full-body               chitecture (see Section 3), which forces the latent space to repre-
+motion reconstruction from sparse input in Section 4.3, while, in              sent valid points in a specific domain. To design the Encoder and
+Section 4.4, we offer a detailed explanation of how these compo-               Decoder networks, we require a network capable of accurately re-
+nents are employed during inference.                                           constructing a large amount of motion capture data. We build on
+                                                                               top of the work by Ponton et al. [PYA*23] which proposes an au-
+                                                                               toencoder structure, with no explicit structure on the latent space,
+                                                                               that uses skeleton-aware operations as building blocks [ALL*20].
+4.1. Problem Definition                                                        Next, we introduce all modifications needed to construct our Pose
+                                                                               Autoencoder; please refer to Ponton et al. [PYA*23] for details on
+Human motion can be defined as an ordered sequence of T poses
+                                                                               the skeleton-aware operations.
+(x(i) )Ti=1 . These poses are based on a humanoid skeleton comprising
+J joints. In contrast to common hierarchical skeleton definitions,             Probabilistic Encoder Our Pose Autoencoder reconstructs single
+where joints are usually defined within the local frame of their par-          poses x(i) ∈ RJ×4+3 as detailed in Section 4.1. However, the input
+ent, we adopt a distinct approach. In our model, joints are defined            of the Encoder E is extended with each joint’s root space transla-
+relative to the root space, utilizing quaternions. In order to ensure          tions. This information helps the Encoder understand human mo-
+that our model is invariant to global transformations, we avoid en-            tion better by explicitly encoding information about the dimensions
+coding the root joint with explicit global information. Instead, the           of the skeleton. For this, we use dual quaternions [AAC22], which
+root joint is expressed through a quaternion encoding the root’s ro-           provide a unified and compact representation encoding both the ro-
+tational increment and a 3D vector encoding displacement, both                 tational and translation information in orthogonal quaternions, as
+with respect to the previous pose, making x(i) ∈ RJ×4+3 .                      used in previous work [PYA*23]. We encode the root’s world dis-
+   In our system, the input comprises an ordered sequence of T                 placement in its corresponding dual quaternion. Thus, we define
+                                                                               the function DQ : RJ×4+3 7→ RJ×8 , converting our original repre-
+sparse poses s(i) , encompassing only a subset of joints S ≤ J (e.g.,
+                                                                               sentation to dual quaternions.
+end-effector data from VR controllers). Unlike complete poses,
+each sparse pose is characterized by the global positions (repre-                 Given a pose x(i) , we convert it to the dual quaternions represen-
+sented as 3D vectors) and rotations (represented as quaternions) of            tation DQ(x(i) ) and use the Encoder to project it to a latent vector
+the sparse tracking signals, resulting in s(i) ∈ RS×(3+4) . The objec-         z(i) ∈ RL with dimension L (in our tests L = 24 for J = 22). How-
+tive of our task is to synthesize full-body human motion (x(i) )Ti=1           ever, as explained in Section 3, we do not use the Encoder’s output
+from sparse inputs (s(i) )Ti=1 .                                               directly as the latent vector. We use two linear layers to project
+            J. L. Ponton et al. / DragPoser: Motion Reconstruction from Variable Sparse Tracking Signals via Latent Space Optimization                                                                          5 of 14
+
+
+           𝜆𝑄 ℒ𝑄 + 𝜆𝐹𝐾 ℒ𝐹𝐾                                                                       𝜆𝐾𝐿𝐷 ℒ𝐾𝐿𝐷                   𝜆𝐶 ℒ 𝐶
+
+
+
+
+                                                                                                                                                                Temp. Upsample
+                                                                                                                                              Skeletal Unpool
+
+
+
+                                                                                                                                                                                 Skeletal Conv.
+                      Dual Quaternion
+
+
+
+
+                                                                                             Linear
+                                               Skeletal Conv.
+
+
+
+
+                                                                                                                                                                                                  Leaky ReLU
+                                                                Skeletal Pool
+                                                                                Leaky ReLU
+                                                                                                      𝝁
+
+
+
+
+                                                                                                                            Linear
+                                                                                                                    𝐳
+
+
+
+
+                                                                                             Linear
+                                                                                                      𝝈
+                                                                                                           𝐳 =𝝁+𝝈⊙𝝐                                                                                            𝐱ො
+       𝐱                                                                                                        𝝐~𝓝(𝟎, 𝐈)                   Probabilistic Decoder 𝒟
+                                   Probabilistic Encoder ℰ
+
+Figure 2: Pose Autoencoder architecture for creating a structured latent space representing valid poses. Following the Variational Autoen-
+coder approach, we train the network, beginning with the input pose data represented in dual quaternions to capture joint rotations and
+translations in root space. The Probabilistic Encoder E estimates the mean and variance parameters of the Gaussian distribution for the
+input pose. Subsequently, a latent vector z is sampled and passed into the Probabilistic Decoder D for pose reconstruction. Training involves
+two reconstruction losses: LQ and LFK , in addition to LKLD and LC which structure the latent space, ensuring standard Gaussian alignment
+and latent space continuity, respectively.
+
+
+
+the Encoder’s output to the mean and variance with L dimensions.                                                   the optimization process. We define LKLD as follows:
+Thus, we represent the Encoder Eφ with parameters φ as the tuple
+                                                                                                                                    1                
+(µφ , σφ ). The final mean and variance represent the Gaussian dis-                                                        LKLD = ⟨1 + log (σ(i) )2 − (µ(i) )2 − (σ(i) )2 , 1⟩                                       (8)
+                                                                                                                                    2
+tribution of the input observation in the latent space. The resulting                                                                           
+latent vector z(i) is computed as follows:
+                                                                                                                              (i)
+                                                                                                                             µ = µφ DQ(x(i) )                                                                        (9)
+                                                                                                                                               
+                                                                                                                             σ(i) = σφ DQ(x(i) )
+                                                  
+               z(i) = µφ DQ(x(i) ) + I σφ DQ(x(i) ) ϵ             (4)                                                                                                                                               (10)
+
+where ϵ ∼ N (0, I).                                                                                                Continuity Loss Finally, we propose the Continuity Loss to im-
+                                                                                                                   prove the Pose Optimizer process (see Section 4.4). Given two con-
+Probabilistic Decoder Once the latent vector z(i) is formed, we                                                    secutive poses (x(i) , x(i+1) ), we want them together in the latent
+use a linear layer and the Decoder Dθ with parameters θ to recon-                                                  space so that with one optimization step we can change from the
+struct the original pose x(i) as follows:                                                                          initial pose to the next one: ẑ(i+1) = z(i) − ∇z MSE(x̂(i) , x(i+1) ). Al-
+                                                                                                                   though the KLD Loss LKLD enforces similar poses to be together
+                                           x̂(i) = Dθ (z(i) )                                             (5)      in the latent space, it does not have the notion of temporal conti-
+                                                                                                                   nuity. With the continuity loss, we further guide the latent space
+Reconstruction Loss We utilize a regular Mean Squared Error re-                                                    construction process to facilitate the Pose Optimizer process. The
+construction loss, defined as follows:                                                                             loss is defined as follows:
+                                                                                                                                                           
+                                        LQ = MSE(x(i) , x̂(i) )                                           (6)             LC = MSE x(i+1) , Dθ (ẑ(i+1) )                                 (11)
+
+                                                                                                                         ẑ(i+1) = z(i) − ∇z MSE(x̂(i) , x(i+1) )                                                   (12)
+Forward Kinematics Loss To facilitate the neural network’s un-
+                                                                                                                                     (i)   (i+1)
+derstanding of the joint hierarchy, we additionally include an FK-                                                       ∇z MSE(x̂ , x              ) = JTz Dθ (z(i) ) · 2(x(i+1) − x̂(i) )                         (13)
+based loss [PGA18; PFAG20]. We compute the global position of
+each joint using FK and compare it with the ground truth. Thus, we                                                    where JTz is the transpose of the Jacobian matrix of the Decoder
+define the function FK : RJ×4+3 7→ RJ×3 , and the loss as follows:                                                 D with respect to z. Figure 3 illustrates the role of the Continu-
+                                                                                                                 ity Loss (LC ) in structuring the latent space based on the temporal
+                LFK = MSE FK(x(i) ), FK(x̂(i) )                 (7)
+                                                                                                                   sequence of poses. In the absence of LC , the Pose Autoencoder
+                                                                                                                   clusters similar poses without considering their temporal sequence,
+KL Divergence Loss This loss is inherent to the Variational Au-                                                    which may result in an undesirable pose being traversed between
+toencoder architecture as introduced in Section 3. It tries to force                                               two consecutive poses during optimization. This can cause the op-
+all the Encoder output distributions to have a small KL divergence                                                 timization process to become trapped in local minima. Conversely,
+regarding the desired distribution of the latent space—a Gaussian                                                  incorporating LC encourages the latent space to organize by pose
+with mean zero and variance one. This allows us to traverse the la-                                                similarity and temporal succession, ensuring that one pose leads
+tent space and find valid poses around the desired distribution in                                                 smoothly to the next. By mitigating the risk of local minima, this
+6 of 14                 J. L. Ponton et al. / DragPoser: Motion Reconstruction from Variable Sparse Tracking Signals via Latent Space Optimization
+
+structure allows for more reliable pose transitions and faster op-                  iments. We previously used i to denote frames; now, we introduce a
+timization (demonstrated by the reduced iteration count in Sec-                     new index j = ⌈i/n⌉. For indexing standard latent vectors z(i) , our
+tion 5.4).                                                                          frame rate is set to 60 fps, which corresponds to the standard frame
+                                                                                    rate of the Pose Optimizer. For indexing predicted latent vectors
+          Without ℒ𝐶                      With ℒ 𝐶                                  by the Temporal Predictor zt ( j) , we use the lower frame rate. The
+                                                                                    Temporal Predictor Tψ , with parameters ψ, adopts the Transformer
+                                                                                    architecture, comprising Encoder (TψE ) and Decoder (TψD ) models.
+
+             ∇ℒ𝑃𝑂
+                                                ∇ℒ 𝑃𝑂                                  The process begins with a current Temporal Predictor index j,
+                                                                                    a desired past window Wp , and a future window W f for predicted
+                                                                                    latent vectors. We define p as the index for initiating new latent
+                                                                                    vector predictions. Specifically, the Encoder TψE is activated every
+                                                                                    W f steps, with p = W f ⌊ j/W f ⌋. Its input is a sequence of past la-
+                                                                                    tent vectors (z(n·k) ) p−Wp ≤k<p. Subsequently, the Decoder TψD , using
+                                                                                    the Encoder’s output and the initial latent vector z(n·p) , predicts the
+                                                                                    next latent vector ẑ( j) . This output is then concatenated to the input
+                                                                                    of the Decoder, and the process repeats W f times, similarly to the
+     𝑖      𝑖+1        𝑖+2                                                          execution of Transformers in Natural Language        Processing tasks.
+                                  𝑖+3     𝑖+4        𝑖+5                            The Decoder’s input is formally defined as z(n·p) , (zt (k) ) p<k< j .
+                                                                                    Additionally, root displacements and the height to the ground for
+Figure 3: Demonstration of how the continuity loss LC structures                    the root, head, hands, and feet are provided to the Encoder TψE to
+the latent space to reflect the temporality of data. The left diagram               narrow down the search space.
+shows a latent space learned without LC , where similar poses are
+clustered together, but transitioning smoothly from one pose to the                    The Encoder’s role is contextualizing the Temporal Predictor’s
+next is not guaranteed—potentially resulting in getting stuck in lo-                latent vector prediction. The iterative prediction of latent vectors
+cal minima. The right diagram illustrates the latent space with LC ,                in the Decoder, however, addresses different scenarios. For sparse
+encouraging consecutive poses from the original motion sequence                     inputs with minimal ambiguity, like six sensors (one per limb and
+to be within reach of a single optimization step. Notice the ability                the root), we set W f = 1. Therefore, the Temporal Predictor only
+to transition from the last green pose to either the first red or blue              helps the Pose Optimizer process to stay within the distribution of
+pose, representing two potential future sequences. Each pose is rep-                valid poses. In cases of higher ambiguity, like four sensors (head,
+resented as a 2D Gaussian distribution, while the mean predicted                    hands, and root), we increase W f to 16 or 60, letting the Decoder
+by the Encoder is represented with a symbol.                                        predict the next possible latent vectors. The Encoder handles actual
+                                                                                    past data, and the Decoder makes future predictions. Therefore, in-
+                                                                                    creasing W f effectively helps during the prediction process.
+Temporal Predictor The Pose Autoencoder effectively constructs                        The Temporal Predictor T is trained before the optimization pro-
+a structured latent space for decoding single poses. However, this                  cess to learn about the data’s temporality. It is trained with a stan-
+space lacks two critical properties. First, it is unbounded, assuming               dard MSE loss function. Giving a motion clip from our database,
+arbitrary shapes as combinations of Gaussian distributions. Second,                 we feed a sequence of poses to the Encoder TψE and let the Decoder
+while the Continuity Loss promotes poses to be reachable during                     TψD predict the following poses.
+the optimization step, it remains unclear which pose to select for
+temporal coherence among all possible reachable poses. This im-
+plies a lack of a clear understanding of the sequential progression                 4.4. Pose Optimizer
+of poses during optimization. We explored the idea of directly en-
+coding sequences of poses in the latent vector. However, this re-                   The preceding sections detailed the components for creating a
+sulted in a very slow optimization process and mostly non-accurate                  structured latent space to generate continuous and valid poses.
+results due to the sparsity of the data. To address these issues, we                However, using the Pose Autoencoder, we cannot directly synthe-
+propose training a neural network—Temporal Predictor—to predict                     size full-body motion from sparse input. Taking inspiration from
+the most likely sequences of latent vectors based on their coherence                Pan et al. [PTL*23], who demonstrate image modification in a
+with previous sequences. These predictions can then inform and                      GAN’s latent space through optimization, we crafted a similar la-
+guide the Pose Optimizer process. This approach not only helps                      tent space optimization process for pose prediction. This process is
+navigate away from invalid regions in the latent space but also pro-                visually summarized in Figure 4 and outlined in Algorithm 1.
+vides the system with an understanding of the temporal sequence                        Given a frame i, with its sparse input s(i) , and an initial pose
+of the data. A visual overview of the Temporal Predictor is depicted                in latent form z(i−1) , our goal is to predict the pose x̂(i) that best
+in Figure 4.                                                                        satisfies the constraints defined. We begin by decoding the initial
+  To maximize the number of previous and future latent vector se-                   latent vector to a pose using the Decoder of the Pose Autoencoder
+quences, the Temporal Predictor T operates at a reduced frequency.                  with fixed parameters: x̂(i−1) = Dθ (z(i−1) ). We then employ the
+Specifically, T is executed every n frames, with n = 4 in our exper-                sparse Forward Kinematics function FK ′ : RJ×4+3 7→ RS×(4+3)
+             J. L. Ponton et al. / DragPoser: Motion Reconstruction from Variable Sparse Tracking Signals via Latent Space Optimization                                                                    7 of 14
+
+                       Temporal Predictor 𝒯                                                  Pose Optimizer (0 ≤ 𝑖𝑡 ≤ 𝑀𝐴𝑋_𝐼𝑇)
+
+                                                                                                                                                                                                   𝐱ො (𝑖)
+                                                                           𝐳ො𝒕 (𝑗) 𝐳ො (𝑖)
+
+
+
+
+                                                                                                                                          Temp. Upsample
+                                                                                                                        Skeletal Unpool
+
+
+
+                                                                                                                                                           Skeletal Conv.
+                                                                                                                                                                            Leaky ReLU
+                                                                                                          Linear
+     Transformer                     Transformer
+                                                            𝐳ො𝒕 (𝑗)                              𝐳ො (𝑖)
+       Encoder                         Decoder                                      ∇ℒ𝑃𝑂
+
+                                                                          𝐳 (𝑖−1)
+                                                𝑘
+   𝐳 𝑛⋅𝑘     𝑝−𝑊𝑝 ≤𝑘<𝑝
+                                   𝐳 𝑛⋅𝑝 , 𝐳𝒕                                                                      Probabilistic Decoder 𝒟                                                   ℒ𝑃𝑂
+                                                    𝑝<𝑘<𝑗
+
+  Every 𝑛 ⋅ 𝑊𝑓 frames                   Every 𝑛 frames                                                      Every frame 𝑖
+    𝑝 = 𝑊𝑓 𝑗/𝑊𝑓                             𝑗 = 𝑖/𝑛
+                                                                                    Input                                             Pose Optimization
+
+
+  𝑝 − 𝑊𝑝                       𝑝            𝑗         𝑝 + 𝑊𝑓
+                                                                                    ℒ𝑃𝑂
+                                                                                                                                                                                                  𝐳ො (𝑖)
+
+                 𝑊𝑝                        𝑊𝑓                               𝐳 (𝑖−1)         𝐳ො𝒕 (𝑗)            𝑖𝑡 = 0                                      𝑖𝑡 = 1                        𝑖𝑡 = 2
+
+Figure 4: Motion reconstruction process via latent space optimization. The procedure begins with an initial latent vector from which the pose
+is decoded. Constraints are then dynamically established as loss functions, and the gradients of these losses are computed via backpropaga-
+tion within the latent space. The decoded pose is iteratively refined through this process, either until a maximum iteration count is reached
+or certain predefined metrics are satisfied. This optimization is guided by a Temporal Predictor network that employs a Transformer archi-
+tecture. The Encoder module generates features from past poses, and the Decoder module predicts future poses. While the Pose Optimizer
+operates at every application frame, the Temporal Predictor is executed at every n frames (with n = 4 in our experiments).
+
+
+
+ ALGORITHM 1: Motion synthesis from sparse input                                    the fly, or imposing arbitrary limits on specific joints, or constrain-
+ (s(i) )Ti=1 .                                                                      ing only positions or rotations.
+
+  for i = 0 to T do
+      ẑ(i) ← z(i−1)
+                                                                                       We backpropagate this loss through the Decoder to the latent
+      s(i) ← Target Sparse Input
+                                                                                    space, obtaining a gradient to guide the update of z(i−1) towards
+       j ← ⌈i/n⌉
+                                                                                    fulfilling the constraints. This process is similar to that of training
+       p ← W f ⌊ j/W f ⌋
+                                                                                  the Decoder, but this time the parameters are fixed. The updated
+        if j % W f == 0 then h ← TψE (z(n·k) ) p−Wp ≤k<p                            latent vector, ẑ(i) = z(i−1) − λPO ∇z LPO , is then decoded back to a
+                                                                                    pose x̂(i) = Dθ (ẑ(i) ). This iterative process is repeated until the po-
+                                                                     
+        if i % n == 0 then zt ( j) ← TψD z(n·p) , (zt (k) ) p<k< j; h
+                                                                                    sitional and rotational error thresholds of the sparse tracking signals
+        while MAX_IT and LPO > ϵ do                                                 are satisfied, a maximum iteration count is reached, or the gradient
+           x̂(i) ← Dθ (ẑ(i) )                                                      of the loss is very close to zero (e.g., 1 × 10−5 ). We found the latter
+                                        
+           LPO ← MSE FK ′ (x̂(i) ), s(i)                                            condition to significantly speed up computations, as it is unlikely
+                                                                                    that any improvements will be made in this case.
+            ẑ(i) ← ẑ(i) − λPO ∇z LPO − λT ∇z MSE(ẑ(i) , zt ( j) )
+        end
+        z(i) ← ẑ(i)
+                                                                                       Additionally, we integrate the Temporal Predictor’s output (see
+  end
+                                                                                    Section 4.3), zt ( j) , to avoid invalid latent space regions and to main-
+                                                                                    tain temporal coherence, particularly when sensor input is sparse.
+                                                                                    This dual optimization, combining pose and temporal constraints,
+                                                                                    ensures our predictions remain both valid within the latent space
+                                                                                    and temporally consistent with the input data. The final latent vec-
+to match the full-body pose with the global joint positions and                     tor update, as shown in Algorithm 1, incorporates both constraints.
+rotations
+       of the sparse   input. The pose optimization loss, LPO =                   We maintain λPO = 1 and adaptively adjust λT based on the number
+MSE FK ′ (x̂(i) ), s(i) , encapsulates our constraints, which can be                of sensors used (0.15, 0.125, 0.02 for 3, 4, and 6 sensors, respec-
+extended as needed, for instance, by adding or removing sensors on                  tively).
+8 of 14            J. L. Ponton et al. / DragPoser: Motion Reconstruction from Variable Sparse Tracking Signals via Latent Space Optimization
+
+5. Experiments and Evaluation                                                  noise to the four limbs aids in regularizing the Temporal Predic-
+                                                                               tor. Thus, in every training iteration, we introduce Gaussian noise
+In this section, we comprehensively evaluate DragPoser, employing
+                                                                               to the latent vector, with mean and standard deviation values for
+both quantitative and qualitative assessments on publicly available
+                                                                               each dimension derived from the dataset, applied to each limb with
+datasets, and comparing its performance with state-of-the-art meth-
+                                                                               a 10% probability. We initially experimented with adding noise
+ods. Furthermore, we evaluate our system across various sensor se-
+                                                                               to arbitrary joints in the full skeleton, but we found that target-
+tups and constraint configurations. Finally, we conduct an ablation
+                                                                               ing individual limbs was more effective. First we train the Pose
+study to examine the impact of DragPoser’s core components. Un-
+                                                                               Autoencoder with a weighted combination of all the losses pre-
+less otherwise noted, our evaluations utilize 6 degrees of freedom
+                                                                               sented L = λQ LQ + λFK LFK + λKLD LKLD + λC LC where λQ = 1,
+(6-DoF) signals, which provide both positional and rotational in-
+                                                                               λFK = 100, λKLD = 0.001 and λC = 1. Subsequently, we train the
+formation. Default end-effector placements are: hip, head, hands,
+                                                                               Temporal Predictor with a standard MSE loss.
+and feet for 6 signals; hip, head, hands, and right foot for 5 signals;
+hip, head, and hands for 4 signals; head and hands for 3 signals.
+                                                                               5.1. Comparison
+Datasets For evaluation, we trained DragPoser using the                        We compare DragPoser with three state-of-the-art deep-learning-
+DanceDB dataset [ASC19] and evaluated with the HUMAND4D                        based methods, AvatarPoser [JSQ*22], SparsePoser [PYA*23] and
+[CSB*20] and SOMA [GB21] datasets, both part of the AMASS                      HuMoR [RBH*21], as well as FinalIK, a state-of-the-art IK method
+collection [MGT*19]. Our choice of AMASS was guided by its                     for animating full-body characters. These methods were selected
+public availability and its use in previous works. Additionally, for           due to their public availability and their representation of different
+some images and supplemental material, we employed the Sparse-                 sensor configurations and approaches.
+Poser database [PYA*23]. This database is particularly advanta-                   AvatarPoser utilizes a Transformer encoder to generate full-body
+geous for VR applications, offering diverse common motions and                 poses from sparse input (three or four sensors) and refines the
+reducing incorrect poses through the use of IMU-based motion cap-              arms with an optimization-based IK. Notably, it excels in produc-
+ture compared to the optical systems used in AMASS datasets. The               ing high-quality poses in scenarios with high ambiguity and limited
+Pose Optimizer process is initialized with the first pose of each mo-          sensors. We extended the method, referred to here as AvatarPoser+,
+tion clip.                                                                     by adding two additional sensors on the feet, allowing a fair com-
+                                                                               parison in six sensor setups. Note that AvatarPoser was retrained
+Metrics To evaluate the effectiveness of our method, we employ                 for each different experiment due to its fixed input.
+four distinct metrics while ensuring the root position is aligned
+with the ground truth data for accurate pose evaluation. First, we                In addition, we compare with SparsePoser, the state-of-the-art
+measure the overall pose quality through three metrics: the Posi-              deep-learning-based method in terms of pose quality and end-
+tional Error (Pos), which calculates the mean Euclidean distance               effector accuracy for six 6-DoF sensors. Their approach is fixed to
+between corresponding joints in centimeters; the Rotational Error              six input sensors and uses an autoencoder and learned IK networks
+(Rot), quantifying the mean angular difference between rotations               for full-body pose reconstruction.
+R0 and R1 using the angle of the rotation matrix D = R0 RT1 and                   We also compare it with HuMoR, which, similar to our work,
+the Velocity Error (Vel), which calculates the mean velocity error             uses a VAE autoencoder to construct a latent space later used dur-
+across all joints in centimeters per second. Additionally, we eval-            ing an optimization process for multiple tasks. Conversely, HuMoR
+uate hard constraints by computing the mean Euclidean distance                 employs a VAE autoencoder on pose transitions rather than com-
+error of the provided end-effectors, excluding the root, in centime-           plete poses. Additionally, the provided implementation requires
+ters.                                                                          processing entire motion sequences, increasing computational de-
+                                                                               mands and leaving the method unsuitable for real-time or interac-
+Training and Implementation Details We implemented Drag-                       tive applications. Moreover, motion sequence length in HuMoR is
+Poser using PyTorch and optimized the networks with the AdamW                  severely constrained by available memory, requiring batch process-
+optimizer [LH19]. The system was trained and evaluated on a PC                 ing and additional techniques to maintain continuity. For this rea-
+configured with an Intel Core i7-12700k CPU, 32GB of RAM,                      son, we executed HuMoR in batches of 60 frames as recommended
+and an NVIDIA GeForce RTX 3090 GPU. The Pose Autoencoder                       in the original paper since we experimented with longer batches,
+was trained with a batch size of 64 and a learning rate of 10−4                but the resulting animations were often highly inaccurate.
+over approximately one day; we set the latent space dimension                     AvatarPoser, SparsePoser and HuMoR were re-trained using the
+to L = 24 and the number of joints to J = 22, resulting in about               DanceDB dataset following the training procedure of their offi-
+168 thousand parameters. For the Temporal Predictor, we trained it             cial implementations. Finally, considering the findings by Ponton
+with a batch size of 512 and a learning rate of 10−3 for approxi-              et al. [PYA*23] that FinalIK exhibits superior end-effector accu-
+mately thirty minutes. The Transformer hyperparameters were set                racy compared to deep learning-based methods, it is employed as a
+to four heads, three layers each for the encoder and decoder, a                baseline for evaluating hard constraints.
+feedforward dimension of 2048, and a feature dimension of 48, to-
+taling approximately 1.2 million parameters. During training, we               Quantitative Table 1 provides an overview of quantitative com-
+used Wp = 16 and W f = 16 and ran the Pose Autoencoder’s En-                   parisons, highlighting DragPoser’s effective balance between IK-
+coder to generate the training database for the Temporal Predic-               like hard constraint representation and high-quality pose recon-
+tor. Additionally, we empirically found that introducing random                struction, an attribute commonly associated with deep-learning
+                 J. L. Ponton et al. / DragPoser: Motion Reconstruction from Variable Sparse Tracking Signals via Latent Space Optimization             9 of 14
+
+Table 1: Accuracy of the reconstructed poses compared against                            of SparsePoser, with FinalIK having the best performance but with
+state-of-the-art methods, for diverse sensor configurations. We re-                      a higher standard deviation.
+port the mean and standard deviation (within parenthesis) of joint                          We also experimented with further reducing the input signals to
+errors (position, rotation, and velocity) as well as the end-effector                    four sensors placed in the head, hands and hip. This is a highly
+positional error, all of them with respect to ground truth data.                         challenging scenario for leg pose reconstruction. In this context,
+Please refer to the text for details about training and test datasets.                   DragPoser exhibits a slight advantage over AvatarPoser and Hu-
+When using 6 sensors (placed at the hip, head, hands, and feet),                         MoR in positional and rotational errors, however, with a slightly
+we compare against AvatarPoser+ (i.e., [JYG*22] extended to use                          higher Velocity Error compared to AvatarPoser. It is important to
+also the two sensors on the feet), FinalIK, HuMoR [RBH*21] and                           note that, despite the reduced sensor count, DragPoser continues
+SparsePoser [PYA*23]. For the 4-sensor configuration (hip, head,                         to maintain high end-effector accuracy (in this case, we take into
+and hands), we compare against AvatarPoser and HuMoR; FinalIK                            account only the four sensors).
+is not considered since it requires all end-effectors, and Sparse-
+                                                                                            However, when only three sensors are used, and the hip sensor
+Poser’s architecture is designed for a fixed 6-sensor configura-
+                                                                                         is removed, DragPoser struggles to achieve the pose quality seen in
+tion. Concerning the 3-sensor setup, we tested our approach with
+                                                                                         AvatarPoser and HuMoR. On the other hand, when the three sen-
+the head+hands and hip+hands configurations, and compared it
+                                                                                         sors are placed on the hip and hands, DragPoser attains comparable
+against the default head+hands AvatarPoser configuration and Hu-
+                                                                                         results to AvatarPoser and HuMoR when robust constraints are in-
+MoR.
+†                                                                                        corporated. We attribute this limitation in our method to the absence
+  HuMoR reconstructs motion in sequences, allowing it to leverage
+                                                                                         of a dedicated component for global position prediction in the case
+future information to adjust past poses and, thus, refine entire mo-
+                                                                                         of AvatarPoser, and not optimizing at a sequence level such as Hu-
+tion sequences during offline processing—in contrast to the other
+                                                                                         MoR. However, we decided to prioritize frame-to-frame prediction
+real-time, frame-to-frame prediction methods used in the compari-
+                                                                                         to use our method in an online prediction setting. As a result, when
+son.
+                                                                                         no hip sensor is available, the method optimizes the outcome solely
+                              End-Effect. Err.                Joint Error                based on the provided sensors and the Temporal Predictor, which
+  Method            Sensors
+                                 Pos (cm)        Rot (deg)    Vel (cm/s)    Pos (cm)     proved insufficient for achieving accurate global positioning. To ad-
+  AvatarPoser+        6         11.2(7.93)       11.3(10.5)   13.4(28.5)    7.66(7.60)   dress this, we dynamically introduce losses, such as enforcing prox-
+  FinalIK             6         1.16(1.22)       11.5(19.2)   6.18(21.2)    3.31(4.64)
+  HuMoR†              6         9.25(4.91)       9.35(10.4)   19.8(35.9)    6.96(5.27)   imity of the feet to the floor and minimizing the distance between
+  SparsePoser         6         3.43(2.53)       5.78(5.85)   10.8(15.0)    2.81(2.66)   hip and head ground projections. While this adaptability highlights
+  Ours                6         1.02(0.73)       7.66(8.71)   10.7(15.1)    2.18(2.70)
+                                                                                         DragPoser’s capability to swiftly integrate new constraints, it also
+  AvatarPoser         4         9.62(6.51)       12.4(11.7)   16.3(31.7)    9.24(10.1)
+  HuMoR†              4         8.61(4.14)       10.8(11.3)   25.6(56.4)    10.9(11.6)
+                                                                                         emphasizes the ongoing challenge of achieving precise global po-
+  Ours                4         1.12(0.72)       10.6(12.4)   20.0(41.5)    7.86(13.1)   sition accuracy without a hip sensor.
+  AvatarPoser
+  Head+Hands
+                      3         12.3(7.51)       14.3(12.8)   20.1(39.5)    11.0(10.8)      In summary, our findings demonstrate that DragPoser achieves
+  HuMoR†
+                      3         15.0(8.30)       11.3(12.5)   28.0(65.1)    14.2(13.0)
+                                                                                         state-of-the-art performance across diverse end-effector scenarios
+  Head+Hands
+                                                                                         and excels in pose reconstruction, particularly when high end-
+  HuMoR†
+  Hip+Hands
+                      3         9.92(4.71)       11.6(12.6)   27.6(63.0)    13.4(12.8)   effector accuracy is crucial. In addition, DragPoser proves to be
+  Ours
+                      3         16.1(11.4)       22.0(22.3)   34.0(50.2)    15.5(15.0)
+                                                                                         a flexible method concerning input configuration and robustness to
+  Head+Hands
+  Ours
+                                                                                         occlusions and sensor malfunctions, as indicated in Table 2.
+                      3         1.77(1.31)       14.1(15.6)   23.1(36.2)    9.95(13.7)
+  Hip+Hands
+                                                                                         Qualitative We present a visual comparison in Figure 5, showcas-
+                                                                                         ing selected frames from different poses in the evaluation datasets.
+                                                                                         In the text, we refer to specific poses in Figure 5 as row/column. All
+methods. In these experiments, we found that DragPoser faces limi-                       methods utilize six 6-DoF sensors, with end-effectors represented
+tations in high-ambiguity three-sensor scenarios, particularly when                      by green spheres. Note that some methods—HuMoR, FinalIK and
+lacking hip sensor data, resulting in performance below that of                          DragPoser—use the ankle joints for foot end-effectors, while the
+AvatarPoser.                                                                             others—AvatarPoser+ and SparsePoser—use the toe joints.
+                                                                                            Generally, FinalIK demonstrates accurate end-effector place-
+   In the six sensors setup (head, hands, hip, and feet), Drag-
+                                                                                         ment but often at the cost of losing plausible poses. FIK/1 and
+Poser surpasses AvatarPoser+, FinalIK and HuMoR in pose quality,
+                                                                                         FIK/3 exemplify this, with incorrectly oriented elbows and sig-
+aligning with SparsePoser’s performance in Joint Error. Most im-
+                                                                                         nificant deviations from ground truth in the rest of the examples.
+portantly, DragPoser excels in End-Effector Error, outperforming
+                                                                                         Moreover, due to its reliance on ad-hoc solutions for natural pose
+all deep-learning methods and slightly improving results compared
+                                                                                         generation, FinalIK struggles in less common scenarios, failing to
+to FinalIK. This superiority is primarily attributed to the Pose Opti-
+                                                                                         reconstruct poses or reach end-effectors, as seen in the FIK/4 and
+mization process in the latent space, which utilizes the Pose Au-
+                                                                                         FIK/5.
+toencoder’s Decoder for achieving deep-learning-like pose qual-
+ity, while concurrently allowing for the fulfillment of hard con-                           HuMoR, AvatarPoser+ and SparsePoser encounter similar chal-
+straints as traditional IK. Despite the enhancement in Positional                        lenges. While they are able to decode high-quality poses, there
+Error, DragPoser encounters a slight increase in Rotational Error.                       are instances, such as in the AP+/3, AP+/5 or HuMoR/5, where
+Finally, we observe that the Velocity Error performance mirrors that                     they fail to accurately reconstruct poses. In terms of end-effectors,
+10 of 14           J. L. Ponton et al. / DragPoser: Motion Reconstruction from Variable Sparse Tracking Signals via Latent Space Optimization
+
+                                                                               Table 2: Accuracy of our method for very diverse sparse input sce-
+                                                                               narios. Each scenario is determined by the number of sensors (3 to
+                                                                               6), their placement, and potential faulty behavior (first column). All
+                                                                               sensors have 6 DoFs (position+rotation) unless otherwise noted.
+                                                                               We report the joint errors and the end-effector errors, as in Table 1.
+                                                                               *Reported end-effector errors encompass all six sensors; this error
+                                                                               is significantly larger compared to more stable setups where only
+                                                                               the tracked sensors are evaluated.
+                                                                                                          End-Effector                Joint Error
+                                                                                 Sensors
+                                                                                                           Pos (cm)      Rot (deg)    Vel (cm/s)    Pos (cm)
+                                                                                 3 Head+Hands              16.1(11.4)    22.0(22.3)   34.0(50.2)    15.5(15.0)
+                                                                                 3 Hip+Hands               1.77(1.31)    14.1(15.6)   23.1(36.2)    9.95(13.7)
+                                                                                 4 Hip+Head+Hands          1.12(0.72)    10.6(12.4)   20.0(41.5)    7.86(13.1)
+                                                                                 5 Hip+Head+Hands+RFoot    1.17(0.77)    9.25(10.8)   15.3(32.8)    4.95(9.44)
+                                                                                 6 Hip+Head+Hands+Feet
+                                                                                                          10.2(16.0)*    12.0(14.8)   21.1(59.7)    6.55(11.1)
+                                                                                 Faulty 1%
+                                                                                 6 Hip+Head+Hands+Feet
+                                                                                                          5.85(11.9)*    9.82(12.1)   17.0(50.4)    4.50(8.50)
+                                                                                 Faulty 0.5%
+                                                                                 6 Hip+Head+Hands+Feet
+                                                                                                           1.56(1.51)    25.9(26.2)   13.2(19.6)    5.81(6.71)
+                                                                                 3 DoF Position
+                                                                                 6 Hip+Head+Hands+Feet     1.02(0.73)    7.66(8.71)   10.7(15.1)    2.18(2.70)
+
+
+
+
+                                                                               5.2. Dynamic Constraints Evaluation
+                                                                               One key advantage of DragPoser is its ability to dynamically adapt
+                                                                               constraints, accommodating hardware changes or user-specific re-
+                                                                               quirements. Our evaluations demonstrate DragPoser in various sen-
+Figure 5: Visual comparison of the pose reconstruction results
+                                                                               sor configurations, showcasing its flexibility and the potential for
+from HuMoR, AvatarPoser+ (AP+), FinalIK (FIK), SparsePoser
+                                                                               customized loss functions to enhance performance in different sce-
+(SP), and DragPoser (Ours). The ground truth poses are high-
+                                                                               narios as detailed in Table 2. The baseline configuration employs
+lighted in green and overlaid on the results. All methods are recon-
+                                                                               six 6-DoF, combining positional and rotational data to minimize
+structed using six 6-DOF trackers as input data. We highlighted
+                                                                               ambiguity and precisely reconstruct human poses. This setup de-
+with a zoom-in some examples of errors found when compared
+                                                                               livers the highest fidelity in terms of pose quality and end-effector
+against the ground truth. Deep-learning-based methods (HuMoR,
+                                                                               accuracy.
+AvatarPoser+ and SparsePoser) often cannot accurately place end-
+effectors, while traditional IK (FinalIK) produces unnatural poses.               However, in certain applications like motion editing or computer
+Our method can produce high-quality poses while achieving high                 vision, only positional information may be available. When we
+end-effector accuracy.                                                         switch to a configuration with six 3-DoF sensors, DragPoser con-
+                                                                               tinues to generate high-quality poses. The Positional Error remains
+                                                                               similar to the six 6-DoF results of AvatarPoser+, and end-effector
+                                                                               accuracy is preserved, although, as expected, there is a notable de-
+most poses from these methods do not precisely align with the tar-             crease in rotational precision.
+get end-effectors. We believe this happens with traditional deep-                 We also explore scenarios with intermittent tracker functional-
+learning-based approaches due to the use of large networks; since              ity, simulating faulty sensors by randomly disconnecting one sen-
+high-frequency details are lost during the forward process.                    sor per frame with a probability of 1% or 0.5%, reconnecting it
+   We observed that latent space optimization methods like Hu-                 after 100 frames. Operating at 60 frames per second, this yields a
+MoR often encounter difficulties when generating poses for long                challenging and unstable input scenario. Despite these conditions,
+sequences (e.g., > 60 poses). This is attributed to the structure and          DragPoser robustly reconstructs high-quality poses, achieving met-
+navigation of the latent space, which can lead to the traversal of             rics on par with those of previous work under stable sensor condi-
+invalid regions and, subsequently, incorrect results (see our sup-             tions. It is important to note that the reported end-effector error
+plemental material for more details). DragPoser mitigates these is-            encompasses all six sensors; thus, due to the frequent disconnec-
+sues through frame-by-frame optimization, ensuring the continuity              tions, this error is significantly larger compared to more stable se-
+of the latent space structure, and utilizing a Temporal Predictor to           tups where only the tracked sensors are evaluated.
+guide the optimization process.                                                   Furthermore, DragPoser’s flexibility extends to its ability to
+                                                                               work with varying numbers of input sensors. We demonstrate its
+   DragPoser consistently generates high-quality poses across all
+                                                                               effective performance with five, four, and three sensors, as previ-
+cases, successfully meeting the end-effector hard constraints. No-
+                                                                               ously discussed in comparison with existing work.
+tably, it excels in reconstructing challenging poses like push-ups
+Ours/5 and kicks Ours/3, effectively balancing pose accuracy with                 Finally, we emphasize that DragPoser’s constraints are not lim-
+the fulfillment of hard constraints.                                           ited to the number of sensors. For example, DragPoser could be
+           J. L. Ponton et al. / DragPoser: Motion Reconstruction from Variable Sparse Tracking Signals via Latent Space Optimization                        11 of 14
+
+configured to align a look-at vector with the head joint’s forward             Table 3: Results of the ablation study. In the first row experiment,
+axis, facilitating precise head orientation control. Other examples            the continuity loss LC is removed when training the Pose Autoen-
+range from maintaining specified distances between joints to en-               coder. In the second row experiment the Temporal Predictor T is
+forcing spatial boundaries. Moreover, hyperparameters like the bal-            not used. We report the joint errors and the end-effector errors.
+ance between positional and rotational accuracy or the prioritiza-
+tion of joint accuracy are fully customizable in real time.                                       End-Effector Error                Joint Error
+                                                                                       Ablation
+                                                                                                      Pos (cm)         Rot (deg)    Vel (cm/s)    Pos (cm)
+                                                                                       No LC          1.50(1.13)       8.39(9.52)   9.53(13.3)    2.65(2.79)
+5.3. Performance                                                                       No T           1.36(1.07)       10.5(12.2)   13.1(19.0)    3.05(4.39)
+                                                                                       Ours           1.02(0.73)       7.66(8.71)   10.7(15.1)    2.18(2.70)
+We measured the average execution times of the different compo-
+nents. Note that our code is executed in Python with no special op-
+timizations. On average, the Temporal Predictor forward pass takes
+                                                                               of optimization iterations required to meet the constraint thresh-
+around 1.8 ms per frame. The other components, which run each
+                                                                               olds in two distinct animation scenarios—a push-up sequence and
+optimization iteration, have the following running times: the De-
+                                                                               a dance routine—setting the maximum number of iterations at 100
+coder’s forward pass averages 0.3 ms, the constraints (losses) com-
+                                                                               per frame. With LC , the push-up animation required 57 iterations,
+putation takes around 1.3 ms (mainly because of the FK), and the
+                                                                               and the dance 22, on average. Without LC , these numbers increased
+backpropagation through the Decoder approximately 2.7 ms. These
+                                                                               significantly to 74 and 73 iterations, respectively.
+three processes are computed on the CPU due to the relatively
+lightweight Decoder model, while the Temporal Predictor is exe-                  In summary, the integration of the Continuity Loss LC not only
+cuted on the GPU. The maximum execution time per frame can                     improves on finding higher quality poses during the optimization
+be computed as 1.8 + MAX_IT(0.3 + 1.3 + 2.7) ms. By adjusting                  search but also streamlines the pose optimization process, evi-
+MAX_IT, DragPoser is able to adapt to the performance require-                 denced by a reduced number of iterations required. This leads to
+ments of various application scenarios. Note that this is the max-             a more efficient optimization cycle, reducing the time required to
+imum execution time per frame; it is usually shorter due to con-               run our method.
+straints being quickly satisfied.
+                                                                               Temporal Predictor The purpose of the Temporal Predictor is
+   To assess computational demands, we recorded the average time
+                                                                               twofold. On the one hand, it ensures that predicted latent vectors re-
+per frame/pose reconstruction compared to other methods. FinalIK,
+                                                                               main within the manifold of valid poses. On the other hand, it learns
+relying on optimized C# code, is the fastest at 0.14 ms. Among
+                                                                               the temporality within the latent space to guide the optimization
+data-driven methods, AvatarPoser and SparsePoser lead at 2.15 ms
+                                                                               process in high-ambiguity scenarios. In its absence, we observe a
+and 15.6 ms, respectively, due to their purely forward-pass execu-
+                                                                               significant decline in all metrics, with Joint Error notably impacted
+tion. HuMoR, hampered by sequence-level optimization due to its
+                                                                               due to its direct influence on the overall pose quality and not just
+latent space design, requires 1567 ms per frame. In contrast, Drag-
+                                                                               the optimization of end-effector positioning.
+Poser, while incorporating optimization, achieves 25.3 ms per pose,
+making it suitable for interactive use. Note that we used a maximum               Visual results presented in Figure 6 further illustrate the Tempo-
+iteration count of 40, which is almost never required due to early             ral Predictor’s role. Here, the system receives input from only four
+constraint fulfillment. DragPoser thus bridges the gap between real-           sensors (hips, head, and hands). With the Temporal Predictor en-
+time performance and the flexibility of latent space optimization,             abled, the system can generate a complete walking cycle; even if it
+offering a cost-effective alternative to methods like HuMoR while              might be out of sync with the ground truth. Without the Temporal
+approaching the speed of forward-pass approaches.                              Predictor, the character’s feet are static, resulting in an unnatural
+                                                                               dragging motion.
+5.4. Ablation Study                                                               The effectiveness of the Temporal Predictor is even more pro-
+                                                                               nounced in complex motions like push-ups. While the optimiza-
+Table 3 presents the results of an ablation study focusing on two
+                                                                               tion process alone can satisfy end-effector constraints, the Tempo-
+critical elements of our proposed method. We first examine the im-
+                                                                               ral Predictor plays a crucial role in achieving temporally coherent
+pact of omitting the Continuity Loss LC during the training of the
+                                                                               poses. Finally, the last column demonstrates the Temporal Predic-
+Pose Autoencoder. We then evaluate the effectiveness of the Tem-
+                                                                               tor’s ability to avoid invalid regions in the latent space: when dis-
+poral Predictor T by excluding it from the Pose Optimizer process.
+                                                                               abled, the optimization process traverses invalid regions of the pose
+All metrics are computed with the six 6-DoF configuration.
+                                                                               manifold and ultimately reconstructs an implausible pose.
+Continuity Loss Our results indicate that including LC generally
+enhances all performance metrics by structuring the latent space               6. Conclusions
+more effectively. An exception is observed in the velocity metric;
+                                                                               In conclusion, our work addresses the critical challenge of achiev-
+this is attributed to the fact that when the Continuity Loss is used,
+                                                                               ing high-quality motion reconstruction with a reduced number of
+the optimization process needs fewer iterations to find poses that
+                                                                               input devices, aiming to make motion capture more accessible to
+satisfy the constraints. Consequently, a lower learning rate might
+                                                                               a wider audience. Our proposed method provides a perfect equi-
+be necessary to avoid overshooting the target.
+                                                                               librium between end-effector accuracy and pose quality. Through
+  For a practical understanding, we calculated the average number              a pose optimization process within a structured latent space, our
+12 of 14          J. L. Ponton et al. / DragPoser: Motion Reconstruction from Variable Sparse Tracking Signals via Latent Space Optimization
+
+
+
+
+Figure 6: Poses reconstructed using four sparse tracking signals (hip, head and hands) with (middle row) and without (last row) temporal
+predictor. Ground truth is colored in green. The Temporal Predictor guides the optimization process to produce temporally-coherent motion
+even in high ambiguity scenarios, thus producing a full walking cycle during motion (left). It also prevents implausible poses by guiding the
+optimization away from invalid latent space regions (right).
+
+
+
+approach simultaneously achieves superior real-time end-effector              the probability of the optimization process of falling into invalid
+position accuracy compared to state-of-the-art IK solutions, and              regions and getting stuck. Furthermore, it is important to note that
+higher pose quality compared to advanced learning approaches like             computing the gradient of the decoder can be time-consuming com-
+AvatarPoser, SparsePoser and HuMoR. In addition, our system re-               pared to standard forward prediction. Despite this computational
+quires only one-time training on a large human motion dataset,                demand, the optimization process typically operates with a few it-
+allowing for dynamic constraint definition through losses during              erations, ensuring relatively fast performance. Finally, DragPoser
+runtime. Unlike previous methods limited to specific tracker con-             prioritizes high-frequency detail for accurate end-effector place-
+figurations, our approach can adapt to flexible tracker setups and            ment, which can sometimes introduce jitter. This can be mitigated
+can handle potential data loss due to occlusions or malfunctions.             by post-processing or by reducing the learning rate of the optimiza-
+In such instances, while there may be a slight reduction in pose or           tion process. Further research may explore alternative optimization
+end-effector accuracy for certain configurations, the structured la-          strategies to refine this behavior, such as employing adaptive learn-
+tent space and temporal predictor enable our method to generate               ing rate methods to control the optimization process better and re-
+plausible and smooth animations. Overall, our approach not only               duce overshoot.
+expands accessibility to motion capture but also proves to be versa-
+tile and effective in handling real-world challenges, showcasing its
+potential for practical applications.                                         Future Work Future research directions may involve exploring
+                                                                              the integration of various sensor types, such as computer vision,
+                                                                              within the dynamic constraints of the pose optimizer. This exten-
+Limitations Despite the notable achievements of our motion re-                sion would allow us to have additional sensor data, contributing to
+construction system, certain limitations need further considera-              a more robust and versatile motion capture system. To further en-
+tion. Firstly, in setups with only 3 sensors available, the lack of           hance the capabilities of our pose optimizer, we aim to introduce
+pelvis/root position tracking has a negative impact on the quality            additional constraints, such as look-at functionality or end-effector
+of our motion reconstruction. A promising approach would be to                pose preservation during editing. These improvements could pro-
+integrate a global position prediction module to overcome this lim-           vide more nuanced control over reconstructed motion, meeting di-
+itation and improve the overall system’s performance. Additionally,           verse user needs and preferences. To refine the latent space struc-
+while our system is trained with various user dimensions and en-              ture, we plan to investigate alternative generative approaches. This
+codes poses using dual quaternions, the lack of comprehensive data            includes exploring methods that prevent unbounded properties and
+specifically focusing on diverse user dimensions means we do not              ensure no empty spaces between valid regions. Such exploration
+explicitly validate its performance in such scenarios. Another po-            could result in a more compact and well-organized latent space,
+tential limitation arises in instances where the pose optimization            thus enhancing the system’s efficiency and performance. Lastly, de-
+process may inadvertently move the latent vector outside the valid            spite initially dismissing the idea of directly encoding temporality
+pose manifold. Although including the Temporal Predictor effec-               in the latent vectors due to increased complexity, we recognize it as
+tively encodes valid regions, the possibility of reconstructing in-           an intriguing avenue for future research. Currently, we encode this
+valid poses remains. This is primarily due to the weight used to              information in an external network. Revisiting this concept and re-
+balance between the Temporal Predictor and the optimization out-              searching efficient strategies to manage the expanded complexity
+puts. The lower the weight of the Temporal Predictor, the higher              could enhance the latent space representation.
+           J. L. Ponton et al. / DragPoser: Motion Reconstruction from Variable Sparse Tracking Signals via Latent Space Optimization         13 of 14
+
+7. Acknowledgements                                                            [CEJ*23] C ASTILLO, A NGELA, E SCOBAR, M ARIA, J EANNERET, G UIL -
+                                                                                 LAUME , et al. “BoDiffusion: Diffusing Sparse Observations for Full-
+This work has received funding from the European Union’s                         Body Human Motion Synthesis”. 2023 IEEE/CVF International Confer-
+Horizon 2020 Research and Innovation Programme un-                               ence on Computer Vision Workshops (ICCVW). Oct. 2023, 4223–4233.
+der HORIZON-CL4-2022-HUMAN-01 grant agreement No                                 DOI : 10.1109/ICCVW60793.2023.00456 3.
+
+101093159 (XR4ED) and grant agreement No 739578 (RISE),                        [CGK*19] C ASERMAN, P OLONA, G ARCIA -AGUNDEZ, AUGUSTO,
+from MCIN/AEI/10.13039/501100011033/FEDER “A way to                               KONRAD, ROBERT, et al. “Real-time body tracking in virtual reality
+                                                                                  using a Vive tracker”. Virtual Reality 23.2 (2019), 155–168. DOI:
+make Europe”, UE (PID2021-122136OB-C21), from the Depart-                         10.1007/s10055-018-0374-z 3.
+ment of Research and Universities of the Government of Catalonia
+                                                                               [Cla16] C LAVET, S IMON. “Motion Matching and The Road to Next-Gen
+(2021 SGR 01035), and the Government of the Republic of Cyprus                    Animation”. Proc. of the Game Dev. Conference. GDC’16. 2016 3.
+through the Deputy Ministry of Research, Innovation and Digital                [CSB*20] C HATZITOFIS, A NARGYROS, S AROGLOU, L EONIDAS,
+Policy. Jose Luis Ponton was also funded by the Spanish Ministry                  B OUTIS, P RODROMOS, et al. “HUMAN4D: A Human-Centric Mul-
+of Universities (FPU21/01927), and Eduard Pujol by Univer-                        timodal Dataset for Motions and Immersive Media”. IEEE Access 8
+sitat Politècnica de Catalunya and Banco Santander (FPI-UPC                       (2020), 176241–176262. DOI: 10.21227/xjzb-4y45 8.
+predoctoral grant).                                                            [DDC*21] D ITTADI, A NDREA, D ZIADZIO, S EBASTIAN, C OSKER, DAR -
+                                                                                  REN , et al. “Full-Body Motion from a Single Head-Mounted Device:
+                                                                                  Generating SMPL Poses from Partial Observations”. Proceedings of the
+References                                                                        IEEE/CVF International Conference on Computer Vision. 2021, 11687–
+                                                                                  11697. DOI: 10.1109/ICCV48922.2021.01148 2.
+[AAC22] A NDREOU, N EFELI, A RISTIDOU, A NDREAS, and C HRYSAN -
+  THOU , Y IORGOS . “Pose Representations for Deep Skeletal Animation”.        [DKP*23] D U, Y UMING, K IPS, ROBIN, P UMAROLA, A LBERT, et al.
+  Comp. Graph. Forum 41.8 (Dec. 2022). ISSN: 1467-8659. DOI: 10 .                 “Avatars Grow Legs: Generating Smooth Human Motion From Sparse
+  1111/cgf.14632 4.                                                               Tracking Inputs With Diffusion Model”. Proceedings of the IEEE/CVF
+                                                                                  Conference on Computer Vision and Pattern Recognition. 2023, 481–
+[ACB*22] A LIAKBARIAN, S ADEGH, C AMERON, PASHMINA, B OGO,                        490. DOI: 10.1109/CVPR52729.2023.00054 3.
+  F EDERICA, et al. “FLAG: Flow-based 3D Avatar Generation from
+  Sparse Observations”. 2022 IEEE/CVF Conference on Computer Vi-               [GB21] G HORBANI, N IMA and B LACK, M ICHAEL J. “SOMA: Solving
+  sion and Pattern Recognition (CVPR). New Orleans, LA, USA: IEEE,                Optical Marker-Based MoCap Automatically”. Proc. International Con-
+  June 2022, 13243–13252. ISBN: 978-1-66546-946-3. DOI: 10.1109/                  ference on Computer Vision. ICCV’21. Oct. 2021, 11117–11126. DOI:
+  CVPR52688.2022.01290 3.                                                         10.1109/ICCV48922.2021.01093 8.
+                                                                               [GMHP04] G ROCHOW, K EITH, M ARTIN, S TEVEN L., H ERTZMANN,
+[AGB*23] AGRAWAL, D HRUV, G UAY, M ARTIN, B UHMANN, JAKOB, et
+                                                                                  A ARON, and P OPOVI Ć, Z ORAN. “Style-Based Inverse Kinematics”.
+  al. “Pose and Skeleton-aware Neural IK for Pose and Motion Editing”.
+                                                                                  ACM Trans. Graph. 23.3 (Aug. 2004), 522–531. ISSN: 0730-0301. DOI:
+  SIGGRAPH Asia 2023 Conference Papers. SA’23. Sydney, Australia:
+                                                                                  10.1145/1015706.1015755 3.
+  ACM, 2023. ISBN: 9798400703157. DOI: 10 . 1145 / 3610548 .
+  3618217 2, 3.                                                                [GMSP21] G UZOV, V LADIMIR, M IR, AYMEN, S ATTLER, T ORSTEN, and
+                                                                                  P ONS -M OLL, G ERARD. “Human POSEitioning System (HPS): 3D Hu-
+[AHK*16] A NDREWS, S HELDON, H UERTA, I VAN, KOMURA, TAKU, et
+                                                                                  man Pose Estimation and Self-localization in Large Scenes from Body-
+  al. “Real-Time Physics-based Motion Capture with Sparse Sensors”.
+                                                                                  Mounted Sensors”. 2021 IEEE/CVF Conference on Computer Vision and
+  Proceedings of the 13th European Conference on Visual Media Pro-
+                                                                                  Pattern Recognition (CVPR). June 2021, 4316–4327. DOI: 10.1109/
+  duction (CVMP 2016). CVMP ’16. New York, NY, USA: ACM, Dec.
+                                                                                  CVPR46437.2021.00430 2.
+  2016, 1–10. ISBN: 978-1-4503-4744-0. DOI: 10 . 1145 / 2998559 .
+  2998564 3.                                                                   [HKA*18] H UANG, Y INGHAO, K AUFMANN, M ANUEL, A KSAN, E MRE,
+                                                                                  et al. “Deep Inertial Poser: Learning to Reconstruct Human Pose from
+[AL11] A RISTIDOU, A NDREAS and L ASENBY, J OAN. “FABRIK: A Fast,                 Sparse Inertial Measurements in Real Time”. ACM Transactions on
+  Iterative Solver for the Inverse Kinematics Problem”. Graphical Mod-            Graphics 37.6 (Dec. 2018), 185:1–185:15. ISSN: 0730-0301. DOI: 10.
+  els 73.5 (Sept. 2011), 243–260. ISSN: 15240703. DOI: 10.1016/j.                 1145/3272127.3275108 2.
+  gmod.2011.05.003 2.
+                                                                               [HWF*17] H UANG, J ING, WANG, Q I, F RATARCANGELI, M ARCO, et al.
+[ALCS18] A RISTIDOU, A NDREAS, L ASENBY, J OAN, C HRYSANTHOU,                     “Multi-Variate Gaussian-Based Inverse Kinematics”. Comp. Graph. Fo-
+  Y IORGOS, and S HAMIR, A RIEL. “Inverse Kinematics Techniques in                rum 36.8 (2017), 418–428. DOI: 10.1111/cgf.13089 3.
+  Computer Graphics: A Survey”. Comp. Graph. Forum 37.6 (2018), 35–
+  58. DOI: 10.1111/cgf.13310 3.                                                [JSQ*22] J IANG, J IAXI, S TRELI, PAUL, Q IU, H UAJIAN, et al. “Avatar-
+                                                                                  Poser: Articulated Full-Body Pose Tracking from Sparse Motion Sens-
+[ALL*20] A BERMAN, K FIR, L I, P EIZHUO, L ISCHINSKI, DANI, et al.                ing”. Computer Vision – ECCV 2022. Ed. by AVIDAN, S HAI, B ROSTOW,
+  “Skeleton-Aware Networks for Deep Motion Retargeting”. ACM Trans-               G ABRIEL, C ISSÉ, M OUSTAPHA, et al. Lecture Notes in Computer Sci-
+  actions on Graphics 39.4 (Aug. 2020). ISSN: 0730-0301, 1557-7368.               ence. Cham: Springer Nature Switzerland, 2022, 443–460. ISBN: 978-3-
+  DOI : 10.1145/3386569.3392462 4.                                                031-20065-6. DOI: 10 . 1007 / 978 - 3 - 031 - 20065 - 6 _ 26 2, 3,
+[AOG*21] A HUJA, K ARAN, O FEK, E YAL, G ONZALEZ -F RANCO, M AR,                  8.
+  et al. “CoolMoves: User Motion Accentuation in Virtual Reality”. Proc.       [JYG*22] J IANG, Y IFENG, Y E, Y UTING, G OPINATH, D EEPAK, et al.
+  ACM Interact. Mob. Wearable Ubiquitous Technol. 5.2 (June 2021). DOI:           “Transformer Inertial Poser: Real-time Human Motion Reconstruction
+  10.1145/3463499 3.                                                              from Sparse IMUs with Simultaneous Terrain Generation”. SIGGRAPH
+[ASA24] A MI -W ILLIAMS, T EMI, S ERGHIDES, C HRISTINA -G EORGIA,                 Asia 2022 Conference Papers. SA ’22. New York, NY, USA: ACM, Nov.
+  and A RISTIDOU, A NDREAS. “Digitizing traditional dances under ex-              2022, 1–9. ISBN: 978-1-4503-9470-3. DOI: 10 . 1145 / 3550469 .
+  treme clothing: The case study of Eyo”. Journal of Cultural Heritage            3555428 2, 9.
+  67 (2024), 145–157. ISSN: 1296-2074. DOI: https : / / doi . org /            [Ken12] K ENWRIGHT, B EN. “Inverse Kinematics – Cyclic Coordinate De-
+  10.1016/j.culher.2024.02.011 2.                                                scent (CCD)”. Journal of Graphics Tools 16.4 (Oct. 2012), 177–217.
+[ASC19] A RISTIDOU, A NDREAS, S HAMIR, A RIEL, and C HRYSANTHOU,                 ISSN : 2165-347X. DOI : 10.1080/2165347X.2013.823362 2.
+  Y IORGOS. “Digital Dance Ethnography: Organizing Large Dance Col-            [LH19] L OSHCHILOV, I LYA and H UTTER, F RANK. “Decoupled Weight
+  lections”. J. Comput. Cult. Herit. 12.4 (Nov. 2019). ISSN: 1556-4673.          Decay Regularization”. ICLR 2019. Jan. 2019. DOI: 10 . 48550 /
+  DOI : 10.1145/3344383 8.                                                       arXiv.1711.05101. arXiv: 1711.05101 8.
+14 of 14            J. L. Ponton et al. / DragPoser: Motion Reconstruction from Variable Sparse Tracking Signals via Latent Space Optimization
+
+[LJ24] L EE, J IYE and J OO, H ANBYUL. “Mocap Everyone Everywhere:              [RBH*21] R EMPE, DAVIS, B IRDAL, T OLGA, H ERTZMANN, A ARON, et
+   Lightweight Motion Capture with Smartwatches and a Head-Mounted                al. “HuMoR: 3D Human Motion Model for Robust Pose Estimation”.
+   Camera”. 2024 IEEE/CVF Conference on Computer Vision and Pattern               2021 IEEE/CVF International Conference on Computer Vision (ICCV).
+   Recognition (CVPR). 2024, 1091–1100. DOI: 10.1109/CVPR52733.                   Oct. 2021, 11468–11479. DOI: 10 . 1109 / ICCV48922 . 2021 .
+   2024.00110 2.                                                                  01129 3, 8, 9.
+[LMR*15] L OPER, M ATTHEW, M AHMOOD, NAUREEN, ROMERO,                           [SMK22] S TARKE, S EBASTIAN, M ASON, I AN, and KOMURA, TAKU.
+  JAVIER, et al. “SMPL: A Skinned Multi-Person Linear Model”. ACM                 “DeepPhase: Periodic Autoencoders for Learning Motion Phase Mani-
+  Transactions on Graphics 34.6 (Nov. 2015), 248:1–248:16. ISSN: 0730-            folds”. ACM Transactions on Graphics 41.4 (July 2022), 136:1–136:13.
+  0301. DOI: 10.1145/2816795.2818013 3.                                           ISSN : 0730-0301. DOI : 10.1145/3528223.3530178 3.
+
+[LSY*23] L EE, S UNMIN, S TARKE, S EBASTIAN, Y E, Y UTING, et al.               [SSY*23] S HI, M INGYI, S TARKE, S EBASTIAN, Y E, Y UTING, et al.
+  “QuestEnvSim: Environment-Aware Simulated Motion Tracking from                  “PhaseMP: Robust 3D Pose Estimation via Phase-conditioned Human
+  Sparse Sensors”. ACM SIGGRAPH 2023 Conference Proceedings. SIG-                 Motion Prior”. 2023 IEEE/CVF International Conference on Com-
+  GRAPH ’23. New York, NY, USA: ACM, July 2023, 1–9. ISBN:                        puter Vision (ICCV). Oct. 2023, 14679–14691. DOI: 10 . 1109 /
+  9798400701597. DOI: 10.1145/3588432.3591504 3.                                  ICCV51070.2023.01353 3.
+[LWJ*22] L IU, H SUEH -T I D EREK, W ILLIAMS, F RANCIS, JACOBSON,               [VMB21] V ICTOR, L ÉON, M EYER, A LEXANDRE, and B OUAKAZ,
+  A LEC, et al. “Learning Smooth Neural Functions via Lipschitz Regu-             S AÏDA. “Learning-based pose edition for efficient and interactive de-
+  larization”. en. Special Interest Group on CG and Interactive Techniques        sign”. Computer Animation and Virtual Worlds 32.3-4 (2021), e2013.
+  Conference Proceedings. Vancouver BC Canada: ACM, Aug. 2022, 1–                 DOI : 10.1002/cav.2013 3.
+  13. ISBN: 9781450393379. DOI: 10.1145/3528233.3530713 3.                      [vMRBP17] Von M ARCARD, T IMO, ROSENHAHN, B ODO, B LACK,
+[LZCV20] L ING, H UNG Y U, Z INNO, FABIO, C HENG, G EORGE, and VAN                M ICHAEL J., and P ONS -M OLL, G ERARD. “Sparse Inertial Poser: Auto-
+  D E PANNE, M ICHIEL. “Character Controllers Using Motion VAEs”.                 matic 3D Human Pose Estimation from Sparse IMUs”. Comput. Graph.
+  ACM Transactions on Graphics 39.4 (Aug. 2020), 40:40:1–40:40:12.                Forum 36.2 (May 2017), 349–360. ISSN: 0167-7055. DOI: 10.1111/
+  ISSN : 0730-0301. DOI : 10.1145/3386569.3392422 3.                              cgf.13131 2.
+[MGT*19] M AHMOOD, NAUREEN, G HORBANI, N IMA, T ROJE, N IKO -                   [VOB*22] VOLETI, V IKRAM, O RESHKIN, B ORIS, B OCQUELET, F LO -
+  LAUS F., et al. “AMASS: Archive of Motion Capture as Surface Shapes”.           RENT , et al. “SMPL-IK: Learned Morphology-Aware Inverse Kinemat-
+  International Conference on Computer Vision. Oct. 2019, 5442–5451.              ics for AI Driven Artistic Workflows”. SIGGRAPH Asia 2022 Technical
+  DOI : 10.1109/ICCV.2019.00554 8.                                                Communications. SA ’22. New York, NY, USA: ACM, Nov. 2022, 1–7.
+                                                                                  ISBN : 978-1-4503-9465-9. DOI : 10.1145/3550340.3564227 3.
+[MSK23] M ILEF, N ICHOLAS, S UEDA, S HINJIRO, and K ALANTARI,
+  N IMA K HADEMI. “Variational Pose Prediction with Dynamic Sample              [WTR11] W U, X IAOMAO, T OURNIER, M AXIME, and R EVERET, L I -
+  Selection from Sparse Tracking Signals”. Comp. Graph. Forum 42.2                ONEL . “Natural Character Posing from a Large Motion Database”. IEEE
+  (2023), 359–369. ISSN: 1467-8659. DOI: 10.1111/cgf.14767 3.                     Computer Graphics and Applications 31.3 (2011), 69–77. DOI: 10 .
+                                                                                  1109/MCG.2009.111 3.
+[OBH*21] O RESHKIN, B ORIS N., B OCQUELET, F LORENT, H ARVEY,
+  F ELIX G., et al. “ProtoRes: Proto-Residual Network for Pose Author-          [WWY22] W INKLER, A LEXANDER, W ON, J UNGDAM, and Y E, Y UTING.
+  ing via Learned Inverse Kinematics”. Int. Conf. on Learning Represen-           “QuestSim: Human Motion Tracking from Sparse Sensors with Simu-
+  tations. Oct. 2021. DOI: 10.48550/arXiv.2106.01981 2, 3.                        lated Avatars”. SIGGRAPH Asia 2022 Conference Papers. Daegu Re-
+                                                                                  public of Korea: ACM, Nov. 2022, 1–8. ISBN: 978-1-4503-9470-3. DOI:
+[PFAG20] PAVLLO, DARIO, F EICHTENHOFER, C HRISTOPH, AULI,
+                                                                                  10.1145/3550469.3555411 2, 3.
+   M ICHAEL, and G RANGIER, DAVID. “Modeling Human Motion with
+   Quaternion-Based Neural Networks”. International Journal of Com-             [YKL21] YANG, D ONGSEOK, K IM, D OYEON, and L EE, S UNG -H EE.
+   puter Vision 128.4 (Apr. 2020), 855–872. ISSN: 1573-1405. DOI: 10 .            “Lobstr: Real-time lower-body pose prediction from sparse upper-body
+   1007/s11263-019-01245-6 5.                                                     tracking signals”. Comp. Graph. Forum 40.2 (2021), 265–275. DOI: 10.
+                                                                                  1111/cgf.142631 3.
+[PGA18] PAVLLO, DARIO, G RANGIER, DAVID, and AULI, M ICHAEL.
+  “QuaterNet: A Quaternion-based Recurrent Model for Human Motion”.             [YLHX22] Y E, YONGJING, L IU, L IBIN, H U, L EI, and X IA, S HI -
+  British Machine Vision Conference (BMVC). May 2018. DOI: https:                 HONG . “Neural3Points: Learning to Generate Physically Realistic Full-
+  //arxiv.org/abs/1805.06485 5.                                                   body Motion for Virtual Reality Users”. Comp. Graph. Forum 41.8
+                                                                                  (2022), 183–194. ISSN: 1467-8659. DOI: 10.1111/cgf.14634 3.
+[PGH*22] P ENG, X UE B IN, G UO, Y UNRONG, H ALPER, L INA, et al.
+  “ASE: large-scale reusable adversarial skill embeddings for physically        [YZH*22] Y I, X INYU, Z HOU, Y UXIAO, H ABERMANN, M ARC, et al.
+  simulated characters”. ACM Trans. Graph. 41.4 (July 2022). ISSN: 0730-          “Physical Inertial Poser (PIP): Physics-aware Real-time Human Motion
+  0301. DOI: 10.1145/3528223.3530110 3.                                           Tracking from Sparse Inertial Sensors”. 2022 IEEE/CVF Conference on
+                                                                                  Computer Vision and Pattern Recognition (CVPR). New Orleans, LA,
+[PTL*23] PAN, X INGANG, T EWARI, AYUSH, L EIMKÜHLER, T HOMAS, et
+                                                                                  USA: IEEE, June 2022, 13157–13168. ISBN: 978-1-66546-946-3. DOI:
+  al. “Drag Your GAN: Interactive Point-based Manipulation on the Gener-
+                                                                                  10.1109/CVPR52688.2022.01282 2.
+  ative Image Manifold”. ACM SIGGRAPH 2023 Conference Proceedings.
+  New York, NY, USA: ACM, July 2023, 1–11. ISBN: 9798400701597.                 [YZH*23] Y I, X INYU, Z HOU, Y UXIAO, H ABERMANN, M ARC, et al.
+  DOI : 10.1145/3588432.3591500 6.                                                “EgoLocate: Real-time Motion Capture, Localization, and Mapping
+                                                                                  with Sparse Body-mounted Sensors”. ACM Transactions on Graph-
+[PYA*23] P ONTON, J OSE L UIS, Y UN, H AORAN, A RISTIDOU, A N -
+                                                                                  ics 42.4 (July 2023), 76:1–76:17. ISSN: 0730-0301. DOI: 10 . 1145 /
+  DREAS, et al. “SparsePoser: Real-Time Full-Body Motion Reconstruc-
+                                                                                  3592099 2.
+  tion from Sparse Data”. ACM Trans. Graph. 43.1 (Oct. 2023). ISSN:
+  0730-0301. DOI: 10.1145/3625264 2–4, 8, 9.                                    [YZX21] Y I, X INYU, Z HOU, Y UXIAO, and X U, F ENG. “TransPose: Real-
+                                                                                  Time 3D Human Translation and Pose Estimation with Six Inertial Sen-
+[PYAP22] P ONTON, J OSE L UIS, Y UN, H AORAN, A NDUJAR, C ARLOS,
+                                                                                  sors”. ACM Transactions on Graphics 40.4 (July 2021), 86:1–86:13.
+  and P ELECHANO, N URIA. “Combining Motion Matching and Orienta-
+                                                                                  ISSN : 0730-0301. DOI : 10.1145/3450626.3459786 2.
+  tion Prediction to Animate Avatars for Consumer-Grade VR Devices”.
+  Comp. Graph. Forum (2022). ISSN: 1467-8659. DOI: 10.1111/cgf.                 [ZSW*23] Z HENG, X IAOZHENG, S U, Z HUO, W EN, C HAO, et al. “Realis-
+  14628 2, 3.                                                                     tic Full-Body Tracking from Sparse Observations via Joint-Level Mod-
+                                                                                  eling”. Proceedings of the IEEE/CVF International Conference on Com-
+                                                                                  puter Vision. 2023, 14678–14688. DOI: 10 . 1109 / ICCV51070 .
+                                                                                  2023.01349 3.
+

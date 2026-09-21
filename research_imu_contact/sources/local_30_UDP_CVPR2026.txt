@@ -1,0 +1,914 @@
+                                          Ultra Diffusion Poser: Diffusion-Based Human Motion Tracking From Sparse
+                                                 Inertial Sensors and Ranging-Based Between-Sensor Distances
+
+                                                                                Dominik Hollidt Tommaso Bendinelli Christian Holz
+                                                                                Department of Computer Science, ETH Zurich, Switzerland
+                                                                  {dominik.hollidt, tommaso.bendinelli, christian.holz}@inf.ethz.ch
+arXiv:2606.02153v1 [cs.CV] 1 Jun 2026
+
+
+
+
+                                          6 IMU+UWB sensors                               reconstruction of                               diﬀuse pose with                 SMPL Pose Estimation
+                                         (inertial cues & pairwise distances)            3D sensor positions                            UWB-Diﬀusion Guidance
+                                                   s1                              Spatial Layout                                                guidance for
+                                                                                                                                                pose correction
+                                                                         UWB          Module                   s1        UWB
+                                                                       distances
+                                                                                          MDS
+
+
+
+                                                        s2        s3
+                                              s4                                                              s2      s3 s s
+                                                                                                         s4              1, ...,   6
+
+
+
+
+                                                                s6                                            s5 s6
+                                                 s5                                unoriented sensor
+                                                                                         layout
+                                                                         IMUs                                            IMUs
+                                                                                    Rotation Estimator                                        Diﬀusion Denoising
+                                                                                                                                        t-1                        t
+
+
+                                        Figure 1. Our method UDP improves wearable IMU+UWB pose estimation by extending UWB as an auxiliary feature to actively
+                                        model its geometric constraints. The Spatial Layout Module reconstructs 3D sensor positions from UWB measurements, providing a
+                                        physically-informed input that conditions a diffusion model to predict SMPL poses. UWB-Diffusion Guidance encourages alignment
+                                        between predicted poses and measured distances during diffusion sampling, improving accuracy and producing consistent motions.
+
+
+                                                                           Abstract                                                    ages alignment between predicted poses and measured dis-
+                                                                                                                                       tances during diffusion sampling. Together, these contri-
+                                        Methods using inertial measurement units (IMUs) provide                                        butions enable our model to achieve state-of-the-art per-
+                                        a wearable alternative to camera-based motion capture. To                                      formance, reducing joint position error by up to 22% over
+                                        mitigate drift from inertial signals, recent sparse inertial                                   prior work. Code can be found here https://github.
+                                        pose estimators integrate inter-sensor distances measured                                      com/eth-siplab/UltraDiffusionPoser.
+                                        by ultra-wideband (UWB) ranging. So far, UWB distances
+                                        have only been used as an additional input feature, ignoring                                   1. Introduction
+                                        the physical constraints they impose on sensor positions.
+                                        However, these distances can also be used to reconstruct the                                   Human pose estimation is fundamental for many applica-
+                                        underlying 3D sensor layout, which in turn provides more                                       tions in augmented and virtual reality and healthcare [8, 50].
+                                        informative input for pose reconstruction. We propose Ul-                                      While numerous camera-based approaches exist to estimate
+                                        tra Diffusion Poser, a diffusion model that explicitly models                                  human poses, they present limitations for widespread adop-
+                                        these geometric constraints. It includes a Spatial Layout                                      tion. External cameras mounted in the environment have
+                                        Module that analytically reconstructs the 3D sensor posi-                                      a fixed sensing area and suffer from occlusions when the
+                                        tions from UWB measurements. These sensor positions are                                        scene is crowded [5]. Pose estimation from wearable cam-
+                                        used alongside IMU signals and UWB distances as a con-                                         eras depends on environmental factors such as lighting or
+                                        ditioning signal during diffusion. Still, network predictions                                  background, suffers from occlusions [31, 36, 41, 48], raises
+                                        can violate inter-sensor distance measurements. To address                                     privacy concerns, and is computationally demanding [12].
+                                        this, we introduce UWB-Diffusion Guidance, which encour-                                          In contrast, compact body-worn sensors such as inertial
+measurement units offer a minimally obtrusive alternative         painting [30, 33] that fills in the current motion, given the
+for human pose estimation, but accurate motion capture still      previous motion and the conditioning signal. In summary,
+requires numerous sensors. While commercial inertial mo-          we provide the following main contributions:
+tion capture systems, such as Xsens [40] or Noitom [27],          • UDP a novel fully learnable motion estimation sys-
+achieve high accuracy with 17–19 sensors, current research          tem, that achieves state-of-the-art pose estimation
+is focusing on achieving the same performance with a more           from IMU+UWB measurements using an autoregres-
+practical six sensor configuration [4, 14, 45].                     sive diffusion-inpainting model. UDP explicitly mod-
+    While learning pipelines have improved pose accuracy,           els the geometric constraints imposed by inter-sensor
+inertial approaches are inherently limited by noisy acceler-        UWB distances via the Spatial Layout Module and UWB-
+ation and angular velocity measurements from IMUs, which            Diffusion Guidance.
+cause drifting pose estimations. The lack of absolute mea-        • The Spatial Layout Module reconstructs the 3D sensor
+surements of IMUs, i.e., no direct observations between             positions. Using multi-dimensional scaling, the 3D lay-
+frames in space or across body segments, makes drift cor-           out is obtained in closed form from UWB distances and
+rection very hard. As a result, sparse inertial pose estimators     serves as a strong prior for full-body pose estimation.
+cannot fully resolve pose errors.                                 • UWB-Diffusion Guidance integrates in-the-loop forward
+    To address these limitations, recent approaches have            kinematics into the diffusion sampling process to correct
+combined IMU measurements with inter-sensor distances               pose estimations that do not align with inter-sensor dis-
+obtained via ultra-wideband (UWB) ranging [4, 20, 42].              tance measurements, thereby reducing implausible or un-
+By providing non-drifting body-fixed pairwise distances be-         realistic pose estimations.
+tween sensors, UWB adds on-body constraints that help
+mitigate drift and thus produce more accurate and stable          2. Related Work
+pose estimates [4, 20]. However, previous IMU+UWB                 Motion Capture from Sparse Inertial Sensors. Com-
+methods have treated inter-sensor distances as auxiliary fea-     pared to camera-based systems, motion capture from sparse
+tures. Instead, enforcing them as constraints on valid sensor     inertial sensors offers greater flexibility in placement, mo-
+positions enables the recovery of the full 3D sensor layout,      bility, and robustness to occlusion. Large motion-capture
+a more informative input than raw distance scalars. Second,       datasets such as TotalCapture [32], DIP-IMU [14], and
+by ignoring these distance constraints during inference, ex-      AMASS [23] have accelerated learning-based inertial pose
+isting approaches can produce poses that directly conflict        estimation. These datasets enable the generation of syn-
+with the measured distances, e.g., estimating wrist positions     thetic IMU measurements by placing “virtual” sensors on
+70 cm apart when UWB reports 90 cm.                               mesh vertices [9, 12, 26, 29]. Still, synthetic data fails to
+    In this paper, we introduce Ultra Diffusion Poser (UDP),      fully capture real-world sensor noise and drift.
+a diffusion-based method that explicitly models the inter-            Recent methods for inertial pose estimation from six
+sensor distances as geometric signals, incorporating their        IMUs can be broadly categorized into purely learnable sys-
+spatial constraints directly into the model architecture. Our     tems [14, 19, 20, 33, 35, 38] and hybrid systems that com-
+approach benefits from two main novelties. First, the Spa-        bine neural networks with post-optimization or physics-
+tial Layout Module (SPL) analytically reconstructs the 3D         based simulation [4, 42, 45–47]. The first learning based
+sensor layout from just inter-sensor distances using multi-       method DIP [14], introduced a recurrent neural network that
+dimensional scaling (MDS). Because the MDS reconstruc-            learns kinematic priors from large-scale motion databases.
+tion is only defined up to rotation and reflection, we in-        TIP [19] extends previous work by generating pose and
+troduce a learnable Rotation Estimator, trained end-to-end        terrain simultaneously using a transformer-based model.
+with the diffusion model, to recover oriented 3D sensor po-       TransposePose introduces a multi-stage training process
+sitions and their reflected version. These 3D sensor po-          that predicts intermediate leaf joints for stabilized train-
+sitions serve as a strong conditional signal, acting as a         ing. PIP [45] incorporated physical constraints (e.g., foot-
+pose prior during the diffusion denoising process. Second,        floor contact) via a physics optimizer to reduce artifacts and
+UWB-Diffusion Guidance encourages consistency between             drift. PNP [46] added better physics-aware IMU simulation.
+the predicted pose and the measured inter-sensor distances,       GlobalPose [47] estimates contact points into the physics
+following diffusion classifier guidance [6]. During diffu-        simulation to reduce the flat world assumption. In parallel,
+sion sampling, the predicted pose is continuously mapped          research has pushed beyond the canonical six-IMU setup by
+to sensor positions via in-the-loop forward kinematics, and       inferring the entire body from fewer sensors [1, 18, 51, 53].
+the alignment between predicted and measured inter-sensor         While TIC [54] and MODA [39] propose learning-based ap-
+distances is used to steer the denoising process toward sat-      proaches to reduce drift, IMU-based methods remain inher-
+isfying UWB distances. To encourage smooth predictions            ently constrained by noisy inertial signals, whose integra-
+over long sequences, we use autoregressive diffusion in-          tion inevitably leads to drift and degraded pose accuracy.
+Motion Estimation with Ultra-Wideband Ranging. To                  At each timestamp t, the inertial measurements are given
+reduce drift from inertial sensors [43], UIP [4] combines       by (Rt , At ), where Rt ∈ Rk×3×3 represents the sensor
+IMUs with ultra-wideband ranging to obtain direct inter-        orientations, and At ∈ Rk×3 denotes their accelerations,
+sensor distance measurements. Although UWB is affected          both expressed in a common global frame. The pairwise
+by body occlusions, this fusion substantially reduces pose      distances dij between sensor i and j, are represented by
+drift compared to IMU-only systems. UIP showed that             matrix Dt ∈ Rk×k .
+passing the pairwise UWB distances through a graph convo-          From those inputs, UDP outputs human motion, which
+lutional network improves pose estimation. UMotion [20]         is parameterized using the SMPL body model (Θt , Tt , β)
+proposes a Kalman filter to model and correct UWB mea-          [21]. Θt ∈ R24×3 defines the local joint rotations, Tt ∈ R3
+surement noise, but requires manual parameter tuning and        specifies the global body translation at time t, and β is the
+cannot estimate global translation. GIP [42] extends UWB        shape vector that characterizes the individual’s body shape.
+posing to two person pose estimation and refines their trans-
+                                                                   Overall, UDP estimates the human motion from a se-
+lation through an optimization framework. While all meth-
+                                                                quence of N measurements, R = {Rt }N                     N
+                                                                                                         t=0 , A = {At }t=0 ,
+ods make important progress in combining UWB and iner-                      N
+                                                                D = {Dt }t=0 :
+tial sensing, they do not explicitly enforce pose consistency
+with UWB measurements or exploit the full 3D sensor lay-
+out. UDP uses these insights to address these limitations.                     (Θ, T) = UDP(R, A, D, β)                   (1)
+
+
+Diffusion-Based Motion Estimation. Recently, methods            3.2. Full-Body Pose Estimation
+have demonstrated the effectiveness of diffusion [10, 28]       The architecture of UDP is visualized in Fig. 2. At its core,
+for motion generation [16, 22, 30] and camera-based pose        UDP is an autoregressive diffusion inpainting model that
+estimation [13, 48]. Additionally, it has been shown that       predicts the current motion given previously predicted mo-
+diffusion’s generative capabilities benefit underconstrained    tion and the current conditioning signal.
+pose reconstruction from sparse trajectories [7, 15, 44],
+effectively filling in missing body parts. Similar to us,           Instead of conditioning motion generation solely on raw
+AGRoL [7] uses a seq-to-seq approach for pose estimation        IMU and UWB measurements, the Spatial Layout Module
+from three-point tracking. DiffusionPoser [33] applied a        provides the 3D sensor layout that serves as a strong ge-
+transformer-based diffusion model to inertial motion cap-       ometric prior during diffusion. First, it reconstructs an ini-
+ture, enabling a greater range of potential sensor place-       tial 3D sensor layout in closed form using multidimensional
+ments. Although quantitative improvements were limited          scaling (MDS) based only on inter-sensor distances. Since
+and the implementation is not publicly available, the work      the MDS reconstruction is only defined up to rotation and
+provides an important step toward diffusion-driven inertial     reflection, a learnable Rotation Estimator orients both the
+pose estimation. Building on this line of research, we intro-   initial MDS layout and its reflected version to produce the
+duce UWB diffusion guidance to predicted poses that are         final oriented sensor layouts (PSP L , P̄SP L ). The oriented
+consistent with UWB distance measurements.                      3D sensor layout, together with the IMU and UWB signals,
+                                                                form the conditioning input to the diffusion model.
+3. Method                                                           To ensure that the generated poses remain consistent
+                                                                with measured inter-sensor distances, we introduce UWB-
+We tailor UDP for the specific purpose of inertial body-        Diffusion Guidance. During diffusion sampling, this mech-
+pose estimation from global orientations R, global accel-       anism uses forward kinematics (FK) to compute the pre-
+erations A, and pairwise inter-sensor distances D. UDP is       dicted sensor positions from the current SMPL pose. These
+a fully learnable autoregressive diffusion-inpainting model     predictions are compared to the measured UWB distances,
+that integrates geometric constraints from inter-sensor dis-    and the diffusion step is guided to correct poses that violate
+tances into its architecture, first with the Spatial Layout     the constraints. By integrating FK directly into the sampling
+Module that reconstructs 3D sensor positions using MDS          loop, UWB-Diffusion Guidance produces smooth and real-
+from inter-sensor distances in closed-form and through          istic motion even under noisy sensor data, whereas simple
+UWB-Diffusion Guidance to align the predicted poses             per-frame post-optimization would lead to jitter and poten-
+with the measured inter-sensor distances.                       tially unrealistic motions [42].
+                                                                    In the following subsections, we first describe the motion
+3.1. Problem Statement
+                                                                representation and the conditioning signals used by UDP.
+UDP, similar to prior work [4, 14, 19, 45], aims to recon-      We then present the components of our method: the Spa-
+struct human motion using k = 6 sparse inertial sensors and     tial Layout Module, the autoregressive diffusion inpainting
+their pairwise distances obtained via UWB.                      process, and the UWB-Diffusion Guidance mechanism.
+                                                                                                                                                 Enter LaTeX \mathcal{M}t
+                                                                                                                              Enter LaTeX \mathcal{M} hist
+
+
+                                       Spatial Layout Module                                                          Motion Diﬀusion Inpainting
+                                                                                                                                  Show SVG                 Show SVG
+                                                                                                                                                 Download SVG           Download SVG
+                                                                                                                                                                      Serif                  Serif        SMPL Pose
+       Sensor Inputs                                                                                                                                                                                      Estimation
+(inertial cues & pairwise distances)                                                                             t =T ... 1                                            UWB-Diﬀusion Guidance
+                                                                                                                    motion history           noisy motion
+                                                                                            3D
+                                           MDS                           normalize &
+                                                                           reﬂect      sensor layouts                                                                     t-1          diﬀusion
+                                                                                                                                                                                        noise
+                                                       initial unoriented                                                                         diﬀusion step
+                                                      3D sensor positions                                                                    t
+                                                                                                                   conditioning                    embedding
+                                                                                                        concat
+
+                                          Rotation
+                                          Estimator
+                                                                                                                                LSTM      Enter LaTeX \hat{\mathcal{M}}0
+                                                           orient initial sensor
+                                              ,                   layout                                                  Diﬀusion Denoiser Show SVG Download SVG        Serif
+
+
+                                                                                                                                                                                    correction of
+                                                                                                                                                                             predicted sensor positions
+                                                                                                                                             denoised motion
+                                                                                                                                                                                    in-the-loop
+                                                                                                                                                                                forward kinematics
+
+
+
+
+Figure 2. The Spatial Layout Module applies metric MDS to the pairwise distance matrix D to recover initial sensor positions, which are
+then oriented by a learnable Rotation Estimator. The resulting 3D sensor layout provides a strong conditioning signal for the diffusion
+model. The autoregressive diffusion inpainting model extends the previously predicted motion based on the current conditioning signal to
+ensure smooth motion prediction. UWB-Diffusion Guidance steers the pose predictions to align with the measured inter-sensor distances.
+
+
+3.2.1. Motion Representation                                                                               In Euclidean space, this classical MDS problem has a
+To obtain the final motion estimation, UDP diffuses the mo-                                                closed-form solution[37]:
+tion representation conditioned on the recovered 3D sensor                                                                                             1 ⊤                           1
+layout and IMU+UWB measurements.                                                                                              H=I−                       11 ,                   B = − HD(2) H,                         (5)
+                                                                                                                                                       k                             2
+   We represent our motion sequence of length N with joint
+orientations in 6D representation [52] and translation ac-                                                 where D(2) contains squared distances, I is the k × k iden-
+cording to the SMPL model:                                                                                 tity matrix, and 1 is a k-dimensional vector of ones.
+                                                                                                               We then perform a singular value decomposition of the
+                              M ∈ RN ×147 = [Θ6D , T]                                         (2)
+                                                                                                           Gram matrix:
+   For better generalization, we normalize each motion                                                                             B = UΣV⊤ ,                      (6)
+sequence M such that its root joint always starts at
+                                                                                                              and obtain the 3D sensor coordinates from the top three
+(0, root height, 0). This canonical normalization enables the
+                                                                                                           eigenvectors and corresponding eigenvalues:
+model to predict accurate positions while mitigating repre-
+sentation shifts in long sequences.                                                                                                                                                        1/2
+   To ensure smooth and continuous motion prediction, we                                                                                                XMDS = U3 Σ3 .                                                 (7)
+use autoregressive diffusion inpainting. We prepend the NH                                                     Here, XMDS ∈ Rk×3 contains the unoriented 3D spatial
+previous predicted frames Mhist to M, normalized such                                                      positions of k sensors. This layout is defined up to transla-
+that its final frame aligns with the first frame of M.                                                     tion, rotation, and reflection, and thus the sequence of lay-
+   The diffusion model Dθ diffuses the motion representa-                                                  outs is temporally incoherent.
+tion based on a conditional signal. This condition tensor C                                                    To resolve this ambiguity, the SPL first brings the MDS
+includes the recovered 3D sensor positions (PSP L , P̄SP L ),                                              layouts into a canonical, normalized frame, which is then
+sensor orientations as rotation matrices, accelerations, inter-                                            oriented by a learned Rotation Estimator. The initial unori-
+sensor distances, and the body shape:                                                                      ented layouts are normalized such that the pelvis is at the
+                                                                                                           origin, the layout is upright (root-head aligns with y-axis)
+              C ∈ RN ×154 = [PSP L , P̄SP L , R, A, D, β]                                     (3)
+                                                                                                           and forward facing (left wrist lies on the positive direction
+3.2.2. Spatial Layout Module                                                                               of the XY-plane). To ensure temporal consistency, frame-
+The inter-sensor distances constrain the sensor positions to                                               wise reflections are resolved whenever the current layout
+a fixed spatial configuration. To recover the corresponding                                                deviates from the previous one by more than a threshold,
+3D sensor layout, our SPL module applies metric multidi-                                                   i.e., when ∥Xt−1 − Xt ∥22 > c. This yields a normalized
+mensional scaling (MDS) [2, 24, 25]. Given the pairwise                                                    and temporally consistent sequence of 3D sensor positions
+distance matrix Dt ∈ Rk×k , MDS finds the k sensor points                                                  X. Since the entire sequence may still be reflected, we ad-
+xi in 3D space whose inter-point distances best match the                                                  ditionally generate a mirrored version X̄. We then retain
+measured distances dij by solving:                                                                         both X and X̄ as layout candidates, one of which corre-
+                                                                                                           sponds to the correct configuration. Finally, a Rotation Es-
+                       X                      2
+              argmin         |xi − xj |2 − dij .         (4)                                               timator predicts the orientation of the sensor layout. It takes
+                     XMDS ∈Rk×3 i<j                                                                        the normalized layout as input and learns to rotate it into a
+consistent, correctly oriented configuration. The Rotation       Algorithm 1 UWB-guided conditional diffusion sampling
+Estimator is trained end-to-end together with the diffusion      Require: Condition C, history Mhist , UWB distances dij
+model:                                                           Ensure: Denoised motion M0
+      RM DS , Pres = RotEstimator(X, X̄, R, A, D),        (8)     1: MT ∼ N (0, I)
+                                                                  2: for t = T down to 1 do
+The initial MDS layout may be imperfect due to sensor             3:     M̂0 ← Dθ (Mt , Mhist , C, t)             ▷ denoise
+noise. Therefore, we refine it by adding an estimated resid-      4:     dˆij ← FK(M̂0 )               ▷ predicted distances
+ual Pres per sensor point:
+                                                                         ϵuwb ← i<j ∥dˆij − dij ∥2 ▷ UWB guidance loss
+                                                                                 P
+                                                                  5:
+ PSP L = RM DS X + Pres , P̄SP L = RM DS X̄ + Pres , (9)          6:     µ̃t ← µt (Mt , M̂0 ) − λ Σt ∇ϵuwb      ▷ guidance
+   Thus, we obtain our recovered sensor layouts                   7:     Mt−1 ∼ N µ̃t , Σt                         ▷ sample
+                                                                  8: end for
+[PSP L , P̄SP L ] that represent the sensor positions of head,
+                                                                  9: return M0
+pelvis, wrists, and knees. We use a 3-layer LSTM [11] for
+the Rotation Estimator.
+3.2.3. Motion Diffusion Inpainting                               3.2.4. UWB-Diffusion Guidance
+UDP adopts the Denoising Diffusion Probabilistic Model           Even with strong conditioning from the 3D sensor layout
+(DDPM) formulation [10]. At each diffusion step t, the           and UWB distances, the diffusion process can still produce
+denoiser Dθ predicts the clean motion M̂0 from the noisy         motions that violate the inter-sensor distances D. Enforcing
+motion representation Mt , conditioned on the input signal       distances on the SMPL pose via a simple frame-wise pose
+C and the previously predicted motion segment Mhist of           optimization can lead to infeasible joint angles, unnatural
+length NH :                                                      poses, and jittery poses due to sensor noise.
+                                                                     Hence, we incorporate UWB-Diffusion guidance to steer
+               M̂0 = Dθ (Mt , Mhist , C, t)              (10)    the diffusion process toward satisfying the pairwise dis-
+   We utilize diffusion-based inpainting [30, 33] to enforce     tance constraints, encouraging agreement with the mea-
+temporal consistency across overlapping windows. Specif-         sured inter-sensor distances D, see Alg. 1.
+ically, the noisy motion Mt , the motion history Mhist ,             UWB-Diffusion guidance makes use of classifier guid-
+and the condition C are projected into a shared embedding        ance [6] that offers a mechanism to control the diffu-
+space. The condition and noisy motion are added and ap-          sion sampling process. During inference, each noisy
+pended to the motion history, and a learnable history token      sample Mt−1 is sampled from a Gaussian with mean
+he is added to mark Mhist . The diffusion step t is encoded      µt (Mt−1 , M̂0 ) that is determined by Mt−1 and M̂0 , as in
+via an MLP, added and prepended to the sequence, yielding        standard diffusion sampling [6, 48]. By shifting this mean
+the combined input S of length 1 + NH + N . We denoise           in the direction of a gradient of a function ϵ that encourages
+S using a LSTM [11].                                             desired properties, the diffusion process can be directed
+   During inference, we apply the diffusion inpainting au-       toward more preferred predictions (see line 6 in Alg. 1).
+toregressively to predict arbitrarily long motion sequences      In our case, the guidance term encourages consistency be-
+and apply Gaussian smoothing with σ = 2 for smoother             tween the predicted pose and the measured inter-sensor dis-
+results.                                                         tances, while retaining smooth outputs and avoiding infea-
+   To train UDP we use the standard diffusion loss [10]:         sible poses. We define the function ϵ by computing pre-
+                                                                 dicted sensor positions, defined by the SMPL mesh, via in-
+      Lsimple = Eq(xt |x0 ) ∥x0 − Dθ (xt , t, C)∥22 .
+                                                  
+                                                        (11)     the-loop forward kinematics during sampling on M̂0 , from
+where q(xt |x0 ) denotes the DDPM forward process that           which the predicted distances dˆij are computed to match the
+gradually adds Gaussian noise to x0 [10]. Unlike Diffusion-      measured distances dij . As UWB distances are inter-body
+Poser [33], we train our model without the need for forward      constraints, gradients for the root translation are set to zero.
+kinematics losses that significantly slow down the training.                             X
+Instead, we use the translation and SMPL joint angle auxil-                     ϵuwb =       ∥dˆij (M̂0 ) − dij ∥2           (15)
+iary losses:                                                                             i<j
+
+                 Ltran = ∥Tpred − Tgt ∥2                (12)
+                                                                 4. Experiments
+                  Lsmpl = |Θpred
+                            6d   − Θgt
+                                    6d |                 (13)
+                                                                 4.1. Experimental Setup
+We also utilize this velocity loss that encourages more ac-
+tive motion translation:                                         To ensure a fair comparison, we follow the same evalua-
+                                                    2          tion setup used in previous work [4, 45, 46] and train on
+   Lvel = ∥Tpred
+               n    − Tpred
+                         n−1 ∥ 2 − ∥T gt
+                                      n  − T gt
+                                             n−1 ∥ 2    (14)     the same AMASS [23] split. We then evaluated UDP on
+DanceDB [3], an AMASS split held out during training,                UDP also generalizes well to real-world datasets. On
+TotalCaptureReal [32] and the test split of DIP-IMU [14],        GIP-DB, a newer real-world dataset with modern UWB
+using the DIP-IMU training split.                                sensors and lower noise levels, UDP achieves state-of-the-
+   Finally, to demonstrate real-world applicability, we also     art results in both zero-shot and fine-tuned settings. In con-
+evaluated our model on two real-world datasets where raw         trast, it only struggles when both UWB and IMU signals are
+IMU and UWB are recorded during acquisition: UIP-                highly noisy, as seen on UIP-DB, where IMU drift reaches
+DB [4] and the recent GIP-DB [42]. These datasets are par-       3.21°/min and UWB errors 17.5 cm [4]. In this case, UDP
+ticularly challenging due to higher and more realistic IMU       achieves SOTA performance only after fine-tuning, which
+drift and UWB noise. For these datasets, we report the per-      allows it to adapt to the dataset’s noise characteristics, while
+formance without, i.e. zero-shot, and with fine-tuning. Fur-     remaining competitive otherwise. We posit that, as UDP re-
+ther details regarding the training and evaluation protocol      lies more heavily on UWB, it is more susceptible to UWB
+are available in the supplementary material (Sec. A.1).          sensing errors; we investigate this further in Sec. 4.2.3.
+We evaluated our method using the following metrics:
+                                                                 Table 1. Results on DIP-IMU. ”*” denotes the results we repro-
+SIP (◦ ) global angle error of shoulders and hips.               duced, because they were not provided in the original paper. ”†”
+GAE (◦ ) mean global angle error of all joints.                  denotes results that we reproduced, because the paper used a dif-
+                                                                 ferent evaluation framework. GT Jitter is 1.830.
+JPE (cm) root-aligned joint position error.
+Jitter (m/s3 ) mean magnitude of the third derivative (jerk)       Model        UWB SIP (°) ↓ GAE (°) ↓ JPE (cm) ↓ Jitter
+of global joint positions.
+                                                                   TIP            ✗      17.07      10.51*      5.82     0.882
+   We compare UDP against state-of-the-art methods, in-            PIP            ✗      15.02       8.78*      5.12     0.240
+cluding the IMU+UWB approaches UIP [4], UMotion [20]               PNP            ✗      13.71       8.75       4.98     0.260
+                                                                   GlobalPose     ✗      13.55      8.47        4.65     0.260
+and GIP [42], as well as the IMU-only methods PNP [46],
+                                                                   DynaIP         ✗      14.41       7.12*      5.03       -
+GlobalPose [47], DynaIP [49], PIP [45], and TIP [19].              UMotion        ✓      15.05†     10.41†      4.38†    0.216†
+Note that, to ensure fairness, we report the numbers from          UIP            ✓      13.20       8.23*      5.05     0.240
+the original papers and replicate results using our pipeline       UDP (ours)     ✓      10.39       8.19       3.42     0.125
+whenever possible.
+4.2. Results                                                     4.2.2. Qualitative Results
+We report quantitative results for DIP-IMU in Tab. 1             We present extensive qualitative results in Fig. 3 and the
+and for DanceDB, TotalCapture, UIP-DB, and GIP-DB in             supplementary material.
+Tab. 2, with detailed interpretation in the following subsec-       As seen in the figure, UDP excels in the accurate estima-
+tion. Next, we analyze UDP’s sensitivity to UWB noise            tion of limb positions. This is due to its strong integration
+(Sec. 4.2.3). Finally, multiple ablation studies are presented   of inter-sensor distances, which impose strong constraints
+to assess the effectiveness of our modules (Sec. 4.3). Addi-     on feasible positions. For example, in row one of Fig. 3, the
+tional results and experiments are available in the appendix.    right arm is extended slightly backward and the left foot is
+                                                                 raised slightly higher, resulting in a more accurate pose pre-
+4.2.1. Pose Estimation Evaluation
+                                                                 diction compared to PIP and UIP. Notably, the better pose
+UDP achieves state-of-the-art results across most evaluation     estimations of UDP are most noticeable during fast motions
+settings. UDP achieves the lowest joint position error in all    such as fast arm movements, where other methods tend to
+evaluation settings, with up to 22% improvement, except          lag behind. Thanks to the UWB-Diffusion Guidance, UDP
+for UIP-DB without fine-tuning. The improvement over             remains robust, producing more accurate leg estimates, un-
+IMU-only methods is up to 35% showing the benefit of dis-        like physics-optimized methods such as PIP, PNP, and UIP,
+tance measurements. Notably, UDP produces consistently           that struggle with complex dance sequences and yield im-
+smooth motion with minimal jitter across all datasets with-      plausible foot placements, see second row in Fig. 3.
+out the need for a physics optimizer as in UIP, PIP, or PNP.
+On DIP-IMU, DanceDB, and TotalCapture the SIP error is           4.2.3. Sensitivity Towards Noise
+consistently the lowest, highlighting the accurate estimation    While UDP is the best method on all other datasets, it
+of the limbs, which impacts visual quality the most. The         achieves only competitive performance in the zero-shot set-
+GA error achieved by UDP is either the lowest or competi-        ting on the UIP-DB dataset, where UWB measurement er-
+tive, being only slightly surpassed by DynaIP on DIP-IMU         rors exceed 17 cm. Here, UIP surpasses it in SIP and
+and by GlobalPose on TotalCapture. This demonstrates that        joint position error. We attribute this to the strong influ-
+modeling geometric constraints from inter-sensor distances       ence of noisy UWB signals, which are tightly integrated
+improves UDP ’s pose estimation.                                 into UDP’s architecture. To analyze this, we compare both
+Table 2. Combined colored results on DanceDB (blue), TotalCapture (green), and UIP-DB (orange). “*” denotes values we reproduced
+because they were not reported in the original papers. ”†” denotes results that we reproduced because the paper used a different evaluation
+framework. Ground Truth Jitter: DanceDB: 2.09, TotalCapture: 0.465, UIP-DB: 0.850, GIP-DB: 0.113. Bold indicates best.
+
+                            Dataset          Model                  UWB   SIP (°) ↓   GAE (°) ↓   JPE (cm) ↓   Jitter
+                            DanceDB          TIP                     ✗     18.70        11.80*       8.50      1.438
+                            DanceDB          PIP                     ✗     20.00        19.17*       8.87      0.661*
+                            DanceDB          PNP                     ✗     16.52*       11.45*       7.18*     0.747*
+                            DanceDB          UMotion                 ✓     11.93†       10.61†       5.19†     1.471†
+                            DanceDB          UIP                     ✓     15.28        10.98*       7.45      0.430
+                            DanceDB          UDP (ours)              ✓     11.79         9.91        4.67      0.175
+                            TotalCapture     TIP                     ✗     11.36        12.30        5.15      0.751
+                            TotalCapture     PIP                     ✗     12.93        12.04        5.61      0.204
+                            TotalCapture     PNP                     ✗     10.89        10.45        4.74      0.260
+                            TotalCapture     GlobalPose              ✗     9.81          9.99        4.25      0.350
+                            TotalCapture     DiffusionPoser          ✗       –          14.40        6.10        –
+                            TotalCapture     UMotion                 ✓     10.58†       11.36†       4.83†     0.215†
+                            TotalCapture     UIP                     ✓     10.70        11.43*       5.11      0.206
+                            TotalCapture     UDP (ours)              ✓     8.95         10.19        3.76      0.124
+                            UIP-DB           TIP                     ✗     33.01          -         14.82      1.860
+                            UIP-DB           PIP                     ✗     30.47        29.33*      13.62      1.570
+                            UIP-DB           UMotion                 ✓     31.61†       27.92†      13.19†     0.054†
+                            UIP-DB           UIP                     ✓     24.12        27.59*      10.65      0.050
+                            UIP-DB           UDP (ours)              ✓     24.95        25.92       11.72      0.071
+                            UIP-DB           UMotion finetuned       ✓     24.37†       25.69†      11.13†     0.045†
+                            UIP-DB           UIP finetuned           ✓     23.85        25.34*      10.65      0.080
+                            UIP-DB           UDP (ours) finetuned    ✓     19.24        21.81       9.04       0.074
+                            GIP-DB           UIP                     ✓     30.18        26.16       10.88      0.224*
+                            GIP-DB           UMotion                 ✓     26.57†       23.43†      9.52†      0.128†
+                            GIP-DB           GIP                     ✓     27.77        23.34       9.45       0.706*
+                            GIP-DB           UDP (ours)              ✓     25.74        22.23       8.86       0.125
+                            GIP-DB           UMotion finetuned       ✓     25.67†       23.23†       9.34†     0.132†
+                            GIP-DB           GIP finetuned           ✓     18.04        17.57        8.70      0.608*
+                            GIP-DB           UDP (ours) finetuned    ✓     15.33        14.34        6.68      0.092
+
+
+
+methods on UIP-DB by progressively blending noisy UWB                      4.3. Ablation Studies
+measurements with ground-truth distances (Tab. 3). While
+                                                                           To validate the contributions of our two main modules, we
+UIP performs slightly better under raw, noisy conditions,
+                                                                           perform ablation studies on TotalCapture.
+UDP achieves up to 1.4 cm lower JPE and 4.59° lower GAE
+once measurement noise is reduced. This trend aligns with                                Table 4. Ablation Studies on TotalCapture.
+UDP’s SOTA results on GIP-DB, a newer real-world dataset
+with more modern, less noisy UWB sensors, demonstrating                      Ablation                            SIP (°) ↓ GAE (°) ↓ JPE (cm) ↓
+both its real-world applicability and the importance of mod-                 UDP w/o SPL & UWB Guidance            10.22    10.79       4.39
+ern UWB-radios with a lower noise profile.                                   UDP w/o SPL                            9.58    10.45       4.03
+                                                                             UDP w/o UWB Guidance                  9.46     10.46       4.05
+Table 3. Improvement of UDP over UIP across different UWB                    UDP w/o RotEstimator                  9.11     10.45       3.92
+noise levels, non-finetuned. The UWB distances are linearly inter-           UDP RotEstimator w/o Pres              9.01    10.22       3.79
+polated between real and ground-truth measurements.                          UDP                                    8.95    10.19       3.76
+
+
+                                  Improvement over UIP                     Spatial Layout Module. Disabling the SPL module in-
+     UWB-Noise Level
+                                  GAE (°)   JPE (cm)                       creases all metrics, with SIP error rising by 7%, highlight-
+     100% (Real noise)                1.67           -1.07                 ing its impact on overall pose accuracy, see Tab. 4. The SPL
+     75%                              3.19           0.71                  benefits further from the Rotation Estimator, which orients
+     50%                              3.76           0.91                  sensor layouts. Disabling it and replacing the oriented sen-
+     25%                              4.12           1.14                  sor layouts PSP L , P̄SP L with the normalized MDS layouts
+     0% (Perfect distances)           4.59           1.40                  X, X̄ increases all errors. This shows that reconstructing
+                                                                           the 3D sensor layout via SPL yields better pose estimates
+                                                                           than just using inter-sensor distances as auxiliary inputs.
+                                                                 improve robustness by modeling sensor uncertainty, which
+                                                                 can be incorporated into the SPL module or guidance loss.
+                                                                     While UDP is fully data-driven and does not require
+                                                                 manual tuning of post-optimization problems, Kalman fil-
+                                                                 ter hyperparameters, as in UMotion, or modeling of physics
+                                                                 optimizers, it also does not benefit from the constraints
+                                                                 these approaches enforce. For tasks requiring zero-foot
+                                                                 skating, ground penetration avoidance, or strict physical
+                                                                 consistency, especially when floor or environment informa-
+                                                                 tion is available, physics optimizers still have an advan-
+                                                                 tage. Future work could investigate refining UDP ’s predic-
+                                                                 tions using existing physics optimizers or integrating novel
+                                                                 physics-based guidance terms into the diffusion framework.
+                                                                     UDP ’s main contributions focus on improving local
+                                                                 pose through on-body constraints. This could be extended
+                                                                 to inter-person constraints, similar to GIP [42], by uti-
+                                                                 lizing inter-person UWB distances. Combining UDP’s
+                                                                 smooth, UWB-aligned motion predictions with the more
+                                                                 jitter-prone inter-person optimizations from GIP has the
+                                                                 potential for accurate and globally consistent motion esti-
+                                                                 mation. These ideas could further be extended to incor-
+                                                                 porate environment-fixed UWB beacons, enabling multi-
+                                                                 person and environment-aware pose refinement.
+                                                                     Finally, similar to prior work [4, 20, 45–47], UDP is re-
+                                                                 stricted to a fixed six-sensor setup. Extending support to ar-
+                                                                 bitrary sensor layouts could further increase its real-world
+                                                                 applicability and flexibility.
+
+                                                                 6. Conclusion
+Figure 3. Qualitative Results of UDP from DanceDB and Total-     In this work, we introduced UDP, a novel full-body pose
+Capture. A brighter red indicates a higher position error. UDP   estimation approach utilizing sparse inertial sensing com-
+consistently produces accurate poses.                            bined with UWB-based distance measurements. While
+                                                                 prior methods used UWB distances only as additional fea-
+                                                                 tures, UDP explicitly models the geometric constraints they
+UWB-Diffusion Guidance. UWB-Diffusion guidance im-               impose on sensor positions. It integrates three key com-
+proves local pose estimates, reducing SIP error by 5% and        ponents: (1) a novel Spatial Layout Module that estimates
+JPE by 7%. Limb segments benefit most from the correc-           3D sensor positions, (2) an autoregressive diffusion inpaint-
+tive effect of diffusion guidance. Disabling both the SPL        ing model, and (3) UWB-Diffusion Guidance that encour-
+and UWB-Diffusion Guidance further deteriorates perfor-          ages pose predictions to be aligned with measured distances
+mance, with JPE increasing by 17%, showing their comple-         during diffusion sampling. We show that explicitly using
+mentary effect. Because UWB-Diffusion Guidance applies           the Spatial Layout Module and UWB-Diffusion Guidance
+corrections during the sampling process, the predicted mo-       leads to more accurate and physically plausible poses com-
+tions remain smooth. This highlights the benefit of lever-       pared to treating UWB distances as auxiliary input fea-
+aging geometric constraints during diffusion sampling by         tures. In total, our experiments showed that UDP improves
+correcting poses that violate UWB measurements.                  pose estimation by up to 22%, outperforming both its di-
+                                                                 rect IMU+UWB baselines and IMU based posers. We hope
+                                                                 these results highlight the potential of modeling the geomet-
+5. Discussion and Limitations
+                                                                 ric constraints provided by novel UWB sensors explicitly to
+We show that UDP excels at local pose estimation thanks          produce advanced models for more generalized and reliable
+to its strong integration of inter-sensor distances. However,    wearable-based pose estimation solutions.
+this makes it sensitive to very noisy UWB measurements,
+see Sec. 4.2.3, and the UWB-Guidance coefficient should          Acknowledgements We thank Yi-Chi Liao, Jiaxi Jiang,
+be adjusted to the expected noise level. Future work could       and all other people who provided valuable feedback.
+References                                                              [14] Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J
+                                                                             Black, Otmar Hilliges, and Gerard Pons-Moll. Deep iner-
+ [1] Karan Ahuja, Eyal Ofek, Mar Gonzalez-Franco, Christian                  tial poser: Learning to reconstruct human pose from sparse
+     Holz, and Andrew D. Wilson. Coolmoves: User motion ac-                  inertial measurements in real time. ACM Transactions on
+     centuation in virtual reality. In Proceedings of the ACM on             Graphics (TOG), 37(6):1–15, 2018. 2, 3, 6
+     Interactive, Mobile, Wearable and Ubiquitous Technologies,
+                                                                        [15] Andela Ilic, Jiaxi Jiang, Paul Streli, Xintong Liu, and Chris-
+     pages 1–23, 2021. 2
+                                                                             tian Holz. Human motion capture from loose and sparse in-
+ [2] Farzana Anowar, Samira Sadaoui, and Bassant Selim. Con-                 ertial sensors with garment-aware diffusion models. In Pro-
+     ceptual and empirical comparison of dimensionality reduc-               ceedings of the Thirty-Fourth International Joint Conference
+     tion algorithms (pca, kpca, lda, mds, svd, lle, isomap, le, ica,        on Artificial Intelligence, IJCAI-25, pages 1206–1214. Inter-
+     t-sne). Computer Science Review, 40:100378, 2021. 4                     national Joint Conferences on Artificial Intelligence Organi-
+ [3] Andreas Aristidou, Ariel Shamir, and Yiorgos Chrysanthou.               zation, 2025. Main Track. 3
+     Digital dance ethnography: Organizing large dance collec-          [16] Biao Jiang, Xin Chen, Wen Liu, Jingyi Yu, Gang Yu, and
+     tions. J. Comput. Cult. Herit., 12(4), 2019. 6                          Tao Chen. Motiongpt: Human motion as a foreign lan-
+ [4] Rayan Armani, Changlin Qian, Jiaxi Jiang, and Christian                 guage. Advances in Neural Information Processing Systems,
+     Holz. Ultra inertial poser: Scalable motion capture and track-          36:20067–20079, 2023. 3
+     ing from sparse inertial sensors and ultra-wideband ranging.       [17] Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa
+     In ACM SIGGRAPH 2024 Conference Papers, pages 1–11,                     Laich, Patrick Snape, and Christian Holz. Avatarposer: Ar-
+     2024. 2, 3, 5, 6, 8, 12, 17                                             ticulated full-body pose tracking from sparse motion sens-
+ [5] Yu Cheng, Bo Yang, Bo Wang, Wending Yan, and Robby T                    ing. In Computer Vision–ECCV 2022: 17th European Con-
+     Tan. Occlusion-aware networks for 3d human pose estima-                 ference, Tel Aviv, Israel, October 23–27, 2022, Proceedings,
+     tion in video. In Proceedings of the IEEE/CVF international             Part V, pages 443–460, 2022. 17
+     conference on computer vision, pages 723–732, 2019. 1              [18] Jiaxi Jiang, Paul Streli, Manuel Meier, and Christian Holz.
+ [6] Prafulla Dhariwal and Alexander Nichol. Diffusion models                Egoposer: Robust real-time egocentric pose estimation from
+     beat gans on image synthesis. In Advances in Neural Infor-              sparse and intermittent observations everywhere. In Eu-
+     mation Processing Systems, pages 8780–8794. Curran Asso-                ropean Conference on Computer Vision, pages 277–294.
+     ciates, Inc., 2021. 2, 5                                                Springer, 2024. 2
+ [7] Yuming Du, Robin Kips, Albert Pumarola, Sebastian Starke,          [19] Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won,
+     Ali Thabet, and Artsiom Sanakoyeu. Avatars grow legs:                   Alexander W Winkler, and C Karen Liu. Transformer inertial
+     Generating smooth human motion from sparse tracking in-                 poser: Real-time human motion reconstruction from sparse
+     puts with diffusion model. In Proceedings of the IEEE/CVF               imus with simultaneous terrain generation. In SIGGRAPH
+     Conference on Computer Vision and Pattern Recognition,                  Asia 2022 Conference Papers, pages 1–9, 2022. 2, 3, 6, 12,
+     pages 481–490, 2023. 3                                                  17
+ [8] Shradha Dubey and Manish Dixit. A comprehensive survey             [20] Huakun Liu, Hiroki Ota, Xin Wei, Yutaro Hirao, Mon-
+     on human pose estimation approaches. Multimedia Systems,                ica Perusquia-Hernandez, Hideaki Uchiyama, and Kiyoshi
+     29(1):167–195, 2023. 1                                                  Kiyokawa. Umotion: Uncertainty-driven human motion es-
+ [9] Vladimir Guzov, Aymen Mir, Torsten Sattler, and Gerard                  timation from inertial and ultra-wideband units. In Proceed-
+     Pons-Moll. Human poseitioning system (hps): 3d human                    ings of the Computer Vision and Pattern Recognition Con-
+     pose estimation and self-localization in large scenes from              ference, pages 7085–7094, 2025. 2, 3, 6, 8, 15
+     body-mounted sensors. In Proceedings of the IEEE/CVF               [21] Matthew Loper, Naureen Mahmood, Javier Romero, Gerard
+     Conference on Computer Vision and Pattern Recognition,                  Pons-Moll, and Michael J Black. Smpl: a skinned multi-
+     pages 4318–4329, 2021. 2                                                person linear model. ACM Transactions on Graphics (TOG),
+[10] Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising dif-               34(6):1–16, 2015. 3
+     fusion probabilistic models. Advances in neural information        [22] Thomas Lucas, Fabien Baradel, Philippe Weinzaepfel,
+     processing systems, 33:6840–6851, 2020. 3, 5                            and Grégory Rogez.            PoseGPT: Quantization-based
+[11] Sepp Hochreiter and Jürgen Schmidhuber. Long short-term                3D Human Motion Generation and Forecasting, 2022.
+     memory. Neural Comput., 9(8):1735–1780, 1997. 5                         arXiv:2210.10542 [cs]. 3
+[12] Dominik Hollidt, Paul Streli, Jiaxi Jiang, Yasaman Haghighi,       [23] Naureen Mahmood, Nima Ghorbani, Nikolaus F. Troje, Ger-
+     Changlin Qian, Xintong Liu, and Christian Holz. Egosim:                 ard Pons-Moll, and Michael J. Black. Amass: Archive of
+     An egocentric multi-view simulator and real dataset for                 motion capture as surface shapes. In Proceedings of the
+     body-worn cameras during motion and activity. Advances                  International Conference on Computer Vision, pages 5442–
+     in Neural Information Processing Systems, 37:106607–                    5451, 2019. 2, 5
+     106627, 2025. 1, 2                                                 [24] Al Mead. Review of the development of multidimensional
+[13] Karl Holmquist and Bastian Wandt. Diffpose: Multi-                      scaling methods. Journal of the Royal Statistical Society:
+     hypothesis human pose estimation using diffusion models.                Series D (The Statistician), 41(1):27–39, 1992. 4
+     In Proceedings of the IEEE/CVF international conference on         [25] Max Mignotte. Mds-based multiresolution nonlinear di-
+     computer vision, pages 15977–15987, 2023. 3                             mensionality reduction model for color image segmenta-
+     tion. IEEE transactions on neural networks, 22(3):447–460,       [39] Yinghao Wu, Shihui Guo, and Yipeng Qin. Moda: Motion-
+     2011. 4                                                               drift augmentation for inertial human motion analysis. In
+[26] Vimal Mollyn, Riku Arakawa, Mayank Goel, Chris Harri-                 Proceedings of the IEEE/CVF Conference on Computer Vi-
+     son, and Karan Ahuja. Imuposer: Full-body pose estimation             sion and Pattern Recognition, pages 27771–27781, 2025. 2
+     using imus in phones, watches, and earbuds. In Proceedings       [40] Xsens. Xsens motion capture. https://www.xsens.
+     of the 2023 CHI Conference on Human Factors in Comput-                com, 2024. 2, 12
+     ing Systems, page Article 529, Hamburg, Germany, 2023.           [41] Weipeng Xu, Avishek Chatterjee, Michael Zollhoefer,
+     Association for Computing Machinery. 2                                Helge Rhodin, Pascal Fua, Hans-Peter Seidel, and Chris-
+[27] Noitom. Noitom motion capture. https : / / www .                      tian Theobalt. Mo2Cap2: Real-time Mobile 3D Mo-
+     noitom.com/, 2024. 2                                                  tion Capture with a Cap-mounted Fisheye Camera, 2019.
+[28] Jiaming Song, Chenlin Meng, and Stefano Ermon. Denois-                arXiv:1803.05959 [cs]. 1
+     ing diffusion implicit models. In International Conference       [42] Ying Xue, Jiaxi Jiang, Rayan Armani, Dominik Hollidt, Yi-
+     on Learning Representations, 2021. 3, 13                              Chi Liao, and Christian Holz. Group inertial poser: Multi-
+[29] Paul Streli, Rayan Armani, Yi Fei Cheng, and Christian                person pose and global translation from sparse inertial sen-
+     Holz. Hoov: Hand out-of-view tracking for proprioceptive              sors and ultra-wideband ranging. In Proceedings of the
+     interaction using inertial sensing. In Proceedings of the 2023        IEEE/CVF International Conference on Computer Vision,
+     CHI Conference on Human Factors in Computing Systems,                 pages 24910–24921, 2025. 2, 3, 6, 8, 12
+     pages 1–16, 2023. 2                                              [43] Yuan Yao, Shifan Jiang, Yangqing Hou, Chengxu Zuo, Xin-
+[30] Guy Tevet, Sigal Raab, Brian Gordon, Yonatan Shafir,                  rui Chen, Shihui Guo, and Yipeng Qin. Tof-ip: time-of-flight
+     Daniel Cohen-Or, and Amit H Bermano. Human motion dif-                enhanced sparse inertial poser for real-time human motion
+     fusion model. arXiv preprint arXiv:2209.14916, 2022. 2, 3,            capture. In The Thirty-ninth Annual Conference on Neural
+     5, 17                                                                 Information Processing Systems, 2025. 3
+[31] Denis Tome, Patrick Peluse, Lourdes Agapito, and Hernan          [44] Brent Yi, Vickie Ye, Maya Zheng, Lea Müller, Georgios
+     Badino. xR-EgoPose: Egocentric 3D Human Pose from an                  Pavlakos, Yi Ma, Jitendra Malik, and Angjoo Kanazawa.
+     HMD Camera, 2019. arXiv:1907.10045 [cs]. 1                            Estimating body and hand motion in an ego-sensed world.
+[32] Matthew Trumble, Andrew Gilbert, Charles Malleson,                    arXiv preprint arXiv:2410.03665, 2024. 3
+     Adrian Hilton, and John Collo-mosse. Total capture: 3d hu-       [45] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada,
+     man pose estimation fusing video and inertial sensors. In             Vladislav Golyanik, Christian Theobalt, and Feng Xu. Phys-
+     Proceedings of the 28th British Machine Vision Conference,            ical inertial poser (pip): Physics-aware real-time human mo-
+     pages 1–13, 2017. 2, 6                                                tion tracking from sparse inertial sensors. In Proceedings of
+[33] Tom Van Wouwe, Seunghwan Lee, Antoine Falisse, Scott                  the IEEE/CVF Conference on Computer Vision and Pattern
+     Delp, and C Karen Liu. Diffusionposer: Real-time human                Recognition, pages 13167–13178, 2022. 2, 3, 5, 6, 8, 12, 17
+     motion reconstruction from arbitrary sparse sensors using        [46] Xinyu Yi, Yuxiao Zhou, and Feng Xu. Physical non-inertial
+     autoregressive diffusion. In Proceedings of the IEEE/CVF              poser (pnp): modeling non-inertial effects in sparse-inertial
+     Conference on Computer Vision and Pattern Recognition,                human motion capture. In ACM SIGGRAPH 2024 Confer-
+     pages 2513–2523, 2024. 2, 3, 5, 16, 17                                ence Papers, pages 1–11, 2024. 2, 5, 6, 12, 17
+[34] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszko-          [47] Xinyu Yi, Shaohua Pan, and Feng Xu. Improving global
+     reit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia            motion estimation in sparse imu-based motion capture with
+     Polosukhin. Attention is all you need. Advances in neural             physics. ACM Transactions on Graphics (TOG), 44(4):1–16,
+     information processing systems, 30, 2017. 17                          2025. 2, 6, 8
+[35] Timo Von Marcard, Bodo Rosenhahn, Michael J Black, and           [48] Siwei Zhang, Bharat Lal Bhatnagar, Yuanlu Xu, Alexan-
+     Gerard Pons-Moll. Sparse inertial poser: Automatic 3d hu-             der Winkler, Petr Kadlecek, Siyu Tang, and Federica Bogo.
+     man pose estimation from sparse imus. In Computer graph-              Rohm: Robust human motion reconstruction via diffusion.
+     ics forum, pages 349–360. Wiley Online Library, 2017. 2               In Proceedings of the IEEE/CVF Conference on Computer
+[36] Jian Wang, Diogo Luvizon, Weipeng Xu, Lingjie Liu, Kri-               Vision and Pattern Recognition, pages 14606–14617, 2024.
+     pasindhu Sarkar, and Christian Theobalt. Scene-Aware Ego-             1, 3, 5
+     centric 3D Human Pose Estimation. In 2023 IEEE/CVF               [49] Yu Zhang, Songpengcheng Xia, Lei Chu, Jiarui Yang, Qi
+     Conference on Computer Vision and Pattern Recognition                 Wu, and Ling Pei. Dynamic inertial poser (dynaip): Part-
+     (CVPR), pages 13031–13040, Vancouver, BC, Canada,                     based motion dynamics learning for enhanced human pose
+     2023. IEEE. 1                                                         estimation with sparse inertial sensors. In Proceedings of
+[37] Prof. Richard Wilkinson. 6.1 Classical MDS — Multi-                   the IEEE/CVF Conference on Computer Vision and Pattern
+     variate Statistics — rich-d-wilkinson.github.io. https:               Recognition, pages 1889–1899, 2024. 6, 16
+     //rich-d-wilkinson.github.io/MATH3030/6.                         [50] Ce Zheng, Wenhan Wu, Chen Chen, Taojiannan Yang, Si-
+     1-classical-mds.html. 4                                               jie Zhu, Ju Shen, Nasser Kehtarnavaz, and Mubarak Shah.
+[38] Yinghao Wu, Lu Yin, Shihui Guo, Yipeng Qin, et al. Ac-                Deep learning-based human pose estimation: A survey. ACM
+     curate and steady inertial pose estimation through sequence           Computing Surveys, 56(1):1–37, 2023. 1
+     structure learning and modulation. Advances in Neural In-        [51] Xiaozheng Zheng, Zhuo Su, Chao Wen, Zhou Xue, and
+     formation Processing Systems, 37:42468–42493, 2024. 2                 Xiaojie Jin.      Realistic full-body tracking from sparse
+     observations via joint-level modeling.       arXiv preprint
+     arXiv:2308.08855, 2023. 2
+[52] Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and Hao
+     Li. On the Continuity of Rotation Representations in Neu-
+     ral Networks. In 2019 IEEE/CVF Conference on Computer
+     Vision and Pattern Recognition (CVPR), pages 5738–5746.
+     IEEE, 2019. 4
+[53] Chengxu Zuo, Yiming Wang, Lishuang Zhan, Shihui Guo,
+     Xinyu Yi, Feng Xu, and Yipeng Qin. Loose inertial poser:
+     Motion capture with imu-attached loose-wear jacket. In Pro-
+     ceedings of the IEEE/CVF Conference on Computer Vision
+     and Pattern Recognition, pages 2209–2219, 2024. 2
+[54] Chengxu Zuo, Jiawei Huang, Xiao Jiang, Yuan Yao, Xian-
+     gren Shi, Rui Cao, Xinyu Yi, Feng Xu, Shihui Guo, and
+     Yipeng Qin. Transformer imu calibrator: Dynamic on-body
+     imu calibration for inertial motion capture. ACM Transac-
+     tions on Graphics (TOG), 44(4):1–14, 2025. 2
+A. Supplementary                                                standard deviation based on the reported mean UWB dis-
+                                                                tance errors from UIP-DB [4] scaled by 1.5. The model is
+A.1. Training and Evaluation Details                            pretrained for 50 epochs using 200 diffusion steps to im-
+In the following section, we provide additional implemen-       prove robustness to noise. For fine-tuning, we take the
+tation and evaluation details.                                  model pretrained on purely synthetic data and train it for
+    The losses described in Sec. 3.2.3 are weighted by the      5 epochs on the training split of either UIP-DB or GIP-DB
+following weights: λsimple = 5, λtran = 5, λsmpl = 1, and       (depending on which dataset is being evaluated). We then
+λvel = 0.3. The velocity loss is activated after 10 epochs,     evaluate the model on the corresponding test split.
+once the prediction has stabilized.                                For consistency, we report results from the original au-
+    UDP uses an LSTM with a hidden state size of 512 with       thors or from previously published works. If the required
+2 layers and a dropout rate of 0.4 for the denoiser network.    metrics are not available, we reproduce the results ourselves
+The motion history length is set to NH = 30, and the mo-        by utilizing the provided weights. We retrain the network if
+tion window size is N = 170 frames at 60 FPS during train-      no weights are provided for that evaluation. Since PIP does
+ing. The model is trained for 150 epochs with a weight de-      not provide training code, we implemented our own training
+cay of 1e−5, an initial learning rate of 1e−4, and step decay   pipeline and trained the model from scratch, ensuring that
+with a factor of γ = 0.33 every 50 epochs. We use a square      no test data from DanceDB leaked into the training process.
+root diffusion noise schedule.                                  PNP [46] does not provide data processing code and provide
+    The rotation estimator uses a hidden state dimension of     the reported results on TotalCapture and DIP. DynaIP does
+512, 3 layers, and a dropout rate of 0.2. We enable UWB-        not predict translation; hence, we only report the results of
+Diffusion Guidance at diffusion step t = 20, with λ = 500       the translation-free DIP dataset. UMotion uses a slightly
+and a weaker λ = 50 for the GIP-DB and UIP-DB, where            different evaluation scheme; we used the authors’ provided
+UWB-signals are less reliable. Overall, the model con-          model weights and reran the results. During inference, we
+tains 11.3M parameters, and training takes approximately        disable the use of ground-truth distances for updating the
+5 hours on an RTX 4090 GPU with a batch size of 256.            Kalman filter covariances, see here. Instead, we assume an
+                                                                8 cm standard deviation for the UWB measurements and set
+    Following prior work [4, 19, 45], the model is ini-
+                                                                the measurement covariance accordingly. Additionally, we
+tially trained on the synthetic AMASS dataset with
+                                                                report results in two settings: First, the zero-shot results re-
+DanceDB held out and directly evaluated on TotalCaptur-
+                                                                ported on UIP-DB and GIP-DB use the raw UWB distances.
+eReal and DanceDB. This is the complete list of Datasets
+                                                                Second, the finetuned results that clean the raw UWB dis-
+used during training: HumanEva, MPI HDM05, SFU,
+                                                                tances using the training split, as seen here in the authors
+MPI mosh, Transitions mocap, SSM synced, CMU, To-
+                                                                code. The reported results are obtained following the same
+talCapture, Eyes Japan Dataset, KIT, BMLmovi, EKUT,
+                                                                evaluation framework as previous work [4, 45, 46]. Eval-
+TCD handMocap, ACCAD, BioMotionLab NTroje, BML-
+                                                                uation metrics follow the conventions established in prior
+handball, MPI Limits, DFaust 67.
+                                                                work [4, 45, 46], excluding end joints that cannot be reli-
+    DIP-IMU and TotalCapture provide IMU signals coming
+                                                                ably estimated from sparse sensor input—specifically, the
+from an XSense suit [40]. For TotalCapture, we use the DIP
+                                                                wrists, hands, root, toes, and ankles.
+sensor calibration. All AMASS training data and DanceDB
+use synthesized IMU data, obtained via finite differences       A.2. Additional Evaluations
+on the motion data following [4, 45]. UWB measurements
+are synthesized from the motion ground truth for AMASS          We provide additional qualitative comparisons in the ac-
+training data, DanceDB, TotalCapture, and DIP-IMU. UIP-         companying video and in Figures 5 and 6. As shown, UDP
+DB [4] and GIP-DB [42] obtain all IMU data through off-         achieves better foot and arm placement than prior work, par-
+the-shelf, low-cost commercial IMU and UWB sensors, and         ticularly in squatting motions, where it better estimates foot
+we use these real-world IMU signals and UWB measure-            positioning while maintaining precise torso alignment.
+ments directly. For DIP-IMU, the model is fine-tuned on            Conversely, methods relying on post-optimization
+the training split for 30 epochs and then evaluated on the      physics simulations (e.g., PIP, UIP, PNP) often struggle
+test split. As UIP-DB, and GIP-DB present a more chal-          with highly dynamic motions, such as dance routines in-
+lenging scenario with lots of real-world sensor noise, we       volving rapid twirls or intentional foot sliding (see the bot-
+train this model with noise augmentations. We introduce         tom row of Fig. 5). In these scenarios, the physics opti-
+Gaussian noise with σacc = 0.6 to the acceleration measure-     mizer may be a bottleneck due to rigid constraint modeling.
+ments and apply random rotation augmentation with Gaus-         Specifically, when the network predicts a foot contact, the
+sian noise of σori = 0.15, and add a random Gaussian bias       optimizer enforces strict zero-velocity or high-friction con-
+of σori-bias = 0.054 and a stronger weight decay of 4e − 5.     straints. Consequently, intentional sliding motions may lead
+For UWB distance noise, we add Gaussian noise with the          to wrong motion estimation when the model inaccurately
+     Figure 4. Qualitative results over a sequence of DanceDB. UDP has generally lower SIP error compared to previous methods.
+
+
+predicts foot contacts. In contrast, UDP, being purely data-        using DDIM [28], we can reduce sampling steps to just 5.
+driven, is not bound by contact enforcement, friction mod-          This increases inference speed by a factor of 14 compared
+els, or hyperparameter choices within the physics model and         to DDPM sampling with 50 steps, while the SIP error in-
+avoids such interference, allowing for the accurate recon-          creases by only 4.8%. We observe that the pose predic-
+struction of complex maneuvers.                                     tion quality stabilizes quickly: the transition from 50 steps
+   While physics optimizers remain a compelling alterna-            (DDPM) to 25 steps (DDIM) induces the largest drop in
+tive for applications where strict physical plausibility (e.g.,     quality, while further reducing the steps to 5 has a negligi-
+non-penetration) takes precedence over tracking fidelity,           ble impact. In comparison to UIP, UDP with 5 sampling
+our results demonstrate that UDP yields smooth, accurate            steps enables 50 times faster inference while still delivering
+motion, particularly in limb placement, while benefiting            superior output quality.
+from the simplicity of a purely data-driven approach.
+                                                                    Table 5. Evaluation of the total inference time (TT) on the To-
+A.2.1. Additional Ablation Studies                                  talCapture dataset (approx. 2,466,s duration) and the mean in-
+                                                                    ference time per frame (MTPF). For 60FPS real-time inference,
+The following sections extend the analysis in the main pa-          16,ms MTPF or lower is required. Reducing the number of diffu-
+per by providing detailed ablation studies regarding infer-         sion steps reduces pose estimation accuracy slightly but increases
+ence dynamics, noise scheduling, temporal lookahead, and            inference speed drastically.
+architectural alternatives.
+                                                                      Metric          SIP (°) ↓   JPE (cm) ↓   TT (s) ↓   MTPF (ms) ↓
+A.2.2. Sampling Steps, Inference and Realtime
+                                                                      TIP               11.36        5.15        568         3.938
+UDP operates in real-time and significantly improves in-              UIP               10.70        5.11       1,342        7.545
+ference speed over UIP. Unlike UIP, it avoids the post-               UDP DDIM 5         9.38        4.01         26         0.151
+processing physics optimizer, which formulates refinement             UDP DDIM 10        9.34        3.99         46         0.265
+                                                                      UDP DDIM 25        9.30        3.98        110         0.627
+as a Quadratic Programming (QP) problem. This QP solver               UDP DDPM 50        8.95        3.76        371         2.117
+acts as a computational bottleneck, as it relies on serial CPU
+execution and cannot benefit from GPU acceleration. In
+contrast, UDP utilizes purely neural-based inference that is        A.2.3. Module Ablation
+fully accelerated on the GPU.                                       We showed that the SPL module and UWB-Diffusion Guid-
+   Tab. 5 shows that UDP achieves 3.6 times faster infer-           ance improve pose estimation under ideal sensing condi-
+ence compared to UIP when running on an RTX 4090. By                tions (TotalCapture). Tab. 6 demonstrates that both com-
+          Figure 5. Qualitative results on DanceDB. UDP often estimates fast motions more accurately than other methods.
+
+
+ponents also improve accuracy under noisy sensor condi-             A.2.4. Noise Schedules
+tions. Notably, adapting the UWB guidance coefficient λ             Additionally, we evaluated various noise schedules, as dif-
+to the sensor noise level enables improved performance, as          fusion models are often sensitive to the specific noise distri-
+noisy distance measurements with strong guidance can in-            bution of the data. We hypothesized that schedules adding
+duce wrong limb predictions.                                        noise more gradually (e.g., cosine or exponential) would
+                                                                    be beneficial, given that error accumulation along the kine-
+                                                                    matic chain causes big joint errors with even minimal joint
+             Figure 6. Qualitative results on TotalCapture. UDP often estimates limb positions more accurately than others.
+
+
+Table 6. GIP-DB ablation on GIP-DB finetuned: SPL and UWB-              A.2.5. Shaped Evaluation
+Guidance improve metrics under real-world noise.
+                                                                        UDP predicts SMPL joint angles and root translation, while
+ Metric                      SIP (°) ↓     GAE (°) ↓       JPE (cm) ↓   the SMPL shape parameters β serve as optional condition-
+ UDP w/o SPL                    16.03           15.09         7.08      ing input when available. Our main evaluation sets β = 0
+ UDP w/o UWB Guidance           16.30           14.86         6.90      (mean shape) for the model input and evaluation. β can
+ UDP λ = 500                    15.35           15.12         7.40      be user-provided or estimated from UWB distances (as in
+ UDP                            15.33           14.34         6.68      UMotion [20]). We show that utilizing the known β re-
+                                                                        duces UDP’s errors (Tab. 9), improving robustness across
+                                                                        diverse body proportions. When using ground-truth shape
+                                                                        parameters both as model input and for evaluation, UDP
+angle noise. As illustrated in Fig. 7, aggressive schedules             achieves consistent gains across all metrics, most notably a
+like the square root schedule can rapidly degrade the pose              10% reduction in SIP error. Since shape influences both
+structure, leading to visually distorted samples even at early          inter-sensor distances and inertial dynamics, providing β
+noise steps. Counter-intuitively, the more aggressive square            further enhances motion estimation accuracy.
+root schedule led to the best performance. As shown in
+Tab. 7, the square root schedule consistently outperforms
+                                                                        A.2.6. No Lookahead
+all other tested schedules across all metrics.
+                                                                        We evaluate the model’s performance in an online setting by
+                                                                        restricting the evaluation to the last frame of the input win-
+    Metric          SIP (°) ↓     GAE (°) ↓             JPE (cm) ↓      dow (Last Frame Only - LFO). In this scenario, the model
+    cosine            9.18              10.25              3.87         relies solely on past observations without access to future
+    exponential       9.29              10.42              4.00         context. As shown in Tab. 10, removing future context re-
+    linear            9.46              10.48              4.09         sults in slightly higher errors, i.e., approximately 2.7% in
+    sqrt              8.95              10.19              3.76         SIP, while the global angle error remains largely unaffected.
+                                                                        Additionally, reducing the context window from 3s to 1s
+      Table 7. UDP trained with different noise schedules.              increases JPE by 3%, with a marginal impact on angle er-
+                                                                        rors. Crucially, even in this restricted online setting with no
+                                                                        lookahead, UDP continues to outperform baseline methods.
+       Figure 7. Noise schedules of different schedules visualized on q(xt |x0 ) in equal steps where the maximum step is T = 50.
+
+                                           Table 8. Ablation Study results on TotalCapture.
+
+      Metric                              SIP Error (°) ↓ GAE (°) ↓ JPE (cm) ↓ TE @ 2m ↓ TE @5m ↓ Jitter (0.465)
+      UDP w/ Transformer                        10.70          12.10        4.79          0.35             0.55           0.115
+      UDP w/ velocity representation            9.30           10.35        3.95          0.28             0.49           0.123
+      UDP w/ FK loss                            9.01           10.29        3.89          0.20             0.32           0.124
+      UDP (ours)                                8.95           10.19        3.76          0.20             0.33           0.124
+
+
+Table 9. Evaluation DanceDB. Shape improves motion estimation.            LFO      W length    SIP (°) ↓     GAE (°) ↓      JPE (cm) ↓
+
+ Model                     SIP (°) ↓   GAE (°) ↓   JPE (cm) ↓              ✓         1s          9.36             10.45           4.14
+                                                                                     1s          9.15             10.49           3.84
+ UDP w/ known shape         10.68        9.35           4.30               ✓         3s          9.19             10.11           4.01
+ UDP w/o known shape        11.79        9.91           4.67                         3s          8.95             10.19           3.76
+
+                                                                       Table 10. Ablation on lookahead and window size. ’LFO’ denotes
+A.2.7. Removal of FK loss                                              evaluating only the last frame of the window.
+
+Unlike previous methods [33, 49], we do not utilize a for-
+ward kinematics loss during training. Using the FK loss                tribute this to unstable gradients arising from the kinematic
+increases the training time from approximately 5h to 14h.              chain: despite similar loss values, the FK loss produces up
+Furthermore, as shown in Tab. 8, the forward kinematics                to 10× higher gradient norms and 1000× larger peak gradi-
+loss does not compromise performance; in fact, it yields               ents with respect to SMPL joint angles compared to a direct
+a marginal reduction in pose estimation accuracy. We at-               L1 loss. This indicates that direct supervision of local joint
+angles is sufficient.
+
+A.2.8. Model Architecture
+Previous works on pose estimation [17, 19, 33] and pose
+generation [30] have employed transformers. However, our
+experiments show that a transformer encoder [34] performs
+significantly worse as a denoising model, with a 27% in-
+crease in joint position error, see Tab. 8. We implemented a
+4-layer transformer encoder with the same token dimension
+as UDP, using sinusoidal position encodings. Overall, our
+results indicate that the local neighborhood priors captured
+by LSTMs are more effective than those learned by trans-
+formers, given the dataset size used in our experiments.
+
+A.3. Translation Results
+
+
+                                       TIP
+                             0.6       PIP
+                                       UDP (ours)                                               Figure 9. An example root trajectory in xz-plane. PIP and UIP
+                                       UIP
+Mean translation error (m)
+
+
+
+
+                             0.5                                                                tend to underestimate translation. UDP follows the trajectory
+                                                                                                closer. TIP has a higher level of jitter.
+                             0.4
+                             0.3
+                                                                                                                             0.8       TIP
+                             0.2                                                                                                       PIP
+                                                                                                                             0.7       PNP
+                             0.1                                                                                                       UIP
+                                                                                                Mean translation error (m)
+
+
+
+
+                                                                                                                             0.6       UDP (ours)
+                             0.0                                                                                             0.5       GlobalPose
+                                   0       1        2           3         4         5   6   7
+                                                        Real travelled distance (m)                                          0.4
+                                                                                                                             0.3
+Figure 8. The cumulative translation error over segment of d me-                                                             0.2
+ters on DanceDB. Purely learned methods UDP and TIP, tend to
+                                                                                                                             0.1
+perform better on complicated dance moves.
+                                                                                                                             0.0
+                                                                                                                                   0       1        2           3         4         5   6   7
+    UDP’s primary contribution lies in improving the pose                                                                                               Real travelled distance (m)
+prediction by modeling geometric constraints using inter-
+sensor measurements. As demonstrated in the main pa-                                            Figure 10. The cumulative translation error over segment of d
+per, the Spatial Layout Module and UWB-Diffusion Guid-                                          meters on TotalCaptures. All models, but UIP, perform similarly
+ance significantly improve local pose estimation, particu-                                      in translation quality.
+larly for arm and leg placement. In this section, we describe
+the modeling of translation prediction and the evaluation of
+UDP’s translation prediction.                                                                   Translation Evaluation. We investigate translation predic-
+Translation Representation. Unlike previous methods                                             tion performance using the established cumulative transla-
+[4, 19, 33, 45, 46] that model translation implicitly by                                        tion error, which measures the drift from the ground truth
+predicting frame-to-frame velocity, UDP outputs absolute                                        trajectory after the subject has traveled a distance of d m.
+translation predictions for individual window, each originat-                                   We report results on DanceDB and TotalCapture for all
+ing at the origin. To form a continuous, long-term sequence,                                    methods for which metrics are reported or could be repro-
+these windows are concatenated such that each window be-                                        duced directly. Overall, UDP achieves translation accu-
+gins at the final position of the preceding one. Velocity-                                      racy that is competitive with existing approaches across all
+based approaches require numerical integration to obtain                                        datasets. On DanceDB, it outperforms the baseline meth-
+global positions, a process where small inaccuracies accu-                                      ods, see Fig. 8. In contrast, on TotalCapture, methods that
+mulate over time. By representing translation as an absolute                                    incorporate a physics optimizer, i.e., PIP, PNP, and Global-
+position directly, we aim to mitigate this integration drift.                                   Pose, achieve lower drift, outperforming UDP by approxi-
+mately 5 cm over 5 m (see Fig. 10).
+   We investigate the varying results qualitatively. On
+DanceDB, UDP generally yields more dynamic and accu-
+rate translations, whereas PIP and UIP tend to underesti-
+mate displacement, especially during twirls or intentional
+foot sliding. This is visible in Fig. 9, where UDP follows
+the ground truth trajectory closely.
+   On TotalCapture, UDP exhibits drift when the transla-
+tion direction is estimated incorrectly. While the magnitude
+of fast, large-scale movements is tracked well, small direc-
+tional errors can occasionally accumulate into larger drift.
+   We attribute these findings to two primary factors. First,
+UDP significantly improves foot and leg placement. Since
+human translation is intrinsically linked to gait, improved
+estimation of stride length and foot positioning reduces
+translation error, as observed on DanceDB. Second, physics
+optimized baselines benefit from explicit contact and dy-
+namics constraints, which aid in tracking translation, as
+seen on TotalCapture. However, strict contact priors, such
+as zero-velocity assumptions, may degrade performance
+when the motion violates these constraints, such as during
+the intentional sliding maneuvers in DanceDB.
+   Overall, UDP demonstrates strong performance in local
+pose estimation due to the incorporation of on-body inter-
+sensor constraints, though it yields mixed results regarding
+global translation. Future work could investigate how pair-
+ing physics optimization with UDP, or the incorporation of
+external UWB anchors, can further improve translation ac-
+curacy.
+A.3.1. Ablation: Absolute Translation Prediction
+Existing methods such as UIP, PIP, TIP, and DiffusionPoser
+predict between-frame translation, i.e., velocity. In contrast,
+we employ an absolute translation representation, normal-
+ized to the origin. This representation improves not only the
+translation results but also marginally enhances local pose
+estimation. Experimentally, switching to a velocity-based
+representation increases translation drift by 16 cm over a
+5 m distance. As shown in Tab. 8, UDP yields superior per-
+formance in both local pose and translation when predicting
+positions directly, highlighting the benefit of this approach.
+

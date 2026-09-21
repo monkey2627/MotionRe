@@ -1,0 +1,758 @@
+Physical Inertial Poser (PIP): Physics-aware Real-time Human Motion Tracking
+                          from Sparse Inertial Sensors
+
+                    Xinyu Yi1     Yuxiao Zhou1                      Marc Habermann2                   Soshi Shimada2
+                          Vladislav Golyanik2                      Christian Theobalt2                Feng Xu1
+      1                                                            2
+          School of Software and BNRist, Tsinghua University           Max Planck Institute for Informatics, Saarland Informatics Campus
+
+
+
+                            Abstract
+
+    Motion capture from sparse inertial sensors has shown
+great potential compared to image-based approaches since
+occlusions do not lead to a reduced tracking quality and the
+recording space is not restricted to be within the viewing
+frustum of the camera. However, capturing the motion and
+global position only from a sparse set of inertial sensors is
+inherently ambiguous and challenging. In consequence, re-
+cent state-of-the-art methods can barely handle very long
+period motions, and unrealistic artifacts are common due
+to the unawareness of physical constraints. To this end, we
+present the first method which combines a neural kinemat-
+ics estimator and a physics-aware motion optimizer to track                   Figure 1. PIP captures physically correct human motion, joint
+body motions with only 6 inertial sensors. The kinemat-                       torques, and ground reaction forces solely from a sparse set
+ics module first regresses the motion status as a reference,                  of six IMUs. Importantly, PIP runs at 60 frames per second with
+and then the physics module refines the motion to satisfy                     only 16ms latency, which enables real-time applications.
+the physical constraints. Experiments demonstrate a clear
+improvement over the state of the art in terms of capture                     which can be either multi-view imagery [4, 6, 58, 82], depth
+accuracy, temporal stability, and physical correctness.                       images [71–73, 84], or a single RGB stream [5, 8, 14, 23, 25,
+                                                                              36, 80, 88]. From the setting, it becomes clear that occlu-
+                                                                              sions (either object-actor or self occlusions) can lead to a
+1. Introduction                                                               significantly reduced tracking quality. Besides, these meth-
+                                                                              ods are sensitive to the lighting and the appearance of the
+   Capturing the motion of real humans is a long-standing                     actor as distinct features need to be extracted from images.
+and challenging problem with many applications in com-                        Moreover, many methods assume a static camera, resulting
+puter vision and graphics, movie production, gaming, AR,                      in a limited space where the subject can be captured. These
+and VR. However, due to its articulated structure, captur-                    drawbacks limit the usability of optical motion capture.
+ing the highly complex and potentially fast movements of                         Recently, researchers start to explore alternative sens-
+the human body is challenging and many works have been                        ing devices such as inertial measurement units (IMUs).
+proposed in the past [4, 65, 68, 69, 73, 88].                                 Production-ready solutions [31, 67] can track the body mo-
+   One category of approaches are image-based where the                       tion accurately solely from inertial sensors. However, they
+actor motion is recovered by analyzing the image data,                        rely on special suits with densely placed sensors (usually 17
+                                                                              IMUs), which are difficult to wear. Besides, the large num-
+    This work was supported by Beijing Natural Science Foundation
+(JQ19015), the NSFC (No.61727808, 62021002), the National Key R&D             ber of IMUs can hinder the actor’s movement. Having a
+Program of China 2018YFA0704000. This work was supported by                   sparser set of IMUs on the body is clearly advantageous and
+THUIBCS, Tsinghua University and BLBCI, Beijing Municipal Education           more flexible. However, recent sparse methods [18, 62, 69]
+Commission. This work was partially supported by the ERC consolidator
+grant 4DReply (770784). We thank Notiom [31] for the extensive support
+                                                                              struggle with physical correctness and cannot disambiguate
+on inertial sensors, and Liuqing Yang, Liangdi Ma, Siyuan Teng, Wenbin        poses with similar sensor measurements such as sitting and
+Lin for the help on live demos. Feng Xu is the corresponding author.          standing; they are non-causal, i.e., need future information,
+
+
+
+                                                                          13167
+which introduces large delays; their accuracy is still limited      can be mainly categorized into optical, inertial, and hybrid
+while temporal artifacts such as jitter become visible.             approaches. Since our method only requires IMU measure-
+    To this end, we propose Physical Inertial Poser (PIP), a        ments as input, we do not discuss purely image-based ap-
+new real-time method for motion capture as well as joint            proaches [14, 15, 22, 24, 37, 45, 55]. Here, we focus on hy-
+torque and ground reaction force estimation using only six          brid and inertial mocap solutions, and the previous efforts
+IMUs (see Fig. 1). In contrast to previous works [18, 69]           on the physical plausibility of human motion.
+that require future information, our method only requires           Optical-inertial Hybrid Motion Capture. As image-
+the information already available at any given time, which          based mocap solutions suffer from occlusions, fusing im-
+means no additional delay is introduced. Our algorithm              ages with IMUs, which aims at achieving more robust mo-
+has two stages: 1) learning-based motion estimation and             tion tracking, has recently attracted much attention. This
+2) physics-based motion optimization, which leverage both           can be achieved by either energy-based optimization [20,
+human kinematics and dynamics in motion capture.                    33–35,40,61] which optimizes human pose to fit both image
+    In the estimation stage, we regress human pose, joint ve-       features and inertia measurements, or feature-based estima-
+locities, and foot-ground contact probabilities from the iner-      tion [12, 59] which regresses human pose from the com-
+tia inputs using recurrent neural networks (RNNs). We esti-         bined features derived from images and IMUs. Zhang et
+mate leaf-to-full joint positions as intermediate tasks to im-      al. [83] propose to exploit IMUs in the 2D pose estima-
+prove the tracking accuracy as proposed by TransPose [69].          tion by fusing the image features of each pair of joints
+To resolve the pose ambiguity arising from the sparse IMU           linked by the IMUs. Some works fuse IMUs with depth
+placement, we further propose a learning-based RNN state            images [17, 21, 86] or optical markers [1] to perform human
+initialization strategy, which helps the networks better learn      motion/performance capture. Nevertheless, these methods
+the change of body pose from input inertia measurements.            are still substantially limited under low light conditions and
+This results in a significant accuracy improvement espe-            heavy occlusions, and require the actor to move within the
+cially for ambiguous motions such as sitting still.                 viewing frustum of the camera. Our method requires no
+    In the optimization stage, we recover the physically cor-       visual input, and thus is free from these limitations.
+rect motion, joint torques, and ground reaction forces from
+the kinematic estimations, leveraging a torque-controlled           Motion Capture from Inertial Sensors. Inertial mocap
+floating-base simulated character model. Different from             approaches do not suffer from occlusions or restricted mov-
+previous works that independently control the rotation of           ing space. Commercial solutions [31, 67] and the extended
+each degree of freedom of the character using proportional-         work [13] rely on 17 IMUs to perform motion capture. They
+derivative (PD) rules [19, 51, 52, 76], we propose a novel          usually require the actor to wear a tight suit with densely
+dual PD controller to incorporate the global holistic con-          bounded IMUs, which is inconvenient, intrusive, and ob-
+trol of the character’s pose. This is achieved by applying          structive. It is clear that having a reduced set of IMUs on the
+PD rules on both joint positions and rotations. The pro-            body is preferable. However, motion capture from sparse
+posed technique significantly improves the translation ac-          inertial sensors is very ambiguous and challenging. Some
+curacy and physical plausibility of the motion.                     works [28, 56, 60] leverage ultrasonic sensors for additional
+    In summary, our main contributions are:                         position information to resolve some ambiguities, but the
+    • The first physics-aware real-time approach that esti-         use of distance sensors limits the recording range. Early
+      mates human motion, joint torques, and ground reac-           purely-inertial works [44, 54, 57] use sparse accelerometers
+      tion forces with only six IMUs, which we call PIP.            to reconstruct human pose by database search. Schwarz
+    • A learning-based RNN state initialization scheme,             et al. [47] use sparse orientation measurements to perform
+      which helps to better disambiguate human motion re-           person-specific pose estimation. To improve the accuracy,
+      gression from sparse IMU measurements (Sec. 3.1).             recent works [11, 18, 41, 62, 69] leverage both acceleration
+    • A dual PD controller, which achieves the combined             and orientation measurements. Marcard et al. [62] present
+      control of local and global pose to improve the motion        an offline method for human motion capture from only
+      tracking accuracy and physical plausibility (Sec. 3.2).       6 IMUs, which achieves promising accuracy. Huang et
+Our experiments demonstrate that PIP significantly out-             al. [18] propose the first deep learning method, which uses
+performs previous sparse IMU-based methods in terms of              a bidirectional recurrent neural network (biRNN) to esti-
+tracking accuracy, physical plausibility, and disambiguation        mate the human pose from 6 IMUs in real-time. However,
+of challenging poses.                                               their method does not allow to locate the person in the 3D
+                                                                    space, i.e., the root translation is not estimated. The current
+2. Related Work                                                     state-of-the-art method, TransPose [69], introduces the first
+                                                                    real-time pose and translation estimation framework, which
+   Human motion capture (mocap) has a long research his-            achieves an accurate capture quality while also only using
+tory. Many works have been devoted to this topic, which             6 IMUs. However, all of these works have a non-negligible
+
+
+
+                                                                 13168
+delay due to the inherent need of future information, can-            lation, together with physical properties including ground
+not stably capture ambiguous poses, and has many non-                 reaction forces and joint torques. The method incorporates
+physical artifacts such as jitter and foot-sliding. In contrast,      two modules: 1) the kinematics module: a neural kine-
+our method does not rely on any future information and is             matics estimator, which infers the human motion from the
+free from the delay while even achieving higher accuracy.             IMU measurements, followed by 2) the dynamics module:
+In addition, we are the first to combine physics-based mo-            a physics-aware motion optimizer, which refines the human
+tion optimization with sparse inertial motion capture, and            motion and outputs the physical properties.
+we show that such a carefully orchestrated design signifi-
+cantly improves the physical correctness of the motion.               3.1. Neural Kinematics Estimator
+Physical Plausibility of Motion. To ensure the physical                  The task of the kinematics module is to estimate the cur-
+plausibility of motion, many works address the awareness              rent motion status (specified later). We use the same kine-
+of physics in their approach. One category of works only              matic tree as in SMPL [30], which contains J = 24 joints.
+impose physical constraints (e.g., foot contacts [7, 50, 89],         We refer to the wrists, ankles, and head as the leaf joints,
+temporal consistency [15, 37, 62], and collision [77]) with-          and the pelvis as the root joint. For all the J joints, their
+out considering human dynamics such as forces and masses.             3D positions are denoted as p ∈ R3J ; their linear velocities
+Some works leverage an explicitly reconstructed scene to              are denoted as v ∈ R3J ; and their rotations are denoted as
+constrain the motion [13,16,81]. However, due to the articu-          φ ∈ R6J in the 6D representation [87]. Since the IMUs do
+lated structure of humans, it is considerably difficult to track      not provide any positional measurement, all these estima-
+the complicated body movements by imposing such naive                 tions are in the local coordinate frame (relative to the root
+constraints. Another category of works leverage physics-              joint). Similar to TransPose [69], we perform a T-Pose cali-
+based human models and estimate forces to control the mo-             bration at the beginning, and then at each time step we stack
+tion, targeting a more accurate modeling of real-world hu-            the IMU measurements, i.e., the aligned accelerations and
+man movements. Some works [27, 43, 52, 63, 66, 79] use                rotation matrices, into a single input vector x ∈ R72 . In the
+optimization-based methods to solve the optimal forces and            following, we first give an overview of our network struc-
+human motion, which satisfy the physical constraints and              ture (Sec. 3.1.1). Then, we dive into our novel learning-
+laws such as the equation of motion [9]. Zell et al. [78] pro-        based initialization for the RNN hidden states during train-
+pose a weakly-supervised learning framework for dynamics              ing (Sec. 3.1.2). The new initialization method helps the
+estimation from human motion. Shimada et al. [51] present             network learn to capture the state-change signals, which is
+a fully-differentiable framework for learning-based motion            crucial to resolve the pose ambiguity in our task.
+and force estimation from videos. Reinforcement learning
+is also used in physics-based character control [2,19,29,38,
+39,70,74,76], which can utilize advanced non-differentiable           3.1.1   Motion Estimation Network
+physics simulators. Among these works, our physics mod-
+                                                                      The structure of the network follows the one of Trans-
+ule is most similar to the work of Shimada et al. [52]. The
+                                                                      Pose [69], which first estimates leaf joint properties and
+major differences are the input to the respective method and
+                                                                      then full body status in a multi-stage style. Different from
+the control of the physical character. Our method assumes
+                                                                      their method [69], we choose to use RNN instead of biRNN
+sparse inertia measurements of the moving body as input
+                                                                      as the basic network structure (elaborated in Sec. 3.1.2), and
+while theirs [52] leverages images of the actor. Moreover,
+                                                                      we estimate the velocity of all joints instead of only the root
+their approach [52] uses a proportional-derivative (PD) con-
+                                                                      joint, since we find that using full-joint velocities in combi-
+troller to control the rotation of each joint of the character
+                                                                      nation with the physics part allows better character control.
+independently. In contrast, our method uses a novel dual
+PD controller to introduce the global control of the charac-              Specifically, as shown in Fig. 2, we first use an RNN PL
+ter, aiming at better accuracy. In other words, our method is         to regress leaf joint positions pleaf ∈ R15 from the IMU
+the first that leverages explicit physics-based optimization          measurements x. Then, the concatenated vector [pleaf x]
+into spare IMU-based motion capture.                                  is fed into the second RNN PA , which estimates all joint
+                                                                      positions p ∈ R3J . Next, we feed the vector [p x] into
+3. Method                                                             three RNNs RA , VA , and CF to estimate the joint rotations
+                                                                      φ ∈ R6J (the root orientation is directly measured by the
+   Our task is to track human motion in real-time using               IMU placed on the pelvis), linear velocities v ∈ R3J , and
+6 IMUs. The input of our method is the sequential mea-                foot-ground contact probabilities c ∈ R2 . Finally, φ, v, and
+surements of accelerations and orientations of the 6 IMUs             c, which we call motion status, are fed into the subsequent
+mounted on the left/right forearms, left/right lower legs,            dynamics module. During training, we use an L2 loss for
+head, and pelvis (Fig. 2). The output of our method is the            PL , PA , and RA , a binary cross-entropy loss for CF , and
+subject’s motion in terms of joint angles and global trans-           the cumulative loss proposed in [69] for VA .
+
+
+
+                                                                   13169
+Figure 2. Overview of our method. We first use a neural kinematics estimator to infer human motion status from sparse IMU measurements.
+Then, we use a physics-aware motion optimizer to obtain physically correct human motion, joint torques, and ground reaction forces.
+
+3.1.2   RNN with Learning-based Initialization                        ing inference, we assume the initial pose of the subject is
+                                                                      known, which can be obtained from the calibration step.
+Full-body motion tracking from sparse inertial sensors is             Notice that the FCN only initializes the RNN for the first
+severely under-constrained and ambiguous. For example,                frame. The FCNs we use for initialization during training
+due to the sparsity of the IMUs, it is impossible to distin-          are shown in Fig. 2 as IPL and IVA , which take the begin-
+guish standing still and sitting still since the IMU measure-                                     (0)
+                                                                      ning leaf joint positions pleaf and joint velocities v (0) as
+ments are identical: orientations are the same and accel-             input, respectively. This initialization is only applied to PL
+erations are zero. To cope with this ambiguity, leveraging            and VA , which suffer most from the ambiguity.
+the temporal information by capturing and memorizing the
+state-change signals in historical frames is a must. Previous         3.2. Physics-aware Motion Optimizer
+state-of-the-art works [18, 69] leverage bidirectional recur-             The output of the kinematics module may still contain
+rent neural networks (biRNN) [46] to learn such temporal              artifacts like jitter and ground penetration. We therefore in-
+information. However, the design of biRNNs only allows a              troduce the dynamics module to explicitly apply the phys-
+fixed frame window in the real-time setting, which prevents           ical constraints as similar to [52]. The input to this mod-
+the access to state changes that happened outside this tem-           ule is the motion status φ, v, and c estimated by the kine-
+poral window, e.g., when the subject remains seated for a             matics module, which serve as the reference in the physics-
+longer time. In consequence, these methods fail to capture            based optimization. The task of the dynamics module is
+such ambiguous poses correctly. To overcome this limita-              to obtain the motion, internal joint torques, and ground
+tion, we use RNNs to retain complete historical information           reaction forces that align with the reference but also sat-
+and capture the crucial state-change signals.                         isfy physical constraints. Specifically, based on the physics
+    To capture the state-change signals, not only does the            model (Sec. 3.2.1), we first use a novel dual PD controller
+architecture have to be updated, but also a new training              (Sec. 3.2.2) to compute the desired acceleration for the sim-
+strategy is necessary. Traditionally, an RNN is trained in            ulated character which can fully reproduce the reference
+a mini-batch manner and always starts with a zero initial-            motion, and then use a motion optimizer (Sec. 3.2.3) to
+ization for hidden states in each batch. However, in our              solve for the acceleration and force that the character can
+setting, a constant initial state is incorrect (the subject may       actually produce within the physical constraints. Finally,
+start from sitting, standing, lying, etc.); and when the ini-         we update the character status and compute the final output
+tial state is wrong, the model can never learn how to change          motion (Sec. 3.2.4).
+its hidden state according to the signals afterward due to
+the mismatch at the beginning. To address this problem,               3.2.1   Physics Model
+we propose a learning-based RNN initialization strategy.
+Specifically, we have a separate fully-connected neural net-          We use a torque-controlled floating-base simulated charac-
+work (FCN), which regresses the initial state of the RNN              ter [85] as our physics model and follow the same mass dis-
+from body pose information. The FCN and RNN are trained               tribution as in [52]. We initialize the subject’s global po-
+jointly: for each mini-batch, the ground-truth pose at the be-        sition at the origin. We refer to the joint positions in the
+ginning is fed into the FCN, then the output of the FCN is            global coordinate frame as r ∈ R3J and the translation as
+assigned to the hidden state of the RNN, then the RNN is              r root ∈ R3 . The time derivative ṙ and r̈ refer to the lin-
+trained as usual. As the RNN implementation is not mod-               ear velocity and acceleration in the global frame. We re-
+ified, the proposed strategy is highly effective and compat-          fer to the local joint rotations (i.e., pose) in Euler angles as
+ible with highly optimized black-box RNN libraries. Dur-              θ ∈ R3J , and its time derivative θ̇ and θ̈ are the angular ve-
+
+
+
+                                                                  13170
+locity and acceleration. The configuration of the character                                                                                                                                                         where θ and θ̇ are the current joint angles and angular ve-
+is described by its pose and translation, which we denote as                                                                                                                                                        locities; E(·) transforms the reference pose to local Euler
+q = [r root θ] ∈ RN where N = 3 + 3J is the degree of                                                                                                                                                               angles; kpθ = 2400 and kdθ = 60 are the gain parameters.
+freedom (DoF). The time derivative q̇ and q̈ are the gener-                                                                                                                                                         Joint Position Controller. This controller computes the de-
+alized velocity and acceleration. The character is controlled                                                                                                                                                       sired linear joint acceleration r̈ des . Different from the ro-
+by the vector of force τ ∈ RN where each dimension refers                                                                                                                                                           tation controller, we do not have reference joint positions
+to the force on the corresponding DoF. In the real world,                                                                                                                                                           since we have no direct distance measurements. Thus, we
+the character is actuated only by the torques at the non-root                                                                                                                                                       compute them from the current joint positions r and the es-
+joints, while no force is applied to the root joint. How-                                                                                                                                                           timated joint velocity v as:
+ever, to compensate for the dynamics mismatch between
+our physics model and real humans, we allow a small resid-                                                                                                                                                                                                                                                                                                                                                                      \boldsymbol r_{\mathrm {ref}} = \boldsymbol r + \mathbf T(\boldsymbol v)\Delta t,                                                                                                                                                                                                                                                                         (4)
+ual force at the root joint as prior works [26, 51, 52, 75, 76]
+do. In our notation, the first six entries τ :6 correspond to                                                                                                                                                       where T(·) maps the joint velocity from local frame to
+the residual force at the root joint, and τ 6: are the actuated                                                                                                                                                     global frame and ∆t is the simulation time step. Then, the
+joint torques. The generalized acceleration q̈ and the force                                                                                                                                                        joint position controller is defined as:
+τ follow the equation of motion [9]:
+                                                                                                                                                                                                                                                                                                                                                                             \ddot {\boldsymbol r}_\mathrm {des} = k_{p_r}(\boldsymbol r_{\mathrm {ref}} - \boldsymbol r) - k_{d_r}\dot {\boldsymbol r},                                                                                                                                                                                                                                                                                  (5)
+             \boldsymbol \tau + \boldsymbol J_\mathrm {c}(\boldsymbol q)^T\boldsymbol \lambda = \boldsymbol M(\boldsymbol q)\ddot {\boldsymbol q} + \boldsymbol h(\boldsymbol q, \dot {\boldsymbol q}),    (1)
+                                                                                                                                                                                                                    where kpr = 3600 and kdr = 60 are the gain parameters; ṙ
+where M ∈ RN ×N is the inertia matrix; h ∈ RN is                                                                                                                                                                    is the current joint velocity, which can be computed by:
+the non-linear effect term that accounts for gravity, Cori-
+olis, and centripetal forces; λ ∈ R3nc is the external con-                                                                                                                                                                                                                                                                                                                                                                                                                                             \dot {\boldsymbol r} = \boldsymbol J \dot {\boldsymbol q},                                                                                                                                                                                                                        (6)
+tact forces applied at nc character-ground contact points;
+J c ∈ R3nc ×N is the contact point Jacobian, which maps                                                                                                                                                             where J ∈ R3J×N is the joint Jacobian.
+the generalized velocity q̇ to the contact point velocities:
+                                                                                 \label {eq:Jqdot} \dot {\boldsymbol r}_\mathrm {c} = \boldsymbol J_\mathrm {c} \dot {\boldsymbol q}.                      (2)      3.2.3                                                                  Motion Tracking Optimizer
+
+Readers are referred to [9] for more details. In our model,                                                                                                                                                         The motion tracking optimizer solves a quadratic program-
+we assume all external forces (except for gravity) are the                                                                                                                                                          ming problem and estimates acceleration q̈, joint torques τ ,
+support and frictional forces exerted at the contact points                                                                                                                                                         and GRF λ. The optimization problem can be written as:
+by the ground, which we call ground reaction force (GRF).
+                                                                                                                                                                                                                      \label {eq:qp} \begin {array}{rll} \mathop {\arg \min }\limits _{\ddot {\boldsymbol q},\boldsymbol \lambda ,\boldsymbol \tau }&\mathcal {E}_{\mathrm {PD}} + \mathcal {E}_{\mathrm {reg}}&\\ \mathrm {s.t.}&\boldsymbol \tau + \boldsymbol J_\mathrm {c}^T\boldsymbol \lambda = \boldsymbol M\ddot {\boldsymbol q} + \boldsymbol h&(\mathrm {equation\,\,of\,\,motion})\\ &\boldsymbol \lambda \in \mathcal {F}&(\mathrm {friction\,\,cone})\\ &\dot {\boldsymbol r}_\mathrm {j}(\ddot {\boldsymbol q}) \in \mathcal {C}&\mathrm {(no\,\,sliding)}. \end {array} 
+3.2.2   Dual Proportional-differential Controller
+To control the character, previous methods [19, 51, 52, 76]
+use a single PD controller to compute either angular accel-
+                                                                                                                                                                                                                                                                                 (7)
+erations or joint torques to reproduce the reference motion.
+                                                                                                                                                                                                                    M is computed from q using the composite rigid body al-
+However, since the configuration of the character is param-
+                                                                                                                                                                                                                    gorithm [9]. h is computed from q and q̇ using the recur-
+eterized in local Euler angles, such methods only focus on
+                                                                                                                                                                                                                    sive Newton-Euler algorithm [9]. The energy function and
+the independent control of local joint rotations, which may
+                                                                                                                                                                                                                    the three constraints will be elaborated in the following.
+result in an undesirable global pose. Simply applying PD
+                                                                                                                                                                                                                    Contact Point Determination. To apply the three con-
+control on global joint rotations will make the optimiza-
+                                                                                                                                                                                                                    straints in Eq. 7, we first need to acquire all the contact
+tion problem non-quadratic, introducing a large computa-
+                                                                                                                                                                                                                    points between the body and the ground. We determine
+tion cost. We find that imposing a PD controller on joint
+                                                                                                                                                                                                                    whether joint j contacts the ground by its vertical distance
+positions will constrain the global pose, while still keeping
+                                                                                                                                                                                                                    to the ground dj , and for the foot joint we additionally lever-
+the problem quadratic. To this end, we propose a dual PD
+                                                                                                                                                                                                                    age the predicted contact probability c for better accuracy
+controller, which contains 1) a rotation controller control-
+                                                                                                                                                                                                                    since feet touch the ground more often. Specifically, a foot
+ling the local pose in joint rotational space and 2) an addi-
+                                                                                                                                                                                                                    joint f is considered in contact if 1) df < 0.5cm or 2) df <
+tional position controller controlling the global pose in joint
+                                                                                                                                                                                                                    3cm and the ground contact probability cf > 0.5; a non-
+positional space. Below, we elaborate the two controllers.
+                                                                                                                                                                                                                    foot joint n is considered in contact only if dn < 0.5cm.
+Joint Rotation Controller. This controller computes the
+                                                                                                                                                                                                                    We then draw an L×L square centered at each contact joint
+desired joint angular acceleration θ̈ des from the estimated
+                                                                                                                                                                                                                    and take its 4 vertices as the contact points. This is based
+reference joint rotations φ using:
+                                                                                                                                                                                                                    on our finding that assuming facet-contacts instead of point-
+                         \ddot {\boldsymbol \theta }_\mathrm {des} = k_{p_\theta }(\mathbf {E}(\boldsymbol \varphi ) - \boldsymbol \theta ) - k_{d_\theta }\dot {\boldsymbol \theta },                     (3)      contacts produces more stable results. We take L = 20cm
+
+
+
+                                                                                                                                                                                                                 13171
+which is roughly the size of a foot. The number of the con-                                                                                                                                                                                                                                                                                                                                                                                                    3.2.4    Dynamic States Updater
+tact joints is denoted as nj , then the number of the contact
+points is nc = 4nj .                                                                                                                                                                                                                                                                                                                                                                                                                                           We use a finite difference method for dynamic state updates:
+Dual PD Controller Term EPD . To reproduce the kine-
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      \begin {aligned} &\boldsymbol q^{(t+1)} = \boldsymbol q^{(t)} + \dot {\boldsymbol q}^{(t)}\Delta t,\\ &\dot {\boldsymbol q}^{(t+1)} = \dot {\boldsymbol q}^{(t)} + \ddot {\boldsymbol q}^{(t)}\Delta t,\\ \end {aligned} 
+matic estimation, the character should generate the angu-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         (13)
+lar and linear joint accelerations given by the dual PD con-
+troller. Thus, in Eq. 7, EPD consists of two components Eθ
+and Er , which control the angular and linear accelerations:                                                                                                                                                                                                                                                                                                                                                                                                   where q̈ (t) is the estimated acceleration from the optimizer
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               and q (t+1) is the updated pose and translation. Since our
+                     \begin {aligned} &\mathcal {E}_{\mathrm {PD}} = k_\theta \mathcal {E}_\theta + k_r\mathcal {E}_r,\\ &\mathcal {E}_\theta = \|\ddot {\boldsymbol q}_{3:} - \ddot {\boldsymbol \theta }_\mathrm {des}\|^2, \mathcal {E}_r = \|\boldsymbol J\ddot {\boldsymbol q} + \dot {\boldsymbol J}\dot {\boldsymbol q} - \ddot {\boldsymbol r}_\mathrm {des}\|^2,\\ \end {aligned}                                                                     system runs at 60 fps, ∆t is set to 1/60 second.
+                                                                                                                                                                                                                                                                                                                                                                                                                                                 (8)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               4. Experiments
+where kθ and kr are the weight terms both set to 1.
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                   In this section, we first compare our approach with pre-
+Regularization Term Ereg . Our regularization term Ereg
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               vious works (Sec. 4.1). Then, we perform an ablative study
+in Eq. 7 contains three energy terms: 1) Eλ penalizes viola-
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               of the key components (Sec. 4.2). Finally, we show the po-
+tions of the Signorini’s conditions of contacts [53]; 2) Eres
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               tential applications of our methods (Sec. 4.3).
+constrains the magnitude of the root residual force; and 3)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               Datasets. The training and evaluation involve the AMASS
+Eτ confines the norms of the joint torques:
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               dataset [32], the DIP-IMU dataset [18], and the TotalCap-
+                   \begin {aligned} &\mathcal {E}_{\mathrm {reg}} = k_\lambda \mathcal {E}_\lambda + k_\mathrm {res}\mathcal {E}_\mathrm {res} + k_\tau \mathcal {E}_\tau ,\\ &\mathcal {E}_\lambda = \sum _{c=1}^{n_\mathrm {c}}d_c\|\boldsymbol \lambda _c\|^2, \mathcal {E}_\mathrm {res} = \|\boldsymbol \tau _{:6}\|^2, \mathcal {E}_\tau = \|\boldsymbol \tau _{6:}\|^2,\\ \end {aligned}                                                                ture dataset [59]. Following [69], we first train the model on
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               AMASS using synthesized IMUs and then fine-tune it on
+                                                                                                                                                                                                                                                                                                                                                                                                                                                 (9)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               the train split of DIP-IMU. The evaluations are performed
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               on TotalCapture and the test split of DIP-IMU. The acceler-
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               ation measurement in TotalCapture is constantly biased and
+where dc is the vertical height of the contact point c; λc is                                                                                                                                                                                                                                                                                                                                                                                                  we re-calibrated it (detailed in the supplemental document).
+the GRF at point c; kλ , kres , and kτ are the corresponding                                                                                                                                                                                                                                                                                                                                                                                                   All the reported numbers are online results.
+weights, which are set to 10, 0.1, and 0.01, respectively.                                                                                                                                                                                                                                                                                                                                                                                                     Metrics. We use the following metrics to evaluate our
+Friction Cone and Sliding Constraints. These two con-                                                                                                                                                                                                                                                                                                                                                                                                          method. 1) SIP Error measures the mean orientation error
+straints in Eq. 7 are only applied to the contacts. We assume                                                                                                                                                                                                                                                                                                                                                                                                  of the upper arms and legs in the global space in degrees. 2)
+the GRF at the contact points should be inside the friction                                                                                                                                                                                                                                                                                                                                                                                                    Mesh Error measures the mean vertex distance between the
+cone1 and the contact joints do not slide. Specifically, we                                                                                                                                                                                                                                                                                                                                                                                                    reconstructed and ground-truth meshes with both root po-
+denote the force/velocity along the y (vertical) axis of the                                                                                                                                                                                                                                                                                                                                                                                                   sition and orientation aligned in cm. 3) Jitter measures the
+global frame as ·y and the same for the x, z (horizontal)                                                                                                                                                                                                                                                                                                                                                                                                      mean jerk (time derivative of acceleration) of all body joints
+axis. The friction cone constraint can be linearized as:                                                                                                                                                                                                                                                                                                                                                                                                       in the global space in km/s3 , which reflects the smoothness
+    \begin {aligned} &\mathcal {F}_c=\{\boldsymbol \lambda _c\in \mathbb {R}^3|\boldsymbol \lambda _c^y \ge 0, |\boldsymbol \lambda _c^x| \le \mu \boldsymbol \lambda _c^y , |\boldsymbol \lambda _c^z| \le \mu \boldsymbol \lambda _c^y\},\\ &\mathcal {F}=\{[\boldsymbol \lambda _1\cdots \boldsymbol \lambda _{n_\mathrm {c}}]\in \mathbb {R}^{3n_\mathrm {c}}|\boldsymbol \lambda _c\in \mathcal {F}_c,c=1,2,\cdots ,n_\mathrm {c}\}, \end {aligned}       of the motion [10]. 4) Zero-Moment Point (ZMP) distance
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               measures the mean distance from the fictitious ZMP [64]
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               position to the Base of Support2 of the character in m. It
+                                                         (10)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               represents the intensity of the perturbation moment which
+which means the vertical force from the ground must be up-
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               lets the character fall, and should be zero for a real human in
+ward, and the horizontal forces should not be larger than the
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               dynamic equilibrium [64]. Previous works [42, 48] lever-
+maximum frictional force. We empirically set the friction
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               age Center of Pressure (CoP) to quantify the equilibrium,
+coefficient µ = 0.6. For the sliding constraint, we have:
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               which is related to the ZMP distance. A discussion about
+             \begin {aligned} &\mathcal {C}_j = \{\dot {\boldsymbol r}_j\in \mathbb {R}^3|\dot {\boldsymbol r}_j^y \ge 0,|\dot {\boldsymbol r}_j^x| \le \sigma , |\dot {\boldsymbol r}_j^z| \le \sigma \},\\ &\mathcal {C} = \{[\dot {\boldsymbol r}_1\cdots \dot {\boldsymbol r}_{n_\mathrm {j}}]\in \mathbb {R}^{3n_\mathrm {j}}|\dot {\boldsymbol r}_j\in \mathcal {C}_j,j=1,2,\cdots ,n_\mathrm {j}\}, \end {aligned}                                      ZMP and CoP can be found in the supplemental document.
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               Among these metrics, 1) and 2) measure pose accuracy, 3)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               and 4) measure physical plausibility. We further evaluate
+                                                           (11)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               cumulative translation error which means the global posi-
+which confines the sliding velocity of every contact joint
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               tion error w.r.t the real travelled distance; and latency which
+smaller than σ = 0.01 while preventing ground penetration.
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               measures the time from receiving the inertia measurements
+The contact joint velocity ṙ j (q̈) in Eq. 7 is computed by:
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               to outputting the pose and translation for the correspond-
+                                                                                                                                     \dot {\boldsymbol r}_\mathrm {j}(\ddot {\boldsymbol q})=\boldsymbol J_\mathrm {j}(\dot {\boldsymbol q} + \ddot {\boldsymbol q}\Delta t),\\                                                                                                                                                        (12)                    ing frame in ms, using a laptop with an Intel(R) Core(TM)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                               i7-10750H CPU and an NVIDIA RTX2080 Super graphics
+where J j ∈ R3nj ×N is the contact joint Jacobian.                                                                                                                                                                                                                                                                                                                                                                                                             card. For all these metrics, the lower, the better.
+  1 Friction cone: the set of all forces that can be transmitted through a                                                                                                                                                                                                                                                                                                                                                                                        2 Base of Support (BoS): the area around the outside edge of the body
+
+Coulomb friction contact. See [3].                                                                                                                                                                                                                                                                                                                                                                                                                             sections in contact with the ground. Also called the support polygon.
+
+
+
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                            13172
+                                                                                                                DIP-IMU
+                             Method                                                                                                                                                         2
+                                                                        SIP Err             Mesh Err             Jitter ZMP Dist                                  Latency
+    DIP [18]                                                             17.10               8.96                   -       -                                       117
+                                                                                                                                                                                        1
+ TransPose [69]                                                          16.68               7.09                1.46     1.67                                       94
+      PIP                                                                15.02               5.95                0.24     0.12                                       16                         3
+
+                                                                                                   TotalCapture
+                             Method
+                                                                        SIP Err             Mesh Err Jitter ZMP Dist                                              Latency
+    DIP [18]                                                             18.62               11.22      -         -                                                 117                                                   4
+ TransPose [69]                                                          16.58                7.42    1.87      1.40                                                 94
+      PIP                                                                12.93                6.51    0.20      0.23                                                 16
+Table 1. Comparison with the state-of-the-art methods on DIP-
+IMU [18] and TotalCapture [59]. Metrics and units are detailed
+at the beginning of Sec. 4. PIP achieves a reduction of 15% of
+the pose error, 87% of the jitter, and 89% of the motion imbalance
+with 83% lower latency compared with the SOTA TransPose [69].
+
+                                                                              & X P X O D W L Y H  7 U D Q V O D W L R Q  ( U U R U
+    0 H D Q  W U D Q V O D W L R Q  H U U R U   P 
+
+
+
+
+                                                             
+
+                                                                                                                                                                               Figure 4. Qualitative results on TotalCapture [59] dataset. We
+                                                             
+                                                                                                                                                                               show the mesh error distribution and the Area Under Curve (AUC)
+                                                                                                                                                                               value of different methods, and select 4 examples for visualization.
+                                                                                                                      7 U D Q V 3 R V H                                     Colors of different methods are shown in the legend. Our approach
+                                                                                                                         3 , 3   Z  R  S K \ V                            is visually the most accurate over all the methods.
+                                                                                                                      3 , 3   Z  R  O H D U Q L Q J  L Q L W 
+                                                                                                                         3 , 3   Z  R  G X D O  3 '                                                    DIP-IMU            TotalCapture
+                                                                                                                                                                                       Method
+                                                                                                                         3 , 3                                                                           SIP Error Jitter SIP Error Jitter
+                                                             
+                                                                                                                                                                                   w/o learning-init       15.12       0.27     13.70       0.23
+                                                                                                                                                              
+                                                                                   5 H D O  W U D Y H O O H G  G L V W D Q F H   P                                              w/o dual-PD           15.04       0.28     12.93       0.32
+Figure 3. Comparison of the translation estimation on TotalCap-                                                                                                                  w/o physics module        15.04       0.48     12.84       0.51
+ture [59]. Our method has the lowest cumulative error because of                                                                                                                         Ours              15.02       0.24     12.93       0.20
+the learning-based RNN initialization and the dual PD controller.                                                                                                              Table 2. Ablation study on the learning-based RNN initialization,
+                                                                                                                                                                               the dual PD controller, and the physics-based optimizer. It demon-
+                                                                                                                                                                               strates the help of our key components on pose accuracy (shown
+4.1. Comparisons                                                                                                                                                               in SIP Error) and physical plausibility (shown in Jitter).
+Quantitative. We compare our method to state-of-the-art
+methods DIP [18] and TransPose [69] which also target                                                                                                                          works. In the third case, we reconstruct the full-body pose
+motion capture from sparse IMUs. Note that DIP does                                                                                                                            faithfully while others nearly fail. In the last challenging
+not estimate global translation. The results are shown in                                                                                                                      example, although the estimated upper legs slightly defer
+Tab. 1 and Fig. 3. Our method not only significantly out-                                                                                                                      from the ground truth, our result still looks similar and out-
+performs previous works on capture accuracy and physical                                                                                                                       performs others. Again, we attribute this superiority to the
+plausibility, but also largely reduces the delay. The pose ac-                                                                                                                 RNN-based estimator and the physics-based optimizer. The
+curacy improvement is attributed to the RNN-based kine-                                                                                                                        ambiguity in these cases comes from the fact that the sub-
+matics estimator which makes use of complete historical                                                                                                                        ject can perform very different poses while keeping the fore-
+information and better captures state-change signals. The                                                                                                                      arm/lower leg orientation unchanged, and the key to resolv-
+improvement of the motion smoothness, equilibrium, and                                                                                                                         ing the ambiguity is the temporal information of the state-
+translation accuracy is attributed to the physics-aware mo-                                                                                                                    change signals. Compared with previous works, we make
+tion optimizer with the novel dual PD controller. Thus,                                                                                                                        better use of such information due to our learning-based
+the proposed combination of learning-based kinematics and                                                                                                                      RNN initialization. In consequence, our networks regress
+optimization-based physics leads to the overall best result.                                                                                                                   more accurate pose and velocities, which, in combination
+                                                                                                                                                                               with the dual PD controller, further improve the results.
+Qualitative. In Fig. 4, we show the mesh error distribu-
+                                                                                                                                                                               4.2. Evaluations
+tion of DIP [18], TransPose [69], and our method on To-
+talCapture. We take 4 examples at 1) 10%, 2) mode, 3)                                                                                                                          Physical Properties. In Fig. 5, we demonstrate the esti-
+median, and 4) 95%. In the first two cases, our method                                                                                                                         mated physical properties. The left figure shows the GRF
+estimates arm and leg orientations better than the previous                                                                                                                    of two feet when the subject is walking. We can see that
+
+
+
+                                                                                                                                                                            13173
+Figure 5. Left: evaluation on the estimated contact forces over       Figure 6. Ablation study on the learning-based RNN initialization
+time in a walking motion. Right: visualization of the arm joint       skill using a long-sitting sequence. We plot the upper leg orienta-
+torques for a waving-hand motion (red for large torques).             tion error over time and pick three frames for visualization.
+
+                                                                      without the physics-based optimizer or the dual PD con-
+the two feet support the body in turns and the GRF ap-                troller, the translation accuracy deteriorates significantly.
+proximately equals gravity, which is reasonable according             Besides, the method without physics-based optimization
+to [49, 78]. The right figure is a series of frames where the         will always estimate a character floating in the air or sinking
+subject waves his hand and we visualize the internal torques          into the ground due to the accumulated error of velocities,
+of the arm (red for large torques). When the arm starts and           and the foot-sliding artifacts are also severe. These facts
+stops moving, the torque is larger due to the acceleration.           demonstrate the necessity of physics awareness and our dual
+Learning-based RNN Initialization. To examine the ef-                 PD controller in mitigating translation error accumulation.
+fect of the learning-based initialization, we train the same          Quantitative results in Tab. 2 also show a significant reduc-
+networks (PL and VA ) without learning-based initialization           tion of the motion jitter in our full method. However, with
+and perform the evaluation. As shown in Tab. 2 and Fig. 3,            the physics-based optimization, the SIP error for TotalCap-
+this variant becomes less accurate and stable, which is re-           ture is slightly larger (0.1◦ ). This is because the physics
+flected in the larger errors across all metrics. The learned          module is mainly helpful for estimating translation and im-
+initialization is most effective when the motion is highly            proving the physical correctness of the motion.
+ambiguous (e.g., sitting), but this advantage is numerically
+averaged out by the common (non-ambiguous) motion in                  4.3. Applications
+the test dataset. To this end, we pick a long-sitting sequence
+                                                                         Our method enables several applications such as real-
+in the DIP-IMU test dataset and plot the upper leg orienta-
+                                                                      time animation of a virtual character and motion re-
+tion error over time in Fig. 6. During the sequence, the sub-
+                                                                      targeting. Also note that reducing the latency from 94ms
+ject started from standing, then sat down immediately, and
+                                                                      to 16ms is critical to enable applications such as gaming.
+kept sitting to the end. The curves show that the method
+                                                                      Please see our supplementary materials for more results.
+without learning-based initialization starts to fail as time
+goes by while our model stably tracks the sequence. By
+examining a few selected frames from the sequence, we can
+                                                                      5. Conclusion and Limitations
+see that the zero-initialized version (in blue) is correct at            In this work, we present the first real-time physics-aware
+the beginning but goes wrong after a long period because it           approach that estimates human motion, joint torques, and
+loses the historical state-change information from standing           ground reaction forces from solely 6 IMUs. Combining the
+to sitting. As a result, its prediction stands up again. In con-      kinematics and the physics modules leads to higher accu-
+trast, ours (in orange) always gives the correct estimation           racy and realism, as shown in our experiments. We also
+due to the good memorizing of such information.                       demonstrate exciting applications like live motion capture.
+Physics and Dual PD Controller. We evaluate 1) remov-                    However, we simplify the real world too much, e.g., as-
+ing the physics-based optimizer, i.e., only using the kine-           suming a flat ground, which makes our method incapable of
+matics module and integrating root velocities to obtain the           capturing humans walking upstairs. Besides, the current ap-
+translation; and 2) removing the joint position controller,           proach is based on the assumption of a known body shape.
+i.e., replacing the dual PD controller with a single PD con-          For different body shapes, we only need to adjust the bone
+troller that only watches q as in [52]. As shown in Fig. 3,           lengths and the mass distribution of the physics model.
+
+
+
+                                                                   13174
+References                                                                    IEEE Conference on Computer Vision and Pattern Recogni-
+                                                                              tion (CVPR), jun 2020. 1, 2
+ [1] Sheldon Andrews, Ivan Huerta, Taku Komura, Leonid Sigal,
+                                                                         [15] Marc Habermann, Weipeng Xu, Michael Zollhöfer, Gerard
+     and Kenny Mitchell. Real-time physics-based motion cap-
+                                                                              Pons-Moll, and Christian Theobalt. Livecap: Real-time
+     ture with sparse sensors. In Proceedings of the 13th Euro-
+                                                                              human performance capture from monocular video. ACM
+     pean Conference on Visual Media Production (CVMP 2016).
+                                                                              Trans. Graph., 38, mar 2019. 2, 3
+     Association for Computing Machinery, 2016. 2
+                                                                         [16] Mohamed Hassan, Vasileios Choutas, Dimitrios Tzionas,
+ [2] Kevin Bergamin, Simon Clavet, Daniel Holden, and
+                                                                              and Michael Black. Resolving 3d human pose ambiguities
+     James Richard Forbes. Drecon: Data-driven responsive con-
+                                                                              with 3d scene constraints. In 2019 IEEE/CVF International
+     trol of physics-based characters. ACM Trans. Graph., 38,
+                                                                              Conference on Computer Vision (ICCV), 2019. 3
+     nov 2019. 3
+                                                                         [17] Thomas Helten, Meinard Müller, Hans-Peter Seidel, and
+ [3] Stéphane Caron. Friction cones - robot locomotion. Web-
+                                                                              Christian Theobalt. Real-time body tracking with one depth
+     site. https://scaron.info/robot-locomotion/
+                                                                              camera and inertial sensors. In 2013 IEEE International
+     friction-cones.html. 6
+                                                                              Conference on Computer Vision, 2013. 2
+ [4] Long Chen, Haizhou Ai, Rui Chen, Zijie Zhuang, and
+     Shuang Liu. Cross-view tracking for multi-human 3d pose             [18] Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J.
+     estimation at over 100 fps. In 2020 IEEE/CVF Conference                  Black, Otmar Hilliges, and Gerard Pons-Moll. Deep inertial
+     on Computer Vision and Pattern Recognition (CVPR), 2020.                 poser learning to reconstruct human pose from sparseinertial
+     1                                                                        measurements in real time. ACM Transactions on Graphics,
+                                                                              (Proc. SIGGRAPH Asia), 37, nov 2018. 1, 2, 4, 6, 7
+ [5] Rishabh Dabral, Soshi Shimada, Arjun Jain, Christian
+     Theobalt, and Vladislav Golyanik. Gravity-aware monoc-              [19] Mariko Isogawa, Ye Yuan, Matthew O’Toole, and Kris Ki-
+     ular 3d human-object reconstruction. In International Con-               tani. Optical non-line-of-sight physics-based 3d human pose
+     ference on Computer Vision (ICCV), 2021. 1                               estimation. In 2020 IEEE/CVF Conference on Computer Vi-
+ [6] Junting Dong, Wen Jiang, Qixing Huang, Hujun Bao, and                    sion and Pattern Recognition (CVPR), 2020. 2, 3, 5
+     Xiaowei Zhou. Fast and robust multi-person 3d pose estima-          [20] Tomoya Kaichi, Tsubasa Maruyama, Mitsunori Tada, and
+     tion from multiple views. In 2019 IEEE/CVF Conference on                 Hideo Saito. Resolving position ambiguity of imu-based hu-
+     Computer Vision and Pattern Recognition (CVPR), 2019. 1                  man pose with a single rgb camera. Sensors, 20, 2020. 2
+ [7] Xiaoxiao Du, Ram Vasudevan, and Matthew Johnson-                    [21] Christoph Kalkbrenner, Steffen Hacker, Maria-Elena Algo-
+     Roberson. Bio-lstm: A biomechanically inspired recurrent                 rri, and Ronald Blechschmidt. Motion capturing with inertial
+     neural network for 3-d pedestrian pose and gait prediction.              measurement units and kinect - tracking of limb movement
+     IEEE Robotics and Automation Letters, 4, 2019. 3                         using optical and orientation information. In Proceedings of
+ [8] Sai Kumar Dwivedi, Nikos Athanasiou, Muhammed Ko-                        the International Conference on Biomedical Electronics and
+     cabas, and Michael J. Black. Learning to regress bodies from             Devices - BIODEVICES, (BIOSTEC 2014), 03 2014. 2
+     images using differentiable semantic rendering. In Proc.            [22] Angjoo Kanazawa, Michael J. Black, David W. Jacobs, and
+     International Conference on Computer Vision (ICCV), oct                  Jitendra Malik. End-to-end recovery of human shape and
+     2021. 1                                                                  pose. In Computer Vision and Pattern Recognition (CVPR),
+ [9] Roy Featherstone.       Rigid Body Dynamics Algorithms.                  2018. 2
+     Springer US, 01 2008. 3, 5                                          [23] Angjoo Kanazawa, Jason Y. Zhang, Panna Felsen, and Jiten-
+[10] Tamar Flash and Neville Hogan. The coordination of                       dra Malik. Learning 3d human dynamics from video. In
+     arm movements: An experimentally confirmed mathemati-                    2019 IEEE/CVF Conference on Computer Vision and Pat-
+     cal model. The Journal of neuroscience : the official journal            tern Recognition (CVPR), 2019. 1
+     of the Society for Neuroscience, 5, 08 1985. 6                      [24] Muhammed Kocabas, Nikos Athanasiou, and Michael J.
+[11] Jack H. Geissinger and Alan T. Asbeck. Motion inference                  Black. Vibe: Video inference for human body pose and
+     using sparse inertial sensors, self-supervised learning, and a           shape estimation. In The IEEE Conference on Computer Vi-
+     new dataset of unscripted human motion. Sensors, 20, 2020.               sion and Pattern Recognition (CVPR), June 2020. 2
+     2                                                                   [25] Muhammed Kocabas, Chun-Hao P. Huang, Otmar Hilliges,
+[12] Andrew Gilbert, Matthew Trumble, Charles Malleson,                       and Michael J. Black. PARE: Part attention regressor for
+     Adrian Hilton, and John Collomosse. Fusing visual and in-                3D human body estimation. In Proceedings International
+     ertial sensors with semantics for 3d human pose estimation.              Conference on Computer Vision (ICCV). IEEE, oct 2021. 1
+     Int. J. Comput. Vision, 127, apr 2019. 2                            [26] Sergey Levine and Jovan Popović. Physically plausible sim-
+[13] Vladimir Guzov, Aymen Mir, Torsten Sattler, and Gerard                   ulation for character animation. In Proceedings of the ACM
+     Pons-Moll. Human poseitioning system (hps): 3d human                     SIGGRAPH/Eurographics Symposium on Computer Anima-
+     pose estimation and self-localization in large scenes from               tion. Eurographics Association, 2012. 5
+     body-mounted sensors. In IEEE Conference on Computer                [27] Zongmian Li, Jiri Sedlar, Justin Carpentier, Ivan Laptev,
+     Vision and Pattern Recognition (CVPR), jun 2021. 2, 3                    Nicolas Mansard, and Josef Sivic. Estimating 3d motion and
+[14] Marc Habermann, Weipeng Xu, Michael Zollhoefer, Ger-                     forces of person-object interactions from monocular video.
+     ard Pons-Moll, and Christian Theobalt. Deepcap: Monoc-                   In Computer Vision and Pattern Recognition (CVPR), 2019.
+     ular human performance capture using weak supervision. In                3
+
+
+
+
+                                                                      13175
+[28] Huajun Liu, Xiaolin Wei, Jinxiang Chai, Inwoo Ha, and Tae-        [42] Bharadwaj Ravichandran. Biopose-3d and pressnet-kl: A
+     hyun Rhee. Realtime human motion control with a small                  path to understanding human pose stability from video.
+     number of inertial sensors. In Symposium on Interactive 3D             2020. 6
+     Graphics and Games. Association for Computing Machin-             [43] Davis Rempe, Leonidas J. Guibas, Aaron Hertzmann, Bryan
+     ery, 2011. 2                                                           Russell, Ruben Villegas, and Jimei Yang. Contact and hu-
+[29] Libin Liu and Jessica Hodgins. Learning basketball dribbling           man dynamics from monocular video. In Proceedings of the
+     skills using trajectory optimization and deep reinforcement            European Conference on Computer Vision (ECCV), 2020. 3
+     learning. ACM Trans. Graph., 37, jul 2018. 3                      [44] Qaiser Riaz, Guanhong Tao, Björn Krüger, and Andreas We-
+[30] Matthew Loper, Naureen Mahmood, Javier Romero, Ger-                    ber. Motion reconstruction using very few accelerometers
+     ard Pons-Moll, and Michael J. Black. SMPL: A skinned                   and ground contacts. Graph. Models, 79, may 2015. 2
+     multi-person linear model. ACM Trans. Graphics (Proc.
+                                                                       [45] Shunsuke Saito, Tomas Simon, Jason Saragih, and Hanbyul
+     SIGGRAPH Asia), 34, oct 2015. 3
+                                                                            Joo. Pifuhd: Multi-level pixel-aligned implicit function for
+[31] Noitom Ltd. Perception neuron series. Website. https:
+                                                                            high-resolution 3d human digitization. In Proceedings of the
+     //www.noitom.com/. 1, 2
+                                                                            IEEE Conference on Computer Vision and Pattern Recogni-
+[32] Naureen Mahmood, Nima Ghorbani, Nikolaus F. Troje, Ger-                tion, June 2020. 2
+     ard Pons-Moll, and Michael J. Black. Amass: Archive of
+                                                                       [46] Mike Schuster and Kuldip K Paliwal. Bidirectional recurrent
+     motion capture as surface shapes. In The IEEE International
+                                                                            neural networks. IEEE transactions on Signal Processing,
+     Conference on Computer Vision (ICCV), Oct 2019. 6
+                                                                            45, 1997. 4
+[33] Charles Malleson, John Collomosse, and Adrian Hilton.
+     Real-time multi-person motion capture from multi-view             [47] Loren Arthur Schwarz, Diana Mateus, and Nassir Navab.
+     video and imus. International Journal of Computer Vision,              Discriminative Human Full-Body Pose Estimation from
+     128, 06 2020. 2                                                        Wearable Inertial Sensor Data. In Modelling the Physiologi-
+[34] Charles Malleson, Andrew Gilbert, Matthew Trumble, John                cal Human. 3DPH 2009., Nov 2009. 2
+     Collomosse, Adrian Hilton, and Marco Volino. Real-time            [48] Jesse Scott, Bharadwaj Ravichandran, Christopher Funk,
+     full-body motion capture from video and imus. In 2017 In-              Robert T. Collins, and Yanxi Liu. From image to stability:
+     ternational Conference on 3D Vision (3DV), 2017. 2                     Learning dynamics from human pose. In Computer Vision
+[35] Timo von Marcard, Gerard Pons-Moll, and Bodo Rosen-                    – ECCV 2020: 16th European Conference, Glasgow, UK,
+     hahn. Human pose estimation from video and imus. IEEE                  August 23–28, 2020, Proceedings, Part XXIII, 2020. 6
+     Transactions on Pattern Analysis and Machine Intelligence,        [49] Erfan Shahabpoor and Aleksandar Pavic. Measurement of
+     38, 2016. 2                                                            walking ground reactions in real-life environments: A sys-
+[36] Dushyant Mehta, Oleksandr Sotnychenko, Franziska                       tematic review of techniques and technologies. Sensors,
+     Mueller, Weipeng Xu, Mohamed Elgharib, Pascal Fua,                     17(9), 2017. 8
+     Hans-Peter Seidel, Helge Rhodin, Gerard Pons-Moll,                [50] Mingyi Shi, Kfir Aberman, Andreas Aristidou, Taku Ko-
+     and Christian Theobalt. XNect: Real-time multi-person                  mura, Dani Lischinski, Daniel Cohen-Or, and Baoquan
+     3D motion capture with a single RGB camera. In ACM                     Chen. Motionet: 3d human motion reconstruction from
+     Transactions on Graphics, volume 39, July 2020. 1                      monocular video with skeleton consistency. ACM Transac-
+[37] Dushyant Mehta, Srinath Sridhar, Oleksandr Sotnychenko,                tions on Graphics (TOG), 2020. 3
+     Helge Rhodin, Mohammad Shafiei, Hans-Peter Seidel,                [51] Soshi Shimada, Vladislav Golyanik, Weipeng Xu, Patrick
+     Weipeng Xu, Dan Casas, and Christian Theobalt. Vnect:                  Pérez, and Christian Theobalt. Neural monocular 3d human
+     Real-time 3d human pose estimation with a single rgb cam-              motion capture with physical awareness. ACM Transactions
+     era. In ACM Transactions on Graphics, volume 36, July                  on Graphics, 40, aug 2021. 2, 3, 5
+     2017. 2, 3
+                                                                       [52] Soshi Shimada, Vladislav Golyanik, Weipeng Xu, and Chris-
+[38] Xue Bin Peng, Pieter Abbeel, Sergey Levine, and Michiel                tian Theobalt. Physcap: physically plausible monocular 3d
+     van de Panne. Deepmimic: Example-guided deep reinforce-                motion capture in real time. ACM Transactions on Graphics,
+     ment learning of physics-based character skills. ACM Trans.            39, dec 2020. 2, 3, 4, 5, 8
+     Graph., 37, jul 2018. 3
+                                                                       [53] A Signorini. Questioni di elastostatica linearizzata e semi-
+[39] Xue Bin Peng, Angjoo Kanazawa, Jitendra Malik, Pieter
+                                                                            linerizzata. Rend. Mat. Appl, XVIII, 1959. 6
+     Abbeel, and Sergey Levine. Sfv: Reinforcement learning
+     of physical skills from videos. ACM Trans. Graph., 37, nov        [54] Ronit Slyper and Jessica Hodgins. Action capture with ac-
+     2018. 3                                                                celerometers. ACM SIGGRAPH/Eurographics Symposium
+[40] Gerard Pons-Moll, Andreas Baak, Thomas Helten,                         on Computer Animation, 01 2008. 2
+     Meinard Müller, Hans-Peter Seidel, and Bodo Rosen-               [55] Yu Sun, Qian Bao, Wu Liu, Yili Fu, Black Michael J., and
+     hahn. Multisensor-fusion for 3d full-body human motion                 Tao Mei. Monocular, one-stage, regression of multiple 3d
+     capture. In 2010 IEEE Computer Society Conference on                   people. In ICCV, October 2021. 2
+     Computer Vision and Pattern Recognition, 2010. 2                  [56] Luke Wicent F. Sy, Nigel H. Lovell, and Stephen J. Red-
+[41] Patrik Puchert and Timo Ropinski. Human pose estimation                mond. Estimating lower limb kinematics using a lie group
+     from sparse inertial measurements through recurrent graph              constrained extended kalman filter with a reduced wearable
+     convolution. CoRR, abs/2107.11214, 2021. 2                             imu count and distance measurements. Sensors, 20, 2020. 2
+
+
+
+
+                                                                    13176
+[57] Jochen Tautges, Arno Zinke, Björn Krüger, Jan Baumann,             [71] Tao Yu, Kaiwen Guo, Feng Xu, Yuan Dong, Zhaoqi Su, Jian-
+     Andreas Weber, Thomas Helten, Meinard Müller, Hans-                      hui Zhao, Jianguo Li, Qionghai Dai, and Yebin Liu. Bodyfu-
+     Peter Seidel, and Bernhard Eberhardt. Motion reconstruc-                  sion: Real-time capture of human motion and surface geom-
+     tion using sparse accelerometer data. ACM Transactions on                 etry using a single depth camera. In The IEEE International
+     Graphics, 30, 05 2011. 2                                                  Conference on Computer Vision (ICCV), October 2017. 1
+[58] Denis Tome, Matteo Toso, Lourdes Agapito, and Chris Rus-             [72] Tao Yu, Jianhui Zhao, Zhang Zerong, Kaiwen Guo, Dai
+     sell. Rethinking pose in 3d: Multi-stage refinement and re-               Quionhai, Hao Li, Gerard Pons-Moll, and Yebin Liu. Dou-
+     covery for markerless motion capture. In 2018 International               blefusion: Real-time capture of human performance with in-
+     Conference on 3D Vision (3DV), 2018. 1                                    ner body shape from a depth sensor. IEEE Transactions on
+[59] Matthew Trumble, Andrew Gilbert, Charles Malleson,                        Pattern Analysis and Machine Intelligence, july 2019. 1
+     Adrian Hilton, and John Collomosse. Total capture: 3d hu-            [73] Tao Yu, Zerong Zheng, Kaiwen Guo, Pengpeng Liu, Qiong-
+     man pose estimation fusing video and inertial sensors. In                 hai Dai, and Yebin Liu. Function4d: Real-time human vol-
+     2017 British Machine Vision Conference (BMVC), 09 2017.                   umetric capture from very sparse consumer rgbd sensors. In
+     2, 6, 7                                                                   IEEE Conference on Computer Vision and Pattern Recogni-
+[60] Daniel Vlasic, Rolf Adelsberger, Giovanni Vannucci, John                  tion (CVPR2021), June 2021. 1
+     Barnwell, Markus Gross, Wojciech Matusik, and Jovan                  [74] Ye Yuan and Kris Kitani. Ego-pose estimation and forecast-
+     Popović. Practical motion capture in everyday surroundings.              ing as real-time pd control. In 2019 IEEE/CVF International
+     ACM Trans. Graph., 26, jul 2007. 2                                        Conference on Computer Vision (ICCV), 2019. 3
+[61] Timo von Marcard, Roberto Henschel, Michael Black, Bodo              [75] Ye Yuan and Kris Kitani. Residual force control for agile
+     Rosenhahn, and Gerard Pons-Moll. Recovering accurate 3d                   human behavior imitation and extended motion synthesis. In
+     human pose in the wild using imus and a moving camera.                    Advances in Neural Information Processing Systems, 2020.
+     In European Conference on Computer Vision (ECCV), sep                     5
+     2018. 2                                                              [76] Ye Yuan, Shih-En Wei, Tomas Simon, Kris Kitani, and Jason
+[62] Timo von Marcard, Bodo Rosenhahn, Michael Black, and                      Saragih. Simpoe: Simulated character control for 3d human
+     Gerard Pons-Moll. Sparse inertial poser: Automatic 3d hu-                 pose estimation. In Proceedings of the IEEE/CVF Confer-
+     man pose estimation from sparse imus. Computer Graph-                     ence on Computer Vision and Pattern Recognition (CVPR),
+     ics Forum 36(2), Proceedings of the 38th Annual Conference                2021. 2, 3, 5
+     of the European Association for Computer Graphics (Euro-             [77] Andrei Zanfir, Elisabeta Marinoiu, and Cristian Sminchis-
+     graphics), 2017. 1, 2, 3                                                  escu. Monocular 3d pose and shape estimation of multiple
+                                                                               people in natural scenes: The importance of multiple scene
+[63] Marek Vondrak, Leonid Sigal, Jessica Hodgins, and Odest
+                                                                               constraints. In 2018 IEEE/CVF Conference on Computer Vi-
+     Jenkins. Video-based 3d motion capture through biped con-
+                                                                               sion and Pattern Recognition, 2018. 3
+     trol. ACM Trans. Graph., 31, jul 2012. 3
+                                                                          [78] Petrissa Zell, Bodo Rosenhahn, and Bastian Wandt. Weakly-
+[64] Miomir Vukobratovic and Branislav Borovac. Zero-moment
+                                                                               supervised learning of human dynamics. In ECCV, 07 2020.
+     point - thirty five years of its life. I. J. Humanoid Robotics,
+                                                                               3, 8
+     1, 03 2004. 6
+                                                                          [79] Petrissa Zell, Bastian Wandt, and Bodo Rosenhahn. Joint 3d
+[65] Jian Wang, Lingjie Liu, Weipeng Xu, Kripasindhu Sarkar,                   human motion capture and physical analysis from monocular
+     and Christian Theobalt. Estimating egocentric 3d human                    videos. In 2017 IEEE Conference on Computer Vision and
+     pose in global space. In Proceedings of the IEEE/CVF In-                  Pattern Recognition Workshops (CVPRW), 2017. 3
+     ternational Conference on Computer Vision (ICCV), October
+                                                                          [80] Hongwen Zhang, Yating Tian, Xinchi Zhou, Wanli Ouyang,
+     2021. 1
+                                                                               Yebin Liu, Limin Wang, and Zhenan Sun. Pymaf: 3d human
+[66] Xiaolin Wei and Jinxiang Chai. Videomocap: Modeling                       pose and shape regression with pyramidal mesh alignment
+     physically realistic human motion from monocular video se-                feedback loop. In Proceedings of the IEEE International
+     quences. ACM Trans. Graph., 29, jul 2010. 3                               Conference on Computer Vision, 2021. 1
+[67] Xsens. Xsens 3d motion tracking. Website. https://                   [81] Siwei Zhang, Yan Zhang, Federica Bogo, Pollefeys Marc,
+     www.xsens.com/. 1, 2                                                      and Siyu Tang. Learning motion priors for 4d human body
+[68] Lan Xu, Weipeng Xu, Vladislav Golyanik, Marc Haber-                       capture in 3d scenes. In International Conference on Com-
+     mann, Lu Fang, and Christian Theobalt. Eventcap: Monoc-                   puter Vision (ICCV), Oct. 2021. 3
+     ular 3d capture of high-speed human motions using an event           [82] Yuxiang Zhang, Liang An, Tao Yu, Xiu Li, Kun Li, and
+     camera. In IEEE Conference on Computer Vision and Pat-                    Yebin Liu. 4d association graph for realtime multi-person
+     tern Recognition (CVPR), jun 2020. 1                                      motion capture using multiple video cameras. In 2020
+[69] Xinyu Yi, Yuxiao Zhou, and Feng Xu. Transpose: Real-time                  IEEE/CVF Conference on Computer Vision and Pattern
+     3d human translation and pose estimation with six inertial                Recognition (CVPR), 2020. 1
+     sensors. ACM Transactions on Graphics, 40, 08 2021. 1, 2,            [83] Zhe Zhang, Chunyu Wang, Wenhu Qin, and Wenjun Zeng.
+     3, 4, 6, 7                                                                Fusing wearable imus with multi-view images for human
+[70] Ri Yu, Hwangpil Park, and Jehee Lee. Human dynamics                       pose estimation: A geometric approach. In 2020 IEEE/CVF
+     from monocular video with dynamic camera movements.                       Conference on Computer Vision and Pattern Recognition
+     ACM Trans. Graph., 40, 2021. 3                                            (CVPR), 2020. 2
+
+
+
+
+                                                                       13177
+[84] Yang Zheng, Ruizhi Shao, Yuxiang Zhang, Tao Yu, Zerong
+     Zheng, Qionghai Dai, and Yebin Liu. Deepmulticap: Perfor-
+     mance capture of multiple characters using sparse multiview
+     cameras. In IEEE Conference on Computer Vision (ICCV
+     2021), 2021. 1
+[85] Yu Zheng and Katsu Yamane. Human motion tracking con-
+     trol with strict contact force constraints for floating-base hu-
+     manoid robots. In 2013 13th IEEE-RAS International Con-
+     ference on Humanoid Robots (Humanoids), 2013. 4
+[86] Zerong Zheng, Tao Yu, Hao Li, Kaiwen Guo, Qionghai Dai,
+     Lu Fang, and Yebin Liu. Hybridfusion: Real-time perfor-
+     mance capture using a single depth sensor and sparse imus.
+     In European Conference on Computer Vision (ECCV), Sept
+     2018. 2
+[87] Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and Hao
+     Li. On the continuity of rotation representations in neural
+     networks. In 2019 IEEE/CVF Conference on Computer Vi-
+     sion and Pattern Recognition (CVPR), 2019. 3
+[88] Yuxiao Zhou, Marc Habermann, Ikhsanul Habibie, Ayush
+     Tewari, Christian Theobalt, and Feng Xu. Monocular real-
+     time full body capture with inter-part correlations. In
+     IEEE/CVF Conference on Computer Vision and Pattern
+     Recognition (CVPR), June 2021. 1
+[89] Yuliang Zou, Jimei Yang, Duygu Ceylan, Jianming Zhang,
+     Federico Perazzi, and Jia-Bin Huang. Reducing footskate
+     in human motion reconstruction with ground contact con-
+     straints. In 2020 IEEE Winter Conference on Applications of
+     Computer Vision (WACV), 2020. 3
+
+
+
+
+                                                                        13178
+

@@ -1,0 +1,844 @@
+                               This ICCV paper is the Open Access version, provided by the Computer Vision Foundation.
+                                             Except for this watermark, it is identical to the accepted version;
+                                       the final published version of the proceedings is available on IEEE Xplore.
+
+
+
+
+    PhaseMP: Robust 3D Pose Estimation via Phase-conditioned Human Motion
+                                    Prior
+
+                    Mingyi Shi                                   Sebastian Starke                                                Yuting Ye
+            The University of Hong Kong                               Meta                                                         Meta
+                         myshi@cs.hku.hk                 sebastian.starke@mail.de                                 yuting.ye@gmail.com
+
+                                     Taku Komura                                        Jungdam Won*
+                              The University of Hong Kong                          Seoul National University
+                                        taku@cs.hku.hk                               jungdam@imo.snu.ac.kr
+
+
+
+
+ 𝐿𝑜𝑤𝑒𝑟 𝑏𝑜𝑑𝑦 𝑖𝑛𝑣𝑖𝑠𝑖𝑎𝑏𝑙𝑒          𝑆𝑝𝑎𝑟𝑠𝑒 𝑠𝑒𝑛𝑠𝑜𝑟 𝑑𝑎𝑡𝑎         𝑁𝑜𝑖𝑠y 𝑠𝑒𝑛𝑠𝑜𝑟 𝑑𝑎𝑡𝑎
+
+
+
+
+Motion in betweenning                                                                       Motion from Videos
+
+Figure 1. Our novel human motion prior PhaseMP enables us to further constrain the predictions in both nominal and challenging
+scenarios, resulting in more natural and stable movements. The figure demonstrates the generated motions in several challenging scenarios,
+which involve generation from incomplete observation in spatial or temporal domain (left), as well as generation from raw videos where
+         Motion fromexists
+heavy occlusion      Videos (right).
+
+
+                                                                                                            Motion from Videos
+
+                               Abstract                                        1. Introduction
+                                                                                  Estimating human poses and motions from real-world
+    We present a novel motion prior, called PhaseMP, mod-
+                                                                               observations is a fundamental problem in computer vi-
+eling a probability distribution on pose transitions con-
+                                                                               sion with numerous potential applications, including hu-
+ditioned by a frequency domain feature extracted from a
+                                                                               man motion understanding, surveillance, motion capture,
+periodic autoencoder. The phase feature further enforces
+                                                                               and human-computer interaction. Recently, there have been
+the pose transitions to be unidirectional (i.e. no backward
+                                                                               significant improvements in 3D human pose/motion esti-
+movement in time), from which more stable and natural mo-
+                                                                               mation from 2D image/video via deep learning; specifi-
+tions can be generated. Specifically, our motion prior can
+                                                                               cally by deploying a data-driven system trained on a paired
+be useful for accurately estimating 3D human motions in the
+                                                                               dataset [23, 31] to learn a mapping from 2D input images
+presence of challenging input data, including long periods
+                                                                               to 3D body motions [42, 47, 25, 57, 66]. However, these
+of spatial and temporal occlusion, as well as noisy sensor
+                                                                               algorithms still struggle in challenging scenarios given un-
+measurements. Through a comprehensive evaluation, we
+                                                                               constrained real-world data. For example, highly dynamic
+demonstrate the efficacy of our novel motion prior, show-
+                                                                               movements can cause motion blurs, and the blurry appear-
+casing its superiority over existing state-of-the-art methods
+                                                                               ance of the body and the environment can lead to failures
+by a significant margin across various applications, includ-
+                                                                               in 2D key-point detection, which is a preprocessing step
+ing video-to-motion and motion estimation from sparse sen-
+                                                                               widely used in many 3D pose estimation algorithms. More-
+sor data, and etc.
+                                                                               over, occlusions or a restricted camera field-of-view can re-
+   * Corresponding Author                                                      sult in partial or complete lack of pose information. Al-
+
+
+
+                                                                       14725
+though certain approaches have attempted to address this            [42, 20, 1, 47, 52, 10, 22, 24, 75], or parametric mesh
+challenge by incorporating temporal consistency or formu-           model [4, 25, 46, 26, 33, 31, 15], from various real-world
+lating it as a denoising problem in the presence of artifi-         observations. These approaches can be categorized into two
+cial noise [9, 31, 50], they often struggle when dealing with       groups: optimization-based and learning-based methods.
+long-period occlusion lasting beyond one second.                       The optimization-based methods typically rely on a
+    In this paper, we aim to develop a 3D pose/motion esti-         known transformation function f (e.g., 3D-to-2D projec-
+mation algorithm as shown in Fig 1 that can work robustly           tion), and the 3D poses, as the optimization target x, are ob-
+in challenging scenarios illustrated above. More specifi-           tained by optimizing an objective function that encourages
+cally, we propose a novel motion prior, called PhaseMP,             the transformation f (x) to be close to the observations, rep-
+modeling the probability distribution on pose transitions.          resented in the form of 2D joint positions [13, 2] or body
+Our novel motion prior draws inspiration from previous              mask images [35]. In SMPLify [4], the optimization can
+models [49, 38]; however, the key distinction lies in its com-      be accelerated by constraining the body state using a lin-
+bination with a frequency domain feature extracted from a           ear model SMPL [40], the realism of the optimized poses is
+periodic autoencoder [56], further enhancing the quality and        further improved by incorporating a learned pose prior [46].
+robustness of 3D pose estimation. Intuitively speaking, the            However, accurately modeling real-world transforma-
+phase features play a role akin to long-term physical mo-           tions [32, 65] can be challenging, and test-time optimiza-
+mentum, facilitating the generation of smooth and stable            tion is also computationally expensive. To address these
+movements by enforcing a unidirectional motion (i.e., no            limitations, learning-based methods have emerged as a pop-
+backward movement in time). Consequently, phase features            ular alternative, leveraging data to simplify the pose esti-
+contribute to imbuing the resulting motions with greater nat-       mation process. These methods typically require a paired
+uralness, particularly in scenarios where the laws of physics       dataset [23, 64, 31] of 3D poses and corresponding obser-
+play a significant role. This characteristic extends to chal-       vations, and learn an end-to-end mapping from the obser-
+lenging scenarios where other input features (e.g., joint lo-       vations to the 3D poses using different specifications, such
+cation) are only partially observable. The underlying am-           as known-camera-projection [42, 47], weak-perspective as-
+biguity arising from insufficient contextual cues can be sig-       sumption [25, 48, 58, 59], or kinematic structure [52, 36].
+nificantly reduced by enforcing the model to maintain the           However, these approaches often struggle in accurately pre-
+current momentum.                                                   dicting some key parameters in the wild environment, and
+    We demonstrate the effectiveness of our motion prior in         may require significant amounts of supervision [34], which
+solving challenging video-to-motion estimation problems,            can be constrained by the dataset and network architecture.
+where a large portion of the body is partially invisible for           In our project, we employ an optimization-based ap-
+a long period of time due to occlusions or being out-of-            proach to achieve more robust pose estimation in challeng-
+sight. Additionally, we showcase its capabilities in address-       ing scenarios, such as long-term occlusion, where existing
+ing other problems such as denoising 3D motion data or              methods still struggle to perform effectively.
+estimating full 3D pose from end-effectors only. Through
+comprehensive evaluation, we demonstrate that our system
+outperforms state-of-the-art baselines with a large margin.         3D Human Motion Estimation In addition to estimat-
+    The paper’s contributions can be summarized as follows:         ing pose independently on a frame-by-frame basis, existing
+(1) a novel motion prior, combined with the phase feature,          methods leverage temporal information to improve estima-
+applicable to a wide range of 3D human pose estimation              tion accuracy. One popular approach is to encode the pose
+systems, (2) a new optimization framework incorporating             sequence using neural differential operators. For instance,
+phase feature energy, which can work robustly for many              [47] shows that a dilated temporal convolutional network
+challenging scenarios where the observation is incomplete           with a sizeable receptive field significantly outperforms sin-
+or ambiguous in temporal and spatial domains, (3) a com-            gle frame methods. More advanced context-aware sequen-
+prehensive evaluation showcasing that our system outper-            tial encoders, such as graph convolutions [30, 75, 6, 78, 22]
+forms existing state-of-the-art methods by a large margin,          and transformers [39, 17, 76, 37, 41], which are com-
+not only in ordinary scenarios but also in challenging sce-         monly used in neutral language processing for encoding
+narios.                                                             the long sequence data with parallel multi-head attention
+                                                                    mechanism, have also been developed for this task. Ad-
+2. Related Work                                                     ditionally, the fusion of spatial and temporal information
+                                                                    [71, 51, 77, 6] can be used to avoid conflicts in the sequen-
+3D Human Pose Estimation As a tool in understand-                   tial model and improve estimation performance. Moreover,
+ing the human-centered world, there has been a signifi-             adversarial training [31] between real human motions and
+cant body of work focusing on estimating 3D human pose,             predicted motion is another option to enhance the realism
+which is typically represented by a positional skeleton             of pose sequences.
+
+
+
+                                                                 14726
+                                                                                                                               𝑇𝑟𝑎𝑖𝑛 𝑆𝑡𝑎𝑔𝑒                                                                              𝑃ℎ𝑎𝑠𝑒𝑀𝑃
+
+
+                                                                                                                                                                 𝜇!
+
+                                                                                                                           F
+                                                                                                                                𝑃!"# 𝑥!"#            Prior
+                                                                                                                       ain
+                                                                                                                  om                                                                                     ℒ$%& , ℒ'()*, ℒ&,-!.&!
+                                                                                                                yd                                                                      ℒ/*
+                                 data                                                                   quenc                                                    𝜎!
+                                        doma
+                                            in                t                                     fre         Neural 𝐹𝐹𝑇
+      𝑣𝑒𝑙𝑜𝑐𝑖𝑡𝑦 𝑐𝑢𝑟𝑣𝑒
+                                                                                                                                𝑃!"# 𝑥!"#                                                                                 ∆𝑃
+                                                                                                                                                                             reparam trick
+                                                                                                                                                                 𝜇∅
+                                                                                                                                                    Encoder                                          Decoder              ∆𝑥
+                                                                                                                                 𝑥!                                                          𝑧!"#
+                                                                                                                                                                 𝜎∅
+                                                                                                                                                                                                                          𝑐!̂
+                                                                                 1D Deconvolution
+                                                              Parameterization
+                1D Convolution
+
+
+
+
+                                          𝐹! , 𝐴! , 𝐵!
+      ~
+
+
+
+
+                                                                                                             ~
+                                 FFT
+
+       𝑣!                                                                                                                      𝐼𝑛𝑓𝑒𝑟𝑒𝑛𝑐𝑒 𝑆𝑡𝑎𝑔𝑒
+  𝒯                                                                                                             𝑣5!     ℒ$%&
+                                                                                                                                                                                                                          ∆𝑃
+                                              𝑆!                                                                                𝑃!"# 𝑥!"#
+      ~
+
+
+
+
+                                                                                                             ~                                       Prior       𝜇
+                                 FC                                                                                                                                                            Decoder                    ∆𝑥
+                                                                                                                                                                                 𝑧!"#                                     c!
+                                         ⨁               𝑃!
+                                                                                                         𝑃𝐴𝐸 𝑛𝑒𝑡𝑤𝑜𝑟𝑘
+                                                                                                                                                                 𝜎
+
+
+
+
+Figure 2. The overview of our system. The left figure illustrates the phase feature extraction process, which takes a window of joint
+velocities with the duration of T as input, then produces frequency domain periodic parameters [Ft , At , Bt , St ] as output, from which the
+phase feature Pt is computed by updating these parameters cyclically. The right figure is our phase-conditioned human motion prior, called
+PhaseMP, based on the structure of conditional VAE. It consists of a Prior network, an Encoder network, and a Decoder network. All the
+networks are used during the training stage, while only the Prior and the Decoder are used during the inference stage.
+
+
+   Another line of work tackles sequential pose estima-                                                                                             sizing high quality transition motion [56]. We leverage fre-
+tion with learned powerful generative priors, which incor-                                                                                          quency domain features extracted from a large-scale mo-
+porate probabilistic models that can capture the nature of                                                                                          tion database to accurately estimate human movements in
+human movements; such works are based on mixtures-of-                                                                                               videos, including those frames in which the body is partially
+Gaussians [21], pose embeddings [45, 12, 63], neural dis-                                                                                           or fully occluded.
+tance field [61], variational autoencoder [14, 38, 19, 67],
+and the diffusion model [11, 68]. Given observations,                                                                                               3. System Overview
+the motion estimation is performed by searching for the
+most plausible alignment on the motion manifold. Hu-                                                                                                   Out system predicts the full 3D human motion sequence
+MoR [49] achieves impressive motion generation by mod-                                                                                              from incomplete data, such as 2D body landmark sequences
+eling the pose transitions instead of modeling the poses di-                                                                                        extracted from videos, 3D end-effector sequences, or noisy
+rectly. Their system can support various types of inputs                                                                                            3D joint position sequences. Our system is composed of
+such as RGB-D videos and 2D/3D joint position sequences.                                                                                            the periodic autoencoder to extract the phase feature, the
+Our system also models the pose transitions but with a par-                                                                                         phase-conditioned motion prior, and the run-time optimiza-
+ticular emphasis on incorporating a frequency domain fea-                                                                                           tion module. Given a large motion database, the periodic
+ture for enhancing the robustness of pose estimation in chal-                                                                                       autoencoder is first trained (see Sec 4.1). Using the ex-
+lenging scenarios.                                                                                                                                  tracted phase features as additional inputs, a motion prior
+   Measuring physical realism or consistency can also lead                                                                                          based is trained (see Sec 4.2, 4.3). At inference time, given
+to a significant improvement in the accuracy of the pre-                                                                                            an input observation sequence, the 3D human motion is
+dicted pose. For example, a consistent skeleton [60, 52, 8]                                                                                         computed via optimization with energy functions that en-
+or physics-inspired metrics [44, 16, 53, 69] such as foot slid-                                                                                     sure both accuracy and realism (see Sec 5).
+ing, foot-floor penetration, human-environment interaction
+ [72, 74, 73] can improve temporal coherence and reduce                                                                                             4. Phase-conditioned Motion Prior
+the searching space in generating motions.
+                                                                                                                                                       We first describe how we compute the phase features
+                                                                                                                                                    using a periodic autoencoder trained with a large mo-
+Motion Frequency Feature The conversion of motion                                                                                                   tion database. Then, we explain the structure of phase-
+signals from the time domain to the frequency domain                                                                                                conditioned motion prior and the loss functions to train it.
+[18] has been utilized for motion editing [5, 27], styliza-
+                                                                                                                                                    4.1. Deep Phase Feature
+tion [62, 70], and compression [3]. Compared to the orig-
+inal data domain, the features in frequency domain often                                                                                               The periodic autoencoder (PAE) [56], which we use to
+remains consistent over a longer period of time, or be-                                                                                             compute the phase features, is depicted on the left side of
+tween different motion clips, making it useful for synthe-                                                                                          Figure 2. It is an autoencoder equipped with convolution
+
+
+
+                                                                                                                                                 14727
+and FFT (fast Fourier transform) layers in its intermedi-            corresponding velocities for all the joints. Our motion prior
+ate structure, allowing it to compute embeddings in the fre-         receives the previous phase feature Pt−1 , the previous pose
+quency domain given joint velocities as inputs. Intuitively          feature xt−1 , and the next pose feature xt as input, then
+speaking, it learns alignments of periodic signals existing          predicts the change of pose ∆x and phase ∆P features as
+in motions, the learned embedding can play a role of phys-           the output, from which the features are updated as follows:
+ical momentum as a result. More specifically, at frame t,                                              M
+PAE uses a window of 3D joint velocities Xt ∈ R3×J×N                                        x̂t =xt−1       ∆x
+                                                                                                                                (6)
+as input, where J, N represent the number of joints and the                                 P̂t =Pt−1 + ∆P,
+size of window, respectively. Given Xt for the frame t, the                 L
+encoding process includes a sequence of 1D convolutions              where      is a differentiable integration operator to compute
+followed by a differentiable FFT layer:                              the current pose given the previous pose and its change ∆x,
+                                                                     where positional and rotational components are updated via
+              At , Bt , Ft = FFT(Conv(Xt )),               (1)       addition and multiplication, respectively.
+                                                                        In this process, ∆P and ∆x are computed from a de-
+where At , Bt , and Ft are amplitudes, offsets, and frequen-         coder D conditioned on a latent variable (i.e. embedding) z
+cies, and phase shift St of periodic embeddings are obtained         that describes the possible pose transition. We use a learn-
+by a separate fully-connected network:                               able prior R and an encoder E (i.e., posterior) similarly to
+                                                                     HuMoR [49]. They are defined as follows:
+  (sx , sy ) =F C(Conv(Xt )), St = atan2(sy , sx ),        (2)
+                                                                                         ′
+                                                                                        zt−1 =ϵ(R(xt−1 , Pt−1 ))
+where atan2 is a 2-argument arc-tangent. Then At , Bt , Ft ,
+                                                                                        zt−1 =ϵ(E(xt−1 , xt , Pt−1 ))           (7)
+St are used to compose phase features in the decoding pro-
+cess, which is conducted by first reconstructing the feature                     ∆x, ∆P, ct =D(xt−1 , zt−1 , Pt−1 ),
+maps Ft in the temporal domain:                                      where ϵ denotes a re-parameterization operation [28], zt−1  ′
+
+                                                                     and zt−1 represents the latent variables sampled from the
+         Ft = At · sin(2π · (Ft · T − St )) + Bt           (3)
+                                                                     Gaussian distribution, generated from the prior and the en-
+where T is a known time window. This is followed by a                coder, respectively, and ct is the contact label to further en-
+1D deconvolution Xt′ = DeConv(Ft ) for reconstructing                hance motion quality.
+the original signals. The entire PAE is trained using the            4.3. Prior Training
+reconstruction loss:
+                                                                         The pose in the next frame is predicted by sampling a
+                  LP AE = M SE(Xt , Xt′ )                  (4)       Gaussian distribution produced by the prior model. In the
+                                                                     training stage, following the CVAE [55], as shown in the
+   Once PAE is trained, the deep phase feature Pt are com-           right side of Figure 2, the prior model R is trained with
+puted as follows using the frequency domain parameters:              posterior E by aligning their distribution N (µθ , σθ2 ) and
+                                                                     N (µϕ , σϕ2 ).
+                     Pt = [pt , Ft , At ].                 (5)
+                                                                         Given the D set of training data in the form of
+where pt = (At ·sin(2π ·St ), At ·cos(2π ·St )) is called the        {xt−1 , Pt−1 , xt , Pt }D
+                                                                                             i , our motion prior is trained by the
+phase manifold vectors that periodically change over time,           following loss function composed of four terms:
+and the last two variables are frequency and amplitude.                L = Lrec + λKL LKL + λct Lct + λSM P L LSM P L . (8)
+4.2. Motion Prior Modeling                                           with weights λKL = 4e−4 , λct = 0.01, λSM P L = 0.5.
+    The right side of Figure 2 illustrates our novel phase-          The first term Lrec is the reconstruction loss that minimizes
+conditioned motion prior. The structure is inspired by Mo-           the difference between the decoder output and the ground
+tionVAE [38] and HuMoR [49]; both models, including                  truth:
+ours, are based on conditional VAEs [29] where the dis-                       Lrec = ∥x̂t − xt ∥2 + 0.1 × ∥P̂t − Pt ∥2 ,        (9)
+tribution of plausible pose transition is learned. The key
+differences are that our model is conditioned by the deep            where x̂, P̂ are the predicted pose and phase features, re-
+phase feature Pt extracted from pre-trained periodic autoen-         spectively. The second term LKL enforces the distribution
+coder [56] in addition to the pose feature, and sinusoidal ac-       learned by the learnable prior is close to the one from the
+tivation layers [54] are also incorporated to fully utilize the      encoder by measuring their KL-divergence. The third term
+periodic nature of our phase feature.                                Lct is the contact loss
+                                                                                         X
+    For the pose feature, we use the same representation used                     Lct =      BCE(ĉjt , cjt ) + ĉjt ∥v̂tj ∥2 (10)
+in HuMoR [49], which includes position, orientation, and                                  j
+
+
+
+
+                                                                  14728
+where BCE is the binary cross-entropy; ĉjt and v̂tj repre-            to update the phase manifold features. Otherwise, the values
+sent the predicted contact label and the velocity of the j-            are interpolated based on corresponding confidence values.
+th joint, respectively. This term encourages the decoder to
+predict correct contact labels while keeping the velocities of          𝑁𝑜 𝐼𝑛𝑡𝑒𝑟𝑝𝑜𝑙𝑎𝑡𝑖𝑜𝑛
+
+the joints in contact with the ground to become zero. The
+final term LSM P L is optional which enforces the generated
+body meshes to be consistent with the SMPL model in the
+ground truth dataset, which is the same as one described in             𝐷𝑦𝑛𝑎𝑚𝑖𝑐 𝐼𝑛𝑡𝑒𝑟𝑝𝑜𝑙𝑎𝑡𝑖𝑜𝑛
+
+HuMoR [49].
+4.4. Robust Inference of PhaseMP
+   Given an initial pose and phase features x0 and P0 , an             Figure 3. A visualization of the phase manifold vector p on two
+embedding for transition z0 is sampled randomly from the               channels. The above represents the phase feature directly pre-
+prior distribution R(x0 , P0 ), from which the decoder gen-            dicted by the network, while the bottom vector shows the interpo-
+                                                                       lated phase based on Eq. 11. This shows that dynamic interpola-
+erates the change of pose and phase features, and then they
+                                                                       tion greatly helps to increase stability when the input pose features
+are updated via Eq.6. This process can be performed repeat-            are noisy.
+edly to generate a continuous motion (x0 , x1 , x2 , · · · ). Al-
+though we observe that our phase-conditioned motion prior
+can generate better quality motions already when compared
+to other methods, the generated motions can still deteriorate          Implementation The prior and encoder networks are
+especially when the input observation is highly unreliable             both designed as fully-connected 5-layer MLPs equipped
+due to noisy or missing joints. We thus propose a novel                with ReLU activation units and group normalization. The
+way to update the phase feature that considers the confi-              decoder is designed as a 4-layer SirenMLP [54] with sine
+dence of the input observation dynamically. It is computed             activation of 60 sine factor. We follow the initialization
+as follows:                                                            scheme introduced in Siren [54]. Moreover, we introduce
+                                                                       skip connections from the phase feature to each layer of the
+     p̄t = Āt · I(αP )(R(θ) · pt−1 , (pt−1 + ∆p))                     decoder network, further enhancing its influence. Follow-
+                                                                       ing MotionVAE [38], we also use scheduled sampling to
+       Āt = (1 − αA )At−1 + αA (At−1 + ∆A)
+                                                            (11)       ensure the network learns from its own predictions. More
+        F̄t = (1 − αF )Ft−1 + αF (Ft−1 + ∆F )                          details will be introduced in the supplemental materials.
+                         θ = ∆t · 2π · F̄t
+where the update is basically performed by the interpola-              5. Test-time Optimization
+tion of two sources, one from network prediction and the                   During run-time, given partial observations, such as 2D
+other from a cyclic update by rotating the phase manifold              landmark sequence or partial 3D joint sequence, we esti-
+vector pt−1 with θ. I(·) refer to linear interpolation, R(·)           mate the original 3D pose sequence by optimization. In
+is the rotation operation, ∆t is a time-step between adjacent          this section, we outline the details for integrating our phase-
+frames, and α∗ ∈ [0, 1] represents how reliable each com-              conditional motion prior with optimization.
+ponent of the phase feature is given the current pose feature.
+                                                                           There are three stages to perform the optimization.
+The confidence values αA , αP , and αF are computed by:
+                                                                      Given a sequence of observations o1:T (e.g., a sequence of
+                     0, 0, 0 if ϕt < ϕlow
+                                                                      2D joint positions in a video) with length T , a ground plane
+       αA , αP , αF = ϕt , ϕt , ϕt if ϕlow ≤ ϕt < ϕhigh      (12)      is estimated and a sequence of SMPL poses are roughly fit-
+                     
+                      1, 0.5, 1 if ϕt ≥ ϕhigh
+                     
+                                                                       ted to the observations in Stage 1. An initial sequence of
+where ϕt ∈ [0, 1] is the confidence value of the input obser-          phase features P1:T is then computed from these poses in
+vation at frame t (e.g., values given by 2D pose detectors),           Stage 2 using the encoder in Eq. 7. In Stage 3, starting
+and ϕlow , ϕhigh are user-specified minimum and maximum                from the roughly fitted poses in Stage 1 and the initialized
+confidence thresholds where we use 0.4, 0.8, respectively.             sequence of phase features in Stage 2, a refinement step is
+Note we set αP = 0.5 even when the input observation                   performed by using our PhaseMP to optimize the pose se-
+is fully reliable as demonstrated in [56]. If the confidence           quence with energies measuring plausibility of the pose se-
+value is high (α∗ = 1) then the phase feature is updated               quence. All the above stages are performed by different
+following Eq. 11. If the confidence is low (α∗ = 0), the fre-          optimization targets and energy terms.
+quency and amplitude feature At , Ft are carried over from                 We will describe Stage 3 here and explain the other
+the previous frame as the same as At−1 Ft−1 , and are used             stages in the supplementary materials. The optimization
+
+
+
+                                                                    14729
+problem in Stage 3 is formulated as follows:                         enforces the bone lengths lt to be consistent over time; the
+                                                                     third term makes the foot stationary by minimizing its ve-
+            argmin (λobs Eobs + λprior Eprior                        locity v f oot when the contact label ĉft oot is enabled; and
+           z1:T −1 ,β,g                                    (13)      the final term prevents the ground plane to deviate from its
+                     +λreg Ereg + λphase Ephase )                    initial guess ginit during the optimization.
+where β is the SMPL shape parameter, and g is the ground
+                                                                     Phase-based Energy As demonstrated in previous
+plane parameter. The energy function comprises four terms
+                                                                     work [49], natural-looking motions can be often generated
+where the first three terms are those proposed in Hu-
+                                                                     when the input observation is dense and reliable, for
+MoR [49] while the last term is newly introduced in this
+                                                                     example, when all joints are clearly visible in the video
+work, which can significantly improve the motion quality
+                                                                     and the motion is not extremely dynamic. However, the
+especially for challenging scenarios. The weights can be
+                                                                     quality of generated motions is significantly degraded when
+set differently depending on the types of tasks, our settings
+                                                                     insufficient cues are provided, due to occlusions or the
+for each task are included in Appendix. The details of each
+                                                                     body being out-of-sight. Simply increasing the weights of
+energy are explained below.
+                                                                     the motion prior energy cannot handle invisibility for a long
+                                                                     duration (>1s). Here, we introduce a novel phase-based
+Observation Energy The purpose of the observation en-                energy to mitigate this challenge.
+ergy is to enforce the predicted sequence to align with the              To calculate the energy, we first compute target phase
+given observations:                                                  features P̄1:T by setting the initial phase to 0 and updating
+                            T
+                                                                     it by inference with Eq. 11. We then optimize the phase
+                                                                     features P1:T by minimizing its difference with the target
+                            X
+                 Eobs =           ||O(x̂t ) − ot ||2       (14)
+                            t=1
+                                                                     phase features P̄1:T :
+                                                                                                T
+where ot is an instance of observation at frame t and O                                         X
+                                                                                     Ephase =         ||P̄t − Pt ||2 .        (17)
+is a function that projects the pose sequences x̂0∼T which
+                                                                                                t=1
+are predicted by our model to the observation space. For
+instance, a 3D-to-2D projection can be used for the video-           For the optimization, P1:T is first initialized by the phase
+to-motion task while a masking function can be used for              features extracted from the SMPL poses in Stage 2. This en-
+reconstructing full 3D poses from 3D partial markers.                ergy can be considered as an additional regularization term
+                                                                     in the frequency domain by encouraging the generated mo-
+                                                                     tion to maintain similar periodicity to ones computed from
+Motion Prior Energy The goal of the motion prior term
+                                                                     reliably observations only.
+is to measure whether the given sequence of latent variables
+z1:T represents a plausible motion. This can be computed
+by                                                                   Implementation By default, we use L-BFGS optimiza-
+                         T
+                         X −1                                        tion with a step size of 1 and a maximal number of iter-
+            Eprior = −        log N (zt ; µtθ , σθt )                ations per optimization step of 20, which is implemented
+                         t=1
+                                                        (15)         by PyTorch. It takes approximately 6 minutes to fit a 3-
+                          µtθ , σθt = R(xt , Pt )                    second sequence with a GTX 3090 graphics card. More
+                                                                     details about optimization exist in the supplemental materi-
+where µtθ , σθt are the mean and standard deviation of the           als.
+prior distribution of pose transitions predicted by R.
+                                                                     6. Evaluation
+Regularization Energy The regularization energy helps                    We evaluate our system on (i) motion reconstruction
+the optimized motion to be smooth and consistent. It con-            task, (ii) motion completion from sparse 3D joint markers,
+sists of four terms:                                                 (iii) video-to-motion task in challenging scenes, (iv) abla-
+              T
+              X                                                      tion study. More qualitative and quantitative experiments
+     Ereg =     (||Jˆt − Jˆtsmpl ||2 + ||lˆt − ˆlt−1 ||2             are available in the supplemental materials.
+             t=1                                           (16)
+                                                                     6.1. Datasets and Metrics
+           +ĉft oot ||vtf oot ||2 + ||g − ginit ||2 )
+                                                                     Datasets The evaluation of our proposed method utilizes
+where the first term regularizes the distance between the            three human motion datasets. (1) AMASS [31], the largest
+predicted joint positions Jˆt and the joint positions Jˆtsmpl        dataset in terms of motion capture data, is curated from var-
+computed from the SMPL pose parameters; the second term              ious sources and represented in the SMPL format, all the
+
+
+
+                                                                  14730
+                                             per-frame reconstruction                   sampling (5s)                 sampling (10s)
+ Model                           Contact ↑    MPJPE↓      PJPE-std↓     MV-PE↓   Contact ↑   ADE ↓      FDE ↓   Contact ↑   ADE ↓      FDE ↓
+ HuMoR [49](MLP, w/o Phase)       0.9770        0.022       0.051        0.057     0.8585    36.14      47.34    0.8216     45.43      62.47
+ Ours(MLP, with Phase)            0.9764        0.020       0.040        0.061     0.8646    32.36      35.73    0.8525     39.48      54.96
+ Ours(SirenMLP, w/o Phase)        0.9788        0.019       0.031        0.044     0.8691    31.81      35.59    0.8577     35.47      49.95
+ Ours(SirenMLP, with Phase)       0.9799        0.017       0.021        0.047     0.8702    34.88      36.91    0.8662     42.12      49.47
+Table 1. Comparison of different methods on the per-frame prediction (Left) and random sampling with different durations (Middle, Right).
+The MPJPE and DE are measured as positional errors with the unit of centimeters. For the sampling experiments, we use the same initial
+pose from ground truth, and then run the sampling 50 times, and choose the one with the lowest ADE (average) to report its FDE(final
+frame).
+
+
+data are down-sampled to 30 fps in our experiments. We                     izing the system with x0 and P0 from a test motion, and
+train the phase extractor using the CMU subset and then                    then sampling 50 different motion sequences autoregres-
+train the phase-conditioned variational autoencoder (VAE)                  sively from the same seed for the same length as the test
+on the training subsets which are the same as [49, 61].                    motion. We select the sequence with the lowest average dis-
+All evaluation is conducted using the Transitions and Hu-                  placement error (ADE) as the closest prediction. We report
+manEva subsets. (2) i3DB [43] and (3) PROX [16], which                     both the ADE and last frame distance (FDE) for the selected
+contain RGB videos of human-environment interaction and                    sequence. The results are presented in Table 1 which shows
+are used for a comprehensive quantitative and qualitative                  that our full method (SirenMLP+Phase) achieves the best
+evaluation of the video-to-motion task. We first perform                   performance on average and all other variants also outper-
+pre-processing by running Openpose, human mask detec-                      form the SOTA baseline.
+tion, and plane estimation to facilitate further test-time pose
+estimation.
+                                                                           6.3. Estimation from 3D Observations
+Baseline and Metrics Based on our inspiration from the                        We conduct an experiment to evaluate the effectiveness
+HuMoR baseline, we propose several enhancements in our                     of test-time optimization in filling incomplete 3D joints.
+system, including a conditional feature, a new network                     To simulate real-world occlusions, we generate three types
+module, and different optimization energy terms. We eval-                  of inputs: 1) occluded joints in time (missing frames) or
+uate the effectiveness of these improvements in challenging                in space (joints above 0.9m in height are only visible; or
+scenarios through experiments.                                             the end-effectors are only visible); 2) joint positions with
+   To assess the accuracy of our reconstruction, we com-                   noise. We then recover the original pose sequence using our
+pute the commonly used metrics MPJ-PE and MV-PE [42,                       PhaseMP. The performance is evaluated based on the av-
+31, 49], to show the mean positional distance (cm) of body                 erage positional error for visible (Vis) and occluded (Occ)
+joints and vertices between our prediction and the ground                  joints.
+truth. Additionally, we use the displacement distance (DE)
+between the generated motion and ground truth, to evalu-                       The experimental results are presented in Table 2 and
+ate whether our learned prior can effectively reconstruct the              Table 3. Our approach outperforms other methods in pre-
+desired motion. To examine the physical realism of the mo-                 dicting occluded joints, as demonstrated by the average po-
+tion estimation task [38, 49], we also measure the accuracy                sitional error of all and invisible (Occ) joints. Further-
+of contact (Contact), mean per-joint accelerations (Accel),                more, our method can predict contact labels more accu-
+foot-ground penetrations with a 15cm threshold, penetra-                   rately than HuMoR. Regarding the denoising experiments,
+tion occurrence frequency (P-Frep), mean penetration dis-                  our approach produces smoother results, particularly when
+tance (P-Dis).                                                             the degree of noise is high.However, an interesting observa-
+                                                                           tion is that our method does not align visible joints as accu-
+6.2. Evaluation of Motion Reconstruction                                   rately as VPoser-t. This can be attributed to the additional
+    Because our model is based on conditional VAEs, we                     constraints imposed by the periodic manifold, which en-
+first evaluate our model by measuring the accuracy on re-                  courages more realistic motion rather than focusing solely
+construction (prediction). The accuracy is evaluated by two                on local alignments.
+criteria, where we use the AMASS dataset to train and test                    Some visualization comparison is shown in Figure 5
+our model. The first criterion is the per-frame prediction ac-             where our method generates more natural-looking and dy-
+curacy, where the ground truth input of xt−1 , Pt−1 , and the              namic motions with less foot sliding when compared to
+latent variable zt obtained from E(xt−1 , xt ) are given. The              HuMoR. The differences are best seen in the supplemental
+second criterion evaluates the sequential output by initial-               video.
+
+
+
+                                                                        14731
+                                                                  fitting (3s)                                                          fitting (5s)
+ Method      Input Conditions        Vis       Occ      All      Contact ↑       Accel   P-Frep     P-Dis     Vis      Occ       All    Contact↑       Accel   P-Frep   P-Dis
+ VPoser-t                            0.67     20.76     9.22         -           5.71    16.77%     2.28       -         -         -        -             -       -       -
+ MVAE                                2.39     19.15     9.52         -           7.12     3.15%     0.30       -         -         -        -             -       -       -
+               Jheight >0.9
+ HuMoR                               1.46     17.40     8.24       0.89          5.38     3.31%     0.26     2.38      18.44     9.68     0.85          4.87   4.92%    0.30
+ Ours                                3.94     15.63     8.31       0.89          4.58    3.04%      0.28     3.29      16.08     8.41     0.87          4.69   4.32%    0.31
+ HuMoR                               3.05      4.12     3.83       0.96          4.91    0.31%      1.03     3.15      4.20      3.91     0.96          4.97   1.19%    1.25
+                Jend effectors
+ Ours                                3.16      4.07     3.79       0.97          4.88    0.28%      1.02     3.32      4.16      3.88     0.96          4.99   0.82%    1.13
+ HuMoR                               5.56      7.76     7.49       0.91          7.72    1.57%      1.90     11.04     13.53   13.25      0.87          9.65   19.02%   5.97
+             10 frames interval
+ Ours                                3.19      4.92     4.33       0.93          6.33    1.31%      1.72      8.48     10.21    9.30      0.92          8.42   9.73%    3.73
+Table 2. Comparison of different methods on different input settings: 1) Incomplete joints; 2) Root and 5 end-effectors; 3) Keyframes
+with 10 frame intervals. Comparisons are performed with two different durations (3 and 5 seconds). All the results are measured by two
+groups of metrics, where one group is the positional error for visible/occluded/all joints, and the other group is used to measure the physical
+realism including the contact accuracy and foot-ground penetrations statistics with 15cm threshold.
+
+
+ Method                Noisy Radius          All      Contact↑    P-Frep     P-Dis           show qualitative results in Figure 4. Our method maintains
+ 1D-Filter                  4cm             3.91          -       2.45 %         0.14        consistency in long sequences thanks to the temporal fea-
+ VPoser-t                   4cm             3.67          -       1.35%          0.07        tures captured by the phase feature, which stabilizes the es-
+ MVAE                       4cm             2.68          -       1.75%          0.11
+ HuMoR                      4cm             2.27        0.97      1.18%          0.05        timation in heavily occluded frames, such as sitting on a
+ Ours(w/o Phase)            4cm             2.12        0.97      1.22%          0.06        sofa. More results for the video-to-motion task can be found
+ Ours(with Phase)           4cm             1.96        0.98      1.14%          0.05        in our supplementary materials.
+ 1D-Filter                 12cm             11.89         -       4.87%          2.66
+ HuMoR                     12cm             34.08       0.77      7.29%          5.26
+ Ours                      12cm              9.42       0.89      4.20%          0.48
+                                                                                             6.5. Ablation Study
+Table 3. Motion estimation from noisy inputs, where two different
+noise levels are tested.
+                                                                                                Here we analyze the effectiveness of each newly-added
+                                                                                             component of our system for the motion reconstruction task.
+6.4. Estimation from RGB Observations                                                        The optimization without any new component is used as
+                                                                                             the baseline. Then we compare the results of the recon-
+    We evaluate the proposed method in the video-to-motion                                   structed motion w/wo SirenMLP (SI), w/wo Phase Condi-
+task, where the goal is to estimate 3D pose sequences from                                   tion (PC), w/wo Dynamic Test-Time Interpolation(DI). The
+RGB videos. We use i3DB [43] and PROX [16] datasets,                                         experiment is done with i3DB dataset in the same setting
+and also obtain the 2D poses and confidence values from                                      described in Sec. 6.4. The results are shown in Tab. 5.
+OpenPose [7]. To mitigate the local minima issue, we fol-
+low the same procedure proposed by HuMoR, which splits
+the entire motion into 3-second sub-sequences. However,                                           Method            Components          MPJPE      P-MPJPE     P-Frep   P-Dis
+instead of stitching all sub-sequences after the parallel opti-                                   VIBE                  -               116.46         15.08   7.98%    3.01
+                                                                                                  Baseline              -                30.49         15.44   2.61%    0.79
+mization, we optimize them one by one, using the last frame                                       Ours       SI ×     PC ✓     DI ×      31.75         18.33   2.51%    0.83
+in the optimized sequence st−1 as the initial pose of st . As                                     Ours       SI ✓     PC ×     DI ×      29.91         15.42   2.73%    0.74
+a result, we can easily stitch them sequentially to obtain a                                      Ours       SI ×     PC ✓     DI ✓      27.82         14.90   2.39%    0.64
+                                                                                                  Ours       SI ✓     PC ✓     DI ✓      27.43         14.19   2.03%    0.61
+full-frame reconstruction. The results are presented in Ta-
+                                                                                             Table 5. Comparison of different system components involved set-
+ble 4. It is observed that optimization-based methods pro-
+                                                                                             ting.
+duce more accurate results, and our proposed method fur-
+ther improves the estimation compared to others. We also
+
+                                                                                                The ablation study reveals the effectiveness of different
+                              i3DB                                   PROX                    components in our framework. Phase is a powerful signal
+ Method      MPJPE        P-MPJPE P-Frep               P-Dis     P-Frep P-Dis                which helps to reproduce realistic movements. However,
+ VIBE         116.46         15.08         7.98%       3.01      23.46%          4.71        using it solely will result in an unstable prediction under
+ VPoser-t      32.73         16.62         9.59%       2.68      13.38%          2.82
+ MVAE          40.91         19.17         7.43%       1.55          -             -
+                                                                                             heavy occlusion scenarios due to the error accumulation
+ HuMoR         28.15         14.51         2.12%       0.68       9.99%          1.56        through the auto-regressive phase update. Dynamic inter-
+ Ours          27.43         14.19         2.03%       0.61      9.12%           1.38        polation masks out the low confidence frames, and its com-
+Table 4. Comparison of different methods for the video-to-motion                             bination with the phase makes the prediction more robust
+task on i3DB [43] and PROX [16] datasets. The P-MPJPE is used                                in challenging cases. The SirenMLP module also improves
+for calculating the positional error after root alignment.                                   the baseline results.
+
+
+
+                                                                                          14732
+ VIBE
+
+
+
+
+HuMoR
+
+
+
+
+ Ours
+
+
+
+Figure 4. Qualitative comparison for video-to-motion task. We run video-based motion reconstruction method VIBE [31], test-time op-
+timization with HuMoR [49] and our method in the same settings and report the results. All the methods are trained with AMASS [31]
+dataset only. Our method can produce more coherent and realistic motion even in the existence of heavy occlusion.
+
+
+                                                                 same with other methods, our optimization process can still
+                                                                 encounter failures when tested on motions that significantly
+    𝑊𝑖𝑡ℎ𝑜𝑢𝑡 𝑃ℎ𝑎𝑠𝑒
+                                                                 deviate from the training data.
+                                                                    One intriguing future direction could involve utilizing 20_13
+                                                                                                                18_64
+                                                                 the learned phase feature as a positional encoding for a
+    𝑊𝑖𝑡ℎ 𝑃ℎ𝑎𝑠𝑒
+                                          235           275 395 459                         5_1
+                                                                 transformer architecture, allowing the phase feature to di-
+  155 160 202 220                                                rectly influence predictions without test-time optimization.
+                                                                                                       11_1 would be ex-
+                                                                 Another promising avenue for future research
+                                                                 ploring the integration of multi-modal signals that can be
+   𝑊𝑖𝑡ℎ𝑜𝑢𝑡 𝑃ℎ𝑎𝑠𝑒                                                 easily combined in the frequency domain, such as sound
+                                                                 waves from input videos.
+
+                                                                       Acknowledgments
+   𝑊𝑖𝑡ℎ 𝑃ℎ𝑎𝑠𝑒
+                                                                          This work was mainly done during Mingyi Shi’s intern-
+Figure 5. Motion generation from incomplete input. The first and       ship in Meta. We thank Deepak Gopinath for his valu-
+second rows are the fully body reconstruction from the upper body      able input. Jungdam Won was partially supported by the
+only with/without using the phase feature. The bottom two rows
+                                                                       New Faculty Startup Fund from Seoul National University,
+show motion-in-betweening results from sparse keyframes shown
+as purple color.
+                                                                       ICT(Institute of Computer Technology) at Seoul National
+                                                                       University, and the MSIT (Ministry of Science and ICT),
+                                                                       Korea, under the ITRC (Information Technology Research
+7. Discussion                                                          Center) support program (IITP-2023-2020-0-01460) super-
+                                                                       vised by the IITP(Institute for Information & Communica-
+    We have demonstrated the benefits of our phase-                    tions Technology Planning & Evaluation). Taku Komura
+conditioned motion prior model, PhaseMP, in a variety of               and Mingyi Shi are partly supported by Technology Com-
+3D pose estimation tasks under challenging settings. It is             mission (Ref:ITS/319/21FP) and Research Grant Council
+a general motion representation model that can be applied              (Ref: 17210222), Hong Kong.
+to encode not only periodic actions such as locomotion but
+also complex non-periodic actions such as dancing.
+    Our system has several limitations. Firstly, it relies on
+an assumption the motions are performed on flat ground
+and the cameras are static. Secondly, our system might fail
+when the occlusion period is excessively long because the
+ambiguity in the phase prediction increases. Thirdly, though
+most movements can be reconstructed with the periodic au-
+toencoder, the diversity of the output motions may be re-
+stricted to those observed in the training data. Lastly, as
+
+
+
+                                                                    14733
+References                                                                     tern Recognition, 2004. CVPR 2004., volume 1, pages I–I,
+                                                                               2004.
+ [1] Anurag Arnab, Carl Doersch, and Andrew Zisserman. Ex-
+                                                                          [13] Varun Ganapathi, Christian Plagemann, Daphne Koller, and
+     ploiting temporal context for 3d human pose estimation in
+                                                                               Sebastian Thrun. Real time motion capture using a single
+     the wild. In Proceeding of the IEEE/CVF Conference in
+                                                                               time-of-flight camera. In 2010 IEEE Computer Society Con-
+     Computer Vision and Pattern Recognition, CVPR’19, pages
+                                                                               ference on Computer Vision and Pattern Recognition, pages
+     3395–3404, June 2019.
+                                                                               755–762, 2010.
+ [2] Andreas Baak, Meinard Müller, Gaurav Bharaj, Hans-Peter             [14] S. Ghorbani, C. Wloka, A. Etemad, M. A. Brubaker, and
+     Seidel, and Christian Theobalt. A data-driven approach for                N. F. Troje. Probabilistic character motion synthesis using
+     real-time full body pose reconstruction from a depth camera.              a hierarchical deep latent variable model. In Proceedings
+     In 2011 International Conference on Computer Vision, pages                of the ACM SIGGRAPH/Eurographics Symposium on Com-
+     1092–1099, 2011.                                                          puter Animation, SCA ’20, Goslar, DEU, 2020. Eurograph-
+ [3] Philippe Beaudoin, Pierre Poulin, and Michiel van de Panne.               ics Association.
+     Adapting wavelet compression to human motion capture                 [15] Julian Habekost, Takaaki Shiratori, Yuting Ye, and Taku Ko-
+     clips. In Proceedings of Graphics Interface 2007, pages 313–              mura. Learning 3d global human motion estimation from
+     318, 2007.                                                                unpaired, disjoint datasets. In 31st British Machine Vision
+ [4] Federica Bogo, Angjoo Kanazawa, Christoph Lassner, Pe-                    Conference 2020, BMVC 2020, Virtual Event, UK, Septem-
+     ter Gehler, Javier Romero, and Michael J. Black. Keep it                  ber 7-10, 2020. BMVA Press, 2020.
+     SMPL: Automatic estimation of 3d human pose and shape                [16] Mohamed Hassan, Vasileios Choutas, Dimitrios Tzionas,
+     from a single image. In Proceedings of the European Confer-               and Michael J. Black. Resolving 3D human pose ambigu-
+     ence on Computer Vision, ECCV ’16, page 561–578, Berlin,                  ities with 3D scene constraints. In International Conference
+     Germany, 2016. Springer.                                                  on Computer Vision, pages 2282–2292, Oct. 2019.
+ [5] Armin Bruderlin and Lance Williams. Motion signal pro-               [17] Yihui He, Rui Yan, Katerina Fragkiadaki, and Shoou-I Yu.
+     cessing. In Proceedings of the 22nd Annual Conference                     Epipolar transformers. In Proceedings of the IEEE/CVF
+     on Computer Graphics and Interactive Techniques, SIG-                     Conference on Computer Vision and Pattern Recognition,
+     GRAPH ’95, page 97–104, New York, NY, USA, 1995. As-                      pages 7779–7788, 2020.
+     sociation for Computing Machinery.                                   [18] M. Heideman, D. Johnson, and C. Burrus. Gauss and the
+ [6] Yujun Cai, Liuhao Ge, Jun Liu, Jianfei Cai, Tat-Jen Cham,                 history of the fast fourier transform. IEEE ASSP Magazine,
+     Junsong Yuan, and Nadia Magnenat Thalmann. Exploit-                       1(4):14–21, 1984.
+     ing spatial-temporal relationships for 3d pose estimation via        [19] Gustav Eje Henter, Simon Alexanderson, and Jonas Beskow.
+     graph convolutional networks. In Proceedings of the IEEE                  MoGlow: Probabilistic and controllable motion synthesis
+     International Conference on Computer Vision, pages 2272–                  using normalising flows. ACM Transactions on Graphics,
+     2281, 2019.                                                               39(4):236:1–236:14, 2020.
+ [7] Zhe Cao, Gines Hidalgo, Tomas Simon, Shih-En Wei, and                [20] Mir Rayat Imtiaz Hossain and James J Little. Exploiting
+     Yaser Sheikh. Openpose: Realtime multi-person 2d pose es-                 temporal information for 3d human pose estimation. In
+     timation using part affinity fields. In Proceedings of the 2018           European Conference on Computer Vision, pages 69–86.
+     IEEE Conference on Computer Vision and Pattern Recogni-                   Springer, 2018.
+     tion, CVPR ’18, Washington, DC, USA, 2018. IEEE Com-
+                                                                          [21] Nicholas R. Howe, Michael E. Leventon, and William T.
+     puter Society.
+                                                                               Freeman. Bayesian reconstruction of 3d human motion from
+ [8] Tianlang Chen, Chen Fang, Xiaohui Shen, Yiheng Zhu, Zhili                 single-camera video. In Proceedings of the 12th Interna-
+     Chen, and Jiebo Luo. Anatomy-aware 3d human pose esti-                    tional Conference on Neural Information Processing Sys-
+     mation in videos. arXiv preprint arXiv:2002.10322, 2020.                  tems, NIPS’99, page 820–826, Cambridge, MA, USA, 1999.
+ [9] Yu Cheng, Bo Yang, Bo Wang, Wending Yan, and Robby T.                     MIT Press.
+     Tan. Occlusion-aware networks for 3d human pose estima-              [22] Wenbo Hu, Changgong Zhang, Fangneng Zhan, Lei Zhang,
+     tion in video. In Proceedings of the IEEE/CVF International               and Tien-Tsin Wong. Conditional Directed Graph Convolu-
+     Conference on Computer Vision (ICCV), October 2019.                       tion for 3D Human Pose Estimation. arXiv:2107.07797 [cs],
+[10] H. Ci, X. Ma, C. Wang, and Y. Wang. Locally Connected                     2021.
+     Network for Monocular 3D Human Pose Estimation. IEEE                 [23] Catalin Ionescu, Dragos Papava, Vlad Olaru, and Cristian
+     Transactions on Pattern Analysis and Machine Intelligence,                Sminchisescu. Human3.6m: Large scale datasets and predic-
+     pages 1–1, 2020.                                                          tive methods for 3d human sensing in natural environments.
+[11] Yuming Du, Robin Kips, Albert Pumarola, Sebastian Starke,                 IEEE Trans. Pattern Anal. Mach. Intell., 36(7):1325–1339,
+     Ali Thabet, and Artsiom Sanakoyeu. Avatars grow legs:                     July 2014.
+     Generating smooth human motion from sparse tracking in-              [24] Karim Iskakov, Egor Burkov, Victor Lempitsky, and Yury
+     puts with diffusion model. In CVPR, 2023.                                 Malkov. Learnable Triangulation of Human Pose. In
+[12] A. Elgammal and Chan-Su Lee. Separating style and content                 2019 IEEE/CVF International Conference on Computer Vi-
+     on a nonlinear manifold. In Proceedings of the 2004 IEEE                  sion (ICCV), pages 7717–7726, Seoul, Korea (South), 2019.
+     Computer Society Conference on Computer Vision and Pat-                   IEEE.
+
+
+
+
+                                                                       14734
+[25] Angjoo Kanazawa, Michael J. Black, David W. Jacobs, and             [39] Ruixu Liu, Ju Shen, He Wang, Chen Chen, Sen-ching Che-
+     Jitendra Malik. End-to-end recovery of human shape and                   ung, and Vijayan Asari. Attention mechanism exploits tem-
+     pose. In Proceedings of the IEEE Conference on Computer                  poral contexts: Real-time 3d human pose reconstruction. In
+     Vision and Pattern Recognition, CVPR ’18, pages 7122–                    Proceedings of the IEEE/CVF Conference on Computer Vi-
+     7131, Washington, DC, USA, 2018. IEEE Computer Soci-                     sion and Pattern Recognition (CVPR), June 2020.
+     ety.                                                                [40] Matthew Loper, Naureen Mahmood, Javier Romero, Gerard
+[26] Angjoo Kanazawa, Jason Y. JZhang, Panna Felsen, and Ji-                  Pons-Moll, and Michael J. Black. Smpl: A skinned multi-
+     tendra Malik. Learning 3d human dynamics from video. In                  person linear model. ACM Trans. Graph., 34(6):248:1–
+     Proceedings of the IEEE/CVF Conference on Computer Vi-                   248:16, Oct. 2015.
+     sion and Pattern Recognition, CVPR’19, 2019.                        [41] Haoyu Ma, Zhe Wang, Yifei Chen, Deying Kong, Liangjian
+[27] Ben Kenwright. Quaternion fourier transform for character                Chen, Xingwei Liu, Xiangyi Yan, Hao Tang, and Xiaohui
+     motions. In Workshop on Virtual Reality Interactions and                 Xie. Ppt: token-pruned pose transformer for monocular and
+     Physical Simulations, 2015.                                              multi-view human pose estimation. In ECCV, 2022.
+[28] Diederik P Kingma and Max Welling. Auto-encoding varia-             [42] Julieta Martinez, Rayat Hossain, Javier Romero, and
+     tional bayes. arXiv preprint arXiv:1312.6114, 2013.                      James J. Little. A simple yet effective baseline for 3d human
+[29] Diederik P Kingma and Max Welling. Learning struc-                       pose estimation. In Proceeding of the IEEE International
+     tured output representation using deep conditional generative            Conference on Computer Vision, ICCV ’17, pages 2659–
+     models. In International Conference on Machine Learning,                 2668, Oct 2017.
+     pages 348–356. PMLR, 2014.                                          [43] Aron Monszpart, Paul Guerrero, Duygu Ceylan, Ersin
+[30] Thomas N. Kipf and Max Welling. Semi-supervised classi-                  Yumer, and Niloy J. Mitra. iMapper: Interaction-guided
+     fication with graph convolutional networks. In International             scene mapping from monocular videos. ACM SIGGRAPH,
+     Conference on Learning Representations, 2017.                            July 2019.
+[31] Muhammed Kocabas, Nikos Athanasiou, and Michael J.                  [44] Lea Müller, Ahmed A. A. Osman, Siyu Tang, Chun-Hao P.
+     Black. VIBE: Video inference for human body pose and                     Huang, and Michael J. Black. On self-contact and human
+     shape estimation. In Proceedings IEEE Conf. on Computer                  pose. In Proceedings IEEE/CVF Conf. on Computer Vision
+     Vision and Pattern Recognition (CVPR), pages 5252–5262.                  and Pattern Recogßnition (CVPR), June 2021.
+     IEEE, June 2020.                                                    [45] Dirk Ormoneit, Hedvig Sidenbladh, Michael Black, and
+[32] Muhammed Kocabas, Chun-Hao P Huang, Joachim Tesch,                       Trevor Hastie. Learning and tracking cyclic human motion.
+     Lea Muller, Otmar Hilliges, and Michael J Black. SPEC:                   In T. Leen, T. Dietterich, and V. Tresp, editors, Advances
+     Seeing People in the Wild With an Estimated Camera.                      in Neural Information Processing Systems, volume 13. MIT
+     page 11.                                                                 Press, 2000.
+[33] Nikos Kolotouros, Georgios Pavlakos, Michael J. Black, and          [46] Georgios Pavlakos, Vasileios Choutas, Nima Ghorbani,
+     Kostas Daniilidis. Learning to reconstruct 3d human pose                 Timo Bolkart, Ahmed A. A. Osman, Dimitrios Tzionas, and
+     and shape via model-fitting in the loop. In Proceedings of the           Michael J. Black. Expressive body capture: 3D hands, face,
+     IEEE International Conference on Computer Vision, 2019.                  and body from a single image. In Proceedings IEEE Conf.
+[34] Nikos Kolotouros, Georgios Pavlakos, Michael J. Black, and               on Computer Vision and Pattern Recognition (CVPR), pages
+     Kostas Daniilidis. Learning to reconstruct 3d human pose                 10975–10985, 2019.
+     and shape via model-fitting in the loop. In Proceedings             [47] Dario Pavllo, Christoph Feichtenhofer, David Grangier, and
+     of the IEEE International Conference on Computer Vision,                 Michael Auli. 3d human pose estimation in video with tem-
+     ICCV’19, 2019.                                                           poral convolutions and semi-supervised training. In Proceed-
+[35] Christoph Lassner, Javier Romero, Martin Kiefel, Federica                ings of the IEEE Conference on Computer Vision and Pattern
+     Bogo, Michael J. Black, and Peter V. Gehler. Unite the peo-              Recognition, CVPR ’19, Washington, DC, USA, 2019. IEEE
+     ple: Closing the loop between 3d and 2d human representa-                Computer Society.
+     tions. In IEEE Conf. on Computer Vision and Pattern Recog-          [48] Xue Bin Peng, Angjoo Kanazawa, Jitendra Malik, Pieter
+     nition (CVPR), July 2017.                                                Abbeel, and Sergey Levine. Sfv: Reinforcement learning
+[36] Jiefeng Li, Chao Xu, Zhicun Chen, Siyuan Bian, Lixin Yang,               of physical skills from videos. In SIGGRAPH Asia 2018
+     and Cewu Lu. Hybrik: A hybrid analytical-neural inverse                  Technical Papers, page 178. ACM, 2018.
+     kinematics solution for 3d human pose and shape estimation.         [49] Davis Rempe, Tolga Birdal, Aaron Hertzmann, Jimei Yang,
+     In Proceedings of the IEEE/CVF Conference on Computer                    Srinath Sridhar, and Leonidas J. Guibas. Humor: 3d human
+     Vision and Pattern Recognition, pages 3383–3393, 2021.                   motion model for robust pose estimation. In International
+[37] Wenhao Li, Hong Liu, Runwei Ding, Mengyuan Liu, Pichao                   Conference on Computer Vision (ICCV), 2021.
+     Wang, and Wenming Yang. Exploiting temporal contexts                [50] Chris Rockwell and David F. Fouhey. Full-body awareness
+     with strided transformer for 3d human pose estimation. IEEE              from partial observations. In ECCV, 2020.
+     Transactions on Multimedia, 2022.                                   [51] Wenkang Shan, Zhenhua Liu, Xinfeng Zhang, Shanshe
+[38] Hung Yu Ling, Fabio Zinno, George Cheng, and Michiel                     Wang, Siwei Ma, and Wen Gao. P-stmo: Pre-trained spa-
+     van de Panne. Character controllers using motion vaes. ACM               tial temporal many-to-one model for 3d human pose estima-
+     Trans. Graph., 39(4), 2020.                                              tion. In Computer Vision–ECCV 2022: 17th European Con-
+
+
+
+
+                                                                      14735
+     ference, Tel Aviv, Israel, October 23–27, 2022, Proceedings,       [65] Zhe Wang, Daeyun Shin, and Charless C. Fowlkes. Predict-
+     Part V, pages 461–478. Springer, 2022.                                  ing Camera Viewpoint Improves Cross-dataset Generaliza-
+[52] Mingyi Shi, Kfir Aberman, Andreas Aristidou, Taku Ko-                   tion for 3D Human Pose Estimation. arXiv:2004.03143 [cs],
+     mura, Dani Lischinski, Daniel Cohen-Or, and Baoquan                     2020.
+     Chen. MotioNet: 3D Human Motion Reconstruction from                [66] Yuliang Xiu, Jinlong Yang, Dimitrios Tzionas, and
+     Monocular Video with Skeleton Consistency. ACM Transac-                 Michael J. Black. ICON: Implicit Clothed humans Obtained
+     tions on Graphics, 40(1):1:1–1:15, 2020.                                from Normals. In Proceedings of the IEEE/CVF Conference
+[53] Soshi Shimada, Vladislav Golyanik, Weipeng Xu, Patrick                  on Computer Vision and Pattern Recognition (CVPR), pages
+     Pérez, and Christian Theobalt. Neural monocular 3d hu-                 13296–13306, June 2022.
+     man motion capture with physical awareness. ACM Trans.             [67] Heyuan Yao, Zhenhua Song, Baoquan Chen, and Libin Liu.
+     Graph., 40(4), jul 2021.                                                Controlvae: Model-based learning of generative controllers
+[54] Vincent Sitzmann, Julien N.P. Martel, Alexander W.                      for physics-based characters. ACM Trans. Graph., 41(6), nov
+     Bergman, David B. Lindell, and Gordon Wetzstein. Implicit               2022.
+     neural representations with periodic activation functions. In      [68] Ye Yuan, Jiaming Song, Umar Iqbal, Arash Vahdat, and Jan
+     Proc. NeurIPS, 2020.                                                    Kautz. Physdiff: Physics-guided human motion diffusion
+[55] Kihyuk Sohn, Honglak Lee, and Xinchen Yan. Learning                     model. arXiv preprint arXiv:2212.02500, 2022.
+     structured output representation using deep conditional gen-       [69] Ye Yuan, Shih-En Wei, Tomas Simon, Kris Kitani, and Jason
+     erative models. In C. Cortes, N. Lawrence, D. Lee, M.                   Saragih. Simpoe: Simulated character control for 3d human
+     Sugiyama, and R. Garnett, editors, Advances in Neural Infor-            pose estimation. In Proceedings of the IEEE/CVF Confer-
+     mation Processing Systems, volume 28. Curran Associates,                ence on Computer Vision and Pattern Recognition (CVPR),
+     Inc., 2015.                                                             2021.
+[56] Sebastian Starke, Ian Mason, and Taku Komura. DeepPhase:           [70] M Ersin Yumer and Niloy J Mitra. Spectral style transfer for
+     Periodic autoencoders for learning motion phase manifolds.              human motion between independent actions. ACM Transac-
+     ACM Transactions on Graphics (TOG), 41(4), 2022.                        tions on Graphics (TOG), 35(4):1–8, 2016.
+[57] Yu Sun, Qian Bao, Wu Liu, Yili Fu, Black Michael J., and           [71] Jinlu Zhang, Zhigang Tu, Jianyu Yang, Yujin Chen, and Jun-
+     Tao Mei. Monocular, one-stage, regression of multiple 3d                song Yuan. Mixste: Seq2seq mixed spatio-temporal encoder
+     people. In IEEE International Conference on Computer Vi-                for 3d human pose estimation in video. In Proceedings of
+     sion, ICCV, 2021.                                                       the IEEE/CVF Conference on Computer Vision and Pattern
+[58] Yu Sun, Qian Bao, Wu Liu, Yili Fu, Black Michael J., and                Recognition (CVPR), pages 13232–13242, June 2022.
+     Tao Mei. Monocular, one-stage, regression of multiple 3d           [72] Siwei Zhang, Yan Zhang, Federica Bogo, Pollefeys Marc,
+     people. In ICCV, 2021.                                                  and Siyu Tang. Learning motion priors for 4d human body
+[59] Yu Sun, Wu Liu, Qian Bao, Yili Fu, Tao Mei, and Michael J               capture in 3d scenes. In International Conference on Com-
+     Black. Putting people in their place: Monocular regression              puter Vision (ICCV), Oct. 2021.
+     of 3d people in depth. In CVPR, 2022.                              [73] Siwei Zhang, Yan Zhang, Qianli Ma, Michael J. Black, and
+[60] Yu Sun, Yun Ye, Wu Liu, Wenpeng Gao, YiLi Fu, and Tao                   Siyu Tang. PLACE: Proximity learning of articulation and
+     Mei. Human mesh recovery from monocular images via a                    contact in 3D environments. In International Conference on
+     skeleton-disentangled representation. In IEEE International             3D Vision (3DV), Nov. 2020.
+     Conference on Computer Vision, ICCV, 2019.                         [74] Kaifeng Zhao, Shaofei Wang, Yan Zhang, Thabo Beeler, ,
+[61] Garvita Tiwari, Dimitrije Antic, Jan Eric Lenssen, Nikolaos             and Siyu Tang. Compositional human-scene interaction syn-
+     Sarafianos, Tony Tung, and Gerard Pons-Moll. Pose-ndf:                  thesis with semantic control. In European conference on
+     Modeling human pose manifolds with neural distance fields.              computer vision (ECCV), Oct. 2022.
+     In European Conference on Computer Vision (ECCV), Octo-            [75] Long Zhao, Xi Peng, Yu Tian, Mubbasir Kapadia, and Dim-
+     ber 2022.                                                               itris N. Metaxas. Semantic Graph Convolutional Networks
+[62] Munetoshi Unuma, Ken Anjyo, and Ryozo Takeuchi. Fourier                 for 3D Human Pose Regression. 2019 IEEE/CVF Confer-
+     principles for emotion-based human figure animation. In                 ence on Computer Vision and Pattern Recognition (CVPR),
+     Proceedings of the 22nd annual conference on Computer                   pages 3420–3430, 2019.
+     graphics and interactive techniques, pages 91–96, 1995.            [76] Ce Zheng, Sijie Zhu, Matias Mendieta, Taojiannan Yang,
+[63] Raquel Urtasun, David J. Fleet, and Pascal Fua. Tempo-                  Chen Chen, and Zhengming Ding. 3d human pose estimation
+     ral motion models for monocular and multiview 3d human                  with spatial and temporal transformers. Proceedings of the
+     body tracking. Computer Vision and Image Understanding,                 IEEE International Conference on Computer Vision (ICCV),
+     104(2):157–177, 2006. Special Issue on Modeling People:                 2021.
+     Vision-based understanding of a person’s shape, appearance,        [77] Ce Zheng, Sijie Zhu, Matias Mendieta, Taojiannan Yang,
+     movement and behaviour.                                                 Chen Chen, and Zhengming Ding. 3D Human Pose Es-
+[64] Timo von Marcard, Roberto Henschel, Michael Black, Bodo                 timation With Spatial and Temporal Transformers. In
+     Rosenhahn, and Gerard Pons-Moll. Recovering accurate 3d                 IEEE/CVF International Conference on Computer Vision
+     human pose in the wild using imus and a moving camera.                  (ICCV), page 10, 2021.
+     In European Conference on Computer Vision (ECCV), sep              [78] Zhiming Zou and Wei Tang. Modulated graph convolutional
+     2018.                                                                   network for 3d human pose estimation. In Proceedings of
+
+
+
+
+                                                                     14736
+the IEEE/CVF International Conference on Computer Vision
+(ICCV), pages 11477–11487, October 2021.
+
+
+
+
+                                                           14737
+

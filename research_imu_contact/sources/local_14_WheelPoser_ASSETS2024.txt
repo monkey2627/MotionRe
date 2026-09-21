@@ -1,0 +1,1063 @@
+                                                        WheelPoser: Sparse-IMU Based Body Pose Estimation
+                                                                       for Wheelchair Users
+                                                                                Yunzhi Li                                                                    Vimal Mollyn
+                                                                    Carnegie Mellon University                                                        Carnegie Mellon University
+                                                                       Pittsburgh, PA, USA                                                               Pittsburgh, PA, USA
+                                                                       yunzhil@cs.cmu.edu                                                               vmollyn@cs.cmu.edu
+
+                                                                             Kuang Yuan                                                                  Patrick Carrington
+                                                                   Carnegie Mellon University                                                         Carnegie Mellon University
+                                                                      Pittsburgh, PA, USA                                                                Pittsburgh, PA, USA
+arXiv:2409.08494v1 [cs.GR] 13 Sep 2024
+
+
+
+
+                                                                    kuangy@andrew.cmu.edu                                                               pcarrington@cmu.edu
+
+
+
+
+                                         Figure 1: WheelPoser uses a sparse-IMU setup for practical and effective pose estimation of wheelchair users. It comprises a
+                                         learning-based kinematics module that maps sparse IMU measurements to joint rotations and a physics-based optimizer for
+                                         motion refinement. Our models are pre-trained on the AMASS dataset and fine-tuned on our WheelPoser-IMU dataset leading
+                                         to state-of-the-art pose estimation performance for wheelchair users.
+                                         ABSTRACT                                                                                    better than similar systems using sparse IMUs. To train our sys-
+                                         Despite researchers having extensively studied various ways to                              tem, we collect a novel WheelPoser-IMU dataset, consisting of 167
+                                         track body pose on-the-go, most prior work does not take into                               minutes of paired IMU sensor and motion capture data of peo-
+                                         account wheelchair users, leading to poor tracking performance.                             ple in wheelchairs, including wheelchair-specific motions such as
+                                         Wheelchair users could greatly benefit from this pose information                           propulsion and pressure relief. Finally, we explore the potential
+                                         to prevent injuries, monitor their health, identify environmental                           application space enabled by our system and discuss future oppor-
+                                         accessibility barriers, and interact with gaming and VR experi-                             tunities. Open-source code, models, and dataset can be found here:
+                                         ences. In this work, we present WheelPoser, a real-time pose es-                            https://github.com/axle-lab/WheelPoser.
+                                         timation system specifically designed for wheelchair users. Our
+                                         system uses only four strategically placed IMUs on the user’s body                          CCS CONCEPTS
+                                         and wheelchair, making it far more practical than prior systems                             • Human-centered computing → Accessibility; • Computing
+                                         using cameras and dense IMU arrays. WheelPoser is able to track                             methodologies → Motion capture.
+                                         a wheelchair user’s pose with a mean joint angle error of 14.30◦
+                                         and a mean joint position error of 6.74 cm, more than three times                           KEYWORDS
+                                                                                                                                     Wheelchair Users, Motion Capture, Pose Estimation, Inertial Mea-
+                                         Permission to make digital or hard copies of part or all of this work for personal or       surement Units, Real-time
+                                         classroom use is granted without fee provided that copies are not made or distributed
+                                         for profit or commercial advantage and that copies bear this notice and the full citation   ACM Reference Format:
+                                         on the first page. Copyrights for third-party components of this work must be honored.      Yunzhi Li, Vimal Mollyn, Kuang Yuan, and Patrick Carrington. 2024. Wheel-
+                                         For all other uses, contact the owner/author(s).
+                                                                                                                                     Poser: Sparse-IMU Based Body Pose Estimation for Wheelchair Users. In
+                                         ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada
+                                         © 2024 Copyright held by the owner/author(s).
+                                                                                                                                     The 26th International ACM SIGACCESS Conference on Computers and Ac-
+                                         ACM ISBN 979-8-4007-0677-6/24/10.                                                           cessibility (ASSETS ’24), October 27–30, 2024, St. John’s, NL, Canada. ACM,
+                                         https://doi.org/10.1145/3663548.3675638                                                     New York, NY, USA, 17 pages. https://doi.org/10.1145/3663548.3675638
+ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada                                                                                 Li et al.
+
+
+1    INTRODUCTION                                                           As a result, WheelPoser establishes a new state-of-the-art (SOTA)
+The upper body pose of people who use wheelchairs contains rich          for sparse-IMU based upper body pose estimation of wheelchair
+and valuable information about their behavior, activities, and inter-    users, achieving a mean joint angle error of 14.30◦ and a mean joint
+actions with the environment. Being able to track and understand         position error of 6.74 cm for real-time pose estimation. WheelPoser
+these poses on a daily basis holds immense potential to enhance          outperforms existing models designed for people without motor
+various aspects of wheelchair users’ lives and open up new applica-      impairments by more than threefold. To summarize, we make the
+tions and experiences. For instance, tracking the day-to-day upper       following contributions:
+body mechanics of a wheelchair user can be used to promote their               • We design and implement a first-of-its-kind real-time, sparse-
+health awareness and facilitate injury prevention [53]. Long-term                IMU-based wheelchair user tracking system for practical and
+monitoring of wheelchair users’ daily movement patterns across                   effective upper body pose estimation.
+various contexts can also be instrumental in wheelchair fitting and            • We propose and verify an optimized IMU device setup, en-
+guiding novel design for maximized comfort and mobility [46], as                 suring that it is minimally intrusive and practical for daily
+well as identifying environmental barriers for accessible modifica-              use while retaining essential information for accurate pose
+tions [38]. More broadly, pose tracking allows for precise analytics             estimation.
+and training for adaptive sports, while also affording new interac-            • We collect and release a novel dataset that captures 167 min-
+tion modalities for consumer-level applications such as inclusive                utes of essential on-wheelchair motions performed by 2 full-
+gaming and VR experiences [23, 68].                                              time wheelchair users and 12 participants without motor
+   Despite this promising potential, there is still no system that               impairments.
+achieves practical upper body pose estimation for wheelchair users             • We comprehensively evaluate our system, establishing the
+across diverse contexts. Most commonly, wheelchair users’ poses                  first benchmark of sparse-IMU based upper body pose esti-
+are captured using cameras, such as optical cameras in marker-                   mation for wheelchair users. The results demonstrate that
+based motion capture systems (e.g., Vicon [88]) and RGB or RGB-                  our proposed method significantly enhances pose estimation
+D cameras [16, 33, 36, 63, 79, 96]. Yet, these systems are privacy-              accuracy compared to existing SOTA models.
+invasive, sensitive to occlusion, and most importantly do not work             • We discuss the broad application space enabled by our system
+on the go. In contrast, pose estimation using inertial measurement               and opportunities for future work.
+units (IMUs) is portable, able to work in any environment, insuscep-        In the sections below, we first briefly describe related work in
+tible to visual occlusions, and more privacy-preserving, making it a     motion tracking technologies for wheelchair users, followed by a
+more suitable solution for everyday consumer-level usage. However,       description of WheelPoser’s pose estimation pipeline. Next, we de-
+existing IMU-based motion capture systems require instrumenting          scribe our data collection process for the WheelPoser-IMU dataset,
+the wheelchair user with dense IMU arrays on each joint, totaling        our evaluation results, and some exemplary applications. We end
+11 or more sensors, to effectively estimate upper body poses [47, 85],   by discussing the limitations of our system and potential avenues
+significantly reducing their practicality and usability.                 for future work.
+   In this work, we present WheelPoser, a motion capture system
+that achieves real-time upper body pose estimation for wheelchair        2     RELATED WORK
+users using a total of 4 strategically positioned IMUs on both the
+                                                                         In this section, we review prior motion tracking systems with a
+wheelchair and the user’s body. Drawing inspiration from previous
+                                                                         focus on systems designed for wheelchair users. We first look at
+studies that use sparse IMUs for pose estimation of people without
+                                                                         general activity sensing technologies related to the movement of
+motor impairments [34, 40, 65, 99], WheelPoser employs a learning-
+                                                                         wheelchair users. Then we review prior research on motion capture
+based kinematics module to map sparse inertial measurements to
+                                                                         solutions for wheelchair users, including both camera-based and
+a broader set of upper body joint angles. Unfortunately, there is
+                                                                         IMU-based solutions. Finally, we review pose estimation techniques
+no publicly available motion capture dataset of wheelchair users,
+                                                                         that utilize sparse IMU measurements. For a more detailed review
+let alone one on a large scale, that would allow us to directly train
+                                                                         of motion capture technologies we refer readers to surveys by
+such a model. To address this, we propose a data synthesis and
+                                                                         Desmarais et al. [18] and Nguyen et al. [71]
+pose estimation pipeline tailored for wheelchair users. Specifically,
+we first train a base model by leveraging the diverse upper body
+                                                                         2.1     Activity Sensing for Wheelchair Users
+motions in existing datasets collected from people without motor
+impairments [61]. We then fine-tune this pre-trained model on our        Broadly in the field of motion tracking for wheelchair users, a
+newly collected WheelPoser-IMU dataset, comprising 167 minutes           substantial amount of research has been dedicated to tracking
+of typical on-wheelchair motions with IMU sensor data from 14            wheelchair kinematics and developing activity recognition tech-
+participants, in order to bridge the gap between existing motions        niques. For instance, Rhodes et al. [80] developed a radio-frequency
+and on-wheelchair motions. Additionally, we propose a physics-           based localization system for tracking the field positions of man-
+based optimization module tailored for on-wheelchair motions,            ual wheelchair sports players. Slikker et al. [93] explored the use
+that further refines the predicted pose by increasing its smoothness     of three wheelchair-mounted IMUs to measure motion features
+and offering joint torque estimates, which could be beneficial for       like speed and frame rotation during manual wheelchair sports.
+healthcare and sports applications.                                      Similarly, SpokeSense [11] built a sensing system that could track
+                                                                         manual wheelchair motion data (speed zone, orientation change)
+                                                                         and provide sports related contextual information (dribbling sound,
+WheelPoser: Sparse-IMU Based Body Pose Estimation for Wheelchair Users                          ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada
+
+
+game buzzer) for adaptive basketball analytics. SMARTwheel [15] is       accuracy of the Kinect in tracking upper body joint angles during
+a commercial solution that can monitor wheelchair speed and other        wheelchair propulsion compared to marker-based systems, finding
+propulsion metrics like push force and frequency. G-WRM [29] em-         discrepancies ranging from 6 to 26 degrees across different joints.
+ploys a wheel-mounted gyroscope to measure angular velocities of            While camera-based approaches have shown increasing promise,
+the wheel, thereby allowing for speed measurements with known            they raise privacy concerns, are often sensitive to occlusion, light-
+wheel size. De Vries et al. [17] also developed a three-IMU based        ing conditions, and user appearances (clothing, hair), and most
+system that could track the linear velocity, traveled distance, and      importantly require a fixed sensor location and pose tracking space,
+magnitude of turns of a wheelchair.                                      making them impractical for on-the-go motion capture.
+   Prior research on tracking the physical activities of wheelchair
+users has primarily focused on fitness, with a substantial body of       2.3    Motion Capture for Wheelchair Users with
+work dedicated to quantifying the energy expenditure of manual                  Dense IMUs
+wheelchair users [26, 30, 50, 72]. Additionally, researchers have
+                                                                         An alternative to camera-based systems is to instrument the user
+investigated ways to track a set of discrete activities using cameras
+                                                                         with sensors such as IMUs. Motion tracking using IMUs offers nu-
+or IMUs, such as deskwork [22], household activities [22, 31], sit-
+ting posture [58, 59], wheelchair propulsion [12, 17, 21, 22, 28, 31],   merous advantages – they are portable, robust to visual occlusion,
+and wheelchair transfers [3, 22, 95]. More recently, commercially        work both indoors and outdoors, and are more privacy-preserving –
+available fitness trackers - Apple Watch [1] and Garmin [90] have        making them extremely suitable for everyday motion capture. Com-
+integrated wheelchair settings to measure wheelchair users’ calo-        mercial IMU-based motion capture systems, such as Xsens [97], rely
+ries burned, active minutes, number of pushes, etc.                      on the dense placement of IMUs (17 or more sensors) on each body
+   WheelPoser advances beyond prior work by providing a more             joint to determine the orientations of these joints for pose estima-
+continuous and comprehensive user representation, rather than            tion. Researchers have leveraged such setups to track wheelchair
+focusing solely on coarse-grained activities or wheelchair kine-         users’ upper body kinematics during wheelchair transfer [47] and
+matics. This high-fidelity user representation could further have a      various functional activities [85]. Similarly, Hooke et al. [32] focused
+                                                                         on tracking single-arm kinematics during wheelchair propulsion
+trickle-down effect on higher-level techniques like activity recogni-
+                                                                         by placing three IMUs on the user’s arm and one on their trunk.
+tion [13, 78, 82].
+                                                                         However, the substantial quantity of sensors involved is intrusive
+                                                                         for users and necessitates a time-consuming setup process, which
+2.2     Motion Capture for Wheelchair Users with                         significantly reduces the practicality and usability of such systems.
+        Cameras                                                              In contrast, WheelPoser employs a minimally intrusive setup
+Most commonly, motion capture for wheelchair users relies on com-        with just four IMUs to achieve accurate upper body pose estimation.
+mercial marker-based motion capture systems, such as Vicon [88]          Our approach significantly enhances the practicality while retaining
+and OptiTrack [87], which have been the gold standard for both           all the benefits of IMU-based solutions.
+industrial and research applications due to their millimeter level ac-
+curacy. For instance, these systems have enabled extensive research      2.4    Motion Capture with Sparse IMUs
+into the biomechanics of wheelchair propulsion [14, 48, 49, 54]          To improve the usability and practicality of IMU-based motion cap-
+and transfer [42, 70, 92], as well as the pathology of various upper     ture systems, researchers have recently started to investigate ways
+extremity injuries faced by wheelchair users [8, 39, 51]. The cost       to leverage sparse inertial sensors for pose estimation. Early work
+and setup requirements of these systems however often prohibit           placed accelerometers on the wrists, trunk, and ankles [81, 84, 89]
+consumer use.                                                            and estimated pose by searching for similar accelerations in a prere-
+   More recently, advancements in computer vision have led to            corded motion database. SIP [94] instead employed an optimization-
+the emergence of numerous markerless motion capture systems.             based method to achieve offline full-body pose estimation with only
+RGB-based approaches have been developed to estimate both 2D [4,         6 IMUs. With the release of the large AMASS dataset (over 60 hours
+9, 64, 73] and 3D [24, 41, 45, 77, 86] body pose with varying levels     of motion sequences) [61], researchers started using deep learn-
+of granularity. However, these systems fail for wheelchair users,        ing based methods to predict body pose from IMU measurements.
+often leading to unnatural, incorrect pose estimates, due to a lack      Specifically, DIP [34] first adopted a bidirectional recurrent neural
+of representation in the training data. To enhance the diversity         network (biRNN) to learn the mapping between IMU measure-
+of training data, researchers have recently explored generating          ments and joint rotations from extensive motion capture datasets
+synthetic image data using game engines for model refinement [6,         and showed a real-time human pose estimation with 6 IMUs. Trans-
+33], achieving varying levels of success. Concurrently, depth-based      Pose [99], PIP [98], TIP [40] and IMUPoser [65] all built upon this by
+systems have been employed by rehabilitation scientists to study         introducing new model architectures, prediction tasks and sensor
+the kinematics of wheelchair users. Wei et al. [96] demonstrated         locations to improve pose estimation. However, these systems are
+that skeletal positions tracked by a Microsoft Kinect could be used      only designed for and evaluated with people without motor impair-
+to differentiate between proper and improper wheelchair transfer         ments. They all require placing IMU sensors on users’ pelvis and
+techniques. Similarly, Rammer et al. [79] assessed the repeatability     legs, which is often challenging and uncomfortable for wheelchair
+of the Kinect in extracting spatiotemporal parameters and joint          users. Moreover, all existing systems are trained on motion cap-
+range of motion during wheelchair propulsion and found high inter-       ture datasets predominantly composed of standing and walking
+trial repeatability. Furthermore, Milgrom et al. [63] examined the       motions, which completely lack representation of the diverse range
+ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada                                                                                   Li et al.
+
+
+of wheelchair-related motions [16]. Consequently, these limitations     instrumented with one IMU each to capture arm movements. Tra-
+make them unusable for wheelchair users and ill-equipped to cap-        ditionally, capturing the motion of the user’s torso requires an
+ture their poses accurately.                                            additional IMU placed on their pelvis [34, 40, 98, 99]. However, for
+   In comparison, WheelPoser serves as the first-of-its-kind sparse-    wheelchair users, we recognize that wearing a sensor on the pelvis
+IMU-based motion capture system designed specifically for wheel-        could be not only inconvenient but also uncomfortable, considering
+chair users, from device setup and data synthesis to pose estimation.   their seated posture and the presence of wheelchair backrests for
+We also collect a novel motion capture dataset consisting of 167        trunk support. Therefore, we propose to position this sensor at the
+minutes of on-wheelchair human motions and paired IMU data.             center of the wheelchair axle, which is a standard component in
+This dataset is larger than the combined sizes of similar datasets in   modern wheelchairs. Our intuition is that as modern wheelchairs
+ambulatory settings (DIP [34] and TotalCapture [91]), and serves as     are designed to provide wheelchair users with spinal stabilization,
+an initial step towards creating inclusive motion capture datasets.     the wheelchair’s motion will exhibit strong correlations with the
+                                                                        user’s pelvis motion. To validate our intuition, we conducted a
+3     WHEELPOSER SYSTEM                                                 preliminary study.
+The primary design goals of our system are twofold: 1) to employ a
+sparse-IMU setup for enhanced usability and practicality, and 2) to     3.1.1 Preliminary Study: Examining Wheelchair-Pelvis Motion Cor-
+achieve comprehensive upper body pose estimation in real-time to        relation. To examine our intuition, we conducted a preliminary
+support a wide range of applications. This combination presents         study with three participants without motor impairments (two
+inherent challenges due to the ambiguity in mapping sparse in-          males and one female) sitting on a provided manual wheelchair.
+ertial measurements to a broader set of joint angles. Although          The participants were asked to perform a diverse set of typical
+prior research has demonstrated the feasibility of using deep neural    wheelchair motions, such as wheelchair propulsion and turning
+networks to learn this intricate mapping from large-scale motion        (Sec. 4.2). In addition to the four IMUs of our device setup, we at-
+capture datasets, there is currently no publicly available motion       tached the fifth IMU to the user’s pelvis to capture the actual pelvis
+capture dataset of wheelchair users, let alone a large-scale dataset    motion for comparison. All five IMUs were time-synchronized and
+sufficient for deep neural network training.                            streamed at 30Hz, resulting in a total of 100 minutes of motion data.
+   We address these gaps and challenges from the following three           Our analysis focused on two main aspects. First, we examined
+perspectives: 1) we introduce a sparse-IMU configuration that cap-      the similarity of orientations and accelerations between the user’s
+tures the essential motions of both the user and the wheelchair         pelvis and wheelchair. Second, interrelated with our later discussed
+while minimizing intrusiveness, 2) we propose a data synthesis and      data synthesis and pose estimation pipeline (Sec. 3.2.1), we investi-
+pose estimation pipeline that builds upon this device setup and en-     gated the correlation between the relative accelerations of upper
+ables us to leverage high-quantity and diverse upper body motions       body joints (specifically the wrists and head) in relation to the
+in existing datasets for wheelchair user pose estimation, and 3) we     wheelchair and the user’s pelvis. For ease of reference, we term this
+collect a novel motion capture dataset covering a wide range of         type of acceleration as "normalized acceleration". Additionally, all
+essential wheelchair-related activities and fine-tune our pre-trained   IMU signals were transformed from the sensor-coordinate frame
+pose estimation model to bridge the gap between on-wheelchair           to a body-centric frame for analysis, where the x-axis points to
+activities and existing motion types.                                   the left, the y-axis points upward, and the z-axis points forward,
+                                                                        ensuring consistency with the human kinematic model used in our
+3.1     Device Setup                                                    study (Sec. 3.2.1).
+                                                                           Orientation: To measure the similarities between the orientations
+                                                                        of the user’s pelvis and the wheelchair, we used the distance metric
+                                                                        (Equation 1) proposed by Huynh [35] where 𝑞 1 and 𝑞 2 are unit
+                                                                        quaternions, and the function 𝜙 gives values in the range [0, 1],
+                                                                        with 0 representing that the two quaternions are identical. Using
+                                                                        this metric, the average distance between the orientation of the
+                                                                        user’s pelvis and the orientation of the wheelchair is 0.007 (std =
+                                                                        0.011), indicating that the two orientations are indeed quite similar.
+                                                                        We also qualitatively examined this similarity by using their Euler
+                                                                        angle representations and found consistent correlations across all
+                                                                        samples (Figure 3).
+
+Figure 2: WheelPoser uses four IMUs strategically placed on                                    𝜙 (𝑞 1, 𝑞 2 ) = 1 − |𝑞 1 · 𝑞 2 |                (1)
+the user’s forearms and head, as well as their wheelchair.
+                                                                           Acceleration: For accelerations, we assessed similarity by calcu-
+  Our system comprises four IMUs strategically positioned on the        lating correlation coefficients along each axis (ranging from 0 to 1,
+user’s body and their wheelchair to capture crucial aspects of the      with 1 indicating identical signals). Here and throughout the rest of
+user’s upper body motion (Figure 2). Specifically, one IMU is placed    this paper, we note that "acceleration" refers specifically to gravity-
+on the user’s head, primarily to capture the user’s head movements      subtracted linear acceleration. The resulting coefficient matrices
+but also certain upper body motions. The user’s forearms are also       for each axis are illustrated in Figure 4. Specifically, the coefficients
+WheelPoser: Sparse-IMU Based Body Pose Estimation for Wheelchair Users                             ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada
+
+
+
+
+                    Angle (rad)
+                    Angle (rad)
+                    Angle (rad)
+
+
+
+
+Figure 3: Sample orientation measurements (Euler angles) of two IMUs attached to the user’s pelvis and the wheelchair’s central
+axle. The orientations are highly correlated, affirming the close relationship between the pelvis and wheelchair axle motion.
+
+
+
+
+Figure 4: Correlation coefficient matrices displaying normalized accelerations of the left wrist (LW), right wrist (RW), head (H),
+pelvis (P), and wheelchair (C), where, for instance, LW-C represents the normalized acceleration of the left wrist with respect
+to the wheelchair. normalized accelerations with respect to the pelvis and wheelchair are highly correlated.
+
+
+between the user’s pelvis acceleration and the wheelchair’s acceler-        base model with a broad understanding of upper body pose patterns
+ation are 0.67, 0.38, and 0.70, respectively, indicating a fairly strong    using diverse upper body motions found in existing datasets and
+correlation. The lower coefficients along the y-axis can be attributed      later fine-tune this model with a small amount of data to bridge the
+to noise, as there is minimal motion along the axis perpendicular           gap between existing motions and wheelchair mobility. Here we
+to the ground. For the normalized accelerations of the user’s wrists        describe our data synthesis pipeline followed by the architectures
+and head with respect to the user’s pelvis and the wheelchair, the          of three neural networks we adapt from SOTA pose estimation
+average coefficients for the left wrist, right wrist, and head are 0.989,   models using sparse-IMUs.
+0.99, and 0.926, respectively, which demonstrate strong correlations
+for pose estimation.
+   Summary: Based on this preliminary study, we have confirmed              3.2.1 Data Synthesis. To train the neural networks in our kine-
+the correlation between the motion of the user’s pelvis and that of         matics module, we need a sufficiently large dataset that contains
+the wheelchair, validating the effectiveness of our device setup for        both IMU measurements and human pose ground truths. Follow-
+capturing the upper body pose of wheelchair users. Additionally,            ing previous work, we adopt the SMPL body model [56] as our
+the correlations observed between the normalized accelerations              kinematic model and the AMASS dataset [61] to train our base
+hold promise for leveraging diverse upper body motions in existing          model. The AMASS dataset is a composition of existing motion
+datasets collected from individuals without motor impairments.              capture datasets and contains SMPL pose parameters for more than
+Furthermore, we envision that this configuration could be seam-             60 hours of motions performed by over 300 subjects without motor
+lessly integrated with devices that users already carry on a daily          impairments. However, as the AMASS dataset does not contain
+basis, such as smartwatches and earbuds, as well as with low-cost           IMU sensor data, we synthesize inertial data by attaching virtual
+devices in the chairable form factor [10, 65].                              IMUs to the corresponding vertices of our selected joints on the
+                                                                            SMPL mesh, similar to DIP [34]. We then calculate the sequential
+                                                                            positions, accelerations, and rotations of these vertices in the global
+3.2     Learning-based Kinematics Module                                    reference frame using the SMPL body model (Equation 2). Here,
+WheelPoser uses a deep neural network to predict upper body                 𝑥𝑖 (𝑡) and 𝑎𝑖 (𝑡) represent the position and the acceleration of the
+joint angles from sparse-IMU measurements. We propose a data                𝑖 th IMU at the frame 𝑡 respectively, and Δ𝑡 represents the time
+synthesis and pose estimation pipeline that enables us to first train a     interval between two adjacent frames which is 60    1 𝑠, as we set the
+ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada                                                                                      Li et al.
+
+
+frame rate to 60 Hz. Following prior work, we set 𝑛 = 4 to mitigate                   and the output from the second stage to predict the SMPL
+motion jitters in the data.                                                           pose parameters. The LSTM cells in each stage have hidden
+                                                                                      dimensions of 256, 64, and 128, respectively.
+                  𝑥𝑖 (𝑡 − 𝑛) + 𝑥𝑖 (𝑡 + 𝑛) − 2𝑥𝑖 (𝑡)                                 • Transformer decoder: We also compare against using a
+          𝑎𝑖 (𝑡) =                                  , 𝑖 = 1, 2, 3, 4 (2)
+                               (𝑛Δ𝑡) 2                                                transformer-based model for pose estimation. We follow a
+   Informed by our preliminary study, we also normalize the syn-                      similar structure to TIP [40] and use an autoregressive trans-
+thetic upper body IMU data with respect to the pelvis joint. Specifi-                 former decoder (4 layers, 16 heads, model dimension 256)
+cally, we have the synthetic accelerations [𝑎𝑝𝑒𝑙 𝑣𝑖𝑠 , 𝑎𝑙𝑎𝑟𝑚 , 𝑎𝑟𝑎𝑟𝑚 ,                followed by a 1-layer RNN to estimate SMPL pose parame-
+𝑎ℎ𝑒𝑎𝑑 ] ∈ R3×4 and rotations [𝑅𝑝𝑒𝑙 𝑣𝑖𝑠 , 𝑅𝑙𝑎𝑟𝑚 , 𝑅𝑟𝑎𝑟𝑚 , 𝑅ℎ𝑒𝑎𝑑 ] ∈                    ters. Different from TIP, we use a physics-based optimization
+R3×3×4 in the same global frame aligned with the SMPL reference                       module (Sec. 3.3) and do not estimate stable body points or
+frame. We normalize the inertial measurements of the leaf joints                      root velocity.
+(left arm, right arm, and head) with respect to the pelvis joint as:
+                               −1
+                                                                              3.3     Physics-based Optimization Module
+                     𝑎˜𝑙𝑒𝑎𝑓 = 𝑅𝑝𝑒𝑙 𝑣𝑖𝑠 (𝑎𝑙𝑒𝑎𝑓 − 𝑎𝑝𝑒𝑙 𝑣𝑖𝑠 )            (3)
+                                                                              So far, our pose estimation pipeline has only considered kinematic
+                            𝑅˜𝑙𝑒𝑎𝑓 = 𝑅𝑝𝑒𝑙
+                                      −1
+                                                                      (4)     information neglecting human motion dynamics, which can result
+                                          𝑣𝑖𝑠 𝑅𝑙𝑒𝑎𝑓
+                                                                              in unnatural and jittery motion in real-time pose estimation as
+and the inertial measurements of the pelvis joint as:                         shown in previous work [40, 98, 99]. Additionally, in light of the
+                                       −1
+                          𝑎˜𝑝𝑒𝑙 𝑣𝑖𝑠 = 𝑅𝑝𝑒𝑙                            (5)     potential applications of our system, such as health monitoring
+                                           𝑣𝑖𝑠 𝑎𝑝𝑒𝑙 𝑣𝑖𝑠
+                                                                              and sports analytics, where access to information about the joint
+                              𝑅˜𝑝𝑒𝑙 𝑣𝑖𝑠 = 𝑅𝑝𝑒𝑙 𝑣𝑖𝑠                    (6)     torque of wheelchair users’ upper body can be extremely helpful, we
+                                                                              have decided to incorporate a physics-based optimization module
+3.2.2 Kinematics Module Network Architecture. The input to our
+                                                                              to address both of these aspects without adding any additional
+kinematics module is a concatenated vector of size 48, which in-
+                                                                              sensors into our system.
+cludes the normalized accelerations [𝑎˜𝑝𝑒𝑙 𝑣𝑖𝑠 , 𝑎˜𝑙𝑎𝑟𝑚 , 𝑎˜𝑟𝑎𝑟𝑚 , 𝑎˜ℎ𝑒𝑎𝑑 ]
+∈ R3×4 , and normalized orientations expressed in rotation matrix                                  𝜃¥𝑟𝑒 𝑓 = 𝑘𝑝 (𝜃𝑘 − 𝜃 ) − 𝑘𝑑 𝜃¤               (7)
+format [𝑅˜𝑝𝑒𝑙 𝑣𝑖𝑠 , 𝑅˜𝑙𝑎𝑟𝑚 , 𝑅˜𝑟𝑎𝑟𝑚 , 𝑅˜ℎ𝑒𝑎𝑑 ] ∈ R3×3×4 , captured from          Inspired by PIP [98], our physics-based optimization module first
+the four IMUs. The output of our kinematics module is a vector of 96          employs a joint rotation proportional-differential (PD) controller
+SMPL pose parameters - 16 upper body joints represented as 6D rota-           to compute the reference joint angular acceleration 𝜃¥𝑟𝑒 𝑓 from the
+tions [101]. Here, unlike previous approaches that directly measure           joint angles 𝜃𝑘 estimated by the learning-based kinematics module
+pelvis rotation using the IMU placed on the pelvis [34, 40, 98, 99],          (Equation 7, 𝜃 and 𝜃¤ are the joint angles and angular velocities,
+we opt to predict the pelvis pose in the global reference frame.              respectively). The gain parameters 𝑘𝑝 and 𝑘𝑑 are set to 3600 and
+This approach compensates for discrepancies between the orien-                60, respectively, following prior work [98]. These reference accel-
+tations of the user’s pelvis and the wheelchair, offering a more              erations are then refined using quadratic programming to comply
+accurate representation of the movement dynamics of wheelchair                with a set of physical constraints, including the equation of mo-
+users. Specifically, we propose three candidate network architec-             tion [20] as well as no-sliding restrictions for all contact points
+tures for our kinematics module adapted from existing work on                 between the user and the environment. For a more detailed expla-
+sparse-IMU-based pose estimation:                                             nation of the quadratic programming problem, we refer readers to
+     • Single-stage biRNN: Inspired by DIP [34] and IMUPoser [65],            PIP [98] and PhysCap [83]. Here, unlike previous approaches that
+       this architecture contains a two-layer bidirectional recur-            primarily model foot-ground contacts during walking, we focus on
+       rent neural network (biRNN) with long short-term memory                the contact between the user and the wheelchair, defining contact
+       (LSTM) cells of hidden dimension 256. We first transform the           joints as the left hip, right hip, left foot, and right foot based on
+       input vector to this hidden dimension with a ReLU-activated            common wheelchair sitting scenarios. Moreover, considering that
+       linear layer. Next, we feed these embeddings sequentially              user-wheelchair contact points move together, we optimize the
+       into the LSTM after which they are transformed linearly into           pose in the pelvis-relative frame rather than the global frame used
+       estimated SMPL pose parameters.                                        in the existing work. Finally, we perform double integration on the
+     • Three-stage biRNN: Previous research has demonstrated                  refined joint angular accelerations to derive the optimized pose.
+       that utilizing joint positions as an intermediate represen-
+       tation greatly enhances a model’s ability to learn complex
+       human motion priors. The second network in our study ac-
+       cordingly adopts a three-stage structure, inspired by Trans-
+       Pose [99]. Here, each stage features a biRNN with a structure
+       similar to the single-stage biRNN previously described. The            Figure 5: Overview of the physics-based optimization module:
+       first stage predicts the positions of the head, left wrist, and        It calculates reference joint angular acceleration from the
+       right wrist joints based on the input vector. Subsequently,            kinematics module’s estimates. These accelerations are then
+       the second stage utilizes both the initial input vector and the        refined with physical constraints and double-integrated to
+       output from the first stage to predict all upper body joint            produce optimized poses.
+       positions. The final stage then uses both the input vector
+WheelPoser: Sparse-IMU Based Body Pose Estimation for Wheelchair Users                                   ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada
+
+
+                    ID     Gender      Age     Height (cm)       Arm length (cm)     Time Using Wheelchair        Wheelchair Model
+                    W1      Male        48         179                58.4                 27 years                TiLite Aero X
+                    W2      Male        44         183                61.1                 12 years                TiLite Aero T
+
+                               Table 1: Demographic information of full-time wheelchair user participants.
+
+
+
+4     WHEELPOSER-IMU DATASET                                                       Participants first received instructions on various wheelchair move-
+As there is no existing motion capture dataset that encompasses typ-               ment techniques and were then allowed to familiarize themselves
+ical movements performed by wheelchair users, we sought to collect                 with these motions until they felt confident. Practice times ranged
+our own. Our dataset, WheelPoser-IMU, contains 167 minutes of                      from 16 minutes to 50 minutes. Full-time wheelchair user partici-
+paired motion capture and IMU sensor data from 14 participants                     pants were asked to use their own manual wheelchairs (TiLite Aero
+(including 2 full-time wheelchair users and 12 participants without                T and Aero X) for data collection to ensure comfort and external
+motor impairments) performing various on-wheelchair daily activ-                   validity, while other participants were provided with a PER4MAX
+ities. Here we describe our data collection apparatus, procedure,                  Thunder lightweight manual wheelchair. Before starting our study,
+participant demographics, and data processing pipeline.                            we performed a vendor-recommended magnetic field calibration
+                                                                                   and heading reset procedure on the four IMUs to account for mag-
+                                                                                   netic offsets. Following this, the IMU sensors were attached to the
+4.1     Data Collection Apparatus
+                                                                                   participant and their wheelchair (Figure 2). We then performed a
+Our data collection setup comprised four Movella DOTs [69], each                   calibration process to map the IMU measurements to a body-centric
+configured to sample data at a rate of 60 Hz, which is the maximum                 frame and to compensate for the offset between the sensor and the
+sampling rate supported for real-time streaming. The four Movella                  corresponding bone. For further details on calibration, we refer
+DOTs were time-synchronized and communicated over Bluetooth                        readers to [34] and [99].
+to a nearby laptop for recording and processing. To capture ground                    During our study, we collected the following typical motions
+truth pose, we employed a Vicon Motion Capture System consisting                   that wheelchair users would perform on a daily basis, following
+of twelve MX40 cameras and four T160 cameras, operating at a                       established wheelchair skill testing procedures [55]:
+sampling rate of 120 FPS. The participants were instrumented with
+60 retroreflective markers (Figure 6). The Vicon motion capture                        • Arm Motion: Left arm raises (0, 45, 90 degrees), left arm
+data was down-sampled and synchronized with the concurrently                             raising overhead, left arm crossing the torso, right arm raises
+collected IMU data streams. Following prior work [34], we further                        (0, 45, 90 degrees), right arm raising overhead, right arm
+fit an SMPL mesh to this motion capture data using Mosh++ [61].                          crossing the torso, both arms raises (0, 45, 90 degrees), both
+                                                                                         arms raising overhead, both arms crossing the torso, both
+4.2     Participants and Procedure                                                       arms crossing behind the head, both arms swinging.
+                                                                                       • Upper Body: Rotation to the left, rotation to the right, Lean-
+We recruited 14 participants in total for our data collection study,
+                                                                                         ing forward, leaning to the left, leaning to the right, leaning
+including 2 full-time manual wheelchair users and 12 participants
+                                                                                         diagonally to the left, leaning diagonally to the right.
+without motor impairments. The two full-time wheelchair user par-
+ticipants had been using a wheelchair for 27 and 12 years, respec-
+tively. Detailed demographics information are show in Table 1 and 2.
+                                                                                        ID     Gender    Age     Height (cm)        Arm length (cm)
+                                                                                        P1      Male      28         175                 56.7
+                                                                                        P2      Male      28         180                 58.3
+                                                                                        P3     Female     27         164                 54.2
+                                                                                        P4      Male      24         174                 58.5
+                                                                                        P5      Male      23         183                 61.6
+                                                                                        P6     Female     25         168                 53.9
+                                                                                        P7     Female     27         165                 54.9
+                                                                                        P8      Male      32         173                 56.7
+                                                                                        P9     Female     28         160                 51.1
+                                                                                        P10     Male      24         172                 54.7
+                                                                                        P11    Female     27         161                 52.8
+                                                                                        P12    Female     27         160                 52.3
+Figure 6: The WheelPoser-IMU data collection setup in-
+cludes four IMUs placed on both the participant and their                          Table 2: Demographic information of participants without
+wheelchair, along with 60 retroreflective markers attached                         motor impairments.
+across bony landmarks on the participant’s body.
+ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada                                                                                 Li et al.
+
+
+      • Wheelchair Locomotion: Push forward, push backward,
+        push forward in a circle, push backward in a circle, turn
+        while moving forward, turn-in-place, pivot turn.
+
+   Participants performed these motions in a continuous manner
+within a recording session (e.g. arm motions) in order to capture
+natural transitions between categories. Before the start of each
+recording session, participants were asked to perform five rapid
+arm raises (the upper body motion seen in typical jumping jacks),
+to help synchronize motion capture data with IMU sensor data.
+Data collection typically took 45 minutes for participants without
+motor impairments and 1 hour for wheelchair user participants. We
+note that this 15-minute difference was primarily due to longer rest
+periods between sessions for wheelchair user participants. We also
+encountered more instances of mocap markers falling off for these
+participants, requiring extra time to reposition. The total duration
+                                                                         Figure 7: Exemplary motion sequences and poses collected
+of collected motions was consistent across all participants. Com-
+                                                                         in the WheelPoser-IMU dataset.
+pensation of $15 and $75 was provided to each participant without
+motor impairments and wheelchair user participant, respectively.
+
+
+4.3     Data Processing                                                  5.1    Dataset and Metrics
+The collected IMU data was first interpolated for missing packets        For training the kinematics modules, we first utilize data synthe-
+and later synchronized with the SMPL mesh data based on the              sized from AMASS, followed by fine-tuning using our collected
+acceleration markers. In addition to the calibration performed at the    WheelPoser-IMU dataset. To assess the effectiveness and external
+beginning of the data collection, the IMU data for each individual       validity of our proposed method, we conducted a leave-one-subject-
+session were further calibrated based on the corresponding joint         out evaluation study exclusively on the full-time wheelchair users’
+orientation of the first frame of the SMPL mesh to compensate            data. Specifically, we upsample data from a single wheelchair user
+for drift errors that occurred during the data collection process.       and combine it with data from 12 participants without motor im-
+Later, the arm-raising motions at the beginning of each session          pairments to create a fine-tuning dataset, of which 40% comprises
+were discarded, resulting in an overall 167 minutes of synchronized      the single full-time wheelchair user’s data. The fine-tuned model
+IMU and SMPL data on various wheelchair-use-related motions,             is then evaluated on the excluded wheelchair user’s data, and we
+which is nearly twice the size of previously collected ambulatory        report the averaged results from two full-time wheelchair users. We
+motion dataset (DIP-IMU and TotalCapture).                               use the following commonly used metrics to quantitatively evaluate
+                                                                         estimated poses:
+
+5     EVALUATION                                                            (1) Joint angular error, which measures the mean global rotation
+                                                                                error of estimated upper body joints in degrees.
+In this section, we first outline the dataset and metrics used for the
+                                                                            (2) Joint position error, which measures the mean Euclidean
+model training and evaluation in Sec. 5.1. Leveraging these datasets
+                                                                                distance error of estimated upper body joints in centimeters
+and metrics, we then quantitatively evaluate the performance of
+                                                                                with the pelvis joint aligned.
+SOTA models designed for people without motor impairments and
+                                                                            (3) Mesh error, which measures the mean Euclidean distance
+our proposed kinematics modules in Sec. 5.2. Using the kinematics
+                                                                                error of all vertices of the estimated upper body mesh also
+module that achieves the best results, we evaluate the effective-
+                                                                                with the pelvis joint aligned and body model in mean shape
+ness of our proposed physics-based optimization module in Sec. 5.3.
+                                                                            (4) Jitter error, which measures the average jerk of estimated up-
+Lastly, we delve into a detailed exploration of the model’s perfor-
+                                                                                per body joints, which is the third derivative of position with
+mance across various on-wheelchair motion types in Sec. 5.4.
+                                                                                respect to time and reflects the naturalness of the motion.
+   All training and evaluation processes were conducted on a com-
+puter with an Intel(R) Core(TM) i7-13700KF CPU and an NVIDIA                Moreover, we incorporate wrist joint position error and elbow
+RTX 4080 graphics card. The kinematics modules were trained with         joint position error as two additional metrics. This stems from
+a batch size of 256 using the Adam optimizer and a learning rate of      the significance of wrist position in determining the propulsion
+0.001. We trained all kinematics modules using the mean squared          pattern of wheelchair users [7], while elbow positions provide
+error (MSE) loss function. In line with previous work, a sliding         valuable insights into the upper extremity’s range of motion and the
+window of 26 IMU measurement frames was used for real-time               associated risk for overhead reaching [53]. To obtain the estimated
+pose estimation. Specifically, for biRNN-based modules, the win-         joint positions and body mesh, we used the mean SMPL shape
+dow includes 20 past frames, 1 current frame, and 5 future frames,       parameters, ensuring consistency with prior work and mimicking
+whereas for the transformer-based module, it comprises 25 past           real-world scenarios where users’ specific shape parameters are
+frames and 1 current frame.                                              typically unavailable.
+WheelPoser: Sparse-IMU Based Body Pose Estimation for Wheelchair Users                                       ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada
+
+
+           Models                Ang Err (deg)      Pos Err (cm)         Mesh Err (cm)   Jitter (102 /m3 )    Wrist Pos Err (cm)         Elbow Pos Err (cm)
+       IMUPoser [65]              45.20 (10.07)      18.27 (5.29)         39.13 (5.71)     17.59 (26.81)         24.27 (10.27)               15.59 (6.69)
+      TransPose [99]              44.31 (5.97)       19.05 (4.77)         40.16 (3.92)      3.34 (5.72)          23.20 (9.21)                17.15 (6.79)
+          PIP [98]                63.97 (20.07)      23.09 (6.11)         49.44 (7.80)      3.13 (23.03)         28.42 (12.56)               22.76 (9.23)
+          TIP [40]                44.19 (6.12)       18.56 (3.87)         40.34 (3.52)      8.45 (8.68)          21.34 (7.42)                14.91 (5.87)
+ Single-stage biRNN (ours)         15.09 (5.55)       7.12 (3.15)          8.89 (2.92)      3.09 (4.65)          13.56 (6.19)                11.38 (5.53)
+ Three-stage biRNN (ours)         14.23 (5.26)       6.71 (2.95)           8.09 (2.72)      4.13 (6.04)          12.76 (5.81)                11.15 (5.16)
+ Transformer-based (ours)         14.46 (5.48)        6.96 (3.30)         7.88 (2.74)      19.39 (17.72)         12.81 (6.58)                11.66 (6.10)
+
+Table 3: Results for upper body pose estimation across various models: mean (std). We compare our candidate models with
+prior pose estimation models that utilize sparse IMUs, including IMUPoser [65], TransPose [99], PIP [98], and TIP [40].
+
+
+
+5.2     Evaluation of Kinematics Module                                               Additionally, we visually compare the pose estimation results
+The quantitative comparisons of the different kinematics modules                   between our proposed kinematics modules and SOTA models to
+are shown in Table 3, where the mean and standard deviation for                    provide an intuitive understanding of the sources of error and model
+each metric are presented. In addition to assessing the performance                differences. For presentation clarity, we showcase the results of our
+of the three proposed kinematics modules, we also evaluate four                    three-stage biRNN-based kinematics module alongside TransPose.
+state-of-the-art (SOTA) models designed for people without motor                   Additionally, we present the reference and predicted poses in a
+impairments, including IMUPoser [65], TransPose [99], PIP [98],                    full-body manner by matching the lower body joint angles to the
+and TIP [40]. We use the officially released versions provided by the              ground truth, thereby providing an intuitive demonstration of the
+authors and test them on data from the two full-time wheelchair                    pelvis joint angle.
+users. Given that most existing models necessitate a sensor setup                     A major source of difference arises from the estimation of pelvis
+of 6 IMUs (with two additional sensors on the legs or thighs), we                  orientation. Specifically, as illustrated in Figure 8, models trained
+compensate for missing IMU data from the legs using the IMU                        and fine-tuned solely on ambulatory motion consistently exhibit
+data of the wheelchair and solely compare the upper body pose                      bias towards pelvis orientation in standing poses. In contrast, our
+estimation results to ensure fair comparisons.                                     models can compensate for differences in pelvis orientation. Addi-
+                                                                                   tionally, wheelchair users often need to perform overhead reaching
+                                                                                   and far-reaching actions in their everyday lives due to their sitting
+5.2.1 SOTA Models versus Our Candidate Models. First, it is evident
+                                                                                   configuration and environmental accessibility barriers. However,
+that all existing models trained and fine-tuned solely on datasets
+                                                                                   as depicted in Figure 8a, models trained exclusively on ambulatory
+from individuals without motor impairments are incapable of ef-
+                                                                                   motions display biases in shoulder and arm bending angles and fail
+fectively predicting on-wheelchair motions. This demonstrates
+                                                                                   to predict straight arm motions accurately. In contrast, our models
+a substantial disparity between on-wheelchair motion patterns
+                                                                                   demonstrate better performance in capturing this essential aspect
+and those present in existing datasets collected in ambulatory-
+                                                                                   of wheelchair users’ motion. Similarly, wheelchair users often need
+dominated scenarios, such as standing and walking. In contrast,
+                                                                                   to rotate or bend their torso for essential activities like pressure
+our proposed models consistently exhibit significantly better per-
+                                                                                   relief. In response, our models exhibit improved performance in
+formance than existing models, demonstrating the effectiveness of
+                                                                                   predicting corresponding trunk joint angles, as shown in Figure 8b.
+our proposed data synthesis method, pose estimation pipeline, and
+the WheelPoser-IMU dataset.
+
+
+
+
+   (a) Arm reaching motion                         (b) Torso rotation.                                       (c) Wheelchair locomotion.
+
+       Figure 8: Qualitative comparison of pose estimation results between TransPose and our three-stage biRNN model.
+ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada                                                                                         Li et al.
+
+
+          Models            Ang Err (deg)        Pos Err (cm)    Mesh Err (cm)   Jitter (102 /m3 )   Wrist Pos Err (cm)    Elbow Pos Err (cm)
+       TransPose [99]         44.31 (5.97)        19.05 (4.77)    40.16 (3.92)       3.34 (5.72)         23.20 (9.21)          17.15 (6.79)
+          PIP [98]           63.97 (20.07)        23.09 (6.11)    49.44 (7.80)      3.03 (23.03)        28.42 (12.56)          22.76 (9.23)
+      Kinematics Only         14.23 (5.26)         6.71 (2.95)     8.09 (2.72)       4.13 (6.04)         12.76 (5.81)          11.15 (5.16)
+        With physics         14.30 (5.31)         6.74 (2.98)      8.10 (2.73)      2.71 (4.21)         12.86 (5.90)           11.19 (5.21)
+
+Table 4: Results of the physics-based optimization module. Here we compare the effectiveness of our module against PIP which
+focused on foot-ground contact modeling. WheelPoser’s physics module reduces jitter error by more than 30%.
+
+
+
+   Another significant difference between our model and existing                 errors in contact probability lead to errors in pose. However, during
+models for individuals without motor impairments lies in pose                    wheelchair locomotions, the feet “slide” with respect to the ground,
+prediction during wheelchair locomotion, such as propulsion and                  which PIP fails to predict accurately, due to this bias. Additionally,
+turning. As indicated in Figure 8c, our models exhibit significantly             PIP optimizes the pose in the global frame, where the ground and
+better performance in predicting the pose of upper extremities and               footrest should be considered as different objects, leading to further
+torso during such motions. More comparisons can be found in our                  errors. Taken together, these factors cause their approach to fail in
+Video Figure.                                                                    wheelchair usage cases. In contrast, our physics-based optimiza-
+                                                                                 tion module is designed specifically for on-wheelchair motions
+5.2.2 Results Across Our Candidate Models. On comparing the per-                 and significantly reduces the jitter error by more than 30% while
+formance of the three variations of our proposed kinematics module,              maintaining performance across other metrics.
+the single-stage biRNN-based model shows the lowest jitter error,                   The inclusion of a physics module offers other advantages. For
+the transformer-based model exhibits the lowest vertex error, while              instance, we can now estimate the joint torques of the user, which
+the three-stage biRNN-based model outperforms the others across                  are critical to applications like upper extremity health monitor-
+the remaining metrics. The enhanced performance of the three-                    ing, which we will discuss in Sec. 6.4. Figure 9 shows exemplary
+stage biRNN in estimating joint angles and positions aligns with                 estimated joint torques. We can see that in order for the user to
+prior research on people without motor impairments [99], high-                   accelerate their arm for the lifting motion, their right shoulder pro-
+lighting the efficacy of utilizing joint positions as an intermediate            duces a large positive torque (1) and as the arm reaches its highest
+representation for learning complex human motion priors in on-                   point, the right shoulder slows the arm down by producing a large
+wheelchair movements. We also observe a significantly high jitter                negative torque (3). And the estimated joint torque is lower when
+error from the transformer-based model, similar to TIP [40]. Further-            the user’s arm is moving at a steady speed (2).
+more, the three-stage biRNN-based model presents a higher jitter
+error compared to the single-stage model. This difference may arise
+from the presence of noisy joint position outputs in the early-stage
+networks of our model, as opposed to the end-to-end mapping from
+IMU measurements to pose employed in the single-stage biRNN
+model. Overall, given the enhanced pose estimation performance
+and relatively low jitter error of the three-stage biRNN-based kine-
+matics model, we select it as the kinematics model for WheelPoser
+and further evaluation of the physics-based optimization module.
+
+5.3     Evaluation of Physics Module
+We assess the effectiveness of our physics-based optimization mod-
+ule in reducing the jitter error of the predicted pose generated by
+the kinematics module. The detailed results are shown in Table 4.
+Here, we revisit the performance metrics of TransPose and PIP for
+comparison, as TransPose is a kinematics-only model, whereas PIP
+incorporates physics-based modeling for foot-ground contact in am-
+bulatory motion. Notably, PIP achieves much worse pose estimation
+results for on-wheelchair motions compared to its kinematics-only
+counterpart. We attribute this to its focus on modeling foot-ground
+contact, which is not directly applicable to and actually hinders pose
+estimation performance in wheelchair-use scenarios. Specifically, as
+PIP predicts foot-ground contact probability using a model trained
+on ambulatory motions, it is inherently biased towards predicting                Figure 9: Visualization of estimated joint torques of the right
+one or both feet in contact with the ground. These probabilities are             shoulder joint and its corresponding motion sequences.
+then used to refine the pose with a physics-based optimizer, where
+WheelPoser: Sparse-IMU Based Body Pose Estimation for Wheelchair Users                                 ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada
+
+
+      Motion Types        Ang Err (deg)      Pos Err (cm)       Mesh Err (cm)   Jitter (102 /m3 )   Wrist Pos Err (cm)       Elbow Pos Err (cm)
+       Arm motion          16.60 (5.41)       7.61 (3.36)         9.70 (2.52)      1.65 (2.61)         14.81 (6.88)              11.71 (5.66)
+       Upper body          15.73 (5.74)       7.68 (3.12)        10.44 (3.10)      1.43 (1.76)         13.56 (5.73)              11.11 (5.30)
+       Translation         13.57 (4.21)       5.98 (2.77)         8.18 (3.16)      2.83 (3.55)         10.83 (5.23)               9.91 (4.64)
+         Rotation          13.51 (4.87)       6.61 (2.64)         7.56 (2.20)      2.81 (3.91)         12.97 (5.45)              11.74 (4.81)
+        Combined           14.30 (5.31)       6.74 (2.98)         8.10 (2.73)      3.21 (4.33)         11.91 (5.60)              10.56 (4.90)
+
+                              Table 5: Results for upper body pose estimation across different motion types.
+
+
+
+5.4     Performance across Motion Types                                         5.5    Live Demo
+In this section, we delve into a detailed analysis of our model’s per-          We further implement a real-time live pose estimation system using
+formance across various wheelchair motion types. Specifically, we               4 Movella DOTs and Unity. Our system runs in real-time at 60 fps
+categorize our collected wheelchair motion types into five distinct             on a Dell G16 Laptop with an Intel Core i7 12700H CPU and an
+groups, comprising: 1) arm motion and 2) upper body motion as                   NVIDIA 3060 mobile GPU. From the live demos, we can see that our
+detailed in Sec. 4.2, 3) translational wheelchair locomotion (push-             system achieves high accuracy and real-time pose estimation for
+ing forward and backward), 4) rotational wheelchair locomotion                  various motion types (refer to Video Figure). It is able to effectively
+(turning in place and executing a pivot turn), and 5) combined                  handle diverse lighting conditions, visual occlusions, as well as
+wheelchair locomotion (pushing forward in a circle, pushing back-               different environmental contexts. It also demonstrates promising
+ward in a circle, and turning while moving forward). The results of             potential to generalize to different wheelchair models. We note that
+these analyses are presented in Table 5. Specifically, we observe that          our frame rate is bottlenecked by the frame rate (60 fps) of Movella
+our model demonstrates comparable performance on wheelchair                     DOTs. Processing a window of 26 IMU frames in real-time (details
+location motions, including translational, rotational, and combined             in Sec. 5) takes 10.57 ms on our hardware, meaning WheelPoser
+wheelchair motions, yet experiences a drop in performance on                    could potentially run live at over 90 fps with faster IMUs.
+stationary motions such as arm and upper body movements. For
+instance, arm motions demonstrate the largest wrist position error              6     EXAMPLE APPLICATIONS
+and joint angle error, and upper body motions demonstrate the
+                                                                                We envision WheelPoser to enable a wide range of applications
+largest error in joint position and body mesh. We attribute these
+                                                                                across various fields by making IMU-based pose estimation inclu-
+increased errors in arm motions to biases in the elbow and shoulder
+                                                                                sive and practical for everyday uses. The following application
+bending angles present in AMASS dataset. Specifically, straight arm
+                                                                                concepts highlight how WheelPoser can be used by both full-time
+movements and overhead arm motions are underrepresented in
+                                                                                and novice wheelchair users as well as other relevant stakeholders
+AMASS. Yet, they constitute a significantly larger portion of our
+                                                                                in the future.
+dataset, reflecting typical wheelchair use characteristics. Regarding
+the higher errors found in upper body motions, we believe they
+are tied to the low accelerations of the user’s head during these               6.1    Facilitating Wheelchair Skill Training
+movements. Specifically, as our model largely relies on the single              The World Health Organization (WHO) Guidelines on the Provi-
+IMU positioned on the user’s head to infer the trunk motion, the                sion of Wheelchairs [76] necessitates the importance of receiving
+low accelerations hinder the model’s ability to accurately predict              wheelchair skill training for wheelchair users. However, the manner
+joint positions and consequently the body mesh. For qualitative                 in which people receive their wheelchairs varies widely and many
+understanding, we also showcase samples of estimated pose colored               wheelchair users report having limited wheelchair skill training
+based on mesh error in Figure 10.                                               and education resources around [44, 53]. Applications that aim to
+
+
+
+
+Figure 10: Sample estimated poses of our model categorized by its types. The rendered pose is colored based on the mesh error.
+ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada                                                                                 Li et al.
+
+
+facilitate wheelchair skill training in both clinical and community      both rehabilitation-focused and recreational games to more diverse
+contexts can be built on top of our pose estimation system. For          settings, such as outdoor environments and mobile contexts.
+instance, the propulsion patterns used by wheelchair users when
+self-propelling are critical parameters that can describe the quality    6.4    Enhanced Data-Driven Collaborative Care
+of their wheelchair propulsion techniques and significantly influ-       Expanding beyond the aforementioned application domains, we
+ence the likelihood of experiencing an upper extremity injury [74].      envision WheelPoser enabling a variety of applications involving
+Despite the limited skill training resources, clinic-based training      other stakeholders, such as rehabilitation scientists, physical thera-
+further suffers from the cognizant effect, and existing systems can      pists, assistive technology specialists, occupational therapists, and
+only classify basic wheelchair propulsion patterns, such as semi-        caregivers. For instance, the pose and joint torque of wheelchair
+circular and half-moon patterns [12, 21, 28]. Our practical pose         users outside of clinics hold immense potential to advance reha-
+estimation system could track more fine-grained propulsion tra-          bilitation scientists’ understanding of the pathology of issues like
+jectories in wheelchair users’ everyday lives, allowing for more         upper extremity injuries [62]. It can also inform physical thera-
+personalized training guidance to facilitate the adoption of efficient   pists about the effectiveness of dosed treatment and patient compli-
+propulsion techniques. Similarly, wheelchair users’ poses during         ance [53]. Furthermore, metrics like the count of overhead reaching
+wheelchair transfers can be tracked and analyzed for safe trans-         can reflect the accessibility of certain physical environments and
+fer technique training. Further, alerts based on best practices for      inform occupational therapists about environmental modifications.
+recognized pressure relief frequency and timing can be offered.          Additionally, the analysis of a user’s pose while in a wheelchair
+                                                                         extends its utility to assistive technology specialists on issues like
+6.2     Inclusive Personal Informatics                                   wheelchair fitting. Specifically, user pose data may pinpoint issues
+Personal Informatics (PI) systems aim to provide users with action-      related to wheelchair ergonomics and therefore provide a founda-
+able, data-driven insights from personally relevant information,         tion for tailoring wheelchair designs to individual user needs.
+thereby enhancing their quality of life [43]. Although these sys-
+tems have been extensively researched across diverse populations         7     DISCUSSION AND FUTURE DIRECTIONS
+and contexts, individuals with motor impairments have received           Like any system, WheelPoser has limitations. Here, we reflect on
+significantly less attention, leaving many of their crucial needs        the evaluation results of WheelPoser, discuss typical failure cases,
+unmet [67]. Specifically, for wheelchair users, previous research        and explore future opportunities for advancing pose estimation for
+indicates that they can greatly benefit from monitoring specific ac-     wheelchair users.
+tivities like pressure relief and wheelchair usage as well as general
+upper body motions [53]. In this case, tracking a wheelchair user’s      7.1    Generalization
+pose could serve as an intrinsic indicator of human activity and be      As a data-driven approach, learning-based human pose estimation
+particularly informative for tracking a wide range of activities, in     faces challenges with generalization. In our work, we have shown
+contrast to previous work on single-purpose systems [2, 58]. For         that our proposed data synthesis and pose estimation pipeline
+instance, by analyzing the pose of a wheelchair user, we can detect      demonstrates strong generalizability as it enables significant im-
+the occurrence and type of pressure relief actions, which are critical   provements in pose estimation across different model architectures
+for preventing pressure ulcers [66]. Additionally, monitoring the        compared to SOTA methods (see Table 3). Additionally, our trained
+elbow’s position over time can provide valuable data for assessing       model is able to generalize well to unseen data as it achieves good
+a wheelchair user’s range of motion and supporting wheelchair            quantitative and qualitative results on the held-out test split con-
+users’ upper extremity health management [53].                           taining full-time wheelchair users’ data.
+                                                                            We further assess the generalizability of our dataset by fine-
+6.3     Novel Interaction and Gaming Experiences                         tuning a three-stage biRNN based model exclusively on data from
+Practical pose tracking unlocks exciting new possibilities for novel     participants without motor impairments and evaluating its perfor-
+interaction and gaming experiences for wheelchair users. For in-         mance on the data from full-time wheelchair users. In Table 6, we
+stance, by enabling accurate pose estimation without using cameras,      observe a slight performance drop, with error metrics increasing
+WheelPoser addresses privacy concerns while facilitating the im-         by about 11% on average. Still, this data significantly improves pose
+plementation of diverse input methods, such as on-body, in-air, and
+on-wheelchair gestures as explored by Bilius et al. [5]. Additionally,
+it broadens the design space for developing new, intuitive body-
+based interaction techniques, allowing for the creation of novel
+interaction and locomotion techniques in VR/AR environments
+using natural poses or physical wheelchair locomotion, reducing
+the need for inaccessible controllers [68]. Similarly, a wheelchair
+user’s pose provides rich contextual information that could drive
+implicit interactions in applications like smart home systems or au-
+tonomous wheelchair navigation [37]. Furthermore, WheelPoser’s
+real-time and on-the-go pose estimation capabilities open up new
+avenues for inclusive gaming experiences, expanding the reach of             Figure 11: Sample sitting postures of our participants.
+WheelPoser: Sparse-IMU Based Body Pose Estimation for Wheelchair Users                                       ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada
+
+
+                Models                   Ang Err (deg)     Pos Err (cm)    Mesh Err (cm)    Jitter (102 /m3 )    Wrist Pos Err (cm)       Elbow Pos Err (cm)
+       Leave-one-subject-out               14.30 (5.31)      6.74 (2.98)     8.10 (2.73)       2.71 (4.21)            12.86 (5.90)              11.19 (5.21)
+ Without Full-time Wheelchair Users        16.15 (5.53)      7.65 (3.11)     9.57 (3.05)       2.82 (4.77)            14.89 (6.11)              12.65 (5.36)
+Table 6: Comparison of model performance when fine-tuned with data from full-time wheelchair users versus exclusively with
+data from participants without motor impairments.
+
+
+
+estimation performance compared to existing SOTA models trained                   slowly moves their upper body while both of their hands remain
+and fine-tuned solely on ambulatory motion data. This result is                   stable, such as the leaning forward motion illustrated in Figure 12
+promising given the prevalence of simulated data to overcome dif-                 (top row). Similarly, precise positioning of the user’s arm can be
+ficulties in recruiting disabled users to help narrow performance                 difficult as it heavily relies on the acceleration data and our model
+gaps. However, we acknowledge and emphasize the importance of                     does not explicitly account for different bone lengths among users,
+collecting data from real members of intended user groups.                        influencing the acceleration profile. Consequently, our model un-
+   Careful examination of the ground truth poses reveals a pos-                   derperforms in motions that involve close coordination of both
+sible gap between our participants without motor impairments                      arms and may result in mesh penetration, as shown in Figure 12
+and full-time wheelchair users. Specifically, many wheelchair users               (bottom row).
+lack trunk control due to their physical impairments, and their                       More broadly, an inertial sensor relies on its magnetometer to
+default sitting posture may exhibit different characteristics than                facilitate orientation measurement, which can be affected by the
+those of people without motor impairments, as shown in Figure 11.                 magnetic field of the environment. As we are attaching one IMU
+This difference may have led to increased error in pose estimation,               to the axle of the wheelchair, the material used to manufacture
+especially in body mesh error. Additionally, based on our observa-                the wheelchair can potentially affect the IMU measurement and,
+tion, full-time wheelchair users generally demonstrated smoother                  therefore, lead to errors. Additional errors may also be introduced
+wheelchair locomotion (e.g. higher stroke efficiency), likely due to              if the user has a relative position change from their wheelchair, as
+extensive usage experience. More broadly, we acknowledge that                     we have no direct way of measuring the user’s pelvis position.
+each wheelchair user is characterized by their own body shape,
+posture, flexibility, mobility differences, and wheelchair types, all
+of which are likely to influence their motion patterns and subse-                 7.3      Facilitating Marker-based Motion Capture
+quently, the IMU signals. To tackle this problem, we attempted                    In our study, we employed a commercial marker-based motion cap-
+to synthesize pose and motion data from relevant online videos                    ture system to collect human motion ground truth. This approach
+(e.g., wheelchair skill training videos) using state-of-the-art (SOTA)            required participants to visit our motion capture studio in person,
+models for human pose estimation from monocular videos—4D                         which imposed logistical challenges to both the participants and the
+Human [25]. However, we obtained poor performance in pose re-                     research team. Given the limited accuracy of existing RGB camera-
+construction wheelchair users, and the generated data exhibited                   based solutions for tracking wheelchair users’ poses, commercial
+poor accuracy and was temporally inconsistent, ultimately proving                 motion capture systems are likely to remain necessary for motion
+unhelpful in improving the performance of our model.                              ground truth collection in future research. Here, we share several
+                                                                                  lessons learned from our experience to inform similar endeavors.
+7.2     Failure Cases                                                             First, motion capture with marker-based systems involves an ex-
+Our system relies on IMUs on the user’s head and forearms to                      tensive setup. A traditional full-body maker setup, for example,
+predict the user’s pose when their wheelchair remains stationary.                 requires at least six markers on the user’s back. In this work, we
+Additionally, our model utilizes IMU acceleration to address the mo-              attached part of the markers to the wheelchair backrest to avoid
+tion ambiguity introduced by our sparse-IMU sensor setup. Taken                   visual occlusion based on each participant’s wheelchair setup. Here,
+together, these factors result in challenging cases when the user                 we found it beneficial to request a few photos of participants in their
+                                                                                  wheelchairs prior to data collection and plan the potential marker
+                                                                                  placements, which significantly reduced the length of the setup
+                                                                                  process. Additionally, different considerations and adjustments may
+                                                                                  be needed for power wheelchair users, as power wheelchairs tend
+                                                                                  to provide more trunk and head support, which can introduce even
+                                                                                  more visual occlusion. Furthermore, coordinating with participants
+                                                                                  beforehand to review the motions to be collected is critical. We
+                                                                                  found this preparatory step to be essential in ensuring participant
+                                                                                  comfort and facilitating the planning of necessary adjustments. In
+                                                                                  our study, we were able to adjust the planned motions for W14 prior
+                                                                                  to data collection based on his trunk control capacity. In addition,
+                                                                                  both the marker-based motion capture systems and our system
+                                                                                  require calibration motions. In this study, we opted for a T-pose
+         Figure 12: Typical failure cases of our model.                           calibration, which our participants were comfortable with and able
+ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada                                                                                 Li et al.
+
+
+to perform. Future studies might explore more accessible calibra-       take an initial step towards developing large-scale wheelchair mo-
+tion procedures that consider factors such as the wheelchair users’     tion capture datasets by contributing a dataset that includes 167
+range of motion and the type of wheelchair, among others.               minutes of on-wheelchair motions from 14 participants. Future
+                                                                        work should encompass a broader spectrum of wheelchair users,
+                                                                        including not only those who use manual wheelchairs but also
+7.4     Future Opportunities                                            power wheelchair users, as well as both novice and part-time users
+7.4.1 Towards Even More Practical and Unobtrusive Motion Cap-           alongside full-time users. We recognize that building such datasets
+ture. In this work, we demonstrated the feasibility of using four       involves significant labor and financial challenges that extend be-
+IMUs for accurate upper body pose estimation for wheelchair users.      yond the capacity of individual labs or organizations. Therefore,
+Compared to commercial systems that require dense-IMU setups,           we advocate for sustained and large-scale collaborations and call
+WheelPoser represents a crucial step toward inclusive, practical,       for active participation from the wider research community to join
+and unobtrusive motion capture for wheelchair users. Specifically,      us in these efforts.
+our sensor setup effectively lowers accessibility barriers and our
+pose estimation exhibits significant improvement over SOTA meth-
+                                                                        7.4.4 From Wheelchairs to Other Mobility Aids. More broadly, track-
+ods. Further, because of the improved practicality and accessibility,
+                                                                        ing and understanding users’ motion in relation to their mobility
+WheelPoser enables a wide range of applications spanning diverse
+                                                                        aids offers valuable insights and opens up a wide range of research
+fields and multiple stakeholders, as discussed in Sec. 6. Despite
+                                                                        possibilities. In this study, we demonstrated the feasibility of track-
+being much more practical and unobtrusive than previous systems,
+                                                                        ing wheelchair users’ poses using a setup specifically tailored to the
+we acknowledge that wearing and managing four IMUs can still
+                                                                        characteristics of wheelchair use. Looking ahead, future research
+be challenging for some users. Future work may explore ways to
+                                                                        could extend to a wide range of mobility aids, such as walking
+further reduce the number of required IMUs or achieve flexible sen-
+                                                                        canes and rollators. Each of these aids features distinct dynamics
+sor setups that afford user customization. Additionally, our sensor
+                                                                        and user motion patterns, presenting unique challenges for pose
+setup can be implemented using IMUs from devices that people al-
+                                                                        estimation and data collection. Beyond the technical challenges,
+ready carry daily, such as smartwatches, earbuds, and smartphones.
+                                                                        however, the applications of this research extend substantial bene-
+Future work may explore developing pose estimation systems for
+                                                                        fits across both digital and physical spaces. For instance, inclusive
+wheelchair users utilizing these devices to achieve more unobtru-
+                                                                        pose estimation enables inclusive representations in digital spaces
+sive motion capture, similar to previous work with individuals
+                                                                        (e.g. inclusive avatars [60, 100]) that reflect a wider spectrum of
+without motor impairments [65]. Furthermore, a wheelchair of-
+                                                                        user identities and experiences. In addition, detailed analysis of
+fers ample opportunities for instrumentation, and previous studies
+                                                                        user behavior derived from pose estimation data can facilitate iden-
+have demonstrated that many wheelchair users prefer devices in
+                                                                        tifying and subsequently addressing accessibility barriers within
+the chairable form factor [10]. Future research may explore ways
+                                                                        physical environments.
+to improve the pose estimation accuracy by incorporating sensor
+fusion techniques and integrating additional sensor types, such as
+ultra-wideband (UWB) anchors [19, 52] and pressure sensors [57],        8   OPEN SOURCE
+directly into the wheelchair.                                           To enable others to build upon our system, we make our dataset,
+                                                                        architecture, and trained model freely available to the research
+7.4.2 Advanced Physics-based Modeling for Pose Estimation and           community at https://github.com/axle-lab/WheelPoser.
+Wheelchair Kinematics Tracking. Another important direction for
+future research involves designing and integrating more sophis-
+ticated physics-based modeling into the pose estimation pipeline.       9   CONCLUSION
+In our current work, we have shown that physics-based model-            We present WheelPoser, a sparse-IMU based wheelchair user track-
+ing of general human motion and seating contact significantly           ing system that estimates upper body pose in real-time using only
+enhances the smoothness of predicted on-wheelchair motions. Fu-         four strategically placed IMUs on the user’s body and their wheelchair.
+ture studies could investigate tracking and modeling the complex        We contribute a pose estimation pipeline tailored to wheelchair
+hand-pushrim contact, which could lead to more physically plau-         users while allowing us to leverage existing high-quality motion
+sible pose estimations. Additionally, modeling the interaction be-      capture datasets collected from people without motor impairments.
+tween the wheelchair and the ground may improve the accuracy            We also contribute the first-of-its-kind WheelPoser-IMU dataset,
+of wheelchair kinematics tracking, offering advancements over           containing 167 minutes of on-wheelchair motions performed by
+current kinematics-only methods.                                        2 full-time wheelchair users and 12 participants without motor
+                                                                        impairments. Our evaluations demonstrate the performance of
+7.4.3 Towards Large-Scale Inclusive Motion Capture Datasets. As         WheelPoser in accurately predicting wheelchair user motions, sig-
+learning-based approaches become more prevalent across problem          nificantly surpassing prior sparse-sensor based approaches. Overall,
+domains, the creation of inclusive datasets becomes essential to        we believe WheelPoser holds immense potential to unlock a wide
+mitigate bias in machine learning models [27, 75]. Currently, most      range of new application possibilities for wheelchair users, such as
+open-source motion capture datasets are collected predominantly         inclusive self-tracking experiences, wheelchair skill training sup-
+from individuals without motor impairments, featuring typical am-       port, and enhanced collaborative healthcare, all while using an
+bulatory motions such as standing and walking. In this work, we         accessible sensor setup.
+WheelPoser: Sparse-IMU Based Body Pose Estimation for Wheelchair Users                                                  ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada
+
+
+ACKNOWLEDGMENTS                                                                                   Computer Vision and Image Understanding 212 (2021), 103275.
+                                                                                             [19] Nathan DeVrio, Vimal Mollyn, and Chris Harrison. 2023. SmartPoser: Arm Pose
+The authors would like to thank all participants for their time and                               Estimation with a Smartphone and Smartwatch Using UWB and IMU Data. In
+effort in our study. We extend our gratitude to Justin Macey and                                  Proceedings of the 36th Annual ACM Symposium on User Interface Software and
+                                                                                                  Technology. 1–11.
+Jessica Hodgins for their assistance in collecting the motion cap-                           [20] Roy Featherstone. 2014. Rigid body dynamics algorithms. Springer.
+ture data. We also appreciate Giorgio Becherini and the Perceiving                           [21] Brian French, Asim Smailagic, Dan Siewiorek, Vishnu Ambur, and Divya Tyama-
+Systems group at the Max Planck Institute for Intelligent Systems                                 gundlu. 2008. Classifying wheelchair propulsion patterns with a wrist mounted
+                                                                                                  accelerometer. In Proceedings of the ICST 3rd international conference on Body
+for their help with processing the marker data. Finally, we would                                 area networks. 1–4.
+like to thank all members of the AXLE Lab at CMU, Chris Harri-                               [22] Xavier García-Massó, P Serra-Añó, LM Gonzalez, Yiyao Ye-Lin, Gema Prats-
+son, Soyong Shin, and the anonymous reviewers for their valuable                                  Boluda, and J Garcia-Casado. 2015. Identifying physical activity type in manual
+                                                                                                  wheelchair users with spinal cord injury by means of accelerometers. Spinal
+suggestions and feedback.                                                                         Cord 53, 10 (2015), 772–777.
+                                                                                             [23] Kathrin Gerling, Patrick Dickinson, Kieran Hicks, Liam Mason, Adalberto L Sime-
+                                                                                                  one, and Katta Spiel. 2020. Virtual reality games for people using wheelchairs. In
+REFERENCES                                                                                        Proceedings of the 2020 CHI Conference on Human Factors in Computing Systems.
+  [1] Watch Apple. 2022. https://www.apple.com/watch/.                                            1–11.
+  [2] Giulia Barbareschi and Catherine Holloway. 2020. Understanding independent             [24] Shubham Goel, Georgios Pavlakos, Jathushan Rajasegaran, Angjoo Kanazawa,
+      wheelchair transfers. Perspectives from stakeholders. Disability and Rehabilita-            and Jitendra Malik. 2023. Humans in 4D: Reconstructing and Tracking Humans
+      tion: assistive technology 15, 5 (2020), 545–552.                                           with Transformers. In ICCV.
+  [3] Giulia Barbareschi, Catherine Holloway, Nadia Bianchi-Berthouze, Sharon So-            [25] Shubham Goel, Georgios Pavlakos, Jathushan Rajasegaran, Angjoo Kanazawa,
+      nenblum, Stephen Sprigle, et al. 2018. Use of a low-cost, chest-mounted ac-                 and Jitendra Malik. 2023. Humans in 4D: Reconstructing and Tracking Humans
+      celerometer to evaluate transfer skills of wheelchair users during everyday                 with Transformers. arXiv preprint arXiv:2305.20091 (2023).
+      activities: observational study. JMIR rehabilitation and assistive technologies 5, 2   [26] Alexandre Grillon, Andres Perez-Uribe, Hector Satizabal, Laurent Gantel,
+      (2018), e11748.                                                                             David Da Silva Andrade, Andres Upegui, and Francis Degache. 2017. A wireless
+  [4] Valentin Bazarevsky, Ivan Grishchenko, Karthik Raveendran, Tyler Zhu, Fan                   sensor-based system for self-tracking activity levels among manual wheelchair
+      Zhang, and Matthias Grundmann. 2020. BlazePose: On-device Real-time Body                    users. In eHealth 360°. Springer, 229–240.
+      Pose tracking. arXiv:2006.10204 [cs.CV]                                                [27] Anhong Guo, Ece Kamar, Jennifer Wortman Vaughan, Hanna Wallach, and
+  [5] Laura-Bianca Bilius, Ovidiu-Ciprian Ungurean, and Radu-Daniel Vatavu. 2023.                 Meredith Ringel Morris. 2020. Toward fairness in AI for people with disabilities
+      Understanding wheelchair users’ preferences for on-body, in-air, and on-                    SBG@ a research roadmap. ACM SIGACCESS accessibility and computing 125
+      wheelchair gestures. In Proceedings of the 2023 CHI Conference on Human Factors             (2020), 1–1.
+      in Computing Systems. 1–16.                                                            [28] Roxana Ramirez Herrera, Behzad Momahed Heravi, Giulia Barbareschi, Tom
+  [6] Michael J Black, Priyanka Patel, Joachim Tesch, and Jinlong Yang. 2023. Bedlam:             Carlson, and Catherine Holloway. 2018. Towards a Wearable Wheelchair Moni-
+      A synthetic dataset of bodies exhibiting detailed lifelike animated motion. In Pro-         tor: Classification of push style based on inertial sensors at multiple upper limb
+      ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition.             locations. In 2018 IEEE International Conference on Systems, Man, and Cybernetics
+      8726–8737.                                                                                  (SMC). IEEE, 1535–1540.
+  [7] Michael L Boninger, Aaron L Souza, Rory A Cooper, Shirley G Fitzgerald, Ali-           [29] Shivayogi V Hiremath, Dan Ding, and Rory A Cooper. 2013. Development and
+      cia M Koontz, and Brian T Fay. 2002. Propulsion patterns and pushrim biome-                 evaluation of a gyroscope-based wheel rotation monitor for manual wheelchair
+      chanics in manual wheelchair propulsion. Archives of physical medicine and                  users. The journal of spinal cord medicine 36, 4 (2013), 347–356.
+      rehabilitation 83, 5 (2002), 718–723.                                                  [30] Shivayogi V Hiremath, Dan Ding, Jonathan Farringdon, and Rory A Cooper.
+  [8] Simon J Briley, Riemer JK Vegter, Vicky L Goosey-Tolfrey, and Barry S Mason.                2012. Predicting energy expenditure of manual wheelchair users with spinal
+      2020. Scapular kinematic variability during wheelchair propulsion is associated             cord injury using a multisensor-based activity monitor. Archives of physical
+      with shoulder pain in wheelchair users. Journal of biomechanics 113 (2020),                 medicine and rehabilitation 93, 11 (2012), 1937–1943.
+      110099.                                                                                [31] Shivayogi V Hiremath, Stephen S Intille, Annmarie Kelleher, Rory A Cooper,
+  [9] Z. Cao, G. Hidalgo Martinez, T. Simon, S. Wei, and Y. A. Sheikh. 2019. OpenPose:            and Dan Ding. 2015. Detection of physical activities using a physical activity
+      Realtime Multi-Person 2D Pose Estimation using Part Affinity Fields. IEEE                   monitor system for wheelchair users. Medical engineering & physics 37, 1 (2015),
+      Transactions on Pattern Analysis and Machine Intelligence (2019).                           68–76.
+ [10] Patrick Carrington, Amy Hurst, and Shaun K Kane. 2014. Wearables and                   [32] Alexander W Hooke, Melissa MB Morrow, Kai-Nan An, and Kenton R Kaufman.
+      chairables: inclusive design of mobile input and output techniques for power                2009. Capturing wheelchair propulsion kinematics using inertial sensors. In
+      wheelchair users. In Proceedings of the SIGCHI Conference on human factors in               33rd American Society of Biomechanics conference.
+      computing systems. 3103–3112.                                                          [33] William Huang, Sam Ghahremani, Siyou Pei, and Yang Zhang. 2024. Wheel-
+ [11] Patrick Carrington, Gierad Laput, and Jeffrey P Bigham. 2020. SpokeSense:                   Pose: Data Synthesis Techniques to Improve Pose Estimation Performance on
+      developing a real-time sensing platform for wheelchair sports. ACM SIGACCESS                Wheelchair Users. In Proceedings of the CHI Conference on Human Factors in
+      Accessibility and Computing 124 (2020), 1–1.                                                Computing Systems. 1–25.
+ [12] Pin-Wei B Chen and Kerri Morgan. 2018. Toward community-based wheelchair               [34] Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J Black, Otmar
+      evaluation with machine learning methods. Journal of rehabilitation and assistive           Hilliges, and Gerard Pons-Moll. 2018. Deep inertial poser: Learning to re-
+      technologies engineering 5 (2018), 2055668318808409.                                        construct human pose from sparse inertial measurements in real time. ACM
+ [13] Vasileios Choutas, Philippe Weinzaepfel, Jérôme Revaud, and Cordelia Schmid.                Transactions on Graphics (TOG) 37, 6 (2018), 1–15.
+      2018. PoTion: Pose MoTion Representation for Action Recognition. In Pro-               [35] Du Q Huynh. 2009. Metrics for 3D rotations: Comparison and analysis. Journal
+      ceedings of the IEEE Conference on Computer Vision and Pattern Recognition                  of Mathematical Imaging and Vision 35 (2009), 155–164.
+      (CVPR).                                                                                [36] Seonhong Hwang, Chung-Ying Tsai, and Alicia M Koontz. 2017. Feasibility
+ [14] Jennifer L Collinger, Michael L Boninger, Alicia M Koontz, Robert Price, Sue Ann            study of using a Microsoft Kinect for virtual coaching of wheelchair transfer
+      Sisto, Michelle L Tolerico, and Rory A Cooper. 2008. Shoulder biomechanics                  techniques. Biomedical Engineering/Biomedizinische Technik 62, 3 (2017), 307–
+      during the push phase of wheelchair propulsion: a multisite study of persons                313.
+      with paraplegia. Archives of physical medicine and rehabilitation 89, 4 (2008),        [37] JiWoong Jang, Yunzhi Li, and Patrick Carrington. 2022. ” I Should Feel Like
+      667–676.                                                                                    I’m In Control”: Understanding Expectations, Concerns, and Motivations for
+ [15] Rory A Cooper. 2009. SMARTWheel: From concept to clinical practice. Pros-                   the Use of Autonomous Navigation on Wheelchairs. In Proceedings of the 24th
+      thetics and orthotics international 33, 3 (2009), 198–209.                                  International ACM SIGACCESS Conference on Computers and Accessibility. 1–5.
+ [16] R James Cotton. 2020. Kinematic tracking of rehabilitation patients with mark-         [38] Emilia Jarosz. 1996. Determination of the workspace of wheelchair users. Inter-
+      erless pose estimation fused with wearable inertial sensors. In 2020 15th IEEE              national Journal of Industrial Ergonomics 17, 2 (1996), 123–133.
+      International Conference on Automatic Face and Gesture Recognition (FG 2020).          [39] Chandrasekaran Jayaraman, Yaejin Moon, Ian M Rice, Elizabeth T Hsiao Weck-
+      IEEE, 508–514.                                                                              sler, Carolyn L Beck, and Jacob J Sosnoff. 2014. Shoulder pain and cycle to cycle
+ [17] Wiebe HK de Vries, Rienk MA van der Slikke, Marit P van Dijk, and Ursina                    kinematic spatial variability during recovery phase in manual wheelchair users:
+      Arnet. 2023. Real-Life Wheelchair Mobility Metrics from IMUs. Sensors 23, 16                a pilot investigation. PLoS One 9, 3 (2014), e89794.
+      (2023), 7174.                                                                          [40] Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W Winkler,
+ [18] Yann Desmarais, Denis Mottet, Pierre Slangen, and Philippe Montesinos. 2021. A              and C Karen Liu. 2022. Transformer Inertial Poser: Real-time human motion
+      review of 3D human pose estimation algorithms for markerless motion capture.                reconstruction from sparse IMUs with simultaneous terrain generation. In
+ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada                                                                                                                     Li et al.
+
+
+      SIGGRAPH Asia 2022 Conference Papers. 1–9.                                            [62] Jennifer L Mercer, Michael Boninger, Alicia Koontz, Dianxu Ren, Trevor Dyson-
+ [41] Angjoo Kanazawa, Michael J. Black, David W. Jacobs, and Jitendra Malik. 2018.              Hudson, and Rory Cooper. 2006. Shoulder joint kinetics and pathology in
+      End-to-End Recovery of Human Shape and Pose. In Proceedings of the IEEE                    manual wheelchair users. Clinical biomechanics 21, 8 (2006), 781–789.
+      Conference on Computer Vision and Pattern Recognition (CVPR).                         [63] Rachel Milgrom, Matthew Foreman, John Standeven, Jack R Engsberg, and
+ [42] Padmaja Kankipati, Michael L Boninger, Dany Gagnon, Rory A Cooper, and                     Kerri A Morgan. 2016. Reliability and validity of the Microsoft Kinect for
+      Alicia M Koontz. 2015. Upper limb joint kinetics of three sitting pivot wheelchair         assessment of manual wheelchair propulsion. Journal of Rehabilitation Research
+      transfer techniques in individuals with spinal cord injury. The journal of spinal          & Development 53, 6 (2016).
+      cord medicine 38, 4 (2015), 485–497.                                                  [64] MMPose Contributors. 2020. MMPose: OpenMMLab Pose Estimation Toolbox
+ [43] Elisabeth T Kersten-van Dijk, Joyce HDM Westerink, Femke Beute, and Wij-                   and Benchmark. GitHub. https://github.com/open-mmlab/mmpose
+      nand A IJsselsteijn. 2017. Personal informatics, self-insight, and behavior change:   [65] Vimal Mollyn, Riku Arakawa, Mayank Goel, Chris Harrison, and Karan Ahuja.
+      A critical review of current literature. Human–Computer Interaction 32, 5-6                2023. IMUPoser: Full-Body Pose Estimation using IMUs in Phones, Watches,
+      (2017), 268–296.                                                                           and Earbuds. In Proceedings of the 2023 CHI Conference on Human Factors in
+ [44] R Lee Kirby. 2016. Wheelchair skills assessment and training. CRC Press.                   Computing Systems. 1–12.
+ [45] Muhammed Kocabas, Nikos Athanasiou, and Michael J Black. 2020. Vibe: Video            [66] Tamanna Motahar, Isha Ghosh, and Jason Wiese. 2022. Identifying factors that
+      inference for human body pose and shape estimation. In Proceedings of the                  inhibit self-care behavior among individuals with severe spinal cord injury. In
+      IEEE/CVF conference on computer vision and pattern recognition. 5253–5263.                 CHI Conference on Human Factors in Computing Systems. 1–16.
+ [46] Keisuke Kon, Yasuyuki Hayakawa, Shingo Shimizu, Toshiya Nosaka, Takeshi               [67] Tamanna Motahar and Jason Wiese. 2022. A Review of Personal Informatics Re-
+      Tsuruga, Hiroyuki Matsubara, Tomohiro Nomura, Shin Murahara, Hirokazu                      search for People with Motor Disabilities. Proceedings of the ACM on Interactive,
+      Haruna, Takumi Ino, et al. 2015. Development of an algorithm to predict comfort            Mobile, Wearable and Ubiquitous Technologies 6, 2 (2022), 1–31.
+      of wheelchair fit based on clinical measures. Journal of physical therapy science     [68] Martez Mott, John Tang, Shaun Kane, Edward Cutrell, and Meredith Ringel Mor-
+      27, 9 (2015), 2813–2816.                                                                   ris. 2020. “i just went into it assuming that i wouldn’t be able to have the
+ [47] Hikaru Kondo, Soichiro Koyama, Yohei Otaka, Nobuhiro Kumazawa, Shotaro                     full experience” understanding the accessibility of virtual reality for people
+      Furuzawa, Yoshikiyo Kanada, and Shigeo Tanabe. 2024. Kinematic analysis of                 with limited mobility. In Proceedings of the 22nd International ACM SIGACCESS
+      preparation for transferring from wheelchair to bed. Assistive Technology (2024),          Conference on Computers and Accessibility. 1–13.
+      1–10.                                                                                 [69] Movella DOT | Movella.com. [n. d.]. https://www.movella.com/products/
+ [48] Alicia M Koontz, Rory A Cooper, Michael L Boninger, Aaron L Souza, and                     wearables/movella-dot. (Accessed on 04/13/2024).
+      Brian T Fay. 2002. Shoulder kinematics and kinetics during two speeds of              [70] Deborah A Nawoczenski, Shannon M Clobes, Stephanie L Gore, Jennifer L Neu,
+      wheelchair propulsion. Journal of Rehabilitation Research & Development 39, 6              John E Olsen, John D Borstad, and Paula M Ludewig. 2003. Three-dimensional
+      (2002).                                                                                    shoulder kinematics during a pressure relief technique and wheelchair transfer.
+ [49] Mateusz Kukla and Wojciech Maliga. 2022. Symmetry analysis of manual                       Archives of Physical Medicine and Rehabilitation 84, 9 (2003), 1293–1300.
+      wheelchair propulsion using motion capture techniques. Symmetry 14, 6 (2022),         [71] Thong Duy Nguyen and Milan Kresovic. 2022. A survey of top-down approaches
+      1164.                                                                                      for human pose estimation. arXiv preprint arXiv:2202.02656 (2022).
+ [50] Yvonne C Learmonth, Dominique Kinnett-Hopkins, Ian M Rice, JL Dysterheft,             [72] Tom Edward Nightingale, Jean-Philippe Walhin, Dylan Thompson, and James
+      and RW Motl. 2016. Accelerometer output and its association with energy                    Lee John Bilzon. 2015. Influence of accelerometer type and placement on physical
+      expenditure during manual wheelchair propulsion. Spinal cord 54, 2 (2016),                 activity energy expenditure prediction in manual wheelchair users. PloS one 10,
+      110–114.                                                                                   5 (2015), e0126086.
+ [51] Amy R Lewis, Elissa J Phillips, William SP Robertson, Paul N Grimshaw, and            [73] Authors not listed. 2022. Enhancing YOLO for Multi Person Pose Estimation Us-
+      Marc Portus. 2018. Injury prevention of elite wheelchair racing athletes using             ing Object Keypoint Similarity Loss. https://arxiv.org/abs/2204.06806. Accessed:
+      simulation approaches. In Proceedings, Vol. 2. MDPI, 255.                                  2024-04-21.
+ [52] Yunzhi Li, Tingyu Cheng, and Ashutosh Dhekne. 2022. Travelogue: Representing          [74] Paralyzed Veterans of America Consortium for Spinal Cord Medicine et al. 2005.
+      indoor trajectories as informative art. In CHI Conference on Human Factors in              Preservation of upper limb function following spinal cord injury: a clinical
+      Computing Systems Extended Abstracts. 1–7.                                                 practice guideline for health-care professionals. The journal of spinal cord
+ [53] Yunzhi Li, Franklin Mingzhe Li, and Patrick Carrington. 2023. Breaking the                 medicine 28, 5 (2005), 434.
+      “Inescapable” Cycle of Pain: Supporting Wheelchair Users’ Upper Extremity             [75] Temitayo Olugbade, Marta Bieńkiewicz, Giulia Barbareschi, Vincenzo D’amato,
+      Health Awareness and Management with Tracking Technologies. In Proceedings                 Luca Oneto, Antonio Camurri, Catherine Holloway, Mårten Björkman, Peter
+      of the 2023 CHI Conference on Human Factors in Computing Systems. 1–17.                    Keller, Martin Clayton, et al. 2022. Human movement datasets: An interdisci-
+ [54] Hwai-Ting Lin, Fong-Chin Su, Hong-Wen Wu, and Kai-Nan An. 2004. Muscle                     plinary scoping review. Comput. Surveys 55, 6 (2022), 1–29.
+      forces analysis in the shoulder mechanism during wheelchair propulsion. Pro-          [76] World Health Organization et al. 2023. Wheelchair provision guidelines. World
+      ceedings of the Institution of Mechanical Engineers, Part H: Journal of Engineering        Health Organization.
+      in Medicine 218, 4 (2004), 213–221.                                                   [77] Georgios Pavlakos, Vasileios Choutas, Nima Ghorbani, Timo Bolkart, Ahmed
+ [55] Noelle J Lindquist, Patricia E Loudon, Trent F Magis, Jessica E Rispin, R Lee              A. A. Osman, Dimitrios Tzionas, and Michael J. Black. 2019. Expressive Body
+      Kirby, and Patricia J Manns. 2010. Reliability of the performance and safety               Capture: 3D Hands, Face, and Body from a Single Image. In Proceedings IEEE
+      scores of the wheelchair skills test version 4.1 for manual wheelchair users.              Conf. on Computer Vision and Pattern Recognition (CVPR).
+      Archives of physical medicine and rehabilitation 91, 11 (2010), 1752–1757.            [78] Jathushan Rajasegaran, Georgios Pavlakos, Angjoo Kanazawa, Christoph Fe-
+ [56] Matthew Loper, Naureen Mahmood, Javier Romero, Gerard Pons-Moll, and                       ichtenhofer, and Jitendra Malik. 2023. On the Benefits of 3D Pose and Tracking
+      Michael J. Black. 2023. SMPL: A Skinned Multi-Person Linear Model (1 ed.).                 for Human Action Recognition. In Proceedings of the IEEE/CVF Conference on
+      Association for Computing Machinery, New York, NY, USA. https://doi.org/10.                Computer Vision and Pattern Recognition (CVPR). 640–649.
+      1145/3596711.3596800                                                                  [79] Jacob Rammer, Brooke Slavens, Joseph Krzak, Jack Winters, Susan Riedel, and
+ [57] Yiyue Luo, Yunzhu Li, Michael Foshey, Wan Shou, Pratyusha Sharma, Tomás                    Gerald Harris. 2018. Assessment of a markerless motion analysis system for
+      Palacios, Antonio Torralba, and Wojciech Matusik. 2021. Intelligent carpet:                manual wheelchair application. Journal of NeuroEngineering and Rehabilitation
+      Inferring 3d human pose from tactile signals. In Proceedings of the IEEE/CVF               15 (2018), 1–12.
+      conference on computer vision and pattern recognition. 11255–11265.                   [80] James Rhodes, Barry Mason, Bertrand Perrat, Martin Smith, and Victoria Goosey-
+ [58] Congcong Ma, Raffaele Gravina, Qimeng Li, Yu Zhang, Wenfeng Li, and Gian-                  Tolfrey. 2014. The validity and reliability of a novel indoor player tracking system
+      carlo Fortino. 2017. Activity recognition of wheelchair users based on sequence            for use within wheelchair court sports. Journal of sports sciences 32, 17 (2014),
+      feature in time-series. In 2017 IEEE International Conference on Systems, Man,             1639–1647.
+      and Cybernetics (SMC). IEEE, 3659–3664.                                               [81] Qaiser Riaz, Guanhong Tao, Björn Krüger, and Andreas Weber. 2015. Motion
+ [59] Congcong Ma, Wenfeng Li, Raffaele Gravina, and Giancarlo Fortino. 2016. Ac-                reconstruction using very few accelerometers and ground contacts. Graphical
+      tivity recognition and monitoring for smart wheelchair users. In 2016 IEEE                 Models 79 (2015), 23–38.
+      20th international conference on computer supported cooperative work in design        [82] Anshul Shah, Shlok Mishra, Ankan Bansal, Jun-Cheng Chen, Rama Chellappa,
+      (CSCWD). IEEE, 664–669.                                                                    and Abhinav Shrivastava. 2022. Pose and Joint-Aware Action Recognition. In
+ [60] Kelly Mack, Rai Ching Ling Hsu, Andrés Monroy-Hernández, Brian A Smith,                    Proceedings of the IEEE/CVF Winter Conference on Applications of Computer
+      and Fannie Liu. 2023. Towards inclusive avatars: Disability representation in              Vision (WACV). 3850–3860.
+      avatar platforms. In Proceedings of the 2023 CHI Conference on Human Factors in       [83] Soshi Shimada, Vladislav Golyanik, Weipeng Xu, and Christian Theobalt. 2020.
+      Computing Systems. 1–13.                                                                   Physcap: Physically plausible monocular 3d motion capture in real time. ACM
+ [61] Naureen Mahmood, Nima Ghorbani, Nikolaus F Troje, Gerard Pons-Moll, and                    Transactions on Graphics (ToG) 39, 6 (2020), 1–16.
+      Michael J Black. 2019. AMASS: Archive of motion capture as surface shapes. In         [84] Ronit Slyper and Jessica K Hodgins. 2008. Action capture with accelerometers.
+      Proceedings of the IEEE/CVF international conference on computer vision. 5442–             In Proceedings of the 2008 ACM SIGGRAPH/Eurographics symposium on computer
+      5451.                                                                                      animation. 193–199.
+WheelPoser: Sparse-IMU Based Body Pose Estimation for Wheelchair Users                                                ASSETS ’24, October 27–30, 2024, St. John’s, NL, Canada
+
+
+ [85] Paul Starrs, Ambreen Chohan, David Fewtrell, Jim Richards, and James Selfe.           [94] Timo Von Marcard, Bodo Rosenhahn, Michael J Black, and Gerard Pons-Moll.
+      2012. Biomechanical differences between experienced and inexperienced                      2017. Sparse inertial poser: Automatic 3d human pose estimation from sparse
+      wheelchair users during sport. Prosthetics and Orthotics International 36, 3               imus. In Computer Graphics Forum, Vol. 36. Wiley Online Library, 349–360.
+      (2012), 324–331.                                                                      [95] Lin Wei, Cheng-Shiu Chung, and Alicia M Koontz. 2021. Automating the Clinical
+ [86] Yu Sun, Qian Bao, Wu Liu, Yili Fu, Black Michael J., and Tao Mei. 2021. Monocular,         Assessment of Independent Wheelchair Sitting Pivot Transfer Techniques. Topics
+      One-stage, Regression of Multiple 3D People. In ICCV.                                      in Spinal Cord Injury Rehabilitation 27, 3 (2021), 1–11.
+ [87] OptiTrack Motion Capture Systems. [n. d.]. https://optitrack.com/. (Accessed          [96] Lin Wei, W Ka Hyun, Chung-Ting Tsai, and Alicia M Koontz. 2016. Can the
+      on 04/18/2024).                                                                            Kinect detect differences between proper and improper wheelchair transfer
+ [88] Vicon | Award Winning Motion Capture Systems. 2023. https://www.vicon.                     techniques. Rehabilitation Engineering and Assitive Technology Society of North
+      com/.                                                                                      America: Washington, DC, USA (2016).
+ [89] Jochen Tautges, Arno Zinke, Björn Krüger, Jan Baumann, Andreas Weber,                 [97] Xsens. [n. d.]. https://www.xsens.com/.
+      Thomas Helten, Meinard Müller, Hans-Peter Seidel, and Bernd Eberhardt. 2011.          [98] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada, Vladislav Golyanik,
+      Motion reconstruction using sparse accelerometer data. ACM Transactions on                 Christian Theobalt, and Feng Xu. 2022. Physical inertial poser (pip): Physics-
+      Graphics (ToG) 30, 3 (2011), 1–12.                                                         aware real-time human motion tracking from sparse inertial sensors. In Pro-
+ [90] Wheelchair Physiology | Garmin Technology. 2023. https://www.garmin.com/                   ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition.
+      en-US/garmin-technology/health-science/wheelchair-physiology/.                             13167–13178.
+ [91] Matthew Trumble, Andrew Gilbert, Charles Malleson, Adrian Hilton, and John            [99] Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2021. TransPose: real-time 3D human
+      Collomosse. 2017. Total capture: 3d human pose estimation fusing video and                 translation and pose estimation with six inertial sensors. ACM Transactions on
+      inertial sensors. In Proceedings of 28th British Machine Vision Conference. 1–13.          Graphics (TOG) 40, 4 (2021), 1–13.
+ [92] Chung-Ying Tsai, Michael L Boninger, Sarah R Bass, and Alicia M Koontz. 2018.        [100] Kexin Zhang, Elmira Deldari, Yaxing Yao, and Yuhang Zhao. 2023. A Diary
+      Upper-limb biomechanical analysis of wheelchair transfer techniques in two                 Study in Social Virtual Reality: Impact of Avatars with Disability Signifiers on
+      toilet configurations. Clinical Biomechanics 55 (2018), 79–85.                             the Social Experiences of People with Disabilities. In Proceedings of the 25th
+ [93] RMA Van der Slikke, MAM Berger, DJJ Bregman, AH Lagerberg, and HEJ Veeger.                 International ACM SIGACCESS Conference on Computers and Accessibility. 1–17.
+      2015. Opportunities for measuring wheelchair kinematics in match settings;           [101] Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and Hao Li. 2019. On the
+      reliability of a three inertial sensor configuration. Journal of Biomechanics 48,          continuity of rotation representations in neural networks. In Proceedings of the
+      12 (2015), 3398–3405.                                                                      IEEE/CVF conference on computer vision and pattern recognition. 5745–5753.
+

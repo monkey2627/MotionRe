@@ -1,0 +1,3620 @@
+URL: https://arxiv.org/html/2506.06850v1
+
+Deep Inertial Pose: A deep learning approach for human pose estimation
+Report GitHub Issue
+×
+Title:
+Content selection saved. Describe the issue below:
+Description:
+Submit without GitHub
+Submit in GitHub
+arXiv is now an independent nonprofit!
+Learn more
+×
+Back to arXiv
+License: CC BY-NC-SA 4.0
+arXiv:2506.06850v1 [cs.CV] 07 Jun 2025
+Deep Inertial Pose: A deep learning approach for human pose estimation
+Sara M. Cerqueira
+Email:
+id9484@uminho.pt, saracerqueira1996@gmail.com
+Affiliation:
+Center for Microelectromechanical Systems,  University of Minho, Guimarães, 4800 - 058, Portugal
+Corresponding author:
+Corresponding author
+Manuel Palermo
+Email:
+b12450@cmems.uminho.pt
+Affiliation:
+Center for Microelectromechanical Systems,  University of Minho, Guimarães, 4800 - 058, Portugal
+Cristina P. Santos
+Email:
+cristina@dei.uminho.pt
+Affiliation:
+Center for Microelectromechanical Systems,  University of Minho, Guimarães, 4800 - 058, Portugal
+Affiliation:
+LABBELS - Associate Laboratory,  University of Minho, Guimarães, 4800 - 058, Portugal
+Abstract
+Inertial-based Motion capture system has been attracting growing attention due to its wearability and unsconstrained use. However, accurate human joint estimation demands several complex and expertise demanding steps, which leads to expensive software such as the state-of-the-art MVN Awinda from Movella Technologies. This work aims to study the use of Neural Networks to abstract the complex biomechanical models and analytical
+mathematics required for pose estimation. Thus, it presents a comparison of different Neural Network architectures and methodologies to understand how accurately these methods can estimate human pose, using both low cost(MPU9250) and high end (Mtw Awinda) Magnetic, Angular Rate, and Gravity (MARG) sensors. The most efficient method was the Hybrid LSTM-Madgwick detached, which achieved an Quaternion Angle distance error of 7.96º, using Mtw Awinda data. Also, an ablation study was conducted to study the impact of data augmentation, output representation, window size, loss function and magnetometer data on the pose estimation error. This work indicates that Neural Networks can be trained to estimate human pose, with results comparable to the state of the art fusion filters.
+Keywords:
+IMU , MARG , filter fusion , deep learning , human pose estimation
+1
+Introduction
+In recent years, inertial-based
+Motion Capture (MoCap)
+systems have been increasingly used for human motion tracking and analysis, in a wide range of applications. For example, in rehabilitation, this technology has been used in gait monitoring
+Sprager & Juric (2015)
+and to support impairment diagnosis
+Luo et al. (2016)
+. In industry, they have been explored for ergonomic risk assessment
+Merino et al. (2019)
+. The main reason is the fact that they can be worn by the subject, in a natural and unconstrained manner, since they do not imply mobility restrictions. Also, they can be used in both indoors and outdoors, without requiring a controlled environment on a restricted space, as camera-based solutions do
+Choe et al. (2019)
+.
+This versatility potentiated the development of a considerable number of commercial inertial
+MoCap
+systems, such as Rokoko’s Smartsuit Pro (Rokoko Electronics ApS, Denmark), Perception Neuron Pro (Noitom Ltd, Miami), Nansense BioMed (Nansens Biomed Inc., Los Angeles), Movella MVN Awinda (Movella, Netherlands), and Movella MVN Link (Movella, Netherlands). Movella Technologies is the leading company in 3D motion tracking. Movella MVN Awinda and Link are considered a state-of-art system, being featured in several papers for different applications (e.g. research in HRC, ergonomics, sports)
+González-Alonso et al. (2021)
+. Also, they are one of the few inertial
+MoCap
+systems validated for biomechanical analysis
+Al-Amri et al. (2018)
+. However, the high cost of these systems, derived not only from the expensive hardware, but also for the even more expensive licenses, required for the use of the property software for biomechanical analysis (MVN Analyze), pose barriers for their wide use on real and daily life applications. Although Movella’ systems can be used without its proprietary MVN Analyze software, this only provides raw data, without interpretation and whose processing requires strong technical and mathematical skills.
+Academia also followed this trend to develop
+Inertial Measurement Unit (IMU)
+based wearable technology. These wearables, however, tend to be custom-made and specific for an application. For example, single arm systems
+Ligorio et al. (2020)
+;
+Škulj et al. (2021)
+or specific for ergonomic assessment
+Vignais et al. (2013)
+, not allowing general usage.
+Human Pose Estimation (HPE), a specific application of human motion tracking, consists of estimating the position and orientation of human body keypoints, such as the joints, in a 2D or 3D space.
+The estimation of Human joint orientation, from inertial data, i.e. 3D acceleration, 3D angular velocity, and 3D magnetic field measurements, is typically conducted with sensor fusion filters. This sensor fusion is performed to mitigate the drawbacks of each individual sensor. For example, the integration of the angular velocity of the gyroscope causes a significant orientation drift, due to the inherent sensor’s measurement drift, even if small. The accelerometer, in turn, has a stable reference, provided by the gravity acceleration. However, it is typically a noisier sensor. At last, the magnetometer provides the plane heading by measuring the earth’s magnetic field direction. Withal, it is considerably affected by magnetic disturbances
+Lisini et al. (2019)
+. Typical sensor fusion algorithms applied for angle estimation are the Kalman Filter
+Figueiredo et al. (2020)
+and its variants (e.g. Extended
+Kalman Filter (KF)
+Fan et al. (2017)
+, Unscented
+KF
+Atrsaei et al. (2018)
+, Dual Linear
+KF
+Ligorio et al. (2020)
+) and the complementary filters ( e.g. Madgwick’s Gradient Descent filter
+Madgwick et al. (2011)
+, Mahony filter
+Mahony et al. (2008)
+, complementary filter
+Figueiredo et al. (2020)
+). The fusion of this inertial data results in the orientation of the sensor in a global coordinate system. Since the
+IMU
+sensor is attached to a body segment, the segment orientation can be inferred from the sensor’s orientation. However, this step requires a calibration step, also designated
+Sensor-to-Segment (STS)
+alignment, where the relation between the relative orientation of the body segment coordinate system and the sensor coordinate system is defined. Then the relative orientation between segments, i.e, the joint angles, can be computed, towards pose estimation.
+STS
+calibration and sensor fusion are the most critical steps to achieve a high-accuracy system. In terms of
+STS
+, the main source of error is the fact that it assumes a predefined static pose (or sequence of static poses) or a dynamic movement sequence, easily leading to offsets due to mismatches between the calibration performed by the user and the reference, especially when fast/simple calibration procedures are necessary for real-world usage. As for the sensor fusion, it is mostly affected by the gyroscope integration, especially due to its accumulating bias drift, and the accelerometer/magnetometer reference vectors, due to biases and measurement noise.
+Additionally, these steps are highly affected by wearability concerns, since sensor sliding can result in sensor-to-segment offsets. Therefore, they are still open research fields that have been receiving attention from investigators
+Ligorio et al. (2020)
+;
+Pacher et al. (2020)
+.
+The success and low error of Movella’ MVN Awinda in human motion tracking and pose estimation is mainly due to its software, which comprises several differentiating steps that aim to mitigate state-of-art
+IMUs
+-related sources of error. First, regarding gyroscope cumulative drift, besides their higher-quality hardware with a lower gyroscope bias characteristics, they also have a patented
+Strap-down Integration (SDI)
+algorithm that significantly reduces the gyroscope drift, which typically affects the estimation accuracy in the long term
+Xsens (2021b)
+. Second, regarding sensor fusion, they developed a new
+KF
+, entitled XKF3hm, that increases the orientation accuracy by minimizing the Earth magnetic field distortions and attaining a drift-free, absolute orientation
+Paulich et al. (2018)
+. Third, regarding
+STS
+calibration, they perform a dedicated and dynamic procedure, that does not rely in magnetometer data. This is an important step that ensures the alignment between the sensors and human body segments to allow an accurate estimation of the segment kinematics. Fourth, and the core element, they developed a biomechanical model of the human body
+Roetenberg (2006)
+that allows the combination of all motion trackers information, reducing the effects of magnetic distortions.
+Schepers et al. (2018)
+. All this advanced and experience demanding pipelines for signal processing explain the high cost of these licenses. Besides all that, Movella textiles/straps were improved towards minimal sensor slide, which reduces sensor-to segment offsets and, if placed correctly, soft-body artifacts resulting from muscle movement. However, this also results in a complex, time-demanding setup, that many times reduces exploitation by industry and/or rehabilitation settings.
+The aim of this paper is to investigate a different approach for sensor fusion for pose estimation that dismisses complex biomechanical models and advanced and theoretical mathematical models for motion tracking, using
+Magnetic, Angular Rate, and Gravity (MARG)
+sensors, and if possible compensate sources of error resulting from poor sensor dressing setup. It explores
+Deep learning (DL)
+algorithms to abstract from this analytical methods by following a data-driven approach. Moreover, it benchmarks the algorithms performance using both low-cost, highly available
+MARG
+sensors, specifically the MPU9250, and high-quality, expensive MTwAwinda sensors. With this approach we aim to determine if
+Neural Network (NN)
+-based approaches can learn how to surpass hardware and sensor fixation limitations, common on low-cost, widely available hardware, and compare the method’s performance on a hardware that is near of ideal(MTwAwinda).
+If successful, this methodology could provide a scalable and accessible solution for real-time pose estimation, eliminating the need for complex biomechanical models, allowing developers working on wearable prototypes to integrate these algorithms without requiring an exhaustive understanding of the underlying technical complexities. As a result, they can direct their resources toward other critical aspects, such as hardware design, textiles, aesthetics, and overall prototype validation. Also, by testing these models with both low-cost and high-quality inertial sensors, this study provides a broader overview of its performance.
+Joint angle estimation is a fundamental component of many advanced motion analysis systems, making this approach applicable across various fields such as rehabilitation, ergonomics, and sports. In rehabilitation, it could support personalized assessments and enable effective tracking of recovery progress without reliance on expensive equipment
+Das et al. (2022)
+. In ergonomics, it could facilitate real-time monitoring of body posture
+Martins et al. (2024)
+, helping to prevent repetitive strain injuries and enhance workplace safety. In sports, it could provide valuable insights into athletes’ movements
+Rana & Mittal (2021)
+, aiding in technique optimization, performance improvement, and injury prevention.
+1.1
+Related Work
+Pose Estimation is a vast research field with a good amount of literature on using
+DL
+algorithms to detect and predict 3D position
+Li et al. (2022)
+;
+Gamra & Akhloufi (2021)
+. However, it is typically performed on images and videos, whose challenges mostly rely on image quality/noise/artifacts, very different from the challenges of estimating pose from inertial data.
+DL
+algorithms have already been explored on inertial data, however to reconstruct 3D human body pose from a small set of sensors. For example, Huang et al.
+Huang et al. (2018)
+addressed real time reconstruction of Human pose using only 6 high-cost MTwAwinda sensors
+Paulich et al. (2018)
+with a
+bi-directional Recurrent Neural Network (biRNN)
+, achieving a error of 15.85
+∘
+±
+{}^{\circ}\pm
+12.87
+∘
+and 17.54
+∘
+±
+{}^{\circ}\pm
+6.49
+∘
+, depending on the dataset used. Yi et al.
+Yi et al. (2021)
+improved the method (achieving 12.93º ± 6.15º and 8.85 ± 4.82, respectively, for the same datasets) with a multistage pose estimation and a fusion-based global translation estimation, using both a
+biRNN
+and a
+Recurrent Neural Network (RNN)
+. Working on the same topic and with the same data
+Liao et al. (2023)
+, in turn, proposed a temporal convolutional encoder and human kinematics regression decoder
+NN
+that attained an angle error of 13.37º ± 5.35º, and 13.76º ± 5.21º, respectively.
+In gait, sensor reduction has also been investigated using
+NNs
+by
+Alcaraz et al. (2021)
+and
+Kumano et al. (2023)
+.
+Alcaraz et al. (2021)
+employed
+Long Short-Term Memory Networks (LSTMs)
+,
+General Regression Neural Networks (GRNNs)
+and
+Nonlinear Autoregressive Network with Exogenous Inputss (NARXs)
+to estimate sagittal lower limbs’ joint angles using only one
+IMU
+, placed on the foot. The
+LSTM
+outperformed the remaining, achieving errors between 1.91º and 2.57º, in comparison to the
+Ground-Truth (GT)
+data. However, the
+GT
+of this study was the joint angles output of a
+KF
+fed by data from 4
+IMUs
+, placed on the right side at the foot, lower leg, upper leg, and pelvis.
+Kumano et al. (2023)
+, in turn, presented a
+LSTMs
+-based
+NN
+designated IMU2Pose, which estimated 17 joint angles from 3
+IMU
+s positioned at the both heels and left wrist, obtaining a
+Root Mean Square Error (RMSE)
+lower than 12.28º. However, this approach was trained using synthetic
+IMU
+data, generated from the
+Kumano et al. (2019)
+dataset, whose data was captured using Vicon optical motion capture system.
+Notwithstanding, these approaches are not directly comparable with our goal, since they do not explore the potential of
+NN
+s to perform sensor fusion and joint angle estimation, required to estimate human body pose.
+Methodologies such as combining
+NN
+methods with classic sensor fusion methods, such as
+KF
+, have also been tested by Coskun et. al.
+Coskun et al. (2017)
+for pose estimation from images. The proposed method results outperformed the standalone
+KF
+and standalone
+LSTM
+, achieving state-of-art performance and reducing the joint error of the used dataset in 13.8%. This puts hybrid approaches as interesting solutions for pose estimation.
+2
+Methods
+This section describes the methodology behind the development of the framework for Inertial-based Human Pose Estimation. Therefore, it presents the equipments used in this work to build a custom dataset, along with the pre-process steps required to prepare the data. This is followed by an overview of the model framework and the tested
+NN
+architecture. Ends with the description of the post-processing steps.
+2.1
+Materials
+Two inertial-based systems were used in this work, as follows:
+2.1.1
+Ergowear
+Upper-body kinematics were acquired using a smart garment prototype, designated Ergowear
+Resende et al. (2021)
+. The system (Figure
+1(a)
+) is composed by 9 MPU-9250
+IMUs
+(InvenSense, San Jose, CA, USA), a low cost
+IMU
+that combines a tri-axial accelerometer (± 16 g) and a tri-axial gyroscope (± 2000 º/s) and a tri-axial magnetometer(±4900 µT). The
+IMUs
+were placed on the nape, shoulders, trunk (T4 and S1 levels),and right and left upper arms, forearms, and hands.
+2.1.2
+Movella MTw Awinda
+Full body kinematics were acquired using the the Movella MTw Awinda inertial
+MoCap
+system (Movella Technologies B.V., The Netherlands). It is composed of 17 wearable
+IMU
+sensors, which communicate via wireless with a base station module, connected to a computer. This system was used in two manners: i) with the proprietary Movella MVN Analyze software, validated in
+Al-Amri et al. (2018)
+), to acquire
+GT
+data. This software uses the Mtw trackers data to drive a biomechanical model of the subject that provides accurate positional and kinematic data, resulting in information on 23 human body segments. ii) with the free MTmanager software, to acquire high-quality raw sensor data. The system is depicted in figure
+1(b)
+.
+(a)
+Ergowear
+(b)
+MTwAwinda
+Figure 1
+:
+(a)
+Participant instrumented with Movella MTw Awinda and Ergowear.
+(b)
+Participant instrumented with two Movella MTw Awinda systems on top of each other.
+2.2
+Complete Inertial Pose Dataset
+A custom dataset, which is already publicly available
+Palermo et al. (2022a)
+, was elaborated to develop and validate the inertial
+Human Pose Estimation (HPE)
+approaches. To fully explore the potential of these methods and evaluate its performance, two data acquisitions were performed, with very different characteristics; one using low cost hardware on a indoor environment full of magnetic interference, which might be found in rehabilitation, office or industrial settings; and the other using high-quality hardware (Mtw Awinda (Movella Technologies, B.V., The Netherlands), running MtManager software), on an outdoor environment, selected to decrease environment magnetic disturbances and, therefore, provide a best case scenario. Both data acquisitions followed a similar protocol in terms of movement variability.
+Although both sensors (MPU9250 from Ergowear and the MTw motion tracker from Mtw Awinda) have available firmware for sensor fusion that provide sensor’s orientation, this output is not very stable for the low-cost sensors(MPU9250) and the programmer has no control over the implemented fusion filter. Therefore, it is not recommended in applications where high accuracy is required. As consequence only raw
+MARG
+sensor data, i.e. 3D acceleration, 3D angular velocity, and 3D magnetic field measurements, were acquired. Both raw sensor data was related and syncronized with
+GT
+data coming from the Movella MVN Analyse software system. A hardware trigger was used to start the acquisition on both systems.
+These two data acquisitions were conducted aiming to verify if NN-based approaches can learn how to surpass hardware and sensor fixation limitations, common on low-cost, widely available hardware and benchmark against a hardware that is near of ideal. A more complete description of the datasets can be read on our complementary publication
+Palermo et al. (2022b)
+;
+Palermo et al. (2022a)
+focusing on the data.
+2.3
+Pipeline Development and Data Calibration
+Figure 2
+:
+Complete pipeline from raw sensor data to full body pose.
+.
+A multi-step pipeline was implemented, compliant with inertial
+HPE
+literature
+Lopez-Nava & Munoz-Melendez (2016)
+;
+Picerno (2017)
+;
+Pacher et al. (2020)
+guidelines, to obtain the skeleton pose and compare results with the commercial
+MoCap
+systems. Figure
+2
+depicts this pipeline, whose steps are as follows:
+step 1)
+sensors’ scale/bias calibration
+step 2)
+sensor-to-segment calibration
+Picerno (2017)
+;
+Choe et al. (2019)
+;
+step 3)
+whole body sensor-fusion; Traditionally, this sensor fusion is performed for each sensor individually with classical filters (e.g. Kalman, Madgwick, among others)
+Roetenberg et al. (2009)
+. Innovation comes from the use of
+DL
+methods to replace these traditional approaches for sensor fusion.
+Step 4)
+is related to the 3D kinematics tool developed to allow easy visualization of the estimated pose.
+When using raw
+MARG
+data from the higher-end hardware from Movella, however, the sensor bias calibration step is not required, since the manufacture offers a sensor’s self-calibration procedure.
+2.4
+Sensor Fusion
+Calibrated
+MARG
+sensor data, in the segments referential (after
+STS
+calibration the sensor data is in the same referential as respective segments), was then fed to sensor-fusion methods (step 3 of figure
+2
+). These calculate the orientation (represented as unit quaternions) of each segment. The orientation at the initial timestep is calculated using the TRIAD method
+Markley & Crassidis (2014)
+, and is close to the unit quaternion since subjects will always start the trials in the same calibration pose, defined as reference.
+Figure 3
+:
+Multiple sensor-fusion architectures:
+1)
+Classical Filter-fusion;
+2)
+Neural-Networks (global);
+3a)
+Neural-Networks (complementary approach, abbreviated as Hybrid-Complementary-NN);
+3b and 3c)
+Hybrid Filter-Neural-Networks, abbreviated as Hybrid-CFF-NN.
+Three types of approaches with similar inputs and outputs were explored, as depicted in figure
+3
+:
+2.4.1
+Classical Fusion-Filter
+Follows the model-based classical literature
+Markley & Crassidis (2014)
+;
+Mahony et al. (2008)
+;
+Madgwick et al. (2011)
+;
+Sabatini (2011)
+and serves as a strong and relevant baseline on which most existing solutions are based
+Roetenberg et al. (2009)
+;
+Schepers et al. (2018)
+. It relies on mathematical analysis of
+MARG
+complementary sensor data (i.e. gyroscope to capture high frequency dynamics and accelerometer/magnetometer to provide global reference)
+Markley & Crassidis (2014)
+. In simpler complementary methods
+Madgwick et al. (2011)
+;
+Madgwick et al. (2020)
+;
+Mahony et al. (2008)
+;
+Markley & Crassidis (2014)
+, two different orientation solutions are averaged, by a gain factor: i) the gyroscope data integrated over time (dependent on previous step, making it recurrent), and ii) the accelerometer and magnetometer data using a TRIAD method (not dependent on previous steps).
+2.4.2
+Neural-Networks
+Uses model-free
+NNs
+to directly learn the mapping from
+MARG
+sensor readings, to orientations from the training data (figure
+3
+-2).
+This approach makes it straightforward to simultaneously combine data across all sensors, learning an internal latent biomechanical model representation, without explicit mathematical modeling. This combined with the use of information from multiple timesteps can reduce the effects of noise, magnetic disturbances and soft-body artifacts, which traditional systems have trouble dealing with, since these are hard to model explicitly
+Rong (2022)
+.
+2.4.3
+Hybrid-Filter-Neural-Networks
+Combines model-based fusion-filters with model-free
+NNs
+, with the objective of obtaining advantages from both approaches, namely: relying on model-based priors to improve generalization over the complete input space and facilitate training, while using
+NNs
+to learn to address unmodeled system dynamics and perform whole body sensor fusion.
+Two hybrid approaches for combining the
+NNs
+with filters were explored:
+i)
+the first (figure
+3
+-3a), abbreviated as Hybrid-Complementary-NN, is based on a complementary approach (inspired by the complementary filter). The gyroscope data is integrated across timesteps to produce the next quaternion, while a global quaternion is predicted by the
+NN
+, based on the
+MARG
+data. These are then added by a weighted importance factor.
+ii)
+the second approach, abbreviated as Hybrid-CFF-NN uses a classical fusion-filter to output a quaternion prediction. Then, this data, along with the
+MARG
+sensors readings, are fed into a
+NN
+, to output a residual quaternion correction.
+This approach can be divided in two more: 1) feedback-based approach (figure
+3
+-3b), where the quaternion from the
+NNs
+is fed back into the filter; 2) a detached approach ( figure
+3
+-3c), where the filter’s internal state is detached from the
+NN
+. This means that the classical fusion-filter quaternion predictions are independent of the
+NN
+predictions, contrary to the previous method.
+2.5
+3D kinematics
+The segment orientations can finally be combined with a kinematic model of the subject to obtain the 3D positions of the body segments. The kinematic model consisted of 9 segments for Ergowear (pelvis, T12, neck, right shoulder, left shoulder,right elbow, left elbow, right wrist and left wrist) and 17 segments for MTwAwinda (pelvis, stern, head, right shoulder, right upper arm, right forearm, right hand, left shoulder, left upper arm, left forearm, left hand,right upper leg, right lower leg, right foot,left upper leg, left lower leg, left foot). Default segments’ lengths of the kinematic chain were defined based on
+Behrad & Roodsarabi (2012)
+and the initial angles were set according to a N-pose. This way, the complete pose (orientation + position) is obtained, and can be used for easy visualization and evaluation (Figure
+2
+, step 4). It should be noted that the kinematics are performed in global segment space instead of parent-child relative joints as traditionally. This eases the process, since the filter fusion outputs are in the former representation.
+3
+Experimental Protocol
+This section details the experimental protocols, including details on the dataset creation, data pre/post-processing and networks training and evaluation. Variations of the network architectures are also considered at the end of the section.
+3.1
+Dataset Details
+21 (body mass = 66.0 ± 7.8 kg, body height = 171 ± 8.6 cm ) and 10 (body mass = 64.4 ± 8.5 kg, body height = 171 ±8.1 cm ) subjects, participated in the Ergowear and MTwAwinda acquisitions, respectively. Multiple trials were collected with the participants performing 6 types of sequences (ranging from calibration, to daily-activities and random movements), each focusing on different movement dynamics and range of motions. Each sequence was repeated 3 (Ergowear) and 5 (MTwAwinda) times. This amounts to 2.5M and 1M samples of data sampled at 60Hz, synchronized with a
+GT
+inertial
+MoCap
+system. As aforementioned, more details on the data and movements performed can be found on our complementary publication
+Palermo et al. (2022b)
+and publicity available dataset
+Palermo et al. (2022a)
+.
+Given the different number of sensors and, therefore, inputs / outputs contained in each dataset (9 vs 17), each one was treated separately to pre-process, train and evaluate solutions, following similar steps (Figure
+2
+).
+3.1.1
+Calibration
+The low-cost Ergowear sensors were calibrated (step 1 of figure
+2
+) to remove bias and scale factors over all axis, following standard procedures on
+MARG
+sensor literature
+Gonçalves et al. (2021)
+.
+Sensor-to-segment calibration (step 2 of figure
+2
+) was then performed, transforming the inertial data from the sensors’ referential to each of the corresponding segments’ referential. The segments’ referential aligns with the world referential in the
+North-West-Up (NWU)
+frame of reference when the user holds the T-Pose. This is consistent with the frame of reference used by the
+GT
+’s Movella Analyze software
+Xsens (2021a)
+, enabling direct comparison of the data.
+For the MTwAwinda dataset, offline
+STS
+calibration for each subject was performed using an optimization process
+Nomura et al. (2020)
+to minimize the
+Mean Squared Error (MSE)
+distance between sensor inertial data (accelerometer and gyroscope) and the respective
+GT
+trajectories, yielding relatively low orientation offsets. This was performed using multiple long trials, presenting slow dynamics with high variability (mostly sequence and task trials), which resulted in lower error than the standard calibration trials. The transformation was assumed to be constant across trials for the same subject, since the sensors were firmly secured with straps with good grip.
+Unfortunately, this approach did not work reliably for the Ergowear data, since there was some unpredictable sensor displacement across trials. This derived from the subject’s movement and the fact that the smart-garment prototype was not capable to firmly secure the sensors to the subjects’ segments. Instead, a simple static-calibration
+Choe et al. (2019)
+method was used to obtain a reasonable transformation, using the static N-Pose data collected on the start of each trial (first 5 seconds). This method assumes a manual and fixed sensor placement, which is then corrected to the sensor’s referential in the pitch/roll axis, using earth’s gravity vector as reference.
+3.1.2
+Pre-Processing
+The datasets were then preprocessed
+1
+1
+1
+https://github.com/ManuelPalermo/HumanInertialPose/tree/main/hipose/data/dataset_parsing
+to make the data more suitable, for training and evaluating the models. This included:
+i)
+interpolation of missing or corrupt data samples;
+ii)
+resampling of the Ergowear data to a constant 60Hz in order to match the
+GT
+system (not required for the MTwAwinda since data was acquired at this frequency);
+iii)
+filtering out all trials where issues were detected (
+e.g.
+loose sensors, data desynchronization or corruption, etc…);
+iv)
+removing the initial seconds (
+∼
+\sim
+5s) of each trial, which contained static N-Pose calibration data;
+v)
+mapping all
+GT
+segments’ sensor data to the corresponding in each dataset (
+i.e
+9 upper-body segments for Ergowear and 17 full-body segments for the MTwAwinda, from the original 23 from the Movella
+TM
+Analyze software);
+vi)
+normalization of the data to more suitable ranges (accel in
+m
+/
+s
+2
+m/s^{2}
+was converted to
+g
+g
+, magnetometer was normalized by the average magnitude of the measured magnetic field, the gyroscope data in
+r
+​
+a
+​
+d
+​
+s
+/
+s
+rads/s
+already had reasonable values, as well as the unit quaternions used to represent the
+GT
+orientations).
+Figure 4
+:
+Boxplots of the measured acceleration values per segment: (a) Ergoaware dataset, (b) MtwAwinda dataset.
+.
+Table
+1
+presents the descriptive analysis of the two datasets, Ergoaware and MTwAwinda. As it can be observed, except for the magnetometer sensors of the MTwAwinda sensor, the wide range between the minimum and the maximum values, as well as the high and positive kurtosis, suggest that some values deviate substantially from the mean of the data. Also, one can observe that the statistics values are similar when comparing each sensor of each dataset, i.e. accelerometer with accelerometer, gyroscope with gyroscope. The main difference is verified between the magnetometers, which have similar values of mean and standard deviation. However, the maximum and minimum values are very different, possibly due to the high presence of magnetic perturbations in Ergoaware environment, as described in section
+3.1
+. Additionally, in terms of mean value, data is approximately centered around zero, and the standard deviation is around 0.6 G (6
+m
+/
+s
+2
+m/s^{2}
+) for the accelerometers, which is in agreement with the normal acceleration values for daily activities such as human walking
+Bouten et al. (1997)
+and 1.4 º/s for the gyroscopes. Figure
+4
+presents the boxplot of all accelerometer sensors for Ergoaware and MTwAwinda datasets. The remaining sensors are not shown for space and readability reasons. Limbs extremities such as hands, foots, as well as the forearms, present a higher acceleration values range.
+Table 1
+:
+Descriptive analysis of MTwAwinda and Ergoaware datasets
+Dataset
+Sensor
+Mean
+Standard Deviation
+Min
+Max
+Kurtosis
+Skewness
+Ergowear
+Acc
+-0.224
+0.625
+-21.878
+17.614
+4.303
+0.134
+Gyr
+-0.009
+1.181
+-37.392
+34.139
+16.09
+-0.087
+Mag
+-0.093
+0.611
+-37.651
+50.417
+9.839
+0.173
+MTwAwinda
+Acc
+-0.261
+0.63
+-21.145
+17.211
+5.798
+-0.014
+Gyr
+-0.008
+1.49
+-41.237
+36.478
+23.033
+-0.287
+Mag
+-0.236
+0.449
+-2.08
+2.348
+-0.871
+0.509
+3.1.3
+Data Splits
+Each of the datasets was split by subjects into train (70%), evaluation(20%), and test(10%). The split was kept constant to correctly perform benchmarking across multiple models and hyper-parameters. The training split only contained
+task
+,
+circuit
+,
+sequence
+and
+random
+trials, given that the
+calibration
+and
+validation
+trials contained little whole-body dynamic movements (these were still used in the validation and test splits). The resulting data is summarized on Table
+2
+.
+Table 2
+:
+Summary of the train, validation and test data splits for Ergowear and MTwAwinda datasets.
+Dataset
+Splits
+Subjects
+Trials
+Samples
+Ergowear
+train
+15
+184
+773.6k
+val
+4
+24
+101.9k
+test
+2
+51
+236.4k
+MTwAwinda
+train
+7
+117
+480.1k
+val
+1
+20
+73.2k
+test
+2
+41
+188.5k
+3.2
+Sensor Fusion Models: Pipeline Details
+All models were created and trained using the Pytorch
+Paszke et al. (2019)
+DL
+library and with the help of Pytorch-Lightning
+William & The PyTorch Lightning team (2019)
+to facilitate training and evaluation details, on a Python environment.
+The baseline filter-fusion models followed the same pipeline as the
+DL
+models, but the training steps were skipped since these had no learnable parameters. Thus, only testing was performed by computing performance metrics on the same test set. All
+MARG
+sensor data was used as input by default and all models produced orientations for all segments.
+Full trajectories were used to validate and test the models. This is necessary, given the recurrent nature of the fusion-filters and the
+DL
+models used (based on
+RNNs
+), emulating usage in real applications. The full trajectories were also used for training the
+DL
+models, performing backpropagation through time.
+3.2.1
+NN models
+Following existing literature
+Huang et al. (2018)
+;
+Yi et al. (2021)
+;
+Weber et al. (2020)
+, recurrent based
+NNs
+were used, with
+LSTM
+being chosen as the default choice. These were preferred over window based approaches
+Bai et al. (2018)
+;
+Vaswani et al. (2017)
+given the similar recurrent nature of classical filters
+Markley & Crassidis (2014)
+.
+3.2.2
+Hyperparameters
+Reasonable hyper-parameters for training were found empirically and kept constant for all the combinations of models tried. The AdamW
+Loshchilov & Hutter (2017)
+optimizer was selected with an initial learning rate of 2e-3 which was decayed to 1e-5 over 25 epochs using a cosine-annealing schedule with warmup
+Smith & Topin (2019)
+with a batch size of 64. Gradient clipping
+Pascanu et al. (2013)
+with a range of [-0.2, 0.2] was applied during training for all models. At the end of the training, the best model was selected according to the validation loss. All layers, except for the outputs, were followed by
+Batch Normalization (BN)
+Ioffe & Szegedy (2015)
+and a
+Rectified Linear Unit (ReLU)
+non-linearity
+Glorot et al. (2011)
+.
+3.2.3
+Data Augmentation and Regularization
+To increase variability and, consequently, the model’s capacity to generalize, random train-time data augmentation was applied to input and
+GT
+data. This included: sensor gaussian or uniform noise; sensor dropout, i.e., random sensors’ data is overwritten to zero; time-step dropout, i.e., time samples are removed; and small sensor data rotation offsets.
+The strength of the augmentations was increased incrementally over each epoch. Additional train-time regularization was applied to most layers of the model in the form of dropout
+Srivastava et al. (2014)
+, with percentage of 20% for all layers and weight decay parameter
+Krogh & Hertz (1992)
+with a value of 1e-5.
+3.2.4
+Loss
+All
+DL
+models were trained using the
+Quaternion Angle Distance (QAD)
+loss (Eq.
+1
+)
+Huynh (2009)
+, which directly minimizes the angle distance between two quaternions, while avoiding discontinuities associated with Euler representations and classical distance metrics (e.g.
+MSE
+), which, when tried, led to high training instability.
+Q
+​
+A
+​
+D
+=
+2
+×
+arccos
+⁡
+(
+|
+q
+t
+​
+a
+​
+r
+​
+g
+​
+e
+​
+t
+⋅
+q
+p
+​
+r
+​
+e
+​
+d
+|
+)
+,
+Q
+​
+A
+​
+D
+∈
+[
+0
+,
+π
+]
+QAD=2\times\arccos(|q_{target}\cdot q_{pred}|),\quad QAD\in[0,\pi]
+(1)
+3.3
+Performance Metrics
+All models (classical filters and
+NNs
+) were evaluate based on the
+QAD
+Huynh (2009)
+metric (Eq.
+1
+), converted to degrees for easier interpretation.
+QAD
+- The average
+QAD
+metric across time and across all sensors was used, in general, to compare results from different methods.
+QAD Boxplots
+- The
+QAD
+distribution was plotted for each of the predicted segment orientations and visualized in boxplots, to better analyze the error for each individually.
+QAD Timeplots
+- The
+QAD
+was plotted over time for each of the predicted segment orientations, giving a better notion of how the error evolves overtime (
+e.g.
+drift) or in specific complex dynamics.
+Inference Time
+- Inference time was evaluated on an Intel
+TM
+i9-10940X (3.30 GHz) CPU. This is crucial for assessing whether the application meets real-time requirements and refers to the time needed to load and process the inputs into the device and perform a forward pass for a single sample. The results were obtained by running inference on all samples in the test split.
+3.4
+Model Variants
+Some alternative methods were tried, with regards to sensor fusion, some of which had been previously tried in the literature with varying degrees of success, these included:
+i)
+the use of a magnetic rejection heuristic based on the measured magnetic field magnitude, similarly to Madgwick
+et. al.
+Madgwick et al. (2020)
+;
+ii)
+sensor fusion with or without the use of magnetometer data;
+iii)
+different types of
+RNNs
+, namely: vanila
+RNN
+,
+Gated Recurrent Unit (GRU)
+Cho et al. (2014)
+,
+Temporal Graph Convolutional Network (TGCN)
+Zhao et al. (2019)
+and
+LSTM
+Hochreiter & Schmidhuber (1997)
+;
+iv)
+different types of
+NN
+output representations, namely: Euler, quaternion and 6D representation
+Zhou et al. (2019)
+(the representation is still converted to quaternion, as a post-processing step to compute the loss and metrics).
+v)
+model training with temporal windows (1, 2, 5, and 50 steps)
+Hochreiter & Schmidhuber (1997)
+, as opposed to the full trajectories. Although this approach is common in the literature, it was not performed by default as it lead to high error accumulation on the integration step of complementary methods.
+vi)
+different loss functions:
+MSE
+,
+MSE
+but taking into account the shortest rotation arch
+qdist
+and root-segment-relative
+QAD
+(
+RelQAD
+).
+4
+Results
+4.1
+Models’ performance
+4.1.1
+Experiments with Neural Networks
+Table 3
+:
+Sensor Fusion average results, in QADº, and inference time (ms) on Ergowear and MTwAwinda data.
+Experiment
+Variant
+Ergowear
+MTwAwinda
+Ergowear QADº
+Inference time (ms)
+MTwAwinda QADº
+Inference time (ms)
+Model-Free-NN
+GRU
+22.59
+±
+\pm
+15.73
+0.30
+±
+\pm
+0.01
+28.07
+±
+\pm
+23.98
+0.33
+±
+\pm
+0.03
+LSTM
+21.57
+±
+\pm
+14.97
+0.32
+±
+\pm
+0.01
+27.97
+±
+\pm
+24.05
+0.34
+±
+\pm
+0.02
+TGCN
+29.20
+±
+\pm
+21.43
+0.50
+±
+\pm
+0.01
+37.21
+±
+\pm
+34.13
+0.60
+±
+\pm
+0.02
+Hybrid-Complementary-NN
+GRU
+21.48
+±
+\pm
+17.87
+0.43
+±
+\pm
+0.01
+24.80
+±
+\pm
+23.15
+0.47
+±
+\pm
+0.01
+LSTM
+21.58
+±
+\pm
+18.89
+0.46
+±
+\pm
+0.01
+24.30
+±
+\pm
+22.63
+0.49
+±
+\pm
+0.02
+TGCN
+32.59
+±
+\pm
+23.60
+0.63
+±
+\pm
+0.01
+38.68
+±
+\pm
+36.13
+0.74
+±
+\pm
+0.02
+Hybrid-CFF-NN
+LSTM-MG-detach
+20.63
+±
+\pm
+16.45
+1.64
+±
+\pm
+0.02
+8.08
+±
+\pm
+6.67
+1.63
+±
+\pm
+0.03
+LSTM-MG-feedback
+diverged
+-
+diverged
+-
+TGCN-MG-detach
+21.89
+±
+\pm
+17.00
+1.84
+±
+\pm
+0.02
+7.96
+±
+\pm
+6.72
+1.85
+±
+\pm
+0.01
+TGCN-MG-feedback
+diverged
+-
+diverged
+-
+Table
+3
+depicts the results from the 3 approaches, i.e., model-free
+NNs
+, Hybrid-Complementary-
+NNs
+, and Hybrid-Classic-Filter-
+NNs
+, on both Ergowear and MTwAwinda data.
+The best performance was achieved by the TGCN-MG-feedback, on the MTw Awinda dataset, attaining a
+QAD
+error of 7.96º ± 6.72. However, when testing on the Ergowear dataset, the architecture with the best results was the LSTM-MG-detached, with a
+QAD
+of 20.63º ± 16.45. Overall, the Hybrid-Classic-Filter-
+NNs
+outperformed the model-free-
+NNs
+and Hybrid-Complementary-
+NNs
+. Notwithstanding, when comparing between datasets, it is possible to observe that the results for Ergowear were more precise (meaning that result values are closer), ranging from 20.63º ± 16.45 to 32.59º ± 23.60 in contrast to 7.96º ± 6.72 to 38.68º ± 36.13 from MTwAwinda. In specific, the Model-free-
+NNs
+performed better on the Ergowear than on MTwAwinda data. This is also supported by the standard deviation which is higher on the MTwAwinda data.
+Regarding inference time, as expected, it increases with the complexity of the model. Model-free
+NNs
+had the lowest inference times (ranging from 0.3 to 0.6 ms), followed closely by the Hybrid-Complementary-
+NNs
+. The Hybrid CFF-
+NNs
+, due to the added complexity of combining a classic filter with
+NNs
+, resulted in longer inference times (1.64 to 1.85 ms) .
+(a)
+Ergowear’s Model-free LSTM
+(b)
+MTwAwinda’s Model-free LSTM
+(c)
+Ergowear’s LSTM-MG-detach
+(d)
+MTwAwinda’s LSTM-MG-detach
+Figure 5
+:
+Boxplots showing the error per segment:
+(
+a
+) Model-free LSTM on the Ergowear test set,
+(
+b
+) Model-free LSTM on the MTwAwinda test set,
+(
+c
+) LSTM-MG-detach on the Ergowear test set, and
+(
+d
+) LSTM-MG-detach on the MTwAwinda test set.
+Figure
+5
+presents the error per segment of model-free LSTM and LSTM-MG-detach, on both Ergowear and MTwAwinda. As observed, the error per segment of the model-free LSTM trained and tested on Ergowear (fig.
+5
+.a) is more consistent than the one resulting from MTwAwinda ( fig.
+5
+.b), meaning that the third quartile, in almost all segments, was bellow the 30º degrees error mark on Ergowear data. The main contributor for the high average error and standard deviation are the upper limbs (i.e., hands, lower arm, and upper arm) possibly due to the high range of motion of the shoulder joint and consequent movement possibilities for the upper limbs. Also, this high average error is consistent with the pattern observed in the boxplot presented in figure
+4
+.a, in terms of acceleration range. In turn, for Ergowear’s LSTM-MG-detach (
+5
+.c), the greatest source of error is the neck segment, while for MTwAwinda’s LSTM-MG-detach (
+5
+.d) the right hand and the left lower and upper leg were the segments with higher error.
+4.1.2
+Comparison with classical sensor fusion filters
+As a baseline for the deep learning-based experiments, we computed the classical fusion filters
+QAD
+metrics, on both datasets. Different variants were tested to provide a broader comparison base, namely, Mahony filter without magnetometer data, Madgwick filter with and without magnetometer data, Madgwick filter with magnetometer rejection band, and the Extended Kalman Filter(
+Extended Kalman Filter (EKF)
+) with magnetometer data. Table
+4
+depicts the achieved results.
+As expected, the lower errors were obtained on the MTw Awinda dataset, ranging from 7.76º ± 6.75º to 17.03º ± 17.79º. In specific, the lowest
+QAD
+was achieved for the Madgwick with magnetometer band rejection heuristic, closely followed by the Madgwick with magnetometer (7.87º ± 6.76º). Comparing to the results achieved by the
+NN
+-based methods, one can observe that despite none of the
+NN
+-based model presented in table
+3
+overcomes the best classical fusion filter, i.e., the Madgwick with magnetometer band rejection heuristic, the QAD resulting from the TGCN-MG-detach model was very close (7.96º ± 6.72º), as well as the LSTM-MG-detach (8.08º ± 6.67º).
+Table 4
+:
+Average
+QAD
+º and inference time (ms) results, on Ergowear and MTwAwinda data, of Classical Sensor Fusion filters and best NN-based sensor fusion method.
+Experiment
+Ergowear
+MTwAwinda
+QAD°
+Inference time (ms)
+QAD°
+Inference time (ms)
+Mahony (w/o mag)
+20.73
+±
+\pm
+19.39
+0.38
+±
+\pm
+0.01
+12.35
+±
+\pm
+14.00
+0.38
+±
+\pm
+0.01
+Madgwick (w/o mag)
+20.71
+±
+\pm
+20.34
+0.35
+±
+\pm
+0.01
+11.24
+±
+\pm
+13.25
+0.36
+±
+\pm
+0.01
+Madgwick (w/ mag)
+23.23
+±
+\pm
+17.58
+1.15
+±
+\pm
+0.03
+7.87
+±
+\pm
+6.76
+1.16
+±
+\pm
+0.02
+Madgwick (w/ mag reject)
+22.86
+±
+\pm
+17.50
+1.15
+±
+\pm
+0.02
+7.76
+±
+\pm
+6.75
+1.17
+±
+\pm
+0.01
+EKF (w/mag)
+27.48
+±
+\pm
+20.56
+1.09
+±
+\pm
+0.02
+10.17
+±
+\pm
+7.11
+1.12
+±
+\pm
+0.01
+Integral
+26.74
+±
+\pm
+27.77
+0.18
+±
+\pm
+0.00
+17.031
+±
+\pm
+17.79
+0.19
+±
+\pm
+0.00
+LSTM-MG-detach (NN-based)
+20.63
+±
+\pm
+16.45
+1.64
+±
+\pm
+0.02
+8.08
+±
+\pm
+6.67
+1.63
+±
+\pm
+0.03
+TGCN-MG-detach (NN-based)
+21.89 ± 17.00
+1.84
+±
+\pm
+0.02
+7.96 ± 6.72
+1.16
+±
+\pm
+0.02
+For Ergowear dataset the
+QAD
+ranged between 20.71º ± 20.34º and 27.48 ± 20.56, with best and worst fusion filters corresponding to the Madgwick without mag and the
+EKF
+without magnetometer, respectively. With this dataset, the best result was slightly outperformed by the LSTM-MG-detach algorithm( 20.63º
+±
+\pm
+16.45º). Also, comparing the standard deviation between both experiments, one can observe that the angle estimation achieved with the NN-based algorithms is more precise. Aditionally, when comparing the classical fusion filter that used the magnetometer data, whose
+QAD
+ranged between 22.86º ± 17.50º and 27.48º ± 20.56º, with
+NN
+-based models, it is possible to observe that almost all
+NN
+-based models outperform the classical filters, with the exception of models based on the
+TGCN
+. Since Ergowear enviroment was full of magnetic interferences, this could indicate that
+NN
+-based fusion filter are less affected by them.
+The presence of the magnetometer also has impact on the inference times. As observed, in the classical sensor fusion filter, adding a magnetometer increased the inference time from 0.35 ms to 1.15 ms in the case of the Madgwick algorithm. Furthermore, by comparing the information in table
+3
+with that in table
+4
+, one can observe that the inference time of the Hybrid-CFF-
+NNs
+is higher than the combined inference times of the individual models.
+4.2
+Benchmark and Ablation Studies
+Table 5
+:
+Average
+QAD
+º results of the ablation studies on Ergowear data. To ease the results analysis, performance improvements are in bold and underlined, slight performance decreases (
+<
+<
+1º) are underlined, and performance decreases are in normal text, all in relation to the baseline results.
+Ablation study
+LSTM
+COMP-LSTM
+TGCN
+TGCN-COMP
+LSTM-MG-detach
+Baseline
+21.57
+±
+\pm
+14.97
+21.58
+±
+\pm
+18.89
+29.20
+±
+\pm
+21.43
+32.59
+±
+\pm
+23.60
+20.63
+±
+\pm
+16.45
+no augmentation
+22.20
+±
+\pm
+15.39
+21.70
+±
+\pm
+18.17
+29.73
+±
+\pm
+22.25
+34.85
+±
+\pm
+23.23
+20.54
+±
+\pm
+16.38
+output (6D)
+23.04
+±
+\pm
+16.82
+23.30
+±
+\pm
+21.44
+23.06
+±
+\pm
+17.17
+25.18
+±
+\pm
+23.25
+21.21
+±
+\pm
+16.35
+no magnetometer
+36.97
+±
+\pm
+29.07
+33.95
+±
+\pm
+27.79
+41.15
+±
+\pm
+31.45
+42.41
+±
+\pm
+30.65
+-
+window (50)
+17.48
+±
+\pm
+11.01
+27.44
+±
+\pm
+29.47
+30.08
+±
+\pm
+24.76
+46.56
+±
+\pm
+34.47
+22.70
+±
+\pm
+16.16
+window (5)
+46.08
+±
+\pm
+36.07
+84.60
+±
+\pm
+43.00
+-
+-
+23.46
+±
+\pm
+17.42
+window (2)
+69.76
+±
+\pm
+31.47
+84.75
+±
+\pm
+47.76
+-
+-
+23.11
+±
+\pm
+16.16
+window (1)
+109.41
+±
+\pm
+41.29
+95.80
+±
+\pm
+43.13
+-
+-
+23.17
+±
+\pm
+17.64
+MSE
+30.80
+±
+\pm
+25.67
+33.46
+±
+\pm
+31.66
+-
+-
+23.53
+±
+\pm
+19.68
+qdist
+22.12
+±
+\pm
+15.57
+21.08
+±
+\pm
+17.64
+-
+-
+21.23
+±
+\pm
+16.97
+RelQAD
+35.28
+±
+\pm
+19.77
+21.37
+±
+\pm
+17.72
+-
+-
+20.78
+±
+\pm
+16.17
+Table 6
+:
+Average
+QAD
+º results of the ablation studies on MTwAwinda data performance improvements are in bold and underlined, slight performance decreases (
+<
+<
+1º) are underlined, and performance decreases are in normal text, all in relation to the baseline results.
+Ablation study
+LSTM
+COMP-LSTM
+TGCN
+TGCN-COMP
+LSTM-MG-detach
+Baseline
+27.97
+±
+\pm
+24.05
+24.30
+±
+\pm
+22.63
+37.21
+±
+\pm
+34.13
+38.68
+±
+\pm
+36.13
+8.08
+±
+\pm
+6.67
+no augmentation
+27.65
+±
+\pm
+24.05
+25.08
+±
+\pm
+23.95
+35.20
+±
+\pm
+32.54
+36.00
+±
+\pm
+32.91
+8.05
+±
+\pm
+6.85
+output (6D)
+29.53
+±
+\pm
+26.90
+31.4
+±
+\pm
+30.58
+30.23
+±
+\pm
+26.64
+34.73
+±
+\pm
+31.42
+7.82
+±
+\pm
+6.76
+no magnetometer
+62.92
+±
+\pm
+39.69
+52.72
+±
+\pm
+37.88
+66.87
+±
+\pm
+40.04
+65.87
+±
+\pm
+41.60
+-
+window (50)
+14.29
+±
+\pm
+12.17
+98.18
+±
+\pm
+56.96
+19.56
+±
+\pm
+17.20
+30.24
+±
+\pm
+25.83
+7.58
+±
+\pm
+6.72
+window (5)
+28.33
+±
+\pm
+30.83
+63.00
+±
+\pm
+48.63
+-
+-
+7.80
+±
+\pm
+6.76
+window (2)
+36.26
+±
+\pm
+28.74
+47.77
+±
+\pm
+36.35
+-
+-
+7.87
+±
+\pm
+6.76
+window (1)
+69.82
+±
+\pm
+40.09
+64.64
+±
+\pm
+40.19
+-
+-
+7.93
+±
+\pm
+7.92
+MSE
+46.53
+±
+\pm
+36.94
+41.36
+±
+\pm
+35.59
+-
+-
+8.37
+±
+\pm
+7.00
+qdist
+28.55
+±
+\pm
+24.24
+23.86
+±
+\pm
+22.61
+-
+-
+8.15
+±
+\pm
+6.85
+RelQAD
+77.33
+±
+\pm
+45.35
+24.11
+±
+\pm
+22.40
+-
+-
+7.97
+±
+\pm
+6.76
+Multiple ablation studies were conducted by removing certain components of the complete pipeline, to identify the contribution of each to the overall results.
+To ease the analysis, the results were divided by dataset, i.e., Ergowear and MTwAwinda, which are summarized in Table
+5
+and Table
+6
+. For a question of space and organization, the tables that contain the inference time of these models were added to the appendix (Table
+8
+and Table
+7
+.The findings are next described.
+4.2.1
+Data augmentation and regularization
+To understand the effects of data augmentation for the
+NNs
+training, we conducted a experiment where the methods were trained without any data augmentation and regularization.
+Starting by the Ergowear dataset, and comparing with the results achieved with the methods trained with data augmentation and regularization (baseline), in general the non-use of these techniques resulted in a slight performance decrease, with average
+QAD
+increasing between 0.58 % and 6.93%, for the model-free
+LSTM
+and
+TGCN
+, and hybrid-complementary(COMP)
+LSTM
+and
+TGCN
+. The exception was the LSTM-MG-detach algorithms, where the average
+QAD
+reduced 0.47%..
+On the MTw Awinda data, in turn, in relation to the baseline, it is possible to observe that the non-use of augmentation resulted in a improvement in the
+QAD
+metric, with a reduction between 0.45% and 6.92%. The exception was the complementary LSTM, where
+QAD
+increased 3.22%.
+4.2.2
+Output Representation
+Most works use quaternions to represent 3D rotations. However, recently, 6D continuous representations have been proposed suggesting that they outperform the commonly used 4D representation. This ablation test aims to understand if this extra effort, in terms of computation
+Pepe et al. (2022)
+and implementation, is worthwhile.
+For Ergowear data, table
+5
+shows that using a 6D representation only resulted in a performance improvement of the
+TGCN
+model, both in model-free and complementary approaches, with a QAD decrease of 21.07% and 22.75%, respectively. regarding the remaining algorithms, the use of a 6D representation showed no positive results (QAD increase between 2.81% and 7.99%)
+For MTwAwinda data, using the 6D output representation resulted in slight improvement of the LSTM-MG-detach (0.03 QAD, reduction of 3.23 %), and similarly to the ergowear data, the complementary
+TGCN
+. The remaining did not benefit from the introduction of the 6D output representation ( QAD increase between 5.56% and 29.35%). Further, as it can be observed in Tables
+7
+and
+8
+in Appendix A, the inference time of the models using this output representation increased, being the highest between the ablations tests.
+4.2.3
+Use of Magnetometer
+The magnetometer is a sensor typically affected by magnetic interferences, which can increase the pose estimation error. To understand the impact of the use of magnetometer data and if the
+NNs
+can handle magnetic interferences, we conducted an ablation study where all the algorithms were trained without using the magnetometer data.
+In both datasets, the removal of the magnetometer sensors ’s affect all models’ performance negatively, with the
+QAD
+increasing between 30.12% and 71.38% for ergoware dataset, and between 70.31% and 124.91% for MTwAwinda dataset.
+Figure 6
+:
+Temporal results on 5min trial with and without magnetometer, for the COMP-LSTM model.
+4.2.4
+Use of Windows for training
+To understand the trade-off of using window for training, a experiment was conducted where
+NNs
+were trained using windows of 50, 5, 2, and 1 samples.
+Starting the analysis by the ergowear dataset, from table
+5
+it is possible to observe that when using windows of 50 samples the
+LSTM
+model outperformed considerably the baseline value. Also, when comparing to the classical sensor fusion filters from table
+4
+, it is possible to observe that QAD obtained by the
+LSTM
+trained with windows of 50 samples (17.48º ± 11.01º) is smaller than the one obtained by the Madgwick without magnetometer (20.71º ± 20.34º), which was the best method in terms of QAD. However, for the remaining
+NN
+models, the effects of these 50 samples windows were not positive. For the smaller window sizes (5, 2, and 1 sample) the resulting
+QAD
+value was considerably higher, being the highest achieved by 1 sample windows (109.41º ± 41.29º for LSTM, 407% higher than the baseline). Notwithstanding, the LSTM-madgwick_detach was not so affected by the window size as the other algorithms.
+Regarding MTwAwinda dataset, similar to the Ergowear dataset, the use of 50 sample window led to the best results in terms of QAD, in almost all models, to the exception of the complementary
+LSTM
+. In fact, the effect was very notorious on the
+LSTM
+model, whose
+QAD
+lowered from the baseline’s 27.97º± 24.05º to 14.29º ± 12.17º (reduction of 48.82%) and on the LSTM-madgwick_detach, which attained the best
+QAD
+lowest
+QAD
+of all the experiments, with 7.58º ± 6.76º, lower than the
+QAD
+achieved with the Madgwick with magnetometer rejection (7.76º ± 6.75º). The use of small windows, with 1,2, and 5 samples, on the other hand, only seemed to benefit the LSTM-madgwick_detach model, with all windows achieving a
+QAD
+slightly inferior to the baseline. However, it is possible to observe that smaller the window size, higher the
+QAD
+.
+4.2.5
+Use of different loss functions
+These experiments were conducted to test the impact of different loss functions, namely MSE,
+qdist
+, and
+RelQAD
+, during the
+NN
+s training. Overall, no significant
+QAD
+decreases were verified.
+On Ergowear data, the only cases where
+QAD
+decreased was with Complementary LSTM, trained with the
+qdist
+(21.08º ± 17.64º, reduction of 2.30%) and
+RelQAD
+(21.37º ± 17.72º, reduction of 0.95%) loss functions, The remaining experiments resulted in higher
+QAD
+s, with increases between 0.73% and 63.57%. The
+MSE
+loss function was the
+On the MTwAwinda data, the results pattern was similar, with
+QAD
+being decreased when training the Complementary LSTM, with the
+qdist
+(23.86º ± 22.61º, reduction of 1.81%) and
+RelQAD
+(24.11º ± 22.40º, reduction of 0.77%) loss function, and, contrary to the Ergowear data, training the LSTM-madgwick_detach with
+RelQAD
+also resulted in a
+QAD
+decrease (7.97º ± 6.76º, reduction of 1.37%). The remaining experiments also resulted in higher QADs, with the increase ranging between 0.79% and 176.42%
+Aditionally, in both datasets (table
+5
+and
+6
+), it was possible to observe the
+MSE
+loss function was the one that led to the worst performances, the
+RelQAD
+loss fuction seems to be a bad fit for the model-free
+LSTM
+, and the
+qdist
+function seems to lead similar results to the
+QAD
+as loss function.
+5
+Discussion
+Three different approaches were proposed to study the use of
+NNs
+-based methods for Inertial pose estimation and benchmarked against commonly used algorithms, on data representative of low cost (Ergowear) and high end (Movella).
+In general, the
+NN
+based models were able to obtain comparative results to existing classical fusion-filter approaches, but not outperform them consistently.
+Notwithstanding, the existence of a high amount of sensor-to-segment offsets made it harder to compare results. This indicates that when dealing with whole-body sensor fusion solutions, the complete processing pipeline needs to be considered, and not only the sensor fusion stage, in order to obtain the low errors needed for real-world applications.
+The best results were, in general, achieved with the MTwAwinda dataset. This was expected given the higher quality data from the sensors and sensor-to-segment calibration method used.
+Regarding the classical filters, these obtained relatively large errors, when compared to values in the literature, especially in the Ergowear dataset. This was mostly due to the presence of constant sensor-to-segment offsets. Nevertheless, these results served as baselines to compare novel approaches (Table
+4
+).
+The lower error obtained by the classical filters without using the data from the magnetometer can be attributed to the presence of magnetic disturbances and the relatively short trials. This is especially true for the Ergowear data, which was obtained in a more susceptible environment. Withal, the use of magnetometer data is necessary to prevent unbounded drift which accumulates over time, which is seen in longer trials (Figure
+6
+).
+The magnetic rejection heuristic was able to improve results, compared to the default filter implementations with magnetometer, as also found by
+Madgwick et al. (2020)
+. This indicates the presence of magnetic interference during the trials, and the attention needed to mitigate this issue. The
+NNs
+were capable of somewhat dealing with the magnetic disturbances, obtaining better results than the baseline filters with magnetometer. The improvement was lesser in the MTwAwinda dataset, given the lower amount of disturbances, due to the added attention to this issue during acquisition.
+Of the
+NN
+backbone models tested, the
+LSTM
+performed best in general, closely followed by
+GRU
+, while the graph-based
+TGCN
+performed much worse (Table
+3
+).
+The model-free
+NNs
+were not able to consistently outperform the classical fusion filters. In the Ergowear datasets, the models obtained slightly better results, which might indicate the ability to compensate some of the lower quality data and calibration. However, on the MTwAwinda dataset, with better quality data, the models were far from outperforming the classical filters. Withal, the higher error obtained with this dataset (in comparison to ergowear) was not expected, but might be attributed to the higher complexity in fusion the full body sensor data (17 full-body vs 9 upper-body sensors) and lower number of training samples (2.5M vs 1M timesteps).
+The complementary
+NNs
+results were slightly better than the ones obtained with the model-free
+NN
+approach. Still, they were not capable to surpass the classical fusion filters, even though this method relies on the gyroscope integration from the classical "Integral" algorithm. Given the higher effort in its implementation and instability during training (when using windows, as discussed bellow), this method should not be preferred (at least with this simplistic approach, to the model-free
+NN
+approach).
+The hybrid Madgwick filter and
+NNs
+, was the one that presented the best results. On both Ergowear and MTwAwinda datasets the methods were able to achieve very similar results to the best classical sensor fusion filter for each dataset. In fact, for the Ergowear dataset, the method was capable of surpassing the classical method, although with a little difference. Even though, the
+QAD
+error remained, in the best case, 20.63º for the Ergowear and 7.80º for the MTwAwinda datasets.
+Regarding the ablation studies, starting by the data augmentation and regularization, the use of these methods did not seem to bring improvements, possibly given the large amount of data present in the datasets, the relatively small
+NN
+models and the simple augmentation strategies used.
+In terms of output representation, the 6D representation did not appear to improve results compared to the default quaternions, contrary to the findings of
+Zhou et al. (2019)
+.
+In relation to the use of magnetometer, as expected, it proved to have a considerable impact when using
+NNs
+. This reinforces the need of magnetometer data and is indicative of the struggles with stable integration over long time horizons, while on the contrary being easier to fuse non-linear data from the accelerometer, magnetometer, and gyroscope to obtain the sensor orientation.
+The windowed training made it difficult to optimize complementary-based models. This results from the drift and consequent error accumulation, which when using small window intervals becomes insignificant and thus ignored when optimizing, leading to high accumulation over the larger time-frames used for testing. Nevertheless, training with windows can and should be used when training non-complementary models, since this allows better train parallelization, speeding up training and lower prediction error.
+However, training with very small temporal windows (
+<
+<
+5 samples), overall, led to worse results, making this an important parameter to consider.
+As for the use of different loss functions, the traditionally used
+MSE
+had the worst results. The
+qdist
+performed much better, with results similar to
+QAD
+. A relative root approach was also tried, yielding similar results for the complementary
+NN
+approach, but much worse results for the model-free approach, which further evidences that model-free
+NN
+mostly ignores the integration of orientation over a long time horizon.
+The inference time of the filters used ranged from around 0.3ms (model-free
+NNs
+) to 2ms (Hybrid-CFF-
+NNs
+), on CPU (Intel
+TM
+i9-10940X 3.30 GHz), with the the higher values being observed in the LSTM-MG-detach models. Thus, the deployment of the full-body fusion algorithms should not be an issue in most settings, since all of its components (classical filters,
+RNNs
+) are suitable for real-time inference, and the computation can be vectorized for any number of sensors used.
+6
+Conclusion
+The goal of this work was to study the use of methods based on
+NNs
+for the estimation of inertial pose, with the aim of a method capable of abstracting from complex biomechanical models and analytical mathematics.
+This work indicates that
+NNs
+can be trained to perform full-body sensor fusion, with results comparable to classical filters. In addition, it suggests that a combination of classical filters with
+NNs
+methods could lead to improvements with model-based principled outputs of the classical filters, with the data-driven adaptability of
+NNs
+to deal with possible perturbations. However, depending on the accuracy requirements of specific applications, the current model may require further refinement to meet those needs.
+Nevertheless, solving the full-body inertial pose estimation problem requires not only addressing the errors arising from the sensor fusion step but also considering the entire pipeline, including sensor-to-segment calibration. Therefore, future work should explore more advanced sensor-to-segment calibration techniques. Additionally, given the complexity of the problem due to the high degrees of freedom in the human body, the existing dataset should be expanded to provide more data for re-training the models.
+Acknowledgments
+This work is supported by: European Structural and Investment Funds in the FEDER component, through the Operational Competitiveness and Internationalization Programme (COMPETE 2020) [Project nº 39479; Funding Reference: POCI-01-0247-FEDER-39479]; national support to R&D units grant through the reference project UIDB/04436/2020 and UIDP/04436/20200. Sara Cerqueira was supported by the doctoral Grant SFRH/BD/151382/2021, financed by the Portuguese Foundation for Science and Technology (FCT), under MIT Portugal Program.
+Author contributions statement
+S.C., M.P. and C.P.S. contributed to the conceptualization and methodology design of the study ; M.P. developed the software; S.C. conducted validation and visualization. S.C., M.P., and C.P.S. analyzed the results; S.C. and M.P wrote the first draft of the manuscript. S.C., M.P. and C.P.S. contributed to manuscript revision and approved the submitted version. C.P.S. supervised the work and founded the research project.
+Declaration of Competing Interests
+The authors declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
+Appendix A
+Table 7
+:
+Average
+QAD
+º and Inference time (ms) results of the ablation studies on Ergowear data. To ease the results analysis, performance improvements are in bold and underlined, slight performance decreases (
+<
+<
+1º) are underlined, and performance decreases are in normal text, all in relation to the baseline results.
+Ablation study
+LSTM
+COMP-LSTM
+TGCN
+TGCN-COMP
+LSTM-MG-detach
+QAD (º)
+Inference Time (ms)
+QAD (º)
+Inference Time (ms)
+QAD (º)
+Inference Time (ms)
+QAD (º)
+Inference Time (ms)
+QAD (º)
+Inference Time (ms)
+Baseline
+21.57
+±
+\pm
+14.97
+0.32
+±
+\pm
+0.01
+21.58
+±
+\pm
+18.89
+0.46
+±
+\pm
+0.01
+29.20
+±
+\pm
+21.43
+0.50
+±
+\pm
+0.01
+32.59
+±
+\pm
+23.60
+0.63
+±
+\pm
+0.01
+20.63
+±
+\pm
+16.45
+1.64
+±
+\pm
+0.02
+no augmentation
+22.20
+±
+\pm
+15.39
+0.32
+±
+\pm
+0.01
+21.70
+±
+\pm
+18.17
+0.32
+±
+\pm
+0.01
+29.73
+±
+\pm
+22.25
+0.54
+±
+\pm
+0.01
+34.85
+±
+\pm
+23.23
+0.66
+±
+\pm
+0.01
+20.54
+±
+\pm
+16.38
+1.60
+±
+\pm
+0.02
+output (6D)
+23.04
+±
+\pm
+16.82
+0.72
+±
+\pm
+0.01
+23.30
+±
+\pm
+21.44
+0.84
+±
+\pm
+0.01
+23.06
+±
+\pm
+17.17
+0.72
+±
+\pm
+0.01
+25.18
+±
+\pm
+23.25
+0.85
+±
+\pm
+0.01
+21.21
+±
+\pm
+16.35
+1.98
+±
+\pm
+0.02
+no magnetometer
+36.97
+±
+\pm
+29.07
+0.32
+±
+\pm
+0.01
+33.95
+±
+\pm
+27.79
+0.48
+±
+\pm
+0.01
+41.15
+±
+\pm
+31.45
+0.52
+±
+\pm
+0.01
+42.41
+±
+\pm
+30.65
+0.66
+±
+\pm
+0.01
+-
+-
+window (50)
+17.48
+±
+\pm
+11.01
+0.33
+±
+\pm
+0.01
+27.44
+±
+\pm
+29.47
+0.33
+±
+\pm
+0.01
+30.08
+±
+\pm
+24.76
+0.70
+±
+\pm
+0.11
+46.56
+±
+\pm
+34.47
+0.81
+±
+\pm
+0.06
+22.70
+±
+\pm
+16.16
+1.82
+±
+\pm
+0.06
+window (5)
+46.08
+±
+\pm
+36.07
+0.33
+±
+\pm
+0.01
+84.60
+±
+\pm
+43.00
+0.47
+±
+\pm
+0.01
+-
+-
+-
+-
+23.46
+±
+\pm
+17.42
+1.59
+±
+\pm
+0.02
+window (2)
+69.76
+±
+\pm
+31.47
+0.32
+±
+\pm
+0.01
+84.75
+±
+\pm
+47.76
+0.45
+±
+\pm
+0.01
+-
+-
+-
+-
+23.11
+±
+\pm
+16.16
+1.58
+±
+\pm
+0.02
+window (1)
+109.41
+±
+\pm
+41.29
+0.33
+±
+\pm
+0.01
+95.80
+±
+\pm
+43.13
+0.46
+±
+\pm
+0.01
+-
+-
+-
+-
+23.17
+±
+\pm
+17.64
+1.61
+±
+\pm
+0.01
+MSE
+30.80
+±
+\pm
+25.67
+0.32
+±
+\pm
+0.01
+33.46
+±
+\pm
+31.66
+0.32
+±
+\pm
+0.01
+-
+-
+-
+-
+23.53
+±
+\pm
+19.68
+1.59
+±
+\pm
+0.03
+qdist
+22.12
+±
+\pm
+15.57
+0.32
+±
+\pm
+0.01
+21.08
+±
+\pm
+17.64
+0.46
+±
+\pm
+0.01
+-
+-
+-
+-
+21.23
+±
+\pm
+16.97
+1.61
+±
+\pm
+0.01
+RelQAD
+35.28
+±
+\pm
+19.77
+0.32
+±
+\pm
+0.04
+21.37
+±
+\pm
+17.72
+0.47
+±
+\pm
+0.01
+-
+-
+-
+-
+20.78
+±
+\pm
+16.17
+1.63
+±
+\pm
+0.02
+Table 8
+:
+Average
+QAD
+º and inference time (ms) results of the ablation studies on MTwAwinda data performance improvements are in bold and underlined, slight performance decreases (
+<
+<
+1º) are underlined, and performance decreases are in normal text, all in relation to the baseline results.
+Ablation study
+LSTM
+COMP-LSTM
+TGCN
+TGCN-COMP
+LSTM-MG-detach
+QAD (º)
+Inference Time (ms)
+QAD (º)
+Inference Time (ms)
+QAD (º)
+Inference Time (ms)
+QAD (º)
+Inference Time (ms)
+QAD (º)
+Inference Time (ms)
+Baseline
+27.97
+±
+\pm
+24.05
+0.34
+±
+\pm
+0.01
+24.30
+±
+\pm
+22.63
+0.49
+±
+\pm
+0.01
+37.21
+±
+\pm
+34.13
+0.60
+±
+\pm
+0.01
+38.68
+±
+\pm
+36.13
+0.74
+±
+\pm
+0.02
+8.08
+±
+\pm
+6.67
+1.63
+±
+\pm
+0.03
+no augmentation
+27.65
+±
+\pm
+24.05
+0.57
+±
+\pm
+0.01
+25.08
+±
+\pm
+23.95
+0.72
+±
+\pm
+0.01
+35.20
+±
+\pm
+32.54
+0.33
+±
+\pm
+0.01
+36.00
+±
+\pm
+32.91
+0.48
+±
+\pm
+0.01
+8.05
+±
+\pm
+6.85
+1.64
+±
+\pm
+0.02
+output (6D)
+29.53
+±
+\pm
+26. 90
+0.84
+±
+\pm
+0.01
+31.4
+±
+\pm
+30.58
+0.89
+±
+\pm
+0.21
+30.23
+±
+\pm
+26.64
+0.79
+±
+\pm
+0.03
+34.73
+±
+\pm
+31.42
+0.89
+±
+\pm
+0.01
+7.82
+±
+\pm
+6.76
+0.32
+±
+\pm
+0.01
+no magnetometer
+62.92
+±
+\pm
+39.69
+0.36
+±
+\pm
+0.04
+52.72
+±
+\pm
+37.88
+0.50
+±
+\pm
+0.01
+66.87
+±
+\pm
+40.04
+0.59
+±
+\pm
+0.01
+65.87
+±
+\pm
+41.60
+0.73
+±
+\pm
+0.01
+-
+-
+window (50)
+14.29
+±
+\pm
+12.17
+0.53
+±
+\pm
+0.04
+98.18
+±
+\pm
+56.96
+0.37
+±
+\pm
+0.04
+19.56
+±
+\pm
+17.20
+0.56
+±
+\pm
+0.01
+30.24
+±
+\pm
+25.83
+0.69
+±
+\pm
+0.01
+7.58
+±
+\pm
+6.72
+1.89
+±
+\pm
+0.05
+window (5)
+28.33
+±
+\pm
+30.83
+0.34
+±
+\pm
+0.03
+63.00
+±
+\pm
+48.63
+0.47
+±
+\pm
+0.01
+-
+-
+-
+-
+7.80
+±
+\pm
+6.76
+1.84
+±
+\pm
+0.05
+window (2)
+36.26
+±
+\pm
+28.74
+0.33
+±
+\pm
+0.01
+47.77
+±
+\pm
+36.35
+0.47
+±
+\pm
+0.01
+-
+-
+-
+-
+7.87
+±
+\pm
+6.76
+1.62
+±
+\pm
+0.01
+window (1)
+69.82
+±
+\pm
+40.09
+0.34
+±
+\pm
+0.02
+64.64
+±
+\pm
+40.19
+0.49
+±
+\pm
+0.01
+-
+-
+-
+-
+7.93
+±
+\pm
+7.92
+1.66
+±
+\pm
+0.01
+MSE
+46.53
+±
+\pm
+36.94
+0.36
+±
+\pm
+0.04
+41.36
+±
+\pm
+35.59
+0.49
+±
+\pm
+0.01
+-
+-
+-
+-
+8.37
+±
+\pm
+7.00
+1.66
+±
+\pm
+0.02
+qdist
+28.55
+±
+\pm
+24.24
+0.35
+±
+\pm
+0.02
+23.86
+±
+\pm
+22.61
+0.48
+±
+\pm
+0.01
+-
+-
+-
+-
+8.15
+±
+\pm
+6.85
+1.68
+±
+\pm
+0.02
+RelQAD
+77.33
+±
+\pm
+45.35
+0.35
+±
+\pm
+0.05
+24.11
+±
+\pm
+22.40
+0.49
+±
+\pm
+0.01
+-
+-
+-
+-
+7.97
+±
+\pm
+6.76
+1.67
+±
+\pm
+0.06
+Glossary
+Acronyms
+biRNN
+bi-directional Recurrent Neural Network
+BN
+Batch Normalization
+DL
+Deep learning
+EKF
+Extended Kalman Filter
+GRNN
+General Regression Neural Network
+GRU
+Gated Recurrent Unit
+GT
+Ground-Truth
+HPE
+Human Pose Estimation
+IMU
+Inertial Measurement Unit
+KF
+Kalman Filter
+LSTM
+Long Short-Term Memory Network
+MARG
+Magnetic, Angular Rate, and Gravity
+MoCap
+Motion Capture
+MSE
+Mean Squared Error
+NARX
+Nonlinear Autoregressive Network with Exogenous Inputs
+NN
+Neural Network
+NWU
+North-West-Up
+QAD
+Quaternion Angle Distance
+ReLU
+Rectified Linear Unit
+RMSE
+Root Mean Square Error
+RNN
+Recurrent Neural Network
+SDI
+Strap-down Integration
+STS
+Sensor-to-Segment
+TGCN
+Temporal Graph Convolutional Network
+References
+Al-Amri et al. (2018)
+Al-Amri, M., Nicholas, K.,
+Button, K., Sparkes, V.,
+Sheeran, L., & Davies, J. L.
+(2018).
+Inertial measurement units for clinical movement
+analysis: Reliability and concurrent validity.
+Sensors
+,
+18
+.
+URL:
+https://www.mdpi.com/1424-8220/18/3/719
+.
+doi:
+10.3390/s18030719
+.
+Alcaraz et al. (2021)
+Alcaraz, J. C., Moghaddamnia, S., &
+Peissig, J. (2021).
+Efficiency of deep neural networks for joint angle
+modeling in digital gait assessment.
+EURASIP J. Adv. Signal Process.
+,
+2021
+, 10. URL:
+https://doi.org/10.1186/s13634-020-00715-1
+.
+doi:
+10.1186/s13634-020-00715-1
+.
+Atrsaei et al. (2018)
+Atrsaei, A., Salarieh, H.,
+Alasty, A., & Abediny, M.
+(2018).
+Human Arm Motion Tracking by Inertial/Magnetic
+Sensors Using Unscented Kalman Filter and Relative Motion Constraint.
+Journal of Intelligent & Robotic Systems
+,
+90
+, 161–170. URL:
+http://link.springer.com/10.1007/s10846-017-0645-z
+.
+doi:
+10.1007/s10846-017-0645-z
+.
+Bai et al. (2018)
+Bai, S., Kolter, J. Z., &
+Koltun, V. (2018).
+An empirical evaluation of generic convolutional and
+recurrent networks for sequence modeling.
+arXiv preprint arXiv:1803.01271
+, .
+Behrad & Roodsarabi (2012)
+Behrad, A., & Roodsarabi, N.
+(2012).
+3D Human Motion Tracking and Reconstruction Using
+DCT Matrix Descriptor.
+ISRN Machine Vision
+,
+2012
+, 1–11. URL:
+https://www.hindawi.com/journals/isrn/2012/235396/
+.
+doi:
+10.5402/2012/235396
+.
+Bouten et al. (1997)
+Bouten, C., Koekkoek, K.,
+Verduin, M., Kodde, R., &
+Janssen, J. (1997).
+A triaxial accelerometer and portable data processing
+unit for the assessment of daily physical activity.
+IEEE transactions on bio-medical
+engineering
+,
+44
+, 136–47.
+doi:
+10.1109/10.554760
+.
+Cho et al. (2014)
+Cho, K., Van Merriënboer, B.,
+Bahdanau, D., & Bengio, Y.
+(2014).
+On the properties of neural machine translation:
+Encoder-decoder approaches.
+arXiv preprint arXiv:1409.1259
+, .
+Choe et al. (2019)
+Choe, N., Zhao, H., Qiu,
+S., & So, Y. (2019).
+A sensor-to-segment calibration method for motion
+capture system based on low cost mimu.
+Measurement
+,
+131
+, 490–500. URL:
+https://www.sciencedirect.com/science/article/pii/S0263224118307176
+.
+doi:
+https://doi.org/10.1016/j.measurement.2018.07.078
+.
+Coskun et al. (2017)
+Coskun, H., Achilles, F.,
+DiPietro, R., Navab, N., &
+Tombari, F. (2017).
+Long short-term memory kalman filters: Recurrent
+neural estimators for pose regularization.
+In
+2017 IEEE International Conference on
+Computer Vision (ICCV)
+(pp. 5525–5533).
+doi:
+10.1109/ICCV.2017.589
+.
+Das et al. (2022)
+Das, R., Paul, S., Mourya,
+G. K., Kumar, N., & Hussain, M.
+(2022).
+Recent trends and practices toward assessment and
+rehabilitation of neurodegenerative disorders: Insights from human gait.
+Frontiers in Neuroscience
+,
+16
+, 859298.
+doi:
+10.3389/fnins.2022.859298
+.
+Fan et al. (2017)
+Fan, B., Li, Q., & Liu,
+T. (2017).
+How Magnetic Disturbance Influences the Attitude and
+Heading in Magnetic and Inertial Sensor-Based Orientation Estimation.
+Sensors
+,
+18
+,
+76. URL:
+http://www.mdpi.com/1424-8220/18/1/76
+.
+doi:
+10.3390/s18010076
+.
+Figueiredo et al. (2020)
+Figueiredo, J., Carvalho, S.,
+Vilas-Boas, J. P., Goncalves, L.,
+Moreno, J., & Santos, C.
+(2020).
+Wearable inertial sensor system towards daily human
+kinematic gait analysis: Benchmarking analysis to mvn biomech.
+Sensors
+,
+20
+,
+2185. doi:
+10.3390/s20082185
+.
+Gamra & Akhloufi (2021)
+Gamra, M., & Akhloufi, M.
+(2021).
+A review of deep learning techniques for 2d and 3d
+human pose estimation.
+Image and Vision Computing
+,
+114
+, 104282.
+doi:
+https://doi.org/10.1016/j.imavis.2021.104282
+.
+Glorot et al. (2011)
+Glorot, X., Bordes, A., &
+Bengio, Y. (2011).
+Deep sparse rectifier neural networks.
+In G. Gordon, D. Dunson, &
+M. Dudík (Eds.),
+Proceedings of
+the Fourteenth International Conference on Artificial Intelligence and
+Statistics
+(pp. 315–323).
+Fort Lauderdale, FL, USA:
+PMLR volume 15 of
+Proceedings of Machine Learning Research
+.
+URL:
+https://proceedings.mlr.press/v15/glorot11a.html
+.
+González-Alonso et al. (2021)
+González-Alonso, J., Oviedo-Pastor, D.,
+Aguado, H. J., Díaz-Pernas, F. J.,
+González-Ortega, D., &
+Martínez-Zarzuela, M. (2021).
+Custom imu-based wearable system for robust 2.4 ghz
+wireless human body parts orientation tracking and 3d movement visualization
+on an avatar.
+Sensors
+,
+21
+.
+URL:
+https://www.mdpi.com/1424-8220/21/19/6642
+.
+doi:
+10.3390/s21196642
+.
+Gonçalves et al. (2021)
+Gonçalves, H. R., Rodrigues, A., &
+Santos, C. P. (2021).
+Gait monitoring system for patients with
+parkinson’s disease.
+Expert Systems with Applications
+,
+185
+, 115653. URL:
+https://www.sciencedirect.com/science/article/pii/S0957417421010447
+.
+doi:
+https://doi.org/10.1016/j.eswa.2021.115653
+.
+Hochreiter & Schmidhuber (1997)
+Hochreiter, S., & Schmidhuber, J.
+(1997).
+Long short-term memory.
+Neural computation
+,
+9
+, 1735–1780.
+Huang et al. (2018)
+Huang, Y., Kaufmann, M.,
+Aksan, E., Black, M. J.,
+Hilliges, O., & Pons-Moll, G.
+(2018).
+Deep inertial poser: Learning to reconstruct human
+pose from sparse inertial measurements in real time.
+ACM Transactions on Graphics, (Proc. SIGGRAPH
+Asia)
+,
+37
+, 185:1–185:15.
+First two authors contributed equally.
+Huynh (2009)
+Huynh, D. Q. (2009).
+Metrics for 3d rotations: Comparison and analysis.
+Journal of Mathematical Imaging and
+Vision
+,
+35
+, 155–164.
+Ioffe & Szegedy (2015)
+Ioffe, S., & Szegedy, C.
+(2015).
+Batch normalization: Accelerating deep network
+training by reducing internal covariate shift.
+In F. Bach, & D. Blei (Eds.),
+Proceedings of the 32nd International Conference on
+Machine Learning
+(pp. 448–456).
+Lille, France: PMLR
+volume 37 of
+Proceedings of Machine
+Learning Research
+.
+Krogh & Hertz (1992)
+Krogh, A., & Hertz, J. A.
+(1992).
+A simple weight decay can improve generalization.
+In J. E. Moody, S. J. Hanson, &
+R. P. Lippmann (Eds.),
+Advances in
+Neural Information Processing Systems 4
+(pp. 950–957).
+Morgan-Kaufmann.
+Kumano et al. (2019)
+Kumano, Y., Kanoga, S.,
+Yamamoto, M., Takemura, H., &
+Tada, M. (2019).
+Advanced industrial science and technology gait
+database 2019.
+URL:
+https://unit.aist.go.jp/harc/ExPART/GDB2019.html
+.
+Kumano et al. (2023)
+Kumano, Y., Kanoga, S.,
+Yamamoto, M., Takemura, H., &
+Tada, M. (2023).
+Estimating whole-body walking motion from inertial
+measurement units at wrist and heels using deep learning.
+International Journal of Automation
+Technology
+,
+17
+, 217–225.
+doi:
+10.20965/ijat.2023.p0217
+.
+Li et al. (2022)
+Li, J., Wang, Z., Qi, B.,
+Zhang, J., & Yang, H.
+(2022).
+Meme: A mutually enhanced modeling method for
+efficient and effective human pose estimation.
+Sensors
+,
+22
+.
+URL:
+https://www.mdpi.com/1424-8220/22/2/632
+.
+doi:
+10.3390/s22020632
+.
+Liao et al. (2023)
+Liao, X., Dong, J., Song,
+K., & Xiao, J. (2023).
+Three-dimensional human pose estimation from sparse
+imus through temporal encoder and regression decoder.
+Sensors
+,
+23
+.
+URL:
+https://www.mdpi.com/1424-8220/23/7/3547
+.
+doi:
+10.3390/s23073547
+.
+Ligorio et al. (2020)
+Ligorio, G., Bergamini, E.,
+Truppa, L., Guaitolini, M.,
+Raggi, M., Mannini, A.,
+Sabatini, A. M., Vannozzi, G., &
+Garofalo, P. (2020).
+A wearable magnetometer-free motion capture system:
+Innovative solutions for real-world applications.
+IEEE Sensors Journal
+,
+20
+, 8844–8857.
+doi:
+10.1109/JSEN.2020.2983695
+.
+Lisini et al. (2019)
+Lisini, T., Farina, F.,
+Garulli, A., Giannitrapani, A., &
+Prattichizzo, D. (2019).
+Upper body pose estimation using wearable inertial
+sensors and multiplicative kalman filter.
+IEEE Sensors Journal
+, .
+Lopez-Nava & Munoz-Melendez (2016)
+Lopez-Nava, I. H., & Munoz-Melendez, A.
+(2016).
+Wearable inertial sensors for human motion analysis:
+A review.
+IEEE Sensors Journal
+,
+16
+, 7821–7834.
+Loshchilov & Hutter (2017)
+Loshchilov, I., & Hutter, F.
+(2017).
+Decoupled weight decay regularization.
+arXiv preprint arXiv:1711.05101
+, .
+Luo et al. (2016)
+Luo, J., Tang, J., &
+Xiao, X. (2016).
+Abnormal gait behavior detection for elderly based on
+enhanced wigner-ville analysis and cloud incremental svm learning.
+Journal of Sensors
+,
+2016
+, 1–18.
+doi:
+10.1155/2016/5869238
+.
+Madgwick et al. (2011)
+Madgwick, S. O. H., Harrison, A. J. L., &
+Vaidyanathan, R. (2011).
+Estimation of imu and marg orientation using a
+gradient descent algorithm.
+In
+2011 IEEE International Conference on
+Rehabilitation Robotics
+(pp. 1–7).
+doi:
+10.1109/ICORR.2011.5975346
+.
+Madgwick et al. (2020)
+Madgwick, S. O. H., Wilson, S.,
+Turk, R., Burridge, J.,
+Kapatos, C., & Vaidyanathan, R.
+(2020).
+An extended complementary filter for full-body marg
+orientation estimation.
+IEEE/ASME Transactions on Mechatronics
+,
+25
+, 2054–2064.
+doi:
+10.1109/TMECH.2020.2992296
+.
+Mahony et al. (2008)
+Mahony, R., Hamel, T., &
+Pflimlin, J.-M. (2008).
+Nonlinear complementary filters on the special
+orthogonal group.
+IEEE Transactions on Automatic Control
+,
+53
+, 1203–1218.
+doi:
+10.1109/TAC.2008.923738
+.
+Markley & Crassidis (2014)
+Markley, F. L., & Crassidis, J. L.
+(2014).
+Fundamentals of Spacecraft Attitude
+Determination and Control
+.
+Space Technology Library.
+Springer New York, NY.
+URL:
+https://doi.org/10.1007/978-1-4939-0802-8
+.
+Martins et al. (2024)
+Martins, D. R., Cerqueira, S. M., &
+Santos, C. P. (2024).
+Combining inertial-based ergonomic assessment with
+biofeedback for posture correction: A narrative review.
+Computers & Industrial Engineering
+,
+190
+, 110037. URL:
+https://www.sciencedirect.com/science/article/pii/S036083522400158X
+.
+doi:
+https://doi.org/10.1016/j.cie.2024.110037
+.
+Merino et al. (2019)
+Merino, G., da Silva, L.,
+Mattos, D., Guimarães, B., &
+Merino, E. (2019).
+Ergonomic evaluation of the musculoskeletal risks in
+a banana harvesting activity through qualitative and quantitative measures,
+with emphasis on motion capture (xsens) and emg.
+International Journal of Industrial
+Ergonomics
+,
+69
+, 80–89.
+URL:
+https://www.sciencedirect.com/science/article/pii/S0169814118302038
+.
+doi:
+https://doi.org/10.1016/j.ergon.2018.10.004
+.
+Nomura et al. (2020)
+Nomura, M., Watanabe, S.,
+Akimoto, Y., Ozaki, Y., &
+Onishi, M. (2020).
+Warm starting cma-es for hyperparameter
+optimization.
+arXiv preprint arXiv:2012.06932
+, .
+Pacher et al. (2020)
+Pacher, L., Chatellier, C.,
+Vauzelle, R., & Fradet, L.
+(2020).
+Comparison of lower limb calibration methods for
+movement analysis with inertial measurement unit (imu).
+Computer Methods in Biomechanics and
+Biomedical Engineering
+,
+23
+,
+S215–S217. doi:
+10.1080/10255842.2020.1813432
+.
+Palermo et al. (2022a)
+Palermo, M., Cerqueira, S.,
+André, J., & C. Santos, C.
+(2022a).
+Complete inertial pose (cip) dataset.
+URL:
+https://doi.org/10.5281/zenodo.5801927
+.
+doi:
+10.5281/zenodo.5801927
+.
+Palermo et al. (2022b)
+Palermo, M., Cerqueira, S. M.,
+André, J., Pereira, A., &
+Santos, C. P. (2022b).
+From raw measurements to human pose - a dataset with
+low-cost and high-end inertial-magnetic sensor data.
+Scientific Data
+,
+9
+, 591. URL:
+https://doi.org/10.1038/s41597-022-01690-y
+.
+doi:
+10.1038/s41597-022-01690-y
+.
+Pascanu et al. (2013)
+Pascanu, R., Mikolov, T., &
+Bengio, Y. (2013).
+On the difficulty of training recurrent neural
+networks.
+In
+International conference on machine
+learning
+(pp. 1310–1318).
+Paszke et al. (2019)
+Paszke, A., Gross, S.,
+Massa, F., Lerer, A.,
+Bradbury, J., Chanan, G.,
+Killeen, T., Lin, Z.,
+Gimelshein, N., Antiga, L.,
+Desmaison, A., Kopf, A.,
+Yang, E., DeVito, Z.,
+Raison, M., Tejani, A.,
+Chilamkurthy, S., Steiner, B.,
+Fang, L., Bai, J., &
+Chintala, S. (2019).
+Pytorch: An imperative style, high-performance deep
+learning library.
+In H. Wallach, H. Larochelle,
+A. Beygelzimer, F. d'Alché-Buc, E. Fox, & R. Garnett
+(Eds.),
+Advances in Neural Information Processing
+Systems 32
+(pp. 8024–8035).
+Curran Associates, Inc.
+URL:
+http://papers.neurips.cc/paper/9015-pytorch-an-imperative-style-high-performance-deep-learning-library.pdf
+.
+Paulich et al. (2018)
+Paulich, M., Schepers, M.,
+Rudigkeit, N., & Bellusci, G.
+(2018).
+Xsens mtw awinda: Miniature wireless
+inertial-magnetic motion tracker for highly accurate 3d kinematic
+applications.
+doi:
+10.13140/RG.2.2.23576.49929
+.
+Pepe et al. (2022)
+Pepe, A., Lasenby, J., &
+Chacón, P. (2022).
+Learning rotations.
+Mathematical Methods in the Applied
+Sciences
+, . URL:
+https://onlinelibrary.wiley.com/doi/abs/10.1002/mma.8698
+.
+doi:
+https://doi.org/10.1002/mma.8698
+.
+Picerno (2017)
+Picerno, P. (2017).
+25 years of lower limb joint kinematics by using
+inertial and magnetic sensors: A review of methodological approaches.
+Gait & Posture
+,
+51
+, 239–246. URL:
+https://www.sciencedirect.com/science/article/pii/S0966636216306373
+.
+doi:
+https://doi.org/10.1016/j.gaitpost.2016.11.008
+.
+Rana & Mittal (2021)
+Rana, M., & Mittal, V.
+(2021).
+Wearable sensors for real-time kinematics analysis in
+sports: A review.
+IEEE Sensors Journal
+,
+21
+, 1187–1207.
+doi:
+10.1109/JSEN.2020.3019016
+.
+Resende et al. (2021)
+Resende, A., Cerqueira, S.,
+Barbosa, J., Damásio, E.,
+Pombeiro, A., Silva, A., &
+Santos, C. (2021).
+Ergowear: an ambulatory, non-intrusive, and
+interoperable system towards a human-aware human-robot collaborative
+framework.
+In
+2021 IEEE International Conference on
+Autonomous Robot Systems and Competitions (ICARSC)
+(pp.
+56–61).
+doi:
+10.1109/ICARSC52212.2021.9429796
+.
+Roetenberg (2006)
+Roetenberg, D. (2006).
+Inertial and magnetic sensing of human
+motion
+.
+Ph.D. thesis University of Twente Netherlands.
+Roetenberg et al. (2009)
+Roetenberg, D., Luinge, H., &
+Slycke, P. (2009).
+Xsens mvn: Full 6dof human motion tracking using
+miniature inertial sensors.
+Xsens Motion Technologies BV, Tech. Rep
+,
+1
+.
+Rong (2022)
+Rong, S. (2022).
+Quantifications and characteristics of dynamic
+soft tissue artifacts captured by wearable inertial measurement unit
+sensors
+.
+Ph.D. thesis University of British Columbia.
+URL:
+https://open.library.ubc.ca/collections/ubctheses/24/items/1.0421332
+.
+doi:
+http://dx.doi.org/10.14288/1.0421332
+.
+Sabatini (2011)
+Sabatini, A. M. (2011).
+Kalman-filter-based orientation determination using
+inertial/magnetic sensors: Observability analysis and performance
+evaluation.
+Sensors
+,
+11
+,
+9182–9206. URL:
+https://www.mdpi.com/1424-8220/11/10/9182
+.
+Schepers et al. (2018)
+Schepers, M., Giuberti, M.,
+Bellusci, G. et al. (2018).
+Xsens mvn: Consistent tracking of human motion using
+inertial sensing.
+Xsens Technol
+, (pp.
+1–8).
+Smith & Topin (2019)
+Smith, L. N., & Topin, N.
+(2019).
+Super-convergence: Very fast training of neural
+networks using large learning rates.
+In
+Artificial Intelligence and Machine
+Learning for Multi-Domain Operations Applications
+(p.
+1100612).
+International Society for Optics and
+Photonics volume 11006.
+Sprager & Juric (2015)
+Sprager, S., & Juric, M. B.
+(2015).
+Inertial sensor-based gait recognition: A review.
+Sensors
+,
+15
+,
+22089–22127. URL:
+https://www.mdpi.com/1424-8220/15/9/22089
+.
+Srivastava et al. (2014)
+Srivastava, N., Hinton, G.,
+Krizhevsky, A., Sutskever, I., &
+Salakhutdinov, R. (2014).
+Dropout: A simple way to prevent neural networks from
+overfitting.
+Journal of Machine Learning Research
+,
+15
+, 1929–1958.
+Vaswani et al. (2017)
+Vaswani, A., Shazeer, N.,
+Parmar, N., Uszkoreit, J.,
+Jones, L., Gomez, A. N.,
+Kaiser, Ł., & Polosukhin, I.
+(2017).
+Attention is all you need.
+Advances in neural information processing
+systems
+,
+30
+.
+Vignais et al. (2013)
+Vignais, N., Miezal, M.,
+Bleser, G., Mura, K.,
+Gorecky, D., & Marin, F.
+(2013).
+Innovative system for real-time ergonomic feedback in
+industrial manufacturing.
+Applied Ergonomics
+,
+44
+, 566–574. URL:
+https://www.sciencedirect.com/science/article/pii/S0003687012001858
+.
+doi:
+https://doi.org/10.1016/j.apergo.2012.11.008
+.
+Weber et al. (2020)
+Weber, D., Gühmann, C., &
+Seel, T. (2020).
+Neural networks versus conventional filters for
+inertial-sensor-based attitude estimation.
+In
+2020 IEEE 23rd International Conference
+on Information Fusion (FUSION)
+(pp. 1–8).
+IEEE.
+William & The PyTorch Lightning team (2019)
+William, F., & The PyTorch Lightning
+team (2019).
+PyTorch Lightning.
+URL:
+https://github.com/PyTorchLightning/pytorch-lightning
+.
+doi:
+10.5281/zenodo.3828935
+.
+Xsens (2021a)
+Xsens (2021a).
+Mvn user manual.
+https://www.xsens.com/hubfs/Downloads/usermanual/MVN_User_Manual.pdf
+.
+Accessed: 2021-11-02.
+Xsens (2021b)
+Xsens (2021b).
+Understanding strapdown integration.
+https://xsenstechnologies.force.com/knowledgebase/s/article/Understanding-Strapdown-Integration?language=en_US
+.
+Accessed: 2022-01-05.
+Yi et al. (2021)
+Yi, X., Zhou, Y., & Xu,
+F. (2021).
+Transpose: Real-time 3d human translation and pose
+estimation with six inertial sensors.
+ACM Transactions on Graphics
+,
+40
+.
+Zhao et al. (2019)
+Zhao, L., Song, Y., Zhang,
+C., Liu, Y., Wang, P.,
+Lin, T., Deng, M., &
+Li, H. (2019).
+T-gcn: A temporal graph convolutional network for
+traffic prediction.
+IEEE Transactions on Intelligent
+Transportation Systems
+, . doi:
+10.1109/TITS.2019.2935152
+.
+Zhou et al. (2019)
+Zhou, Y., Barnes, C., Lu,
+J., Yang, J., & Li, H.
+(2019).
+On the continuity of rotation representations in
+neural networks.
+In
+2019 IEEE/CVF Conference on Computer
+Vision and Pattern Recognition (CVPR)
+(pp. 5738–5746).
+doi:
+10.1109/CVPR.2019.00589
+.
+Škulj et al. (2021)
+Škulj, G., Vrabič, R., &
+Podržaj, P. (2021).
+A wearable imu system for flexible teleoperation of a
+collaborative industrial robot.
+Sensors
+,
+21
+.
+URL:
+https://www.mdpi.com/1424-8220/21/17/5871
+.
+doi:
+10.3390/s21175871
+.
+Experimental support, please
+view the build logs
+for errors. Generated by
+L
+A
+T
+E
+xml
+.
+Instructions for reporting errors
+We are continuing to improve HTML versions of papers, and your feedback helps enhance accessibility and mobile
+      support. To report errors in the HTML that will help us improve conversion and rendering, choose any of the
+      methods listed below:
+Click the "Report Issue"
+(
+)
+button, located in the page header.
+Tip:
+You can select the relevant text first, to include it in your report.
+Our team has already identified
+the following issues
+. We appreciate your time reviewing and reporting rendering errors we
+      may not have found yet. Your efforts will help us improve the HTML versions for all readers, because disability
+      should not be a barrier to accessing research. Thank you for your continued support in championing open access for
+      all.
+Have a free development cycle? Help support accessibility at arXiv! Our collaborators at LaTeXML maintain a
+list of packages that need conversion
+, and welcome
+developer contributions
+.
+We gratefully acknowledge support from
+        our
+major funders
+,
+member institutions
+,
+,
+        and all contributors.
+Major funding support from

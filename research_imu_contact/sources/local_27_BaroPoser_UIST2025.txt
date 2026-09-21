@@ -1,0 +1,515 @@
+                                           BaroPoser: Real-time Human Motion Tracking from IMUs and
+                                                         Barometers in Everyday Devices
+                                                             Libo Zhang                                                  Xinyu Yi                                        Feng Xu
+                                                 School of Software and BNRist,                           School of Software and BNRist,                    School of Software and BNRist,
+                                                     Tsinghua University                                      Tsinghua University                               Tsinghua University
+                                                             China                                                    China                                             China
+arXiv:2508.03313v1 [cs.CV] 5 Aug 2025
+
+
+
+
+                                        Figure 1: Live comparison between prior work [27] (blue) and BaroPoser (orange) on pose and translation estimation. BaroPoser
+                                        leverages barometric information to improve pose accuracy and enables reconstruction of human motions involving height
+                                        variations.
+                                        Abstract                                                                                ACM Reference Format:
+                                        In recent years, tracking human motion using IMUs from every-                           Libo Zhang, Xinyu Yi, and Feng Xu. 2025. BaroPoser: Real-time Human
+                                                                                                                                Motion Tracking from IMUs and Barometers in Everyday Devices. In The
+                                        day devices such as smartphones and smartwatches has gained
+                                                                                                                                38th Annual ACM Symposium on User Interface Software and Technology
+                                        increasing popularity. However, due to the sparsity of sensor mea-                      (UIST ’25), September 28-October 1, 2025, Busan, Republic of Korea. ACM, New
+                                        surements and the lack of datasets capturing human motion over                          York, NY, USA, 9 pages. https://doi.org/10.1145/3746059.3747731
+                                        uneven terrain, existing methods often struggle with pose estima-
+                                        tion accuracy and are typically limited to recovering movements
+                                        on flat terrain only. To this end, we present BaroPoser, the first                      1    INTRODUCTION
+                                        method that combines IMU and barometric data recorded by a                              Human motion capture (MoCap) is a long-standing and challenging
+                                        smartphone and a smartwatch to estimate human pose and global                           problem in computer graphics and vision. It aims to reconstruct
+                                        translation in real time. By leveraging barometric readings, we esti-                   3D human body movements, with many applications in movie
+                                        mate sensor height changes, which provide valuable cues for both                        production, gaming, and AR/VR.
+                                        improving the accuracy of human pose estimation and predicting                              Although vision-based methods [13, 18, 24, 25] have made signif-
+                                        global translation on non-flat terrain. Furthermore, we propose a                       icant progress in this field, they always require camera visibility and
+                                        local thigh coordinate frame to disentangle local and global mo-                        are sensitive to occlusions and lighting conditions. Some works have
+                                        tion input for better pose representation learning. We evaluate                         focused on tracking human motion via accelerations and rotations
+                                        our method on both public benchmark datasets and real-world                             recorded by body-worn Inertial Measurement Units (IMUs), which
+                                        recordings. Quantitative and qualitative results demonstrate that                       overcome the aforementioned limitations. Commercial solutions
+                                        our approach outperforms the state-of-the-art (SOTA) methods that                       in this category require 17 or more IMUs, which can be intrusive
+                                        use IMUs only with the same hardware configuration.                                     and time-consuming for usage. Recent studies [1, 6, 7, 21, 30–32]
+                                                                                                                                have reduced the number of IMUs to six or fewer, striking a balance
+                                        CCS Concepts                                                                            between accuracy and practicality. However, these methods still re-
+                                                                                                                                quire specialized IMU sensors, limiting their application in everyday
+                                        • Computing methodologies → Motion capture.
+                                                                                                                                life. To tackle this problem, some studies [17, 27] leverage the IMUs
+                                                                                                                                already available in everyday devices (such as phones, watches,
+                                        Keywords                                                                                wristbands, and earbuds) for human motion capture. These meth-
+                                        Motion capture, sensors, inertial measurement units, barometers                         ods define a set of typical device placement locations like the head,
+                                                                                                                                wrists, or pockets, and use up to three of them to estimate human
+                                                                                                                                pose and global translation through neural networks. However, the
+                                                                                                                                accuracy of their motion estimation remains limited, as the prob-
+                                                                                                                                lem is inherently under-constrained due to sparse and noisy IMU
+                                        This work is licensed under a Creative Commons Attribution 4.0 International License.   measurements available in everyday settings. This makes it difficult
+                                        UIST ’25, Busan, Republic of Korea                                                      to accurately recover either local body poses or global translations.
+                                        © 2025 Copyright held by the owner/author(s).
+                                        ACM ISBN 979-8-4007-2037-6/2025/09                                                          In this paper, we present BaroPoser, the first approach that fuses
+                                        https://doi.org/10.1145/3746059.3747731                                                 IMU and barometric data from one smartwatch (worn on one wrist)
+UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea                                              Libo Zhang, Xinyu Yi, and Feng Xu
+
+
+
+
+Figure 2: Overview of our method. BaroPoser takes IMU and barometric data from a smartwatch (left wrist) and a smartphone
+(right pocket) to estimate real-time human motion. We incorporate two core modules: (1) Local Pose Estimator, which regresses
+joint rotations in a local coordinate frame rooted at the thigh and incorporates relative sensor heights to reduce ambiguity;
+and (2) Global Translation Estimator, which predicts horizontal velocity with a neural network and vertical translation from
+pose-corrected thigh height. Together, these components enable accurate MoCap using only sparse sensor data from everyday
+devices.
+
+
+and one smartphone (placed in the thigh pocket of the opposite             • We propose BaroPoser, the first method that fuses IMU and
+side) to estimate full-body motions in real time. In addition to IMU         barometric data from everyday devices to estimate full-body
+data, which has been widely used for MoCap, we propose to in-                motion in real time.
+corporate barometric readings from built-in sensors in everyday            • We introduce barometric height as an additional feature to
+devices such as smartphones and smartwatches. These readings                 enhance both pose and translation estimation under the two-
+provide information about absolute altitude, offering an additional          sensor configuration.
+feature to improve the accuracy of both pose and global transla-           • We establish a local coordinate system rooted at the thigh to
+tion estimation. Such vertical awareness is particularly valuable in         remove orientation dependency and improve motion repre-
+applications such as AR/VR and fitness tracking, where altitude-             sentation learning.
+sensitive actions like stair climbing, squats, and jumps are common.
+Moreover, to better exploit human motion priors in this setting        2 RELATED WORKS
+with only two sensors, we introduce a thigh coordinate system to
+                                                                       2.1 Inertial MoCap with Specialized Sensors
+represent local body poses, which helps to decouple the local and
+global motions. Specifically, we define a local coordinate frame for   Inertial Measurement Units (IMUs) are popular for human motion
+the sensor on the thigh and treat it as the root coordinate frame of   capture due to their small size, low power consumption, and porta-
+the human local pose. Then, both the input and output of the pose      bility. Recently, commercial inertial motion capture methods use 17
+estimation network are represented in this root coordinate frame.      IMUs to accurately capture human motion [15, 26]. However, this
+In this manner, the global and local motion information recorded       approach is costly, requiring cumbersome equipment and skilled
+by the sensors is disentangled naturally as the thigh sensor records   technicians to operate.
+the global motion information while the wrist sensor records the          Recent studies have reduced the number of sensors required
+local one. This allows the deep learning model to focus on learning    to six or fewer. Sparse Inertial Poser (SIP) [23] proposed to recon-
+the local motion prior without any interference from the global mo-    struct human pose and translation from six IMUs in an offline
+tions. Otherwise, we cannot extract pure local motion signals from     manner. Deep Inertial Poser (DIP) [6] proposed a deep learning-
+the sensor input to regress local poses with the help of the learned   based method that uses six IMUs to capture human pose in real
+local pose prior. We evaluate our method on multiple benchmark         time. Building upon this, TransPose [31] estimates both human
+datasets with real IMU data and show consistent improvements           pose and global translation by adopting a multi-stage pose estima-
+over prior approaches. Additionally, we collect a real-world dataset   tion and fusion-based global translation estimation. Subsequent
+and conduct quantitative and qualitative evaluations to further        work [1, 7, 21, 30, 32, 34] has further improved the accuracy and
+validate our method in practical deployment scenarios.                 robustness of sparse inertial motion capture. PIP [30] introduces a
+   In summary, our main contributions include:                         physics-aware motion optimizer, which reduces motion jitter and
+                                                                       improves physical plausibility. Built on Transformer [22], TIP [7]
+BaroPoser: Real-time Human Motion Tracking from IMUs and Barometers in Everyday Devices           UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea
+
+
+additionally estimates Stationary Body Points (SBPs), which enable                  and smartwatches not only provide IMU data but also naturally
+the reconstruction of terrian consistent with the human motion.                     include barometric pressure readings, and propose the first method
+DynaIP [34] leverages pseudo velocities and a part-based design                     that fuses this information to enhance inertial motion capture in
+to improve pose estimation with enhanced robustness and consis-                     everyday settings.
+tency. PNP [32] uses an autoregressive model to learn fictitious
+forces for improved physical consistency in the non-inertial root
+frame. UIP [1] incorporates UWB-based distance measurements                         3     METHOD
+into inertial pose estimation, enabling robust and scalable motion                 Our task is to estimate human pose and global translation in real
+capture through distance-constrained learning. Moreover, Diffu-                    time using IMU and barometer data from a smartwatch and a smart-
+sionPoser [21] employs a diffusion-based generative model with                     phone, which are attached to the left wrist and right thigh pocket,
+autoregressive inference, enabling motion capture with arbitrary                   respectively. We divide this task into two subtasks: height-aware
+numbers and placements of IMUs. Global Inertial Poser [29] im-                     local pose estimation (Section 3.2) and hybrid global translation
+proves the accuracy of both local pose and global orientation by                   estimation (Section 3.3). Figure 2 shows an overview of our pipeline,
+integrating gravity priors and enables the estimation of the uncon-                which we describe in detail in the following sections.
+strained motion in 3D space through 3D contact detection based
+on physics.
+   However, although these methods significantly improve the accu-                  3.1    System Input
+racy and robustness of inertial motion capture with fewer sensors,                  Our system takes as input the accelerations and rotations from
+they still rely on specialized IMU devices that are costly, cumber-                 the IMUs, along with barometric pressure readings that indicate
+some, and not typically accessible to everyday users. Moreover,                     the sensor’s height. However, barometric measurements are highly
+most of them require six IMUs placed on specific body locations,                    susceptible to environmental factors such as temperature and hu-
+which imposes strict hardware constraints and limits usability in                   midity. To mitigate the noise, we employ a Kalman filter [8] to fuse
+casual or mobile scenarios. As a result, the application of these                   the barometric pressure data with the IMU readings, yielding a
+techniques is largely restricted to controlled environments such                    more stable and accurate height estimation. After that, we align the
+as labs or studios, limiting their potential for broader real-world                 inertial measurements and filtered heights to the same reference
+deployment.                                                                         frame, resulting in a data vector 𝒙 ∈ R26 :
+
+2.2    Inertial MoCap with Everyday Devices
+                                                                                                     𝒙 = [𝒂 lw, 𝒂 rp, 𝑹 lw, 𝑹 rp, ℎ lw, ℎ rp ]                (1)
+Earlier research [4, 11, 33] has explored leveraging IMU data from
+consumer devices such as smartphones and smartwatches to iden-
+tify coarse-grained activities like walking, sitting, or stair climbing.
+Some of these works [3, 9] incorporate barometric sensing to esti-                 where 𝒂 ∈ R3 is the acceleration, 𝑹 ∈ R3×3 is the rotation matrix
+mate elevation change or detect activities involving vertical transi-              and ℎ ∈ R1 is the filtered height. The subscripts lw and rp refer to
+tions. However, these approaches are typically limited to classifying              the left wrist and the right thigh pocket, respectively.
+discrete activity labels, without estimating fine-grained body pose
+or continuous global translation.
+   Building on HAR research, recent studies have extended the use                   3.2    Height-aware Local Pose Estimation
+of IMU data from everyday devices to full-body motion capture.                     In this section, we present our method for estimating human pose,
+IMUPoser [17] achieves real-time human pose estimation using any                   i.e. joint rotations, from sparse IMUs and barometric measurements.
+combination of a smartphone, a watch, and earbuds for the first                    Previous works [17, 27] take IMU measurements from consumer
+time. Specifically, it defines five possible on-body device locations              devices as input and employ bidirectional LSTM [5, 19] networks to
+and trains a bidirectional LSTM to directly regress the human pose                 regress human pose, with both the input and output represented in
+from any valid configurations. Lee et al. [12] propose to estimate                 the global coordinate frame. However, the same motion performed
+human motion from smartwatches and a head-mounted camera.                          in different directions corresponds to the same local pose, making
+SmartPoser [2] focuses on estimating upper-limb poses using a                      global-coordinate modeling prone to entangling global orientation
+single smartphone placed on the upper arm. The most relevant                       with pose. Furthermore, inferring full-body joint rotations from
+work to ours is MobilePoser [27], which builds upon the multi-                     extremely sparse inertial signals remains highly under-constrained
+stage strategy of TransPose [31] to simultaneously estimate human                  and ambiguous.
+pose and global translation using everyday consumer devices.                           To address these issues, we establish a local coordinate sys-
+   These works extend inertial motion capture to consumer devices,                 tem by treating the right pocket sensor as the root, and trans-
+making the technology more practical and accessible for everyday                   form both the IMU measurements and the predicted joint rotations
+use. However, due to the sparsity of sensors in daily use and the                  into this local frame. In addition, we leverage the built-in barom-
+lack of uneven-terrain motion data, the accuracy of motion capture                 eters in everyday devices to provide the relative height between
+remains limited, and existing methods are typically constrained to                 the two sensors as an extra input, which helps reduce the am-
+recovering movements on flat terrain. To address this challenge, we                biguity in pose estimation. Specifically, we adopt a data-driven
+leverage the observation that everyday devices such as smartphones                 approach and the input to the network is a concatenated vector
+UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea                                                                 Libo Zhang, Xinyu Yi, and Feng Xu
+
+
+   local , 𝒂 local , 𝑹 local , 𝝎 local , 𝒈 local , Δℎ] ∈ R22 , which can be de-
+[𝒂 lw                                                                             The output is the horizontal velocity 𝒗𝑥𝑧 ∈ R2 . Inspired by [28, 35],
+             rp        lw       rp
+rived from Eq. (1) as follows:                                                    we use a global accumulated velocity loss, which integrate predicted
+                       local                                                      velocities over the entire sequence and compare them with the
+                     𝒂 lw    = 𝑹𝑇rp 𝒂 lw                                   (2)    overall translation:
+                      local
+                    𝒂 rp    = 𝑹𝑇rp 𝒂 rp                                    (3)                                     𝑁
+                                                                                                                   ∑︁           𝑁
+                                                                                                                                ∑︁
+                                                                                                                                             2
+                      local
+                    𝑹 lw    = 𝑹𝑇rp 𝑹 lw                                    (4)                         L𝑣𝑥𝑧 =            𝑣𝑖 −         𝑣𝑖GT                     (9)
+                                                                                                                   𝑖=1          𝑖=1          2
+                  local         1
+                 𝝎rp    (𝑡) =      Log(𝑹 rp (𝑡 − 1)𝑇 𝑹 rp (𝑡))             (5)    where 𝑁 = 150 is the sequence length during training, 𝑣 is the
+                               Δ𝑡
+                                                                                  horizontal velocity, and 𝑣 GT denotes the ground truth.
+                     𝒈 local = 𝑹𝑇rp 𝒈                                      (6)
+                                                                                     For vertical translation, we approximate it using the filtered
+                        Δℎ = ℎ lw − ℎ rp                                   (7)    height of the thigh, which is physically close to the root. However,
+                                                                                  motions such as leg lifting can cause significant changes in thigh
+Here, 𝒂 local ∈ R3 , 𝝎 local ∈ R3 , and 𝑹 local ∈ R3×3 represent the
+                                                                                  height without affecting the root. To correct this, we subtract the
+acceleration, angular velocity, and rotation in the root coordinate
+                                                                                  local thigh variation computed by the estimated pose from the
+frame, respectively; 𝒈 local ∈ R3 and 𝒈 ∈ R3 is the unit gravity
+                                                                                  barometer-derived global height change:
+direction expressed in the root and world frame, respectively, which
+can be used to distinguish between poses such as standing and                                              glb       glb
+                                                                                                 𝑡 𝑦,𝑡 = (ℎ𝑡     − ℎ 0 ) − (ℎ𝑡local − ℎ local
+                                                                                                                                        0     )              (10)
+lying; Δℎ represents the height difference between the two sensors,
+Δ𝑡 = 1/30 is the time interval, and Log(·) : 𝑆𝑂 (3) → R3 maps the                 where 𝑡 𝑦 denotes the vertical translation of root, the subscripts
+rotation matrix to the vector space. The output of the network is the             glb, local refer to the thigh height obtained from the filtered baro-
+SMPL [14] joint rotations 𝜃 ∈ R24×6 in the 6D [36] representation,                metric readings and the local pose, the subscripts 𝑡, 0 indicate the
+also expressed in the root coordinate frame. The loss function used               current and inital time steps. By incorporating barometric infor-
+to train the model is defined as follows:                                         mation, our method is able to produce plausible non-flat terrain
+                                                  2                               motions (e.g., stair climbing) without requiring additional training.
+                              L𝜃 = 𝜃 − 𝜃 GT                                (8)
+                                                  2
+                                                                                  4 IMPLEMENTATION DETAILS
+where superscript GT denotes the ground truth.
+   By transforming global measurements into the local coordinate                  4.1 Data Processing and Collection
+frame, the network learns orientation-free local poses that remain                Following prior work [17, 27], we train our model on the AMASS [16]
+consistent across different subject global orientations. Moreover,                dataset and evaluate it on DIP-IMU, IMUPoser, and TotalCapture
+we leverage the built-in sensors in everyday devices to incorporate               datasets. During training, we use synthetic IMU accelerations and
+a height-related feature, which augments the sparse inertial signals              rotations, along with the heights of two locations (the left wrist
+and improves the accuracy of pose estimation.                                     and right pocket) relative to the initial ground, which is defined
+                                                                                  based on the lowest point of the feet in the first frame. To sim-
+3.3     Hybrid Global Translation Estimation                                      ulate real-world sensor variability, we inject Gaussian noise into
+In this section, we describe our method for estimating global trans-              the synthesized altitude data to improve the model’s robustness
+lation. Prior work [27] combines two sources of velocity: one is                  to barometric fluctuations (Gaussian noise with std = 0.05m). At
+computed using the estimated pose and the probability of foot con-                test time, real IMU accelerations and rotations are used, while the
+tact, while the other is predicted by a neural network based on                   heights are synthetically generated as in training. We also enable
+concatenated IMU signals and estimated joint positions. However,                  real-time IMU and barometer data collection using an OPPO Watch
+this approach has two main limitations: It assumes the subject is                 4 Pro and a Galaxy S24 Ultra, as shown in Figure 3, for live demos
+always moving on flat ground, due to the lack of datasets con-                    and evaluations on real-world data. As the consumer devices used
+taining motions with vertical variation, and it heavily relies on                 in our system capture data at 30 FPS, we resample both the training
+accurate lower-body pose estimation, which is difficult to achieve                and testing data to match this frame rate.
+in everyday settings where only a single IMU is available on the
+thigh.                                                                            4.2    Sensor Calibration
+   To address this issue, we leverage barometric information to de-               Due to hardware differences and environmental sensitivity, baro-
+compose the global translation into horizontal and vertical compo-                metric sensors may exhibit biases and inconsistent pressure-to-
+nents. The horizontal velocity is directly estimated by the network               height scales. Therefore, we calibrate the barometric sensors on
+using only sensor data, while the vertical translation is derived                 both devices to correct for bias and scale. Specifically, we first place
+from the filtered height at the thigh combined with the estimated                 the smartphone and smartwatch at approximately the same height
+pose.                                                                             to compute the relative bias between their barometric sensors after
+   Specifically, we estimate horizontal velocity using a data-driven              wearing the devices. We then perform a T-pose, where the relative
+approach based on a unidirectional LSTM. The input to the network                 height between the two devices is known by assuming a mean body
+is a concatenated vector [𝒂 lw, 𝒂 rp, 𝑹 lw, 𝑹 rp, Δℎ] ∈ R25 , where 𝒂 ∈           shape, which enables us to determine the pressure-to-height scaling
+R3 , 𝑹 ∈ R3×3 , Δℎ ∈ R1 represent the acceleration, rotation matrix,              factor in the current environment. The full calibration process is
+and height difference in the global coordinate frame, respectively.               illustrated in Figure 4.
+BaroPoser: Real-time Human Motion Tracking from IMUs and Barometers in Everyday Devices             UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea
+
+
+                                  Table 1: Quantitative comparison of pose estimation on public datasets.
+
+Dataset                            DIP-IMU                                         IMUPoser                                       TotalCapture
+Method           SIP Err    Ang Err      Pos Err    Mesh Err      SIP Err    Ang Err      Pos Err   Mesh Err      SIP Err     Ang Err      Pos Err      Mesh Err
+IMUPoser          27.21       23.10       9.99        12.34        18.20      20.39        8.92       11.56        17.38        18.79        8.92         10.78
+MobilePoser       26.94       22.39       9.33        11.33        17.52      19.51        8.57       11.02        17.20        18.59        8.78         10.52
+Ours              24.39       21.25       8.57        10.36        13.15      16.20        6.82       8.95         14.52        16.15        7.36         8.94
+
+
+Table 2: Quantitative comparison of pose estimation on real-
+world dataset.
+
+      Method           SIP Err     Ang Err     Pos Err     Mesh Err
+      IMUPoser          28.49       26.50        12.24        14.85
+      MobilePoser       28.01       25.74        12.00        14.46
+      Ours              24.76       23.53        10.73        12.97
+
+
+
+
+                                                                                   Figure 4: Sensor calibration procedure. Left: Both devices
+                                                                                   (watch and phone) are placed at the same height to determine
+                                                                                   barometric bias. Right: A T-pose is performed to establish
+                                                                                   a known vertical offset Δℎ (0.66m) , used to compute the
+                                                                                   pressure-to-height mapping scale.
+
+
+                                                                                   results for pose (Section 5.2) and translation estimation (Section 5.3).
+                                                                                   We further perform ablation studies to validate the effectiveness of
+Figure 3: Hardware setup for collecting real IMU and baromet-                      our key technical components (Section 5.4).
+ric data. We developed an Android-based app for collecting
+sensor data from both the smartwatch and the smartphone.                            5.1     Datasets
+Users can input an IP address to send the collected IMU and
+                                                                                   We conduct both quantitative and qualitative experiments on three
+barometric data to a terminal.
+                                                                                   public datasets containing real IMU data:
+                                                                                          • DIP-IMU [6] contains data from 10 participants, captured
+4.3    Network Structure                                                                    with commercial-grade Xsens[26] IMUs at 60 fps, but it does
+For the pose regression network, we use a 3-layer MLP with the                              not include global translation data.
+hidden size of 512 to encode the first-frame pose into the initial                        • TotalCapture [20] provides real IMU data with corresponding
+LSTM hidden state, followed by a 2-layer unidirectional LSTM with                           ground-truth pose and translation, captured using Xsens
+the hidden size of 512. Inspired by [30], we use a 3-layer MLP                              IMUs at 60 fps.
+to initialize the hidden state of the LSTM in a learnable manner,                         • IMUPoser [17] includes real IMU data paired with ground-
+which helps the model adapt to different initial poses. For horizontal                      truth pose and translation data captured using consumer-
+velocity regression, we directly use a 2-layer unidirectional LSTM                          grade devices: an iPhone 11 Pro, Apple Watch Series 6, and
+with a hidden size of 512. All networks are trained on a single                             AirPods, at 25 fps.
+NVIDIA RTX 4090 GPU for 100 epochs with a batch size of 256,                       As these datasets do not include barometric data, we synthesize
+using the Adam [10] optimizer with a learning rate of 3e-4. The                    height information at the left wrist and right pocket.
+training takes about 6 hours.                                                         In addition to public datasets, we collected a real-world dataset
+                                                                                   using a smartphone and a smartwatch, which record synchronized
+5     EXPERIMENTS                                                                  IMU and barometric measurements. To obtain ground-truth pose
+In this section, we first introduces the datasets used in our experi-              and translation, we use a motion capture system with 20 infrared
+ments (Section 5.1), followed by both quantitative and qualitative                 cameras and placed reflective markers on the subject’s body. The
+UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea                                                 Libo Zhang, Xinyu Yi, and Feng Xu
+
+
+                                                                        three datasets, which can be attributed to the use of local coordinate
+                                                                        representation and height features. To further validate our method
+                                                                        in practical real-world conditions, we also evaluate it on a newly
+                                                                        collected dataset with real IMU and barometer readings. As shown
+                                                                        in Table 2, our full model outperforms prior methods across all
+                                                                        metrics, confirming the effectiveness and generalizability of our
+                                                                        approach in real deployment scenarios.
+
+                                                                        5.2.3 Qualitative comparisons. Figure 6 shows a qualitative com-
+                                                                        parison between our method and prior works. These examples are
+                                                                        selected from the DIP-IMU, IMUPoser, and TotalCapture datasets.
+                                                                        It can be observed that our method can achieves more accurate
+                                                                        human pose estimation and performs particularly well on more
+                                                                        challenging motions such as push-ups (the second row) and forward
+                                                                        bends (the third row).
+                                                                           In addition, Figure 7 presents qualitative results on our real-world
+                                                                        dataset collected from everyday devices. Our method successfully
+                                                                        reconstructs full-body motions, including those involving vertical
+                                                                        displacement such as stair climbing and forward bending, demon-
+Figure 5: Illustration of our data collection setup. Subjects           strating its effectiveness under real-world conditions.
+wear reflective markers for motion capture, while a smart-
+phone is placed in the right thigh and a smartwatch is worn             5.3    Translation Estimation Evaluation
+on the left wrist. The motion data is recorded using a 20-              5.3.1 Quantitative Comparisons. We evaluate global translation
+camera infrared motion capture system.                                  estimation on the TotalCapture, IMUPoser and real-world datasets
+                                                                        (as the DIP-IMU dataset does not provide ground-truth translation),
+                                                                        and compare our method with MobilePoser [27]. For the quanti-
+smartphone and smartwatch are securely attached to the right thigh
+                                                                        tative evaluation, we report the cumulative translation error, as
+and left wrist, respectively. An illustration of our data collection
+                                                                        shown in Figure 8, which measures the global translation error
+setup is shown in Figure 5. The dataset includes approximately
+                                                                        relative to the actual distance traveled. As illustrated, our method
+30 minutes of motion data from 5 subjects performing 10 actions,
+                                                                        outperforms the previous approach on global translation estimation
+covering a range of height-changing activities such as stair stepping
+                                                                        across both real-IMU datasets, achieving a notable improvement.
+and ladder climbing. We also use this dataset to evaluate both
+pose estimation and global translation accuracy quantitatively and
+                                                                        5.3.2 Qualitative Comparisons. We visualize the trajectories of
+qualitatively.
+                                                                        different methods compared to the ground truth for qualitative
+                                                                        evaluation, as shown in Figure 9. The two examples are selected
+5.2     Pose Estimation Evaluation                                      from the TotalCapture dataset. Compared to previous approach,
+5.2.1 Evaluation Metrics. We use the following metrics to quanti-       our method achieves translation results that more closely match
+tatively evaluate pose estimation:                                      the ground truth.
+     • SIP error measures the mean global rotation error of upper
+       arms and upper legs in degrees.                                  5.4    Ablation Studies
+     • Angular error measures the mean global rotation error of all
+                                                                        We perform ablation studies to validate the effectiveness of the key
+       body joints in degrees.
+                                                                        components in our method. For local pose estimation, we analyze
+     • Positional error measures the mean Euclidean distance error
+                                                                        the influence of adopting a thigh-rooted local coordinate frame and
+       of all estimated joints in centimeters with the root joint
+                                                                        the use of height features. We train our model under two modified
+       aligned.
+                                                                        settings: one without height input (w/o Δℎ), the other using global
+     • Mesh error measures the mean Euclidean distance between
+                                                                        frame (w/o local) during training and inference. As reported in Ta-
+       the predicted and ground-truth mesh vertices in centimeters
+                                                                        ble 3, each individual modification leads to a certain improvement
+       after root alignment.
+                                                                        in performance, and when combined, our final method achieves the
+5.2.2 Quantitative comparisons. We conduct a quantitative com-          superior results. The improvement introduced by adding height fea-
+parison with IMUPoser [17] and MobilePoser [27], two inertial           tures is particularly evident on IMUPoser and TotalCapture datasets,
+motion capture methods that also rely on everyday devices. To           which contain a wider variety of motion types.
+ensure a fair comparison, we follow a consistent setup across all          For global translation estimation, we evaluate the impact of in-
+methods, using devices at the left wrist and right thigh pocket,        corporating height features on the final results. To this end, we
+and performing evaluation in an online manner. The results on the       train models with and without the height difference and quanti-
+three public datasets are shown in Table 1. Our method achieves         tatively evaluate them on the TotalCapture Dataset. As shown in
+significant improvements in pose estimation performance across all      Figure 10, incorporating height information also improves global
+BaroPoser: Real-time Human Motion Tracking from IMUs and Barometers in Everyday Devices          UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea
+
+
+
+
+                                                                                   Figure 7: Qualitative comparison of pose estimation on Real-
+                                                                                   World datasets.
+
+
+                                                                                   Table 3: Ablation study on the effects of height difference
+                                                                                   and local coordinate representation for pose estimation.
+
+                                                                                      Method                SIP Err     Ang Err       Pos Err     Mesh Err
+                                                                                                                  DIP-IMU
+                                                                                      w/o Δℎ                 24.50        21.71         8.82         10.61
+                                                                                      w/o local              25.33        22.30         9.12         11.14
+Figure 6: Qualitative comparison of pose estimation on DIP-                           BaroPoser (Ours)       24.39        21.25         8.57         10.36
+IMU, IMUPoser, and TotalCapture datasets.
+                                                                                                                  IMUPoser
+                                                                                      w/o Δℎ                 14.87        17.48         7.62         9.89
+                                                                                      w/o local              15.84        17.76         7.84         10.08
+translation estimation, because it provides additional cues about                     BaroPoser (Ours)       13.15        16.20         6.82         8.95
+vertical motion and sensor dynamics.
+                                                                                                                TotalCapture
+6    LIMITATIONS AND FUTURE WORK                                                      w/o Δℎ                 16.23        17.65         8.15         9.83
+                                                                                      w/o local              15.68        17.25         7.99         9.64
+Although BaroPoser demonstrates notable improvements in pose
+                                                                                      BaroPoser (Ours)       14.52        16.15         7.36         8.94
+and translation estimation by fusing IMU and barometric readings,
+several limitations still remain. First, we assume a mean body shape                                        Real-World Dataset
+and fixed sensor placement on the left wrist and right thigh, which                   w/o Δℎ                 25.68        23.82        11.42         13.76
+may limit its generalizability to more diverse shapes or user-defined                 w/o local              26.08        25.03        11.56         13.96
+configurations. Future work could explore enhancing robustness to                     BaroPoser (Ours)       24.76        23.53        10.73         12.97
+flexible sensor placements and incorporating body shape informa-
+tion.
+   Another limitation is that, although we apply Kalman filtering
+with IMU fusion to smooth the barometric signal, barometers re-                     or fluctuations in the estimated vertical translation. One poten-
+main susceptible to environmental factors. This can lead to drift                   tial direction is to explore more robust sensor fusion techniques
+UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea                                               Libo Zhang, Xinyu Yi, and Feng Xu
+
+
+
+
+                                                                          Figure 9: Qualitative comparison of translation estimation
+                                                                          on TotalCapture dataset. Trajectories are shown on the hori-
+Figure 8: Quantitative comparison of translation estimation               zontal plane and aligned at the origin.
+on IMUPoser, TotalCapture and real-world datasets. The x-
+axis represents the real distance traveled in meters, and the
+y-axis shows the mean translation error in meters.
+
+
+or environment-adaptive filtering to enhance the robustness of
+barometric measurements.
+   Finally, a further limitation lies in the lack of datasets that com-
+bine real IMU and barometer data with ground-truth human motion
+annotations, particularly for movements over uneven terrain. In
+our experiments, we perform quantitative evaluations on test sets
+with synthetic height information and qualitatively demonstrate
+real-world performance on real data. In the future, we plan to col-
+lect real-world datasets that include both barometric readings and
+accurate motion ground truth across diverse environments.
+                                                                          Figure 10: Ablation study on the effects of height difference
+7    CONCLUSION                                                           for global translation estimation.
+                                                                                                        .
+In this work, we present BaroPoser, the first method that fuses
+IMU and barometric data from a smartwatch and a smartphone
+to estimate full-body human pose and global translation in real
+time. To overcome the challenges posed by sparse sensor configu-          that employs a thigh-rooted local representation and incorporates
+rations, we propose a height-aware local pose estimation approach         the sensor height difference as an additional input to the pose
+BaroPoser: Real-time Human Motion Tracking from IMUs and Barometers in Everyday Devices                     UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea
+
+
+regression network. For global translation, we adopt a hybrid ap-                         [17] Vimal Mollyn, Riku Arakawa, Mayank Goel, Chris Harrison, and Karan Ahuja.
+proach that decomposes motion into horizontal and vertical compo-                              2023. Imuposer: Full-body pose estimation using imus in phones, watches, and
+                                                                                               earbuds. In Proceedings of the 2023 CHI Conference on Human Factors in Computing
+nents, estimated via a neural network and pose-corrected baromet-                              Systems. 1–12.
+ric height changes, respectively. Extensive evaluations on public                         [18] Sida Peng, Yuanqing Zhang, Yinghao Xu, Qianqian Wang, Qing Shuai, Hujun
+                                                                                               Bao, and Xiaowei Zhou. 2021. Neural body: Implicit neural representations
+and real-device datasets demonstrate that BaroPoser outperforms                                with structured latent codes for novel view synthesis of dynamic humans. In
+prior methods in both pose and translation accuracy and supports                               Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition.
+motion estimation with vertical variation. This work highlights                                9054–9063.
+                                                                                          [19] Mike Schuster and Kuldip K. Paliwal. 1997. Bidirectional recurrent neural
+the potential of integrating barometric information to expand the                              networks. IEEE Transactions on Signal Processing 45, 11 (1997), 2673–2681.
+applicability of inertial motion capture in unconstrained real-world                           doi:10.1109/78.650093
+settings.                                                                                 [20] Matt Trumble, Andrew Gilbert, Charles Malleson, Adrian Hilton, and John Col-
+                                                                                               lomosse. 2017. Total Capture: 3D Human Pose Estimation Fusing Video and
+                                                                                               Inertial Sensors. In 2017 British Machine Vision Conference (BMVC).
+8    ACKNOWLEDGMENTS                                                                      [21] Tom Van Wouwe, Seunghwan Lee, Antoine Falisse, Scott Delp, and C Karen
+                                                                                               Liu. 2023. Diffusion inertial poser: Human motion reconstruction from arbitrary
+This work was supported by the National Key R&D Program of                                     sparse imu configurations. arXiv preprint arXiv:2308.16682 (2023).
+China (2023YFC3305600), the Zhejiang Provincial Natural Science                           [22] A Vaswani. 2017. Attention is all you need. Advances in Neural Information
+                                                                                               Processing Systems (2017).
+Foundation (LDT23F02024F02), and the NSFC (No.61822111, 62021002).                        [23] Timo Von Marcard, Bodo Rosenhahn, Michael J Black, and Gerard Pons-Moll.
+This work was also supported by THUIBCS, Tsinghua University,                                  2017. Sparse inertial poser: Automatic 3d human pose estimation from sparse
+                                                                                               imus. In Computer graphics forum, Vol. 36. Wiley Online Library, 349–360.
+and BLBCI, Beijing Municipal Education Commission. Feng Xu is                             [24] Shaofei Wang, Bozidar Antic, Andreas Geiger, and Siyu Tang. 2024. IntrinsicA-
+the corresponding author.                                                                      vatar: Physically Based Inverse Rendering of Dynamic Humans from Monocular
+                                                                                               Videos via Explicit Ray Tracing. In Proceedings of the IEEE/CVF Conference on
+                                                                                               Computer Vision and Pattern Recognition. 1877–1888.
+References                                                                                [25] Yuliang Xiu, Yufei Ye, Zhen Liu, Dimitris Tzionas, and Michael J Black. 2024.
+ [1] Rayan Armani, Changlin Qian, Jiaxi Jiang, and Christian Holz. 2024. Ultra inertial        Puzzleavatar: Assembling 3d avatars from personal albums. ACM Transactions
+     poser: Scalable motion capture and tracking from sparse inertial sensors and              on Graphics (TOG) 43, 6 (2024), 1–15.
+     ultra-wideband ranging. In ACM SIGGRAPH 2024 Conference Papers. 1–11.                [26] Xsens. 2024. Xsens. https://www.xsens.com Accessed: 2024-01-07.
+ [2] Nathan DeVrio, Vimal Mollyn, and Chris Harrison. 2023. SmartPoser: Arm Pose          [27] Vasco Xu, Chenfeng Gao, Henry Hoffmann, and Karan Ahuja. 2024. MobilePoser:
+     Estimation with a Smartphone and Smartwatch Using UWB and IMU Data. In                    Real-Time Full-Body Pose Estimation and 3D Human Translation from IMUs in
+     Proceedings of the 36th Annual ACM Symposium on User Interface Software and               Mobile Consumer Devices. In Proceedings of the 37th Annual ACM Symposium on
+     Technology. ACM, 1–12. doi:10.1145/3586183.3606821                                        User Interface Software and Technology. 1–11.
+ [3] Nico Graumüller, Constantin Gis, and et al. 2025. Towards Human Posture Detec-       [28] Hang Yan, Sachini Herath, and Yasutaka Furukawa. 2019. Ronin: Robust neural
+     tion Based on Differential Measurements Using Wearable Barometric Pressure                inertial navigation in the wild: Benchmark, evaluations, and new methods. arXiv
+     Sensors. In BIOSTEC 2025. doi:10.5220/0013273000003911                                    preprint arXiv:1905.12853 (2019).
+ [4] Nils Y Hammerla, Shane Halloran, and Thomas Ploetz. 2016. Deep, convolutional,       [29] Xinyu Yi, Shaohua Pan, and Feng Xu. 2025. Improving Global Motion Es-
+     and recurrent models for human activity recognition using wearables. In IJCAI.            timation in Sparse IMU-based Motion Capture with Physics. arXiv preprint
+ [5] Sepp Hochreiter and Jürgen Schmidhuber. 1997. Long short-term memory. Neural              arXiv:2505.05010 (2025).
+     computation 9, 8 (1997), 1735–1780. doi:10.1162/neco.1997.9.8.1735                   [30] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada, Vladislav Golyanik,
+ [6] Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J Black, Otmar Hilliges,              Christian Theobalt, and Feng Xu. 2022. Physical inertial poser (pip): Physics-
+     and Gerard Pons-Moll. 2018. Deep inertial poser: Learning to reconstruct human            aware real-time human motion tracking from sparse inertial sensors. In Pro-
+     pose from sparse inertial measurements in real time. ACM Transactions on                  ceedings of the IEEE/CVF conference on computer vision and pattern recognition.
+     Graphics (TOG) 37, 6 (2018), 1–15.                                                        13167–13178.
+ [7] Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W Winkler,          [31] Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2021. Transpose: Real-time 3d human
+     and C Karen Liu. 2022. Transformer inertial poser: Real-time human motion                 translation and pose estimation with six inertial sensors. ACM Transactions On
+     reconstruction from sparse imus with simultaneous terrain generation. In SIG-             Graphics (TOG) 40, 4 (2021), 1–13.
+     GRAPH Asia 2022 Conference Papers. 1–9.                                              [32] Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2024. Physical non-inertial poser (pnp):
+ [8] Rudolph Emil Kalman. 1960. A New Approach to Linear Filtering and Prediction              Modeling non-inertial effects in sparse-inertial human motion capture. In ACM
+     Problems. Transactions of the ASME–Journal of Basic Engineering 82, 1 (1960),             SIGGRAPH 2024 Conference Papers. 1–11.
+     35–45. doi:10.1115/1.3662552                                                         [33] Meizhen Zeng, Le T Nguyen, Bo Yu, Ole J Mengshoel, Jun Zhu, Pang Wu, and
+ [9] Hrishikesh Balkrishna Karande, Ravikiran Arasur Thippeswamy Shivalingappa,                Joydeep Ghosh Zhang. 2014. Convolutional neural networks for human activity
+     Abdelhafid Nassim Yaici, Iman Haghbin, Niravkumar Bavadiya, Robin Burchard,               recognition using mobile sensors. In MobiCASE. Springer.
+     and Kristof Van Laerhoven. 2024. Raising the Bar𝑜𝑚𝑒𝑡𝑒𝑟 : Identifying a User’s        [34] Yu Zhang, Songpengcheng Xia, Lei Chu, Jiarui Yang, Qi Wu, and Ling Pei. 2024.
+     Stair and Lift Usage Through Wearable Sensor Data Analysis. arXiv preprint                Dynamic inertial poser (dynaip): Part-based motion dynamics learning for en-
+     arXiv:2410.02790 (2024). https://arxiv.org/abs/2410.02790 Also published in               hanced human pose estimation with sparse inertial sensors. In Proceedings of the
+     Lecture Notes in Computer Science (iWOAR 2024).                                           IEEE/CVF Conference on Computer Vision and Pattern Recognition. 1889–1899.
+[10] Diederik P Kingma and Jimmy Ba. 2014. Adam: A method for stochastic opti-            [35] Xinzhe Zheng, Sijie Ji, Yipeng Pan, Kaiwen Zhang, and Chenshu Wu. 2024.
+     mization. arXiv preprint arXiv:1412.6980 (2014).                                          NeurIT: Pushing the Limit of Neural Inertial Tracking for Indoor Robotic IoT.
+[11] Jennifer R Kwapisz, Gary M Weiss, and Samuel A Moore. 2011. Activity recogni-             arXiv preprint arXiv:2404.08939 (2024).
+     tion using cell phone accelerometers. ACM SIGKDD Explorations Newsletter 12, 2       [36] Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and Hao Li. 2019. On the
+     (2011), 74–82.                                                                            continuity of rotation representations in neural networks. In Proceedings of the
+[12] Jiye Lee and Hanbyul Joo. 2024. Mocap everyone everywhere: Lightweight                    IEEE/CVF conference on computer vision and pattern recognition. 5745–5753.
+     motion capture with smartwatches and a head-mounted camera. In Proceedings
+     of the IEEE/CVF conference on computer vision and pattern recognition. 1091–1100.
+[13] Wenbin Lin, Chengwei Zheng, Jun-Hai Yong, and Feng Xu. 2024. Relightable and
+     animatable neural avatars from videos. In Proceedings of the AAAI Conference on
+     Artificial Intelligence, Vol. 38. 3486–3494.
+[14] Matthew Loper, Naureen Mahmood, Javier Romero, Gerard Pons-Moll, and
+     Michael J. Black. 2015. SMPL: A Skinned Multi-Person Linear Model. ACM
+     Trans. Graphics (Proc. SIGGRAPH Asia) 34, 6 (2015), 248:1–248:16.
+[15] Noitom Ltd. 2021. Perception Neuron Series. https://www.noitom.com/.
+[16] Naureen Mahmood, Nima Ghorbani, Nikolaus F Troje, Gerard Pons-Moll, and
+     Michael J Black. 2019. AMASS: Archive of motion capture as surface shapes. In
+     Proceedings of the IEEE/CVF international conference on computer vision. 5442–
+     5451.
+

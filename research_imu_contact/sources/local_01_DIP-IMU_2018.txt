@@ -1,0 +1,986 @@
+                                         Deep Inertial Poser: Learning to Reconstruct Human Pose from Sparse
+                                         Inertial Measurements in Real Time
+                                         YINGHAO HUANG∗ , Max Planck Insitute for Intelligent Systems, Tübingen, Germany
+                                         MANUEL KAUFMANN∗ , Advanced Interactive Technologies Lab, ETH Zürich, Switzerland
+                                         EMRE AKSAN, Advanced Interactive Technologies Lab, ETH Zürich, Switzerland
+                                         MICHAEL J. BLACK, Max Planck Insitute for Intelligent Systems, Tübingen, Germany
+                                         OTMAR HILLIGES, Advanced Interactive Technologies Lab, ETH Zürich, Switzerland
+                                         GERARD PONS-MOLL, Max Planck Institute for Informatics, Saarbrücken, Germany
+arXiv:1810.04703v1 [cs.GR] 10 Oct 2018
+
+
+
+
+                                         Fig. 1. We demonstrate a novel learning-based method for reconstructing 3D human pose in real-time using only six body-worn IMUs. Our method learns
+                                         from a large synthetic dataset and at runtime predicts pose parameters from real IMU inputs in real-time while only requiring minimal user instrumentation.
+                                         This brings 3D motion capture to new scenarios that are difficult for camera-based methods such as heavy occlusions and fast motion.
+
+                                         We demonstrate a novel deep neural network capable of reconstructing                        constitutes the largest IMU dataset publicly available. We quantitatively eval-
+                                         human full body pose in real-time from 6 Inertial Measurement Units (IMUs)                  uate our approach on multiple datasets and show results from a real-time
+                                         worn on the user’s body. In doing so, we address several difficult challenges.              implementation. DIP-IMU and the code are available for research purposes.1
+                                         First, the problem is severely under-constrained as multiple pose param-
+                                                                                                                                     CCS Concepts: • Computing methodologies → Motion capture;
+                                         eters produce the same IMU orientations. Second, capturing IMU data in
+                                         conjunction with ground-truth poses is expensive and difficult to do in many                Additional Key Words and Phrases: Real-Time, IMU, Deep Learning, RNN
+                                         target application scenarios (e.g., outdoors). Third, modeling temporal de-
+                                                                                                                                     ACM Reference Format:
+                                         pendencies through non-linear optimization has proven effective in prior
+                                                                                                                                     Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J. Black, Ot-
+                                         work but makes real-time prediction infeasible. To address this important
+                                                                                                                                     mar Hilliges, and Gerard Pons-Moll. 2018. Deep Inertial Poser: Learning
+                                         limitation, we learn the temporal pose priors using deep learning. To learn
+                                                                                                                                     to Reconstruct Human Pose from Sparse Inertial Measurements in Real
+                                         from sufficient data, we synthesize IMU data from motion capture datasets.
+                                                                                                                                     Time. ACM Trans. Graph. 37, 6, Article 185 (November 2018), 15 pages.
+                                         A bi-directional RNN architecture leverages past and future information
+                                                                                                                                     https://doi.org/10.1145/3272127.3275108
+                                         that is available at training time. At test time, we deploy the network in
+                                         a sliding window fashion, retaining real time capabilities. To evaluate our
+                                         method, we recorded DIP-IMU, a dataset consisting of 10 subjects wear-                      1    INTRODUCTION
+                                         ing 17 IMUs for validation in 64 sequences with 330 000 time instants; this                 Many applications such as gaming, bio-mechanical analysis, and
+                                         ∗ Both authors contributed equally to this work
+                                                                                                                                     emerging human-computer interaction paradigms such as Virtual
+                                                                                                                                     and Augmented Reality (VR/AR) require a means to capture a user’s
+                                         Authors’ email addresses: yinghao.huang@tue.mpg.de; manuel.kaufmann@inf.ethz.               3D skeletal configuration. Such applications impose three challeng-
+                                         ch; emre.aksan@inf.ethz.ch; black@tue.mpg.de; otmar.hilliges@inf.ethz.ch; gpons@            ing constraints on pose reconstruction: (i) it must operate in real-
+                                         mpi-inf.mpg.de.
+                                                                                                                                     time, (ii) it should work in everyday settings such as sitting at a
+                                         Permission to make digital or hard copies of part or all of this work for personal or       desk, at home, or outdoors, and (iii) it should be minimally invasive
+                                         classroom use is granted without fee provided that copies are not made or distributed       in terms of user instrumentation.
+                                         for profit or commercial advantage and that copies bear this notice and the full citation      Most commonly, the task of recording human motion is achieved
+                                         on the first page. Copyrights for third-party components of this work must be honored.
+                                         For all other uses, contact the owner/author(s).                                            via commercial motion capture (Mocap) systems such as Vicon2 , but
+                                         © 2018 Copyright held by the owner/author(s).
+                                                                                                                                     1 http://dip.is.tuebingen.mpg.de
+                                         0730-0301/2018/11-ART185
+                                         https://doi.org/10.1145/3272127.3275108                                                     2 http://www.vicon.com
+
+
+
+                                                                                                                                         ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+185:2 •      Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J. Black, Otmar Hilliges, and Gerard Pons-Moll
+
+
+these require expensive infrastructure and markers placed on the                   knee and arm bending is problematic. To alleviate this issue we
+user. Marker-less multi-camera approaches are becoming more ac-                    introduce a novel loss-term that forces the network to reconstruct
+curate and can sometimes provide dense surface reconstructions but                 accelerations during training, which preserves information through-
+also require controlled camera setups and can be computationally                   out the network stack and leads to better performance at test time.
+very expensive. Recently, the use of a single RGB or RGB-D cam-                    (iii) Offline approaches for the same task leverage both past and fu-
+era for human pose estimation has become feasible and remains a                    ture information [von Marcard et al. 2017]. We propose an extension
+very active area of research in computer vision [Alldieck et al. 2018;             of our architecture that leverages bi-directional RNNs to further im-
+Kanazawa et al. 2018; Mehta et al. 2018; Omran et al. 2018; Tao et al.             prove the reconstruction quality. At training time, this architecture
+2018]. Single camera methods are still less accurate than multi-view               has access to the same information as [von Marcard et al. 2017],
+methods but more importantly, like all vision-based methods, they                  and propagates information from the past to the future and vice
+require an external camera with the full body visible in the image.                versa. To retain the real-time regime, we deploy this architecture
+This limitation presents a practical barrier for many applications, in             at test time in a sliding-window fashion. We experimentally show
+particular those where heavy occlusions can be expected such as                    that only 5 future frames are sufficient for high-quality predictions,
+sitting at a desk or where the user moves around, such as outdoors.                while only incurring a modest latency penalty of 85ms.
+   Mounting sensors directly on the user’s body overcomes the                          Using only synthetic data for training already provides decent
+need for direct line-of-sight. The most prominent choice for pose                  performance. However, real IMU data contains noise and drift. To
+reconstruction tasks are inertial measurement units (IMUs), which                  close the gap between synthetic and real data distributions, we fine-
+can record orientation and acceleration, are small, and can hence                  tune our model using a newly created DIP-IMU dataset containing
+be easily worn on the body. Commercial systems rely on dense                       approximately 90 minutes of real IMU data.
+placement of IMUs, which fully constrain the pose space, to attain                     We experimentally evaluate DIP using TotalCapture [Trumble
+accurate skeletal reconstructions [Roetenberg et al. 2007]. Placing                et al. 2017], a benchmark dataset including IMU data and reference
+17 or more sensors on the body can be intrusive, time consuming,                   (“ground truth") poses, and on the DIP-IMU dataset. We show that
+and prone to errors such as swapping sensors during mounting.                      DIP achieves an accuracy of 15.85◦ angular error, which is lower
+However, it has been recently demonstrated, that full body pose                    than the competing offline approach, SIP [von Marcard et al. 2017].
+can be recovered from a small set of sensors (6 IMUs) [von Marcard                 This is significant as our method runs in real-time, whereas SIP
+et al. 2017], albeit with a heavy computational cost, requiring offline            requires the full motion sequence as input. To further demonstrate
+optimization of a non-convex problem over the entire sequence; this                the real-time capabilities of DIP, we integrate our approach in a
+can take hours per recording.                                                      simple VR proof-of-concept demonstrator; we take raw IMU data
+   Given that emerging consumer products such as smart-watches,                    as input and our pipeline predicts full body poses, without any
+fitness trackers and smart-glasses (e.g., HoloLens, Google Glass)                  temporal filtering or post-hoc processing. The resulting poses are
+already integrate IMUs, reconstructing 3D body pose from a small                   then visualized via Unity. In summary, DIP occupies a unique place
+set of sensors in real-time would enable many applications. In this                in the pose estimation literature as it satisfies all three aforemen-
+paper we introduce DIP: Deep Inertial Poser, the first deep learning               tioned constraints: it is real time, minimally intrusive, and works in
+method capable of estimating 3D human body pose from only 6 IMUs                   everyday places Fig. 1.
+in real time. Learning a function that predicts accurate poses from
+a sparse set of orientation and acceleration measurements alone
+is a challenging task because (i) the whole pose is not observable
+from just 6 measurements, (ii) previous work has shown that long-
+                                                                                   2     RELATED WORK
+range temporal information plays an important role [von Marcard                    The literature on human pose estimation from images and video
+et al. 2017], and (iii) capturing large datasets for training is time-             is vast. Here we briefly review camera-based methods, those that
+consuming and expensive.                                                           integrate multiple sensor signals using tracking and optimization,
+   To overcome these issues we leverage the following observations                 and learning based methods that recover pose from sparse sensors.
+and insights: (i) Large datasets of human Mocap such as CMU [2008]
+or the H3.6M [2014] exist. Specifically, we leverage AMASS [MoS                    2.1    Camera-based motion capture:
+2018], a large collection of MoCap datasets with data provided in the
+form of SMPL [Loper et al. 2015] model parameters. We leveraged                    Commercial camera-based Mocap solutions require that subjects
+this to synthesize IMU data. Specifically, we place virtual sensors                wear many markers and depend on multiple calibrated cameras
+on the SMPL mesh and use the Mocap sequences to obtain virtual                     mounted in the environment. To overcome these constraints, much
+orientations via forward kinematics, and accelerations via finite dif-             research has been devoted to developing marker-less approaches
+ferences. We leverage this synthetic data for training a deep neural               from multiple cameras (cf. [Sarafianos et al. 2016]). Often such meth-
+network model. (ii) To model long-range temporal dependencies,                     ods require offline processing to achieve high quality results [Ballan
+we leverage recurrent neural networks (RNNs) to map from orienta-                  et al. 2012; Bregler and Malik 1998; Huang et al. 2017; Starck and
+tions and accelerations to SMPL parameters. However, making full                   Hilton 2003] but recently, real-time approaches [de Aguiar et al. 2008;
+use of acceleration information proved to be difficult. This leads to              Elhayek et al. 2017; Rhodin et al. 2015; Stoll et al. 2011] have been
+systematic errors for ambiguous mappings between sensor orien-                     proposed. Such approaches typically fit a skeletal model to image
+tation (measured at the lower-extremities) and pose. In particular                 data or represent the human as a collection of Gaussians [Stoll et al.
+
+
+ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+                       Deep Inertial Poser: Learning to Reconstruct Human Pose from Sparse Inertial Measurements in Real Time • 185:3
+
+
+
+
+Fig. 2. Overview: Left: We leverage existing Mocap datasets to synthesize IMU signals from virtual sensors placed on a SMPL mesh. Middle: A recurrent neural
+network takes IMU signals as input and predicts SMPL pose parameters. Right: The system runs in real-time and can recover full body pose from just 6 sensors.
+
+
+2011]. Other approaches to real-time performance include combin-                  intrusive for the subject, long setup times are required, and errors
+ing discriminative and generative approaches [Elhayek et al. 2017;                such as placing a sensor on the wrong limb are common. To compen-
+Oikonomidis et al. 2012]. However, multi-view approaches assume                   sate for IMU drift, the pioneering work of Vlasic et al. [2007] uses
+stationary, well calibrated cameras and are therefore not suitable                a custom system with 18 boards equipped with acoustic distance
+in mobile and outdoor scenarios. More recently pose estimation                    sensors and IMUs. However, the system is also very intrusive and
+methods have exploited deep convolutional networks (CNNs) for                     difficult to reproduce.
+body-part detection in fully unconstrained monocular images [Cao
+et al. 2016; Chen and Yuille 2014; He et al. 2017; Newell et al. 2016;               Video-inertial trackers. Sparse IMUs have also been combined
+Tompson et al. 2014; Toshev and Szegedy 2014; Wei et al. 2016]. How-              with video input [Malleson et al. 2017; Pons-Moll et al. 2011, 2010;
+ever, these methods only capture 2D skeletal information. Predicting              von Marcard et al. 2016], or with sparse optical markers [Andrews
+3D pose directly from 2D RGB images has been demonstrated us-                     et al. 2016] to constrain the problem. Similarly, sparse IMUs have
+ing offline methods [Bogo et al. 2016; Tekin et al. 2016; Zhou et al.             been combined with a depth camera [Helten et al. 2013]; IMUs are
+2016] and in online settings [Mehta et al. 2018, 2017; Omran et al.               only used to query similar poses in a database, which constrain the
+2018]. Using two fish eye cameras worn on the head, pose estimation               depth-based body tracker. While powerful, hybrid approaches that
+has been demonstrated [Rhodin et al. 2016]. The setup is still very               use video suffer from the same drawbacks as pure camera-based
+intrusive for the user, but future miniature cameras could make                   methods including occlusions and restricted recording volumes.
+the approach more practical; such visual data from body-mounted                   Recent work uses a single moving camera and IMUs to estimate
+cameras could be complementary to our system. Monocular depth                     the 3D pose of multiple people in natural scenes [von Marcard et al.
+cameras provide additional information and have been shown to                     2018], but the approach requires a camera that follows the subjects
+aid robust skeletal tracking [Ganapathi et al. 2012; Pons-Moll et al.             around.
+2015b; Shotton et al. 2013; Taylor et al. 2012; Wei et al. 2012] and en-
+                                                                                     Optimization from sparse IMUs. Von Marcard et al. [2017] com-
+able dense surface reconstruction even under non-rigid deformation
+                                                                                  pute accurate 3D poses using only 6 IMUs. They take a generative
+[Dou et al. 2016; Newcombe et al. 2015; Tao et al. 2018; Zollhöfer
+                                                                                  approach and place synthetic IMUs on the SMPL body model [Loper
+et al. 2014]. Specialized scanners have been used to capture high-
+                                                                                  et al. 2015]. They solve for the sequence of SMPL poses that pro-
+fidelity dense surface reconstructions of humans [Collet et al. 2015;
+                                                                                  duces synthetic IMU measurements that best match the observed
+Pons-Moll et al. 2017, 2015a].
+                                                                                  sequence of real measurements by optimizing over the entire se-
+   In contrast to camera-based work, our approach does not rely
+                                                                                  quence. Like [von Marcard et al. 2017] we also use 6 IMUs to recover
+on calibrated cameras mounted in the environment. Instead, we
+                                                                                  full body pose, and we also leverage SMPL. Our approach is however
+leverage a sparse set of orientation and acceleration measurements,
+                                                                                  conceptually very different: instead of relying on computationally
+which makes the pose reconstruction problem much harder but
+                                                                                  expensive offline optimization, we learn a direct mapping from sen-
+offers the the potential of an infrastructure-free system that can be
+                                                                                  sor data to the full pose of SMPL, resulting in real-time performance
+used in settings where traditional Mocap is not possible.
+                                                                                  and good accuracy despite using only 6 IMUs.
+
+2.2   Optimization based sensor fusion methods                                    2.3      Learning based methods
+   Inertial trackers. Commercial inertial tracking solutions [Roeten-                Sparse accelerometers and markers. An alternative to sensor fu-
+berg et al. 2007] use 17 IMUs equipped with 3D accelerometers,                    sion and optimization is to learn the mapping from sensors to full
+gyroscopes and magnetometers, fused together using a Kalman                       body pose. Human pose is reconstructed from 5 accelerometers by
+Filter. Assuming the measurements are noise-free and contain no                   retrieving pre-recorded poses with similar accelerations from a data-
+drift, the 17 IMU orientations completely define the full pose of the             base [Slyper and Hodgins 2008; Tautges et al. 2011]. The mapping
+subject (using standard skeletal models). However, 17 IMUs are very               from acceleration alone to position is however very difficult to learn,
+
+                                                                                        ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+185:4 •      Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J. Black, Otmar Hilliges, and Gerard Pons-Moll
+
+
+and the signals are typically very noisy. A somewhat easier problem                the output target of the LSTM architecture. This approach ensures
+is to predict full 3D pose from a sparse set of markers [Chai and                  that sufficient data is available for training, and encourages that the
+Hodgins 2005]; here online local PCA models are built from the                     resulting predictions lie close to the subspace spanned by natural
+sparse marker locations to query a database of human poses. Good                   human motion. We now briefly introduce the most salient aspects
+results are obtained since 5-10 marker positions constrain the pose                of the data generation process (Sec. 3.1, Sec. 3.2), the accumulated
+significantly; furthermore the mapping from 3D locations to pose                   dataset used for training (Sec. 3.3), and our proposed network archi-
+is more direct than from accelerations. This approach requires a                   tecture (Sec. 3.4). An overview of the entire pipeline can be found
+multi-camera studio to capture reflective markers.                                 in Fig. 2.
+   Motion sensors. Alternatively, position and orientation can be ob-
+                                                                                   3.1   Background: SMPL body model
+tained from motion sensors based on inertial-ultrasonic technology.
+Full pose can be regressed from 6 such sensors [Liu et al. 2011],                  SMPL is a parametrized model of 3D human body shape and pose
+which provide global orientation and position. While global position               that takes 72 pose, and 10 shape, parameters, θ and β respectively,
+sensors greatly simplify the inverse problem since measurements                    and returns a mesh with N = 6890 vertices. Shape and pose defor-
+are always relative to a static base-station; consequently, capture is             mations are applied to a base template, T µ , that corresponds to the
+restricted to a pre-determined recording volume. Furthermore, such                 mean shape a training 3D scans. We summarize [Loper et al. 2015]
+sensors rely on a hybrid inertial-ultrasonic technology, which is                  here for completeness:
+mostly used for specialized military applications3 . Our method uses                                M(β, θ ) = W (T (β, θ ), J (β), θ, W)             (1)
+only commercially available IMUs —providing orientation and ac-
+                                                                                                     T (β, θ ) = T µ + Bs (β) + Bp (θ ),              (2)
+celeration but no position, and does not require a fixed base-station.
+                                                                                   where W is a linear blend-skinning (LBS) function applied to the
+   Sparse IMUs. Learning methods using sparse IMUs as input have
+                                                                                   template mesh in the rest pose, to which pose- and shape-dependent
+also been proposed [Schwarz et al. 2009], where full pose is re-
+                                                                                   deformations, Bp (θ ) and Bs (θ ), are added. The resulting mesh is
+gressed using Gaussian Processes. The models are trained on specific
+                                                                                   then posed using LBS with rotations about the joints, J (β), which
+movements of individual users for each activity of interest, which
+                                                                                   depend on body shape. The shape-dependent deformations model
+greatly limits its applicability. Furthermore, Gaussian Processses
+                                                                                   subject identity while the pose-dependent ones correct LBS artifacts
+scale poorly with the number of training samples. Generalization
+                                                                                   and capture deformations of the body with pose.
+to new subjects and un-constrained motion patterns is not demon-
+strated.                                                                           3.2   Synthesizing training data
+   Locomotion and gait. IMUs are often used for gait analysis and                  Our approach is learning-based and hence requires a sufficiently
+activity recognition, recently in combination with deep learning                   large dataset for training. Compared to the camera or marker-based
+approaches (cf. [Wang et al. 2017], for example to extract gait pa-                cases, there are very few publicly available datasets including IMU
+rameters via a CNN for medical purposes [Hannink et al. 2016]. Pre-                data and ground-truth poses. To the best of our knowledge the only
+diction of locomotion has been shown using a single IMU [Mousas                    such dataset is TotalCapture [Trumble et al. 2017], including typi-
+2017] using a hierarchical Hidden Markov Model. Deep learning has                  cal day-to-day activities. The dataset contains synchronized IMU,
+been used to produce locomotion of avatars that adapt to irregular                 Mocap and RGB data. However, due to the limited size and types
+terrain [Holden et al. 2017], or that avoid obstacles and follow a                 of activities, models trained on this dataset alone do not generalize
+trajectory [Peng et al. 2017]. These approaches are suited to cyclic               well, e.g., common interaction tasks in VR/AR such as reaching for
+motion patterns, where cycle phase plays a central role.                           and selecting objects in a seated position are not represented at all.
+                                                                                      However, given the capability of fitting SMPL parameters to in-
+   In summary, existing learning methods either rely on global joint               puts of different modalities (17 IMUs, marker data), it becomes
+positions as input—which requires external cameras or specialized                  feasible to generate a much larger and more comprehensive training
+technology—or are restricted to pre-defined motion patterns. DIP is                dataset by synthesizing pairs of IMU measurements and correspond-
+the first deep-learning method capable of reconstructing full-body                 ing SMPL parameters from a variety of input datasets.
+motion from a sparse set of sensors in real time.                                     To attain synthetic IMU training data, we place virtual sensors on
+                                                                                   the SMPL mesh surface. The orientation readings are then directly
+3    METHOD OVERVIEW                                                               retrieved using forward kinematics, whereas we obtain accelerations
+Our goal is to reconstruct articulated human motion in uncon-                      via finite differences. Assuming the position of a virtual IMU is p t
+strained settings from a sparse set of IMUs (6 sensors) in real-time.              for time t, and the time interval between two consecutive frames is
+This problem is extremely difficult since many parts of the body are               dt, the simulated acceleration is computed as:
+not directly observable from the sensor data alone. To overcome this                                       p     + p t +1 − 2 ∗ p t
+problem, we leverage a state-of-the-art statistical model of human                                     at = t −1                    .                 (3)
+                                                                                                                    dt 2
+shape and pose, and regress its parameters using a deep recurrent
+neural network (RNN). In our implementation, we use the SMPL                       3.3   Datasets
+model [Loper et al. 2015] both to synthesize training data and as                  Our final training data is a collection of pairs of synthetic IMU sen-
+3 http://www.intersense.com/pages/20/14                                            sor readings and corresponding SMPL pose parameters. We use a
+
+ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+                       Deep Inertial Poser: Learning to Reconstruct Human Pose from Sparse Inertial Measurements in Real Time • 185:5
+
+
+
+
+Fig. 3. Overview: Left: At training-time our network has access to the whole sequence (blue window) and propagates temporal information from the past to
+the future and vice versa. Our model consists of two stacked bidirectional layers. Shown in blue (solid arrows) is the forward layer and in green (dashed
+arrows) the backward layer. Note that the second layer receives direct input from the forward and backward cells of the layer below (diagonal arrows). Please
+refer to the appendix, Fig. 12, for more details. Right: At runtime we feed a sliding window of short subsequences from the past (blue window) and the future
+(green window) to predict the pose at the current time step. This incurs only minimal latency and makes real-time applications feasible.
+
+
+subset of the AMASS dataset [MoS 2018], itself a combination of                   case of knee raises while standing in place. Here the orientation
+datasets from the computer graphics and vision literature, includ-                data will remain mostly unchanged and only transient accelerations
+ing CMU [De la Torre et al. 2008], HumanEva [Sigal et al. 2010],                  will be recorded throughout the sequence. This observation led to
+JointLimit [Akhter and Black 2015], and several smaller datasets.                 the use of strong priors and a global optimization formulation in
+   We use two further datasets (TotalCapture and DIP-IMU) for eval-               [von Marcard et al. 2017], consisting of orientation, acceleration and
+uation of our method. Both consist of pairs of real IMU readings and              anthropometric terms. This approach is computationally expensive
+reference (“ground-truth”) SMPL poses. To obtain reference SMPL                   and offline, with run-times of several minutes to hours depending
+poses for TotalCapture [Trumble et al. 2017], we used the method of               on the sequence length. To overcome this limitation, we adopt a
+[Loper et al. 2014] on the available marker information. Finally, we              data-driven approach and model the mapping with neural networks
+recorded the DIP-IMU dataset using commercially available XSens                   by using a log-likelihood loss function, implicitly learning the space
+sensors. The corresponding SMPL poses were obtained by running                    of valid poses from sequences directly.
+SIP [von Marcard et al. 2017] on all 17 sensors. More details on the                 Both IMU inputs and corresponding SMPL pose targets are highly
+data collection is available in Section 4.5.                                      structured and exhibit strong correlations due to the articulated na-
+   Note that combining these datasets is non-trivial as most of                   ture of human motion. Recurrent neural networks are capable of
+them use a different number of markers and varying framerates.                    modeling temporal data and have been previously used in modeling
+The datasets involved in this work are summarized in Table 1. All                 of human motion, typically attempting to predict the next frame
+datasets combined consist of 618 subjects and over 1 million frames               of a sequence [Fragkiadaki et al. 2015; Ghosh et al. 2017; Martinez
+of data. To the best of our knowledge no other IMU dataset of this                et al. 2017]. Although we use a different input modality, our model
+extent is available at the time of writing. We will make the following            needs to learn similar motion dynamics. In order to exploit temporal
+data available for research purposes: the generated synthetic IMU                 coherency in the motion sequence we use recurrent neural networks
+data on AMASS, and the DIP-IMU dataset–including correspond-                      (RNN) and bi-directional recurrent neural networks (BiRNN) [Schus-
+ing ground-truth SMPL poses reconstructed from 17 IMUs and the                    ter and Paliwal 1997]—with long short-term memory (LSTM) cells
+original IMU data.                                                                [Hochreiter and Schmidhuber 1997].
+                                                                                     RNNs summarize the entire motion history via a fixed-length
+                                                                                  hidden state vector and require the current input xt in order to
+3.4   Deep Inertial Poser (DIP)
+                                                                                  predict the pose vector yt . While standard RNNs are sufficient in
+                                             N consisting of N train-
+Given the training dataset D = {(x i , y i )}i=1                                  many real-time applications, we experimentally found that having
+ing sequences, our task is to learn a function f : x → y that predicts            access to both future and past information significantly improves
+SMPL pose parameters y from sparse IMU inputs x (acceleration and                 the predicted pose parameters. BiRNNs take all temporal informa-
+orientation for each sensor). This mapping poses a severely under-                tion into account by running two cells in the forward and backward
+constrained problem, since there exist potentially many SMPL poses                directions, respectively. Compared to RNNs (i.e., unidirectional),
+corresponding to the same IMU inputs. For example, consider the
+
+
+                                                                                     ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+185:6 •      Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J. Black, Otmar Hilliges, and Gerard Pons-Moll
+
+Table 1. Dataset overview. “M” denotes MoCap, “I” denotes IMU and “R”                    vec({R̄T1 B , . . . , R̄T5 B }) ∈ R45 . Similarly, the normalized accelerations
+RGB imagery. For details on AMASS see [MoS 2018], for TotalCapture see
+                                                                                         are stacked into at ∈ R15 .
+[Trumble et al. 2017]. Frame numbers and minutes of AMASS correspond
+to the number and time length of frames we generated at 60 fps by down-                     The acceleration data at is inherently noisy and much less sta-
+sampling the original data, where required.                                              ble than the orientations. This issue is further complicated by the
+                                                                                         subtle differences between real and synthesized accelerations in the
+   Name      Type Mode #Frames #Minutes #Subjects #Motions                               training data. In our experiments, we found that different network
+  AMASS Synth M 9,730,526 2703             603     11234                                 architectures displayed the tendency to discard most of the accel-
+TotalCapture Real M, I, R 179,176 50         5       46                                  eration data already at the input level (almost zero weights on the
+  DIP-IMU Real      I     330,178 92        10       64                                  acceleration inputs). For certain motions, the lack of acceleration in-
+                                                                                         formation causes the model to underestimate flexion and extension
+                                                                                         of joints. In order to alleviate this problem, we introduce an auxiliary
+BiRNNs exhibit better qualitative and quantitative results by access-                    task during training. Our model is asked to reconstruct the input
+ing the whole input sequence. This is in-line with the findings of                       acceleration in addition to pose at training time. This additional loss
+[von Marcard et al. 2017] where optimizing over the entire sequence                      forces the model to propagate the acceleration information to the
+was found to be necessary.                                                               upper layers.
+   Before arriving at the proposed bidirectional architecture, we                           Analogous to the main pose task, we model the auxiliary acceler-
+experimented with simple feed-forward networks and WaveNet                               ation loss via a Normal distribution with diagonal covariance.
+[van den Oord et al. 2016] variants. We found that these models                                                             T
+either perform worse quantitatively or produce unacceptable visual
+                                                                                                                            Õ
+                                                                                                           log(p(at )) =           log(N (at |µ a t , σ a t I)),
+jitter. The appendix A contains more details on these experiments.                                                          t =1                                    (5)
+We assume that RNNs can make better use of the inherent temporal                                       (µ a t , σ a t )Tt=1 = f (x = [o, a]).
+properties of the data and hence produce smoother predictions than
+non-recurrent variants, especially if they have access to future and                     The pose prediction loss Eq. (4) and acceleration reconstruction loss
+past information.                                                                        Eq. (5) are complementary to each other and are back-propagated
+   While we train our BiRNN model by using all time-steps, it is                         through the architecture with all weights and other network param-
+important to note that at test time, we use only input sub-sequences                     eters being shared. Only a minimal number of additional trainable
+consisting of past and future frames in a sliding-window fashion. In                     network parameters is required to predict µ at and σ at with suffi-
+our real-time processing pipeline, we only permit a short temporal                       cient accuracy.
+look ahead to keep the latency penalty minimal. Our evaluations                             We experimentally show that adding the auxiliary acceleration
+show that using only 5 future frames provides the best compromise                        loss improves pose predictions quantitatively.
+between performance and latency. Fig. 6 summarizes the impact of
+                                                                                            3.4.3 Regularization. We train on primarily synthetic data. While
+window size on the reconstruction quality. We note that in settings
+                                                                                         the data is sufficiently realistic, slight differences relative to real
+with strict low-latency requirements, such as AR, it may be desirable
+                                                                                         data are unavoidable. As a consequence, we observed indications
+to use no future information at the cost of roughly 1◦ lower accuracy.
+                                                                                         of overfitting, and testing on real data yielded less accurate and
+  3.4.1 Training with uncertainty. During training, we model tar-                        jerky predictions. To counteract overfitting, we regularize models
+get poses y t with a Normal distribution with diagonal covariance                        via dropouts directly on the inputs with a keep probability of 0.8,
+and use a standard log-likelihood loss to train our network:                             which randomly filters out 20% of the inputs during training. Ran-
+                                    T                                                    domly masking inputs helps the model to better generalize to the
+                                                                                         real data and to make smoother temporal predictions.
+                                    Õ
+                     log(p(y)) =           log(N (yt |µ t , σ t I)),
+                                    t =1                                           (4)
+                                                                                            3.4.4 Fine-tuning with real data. To reduce the gap between real
+                  (µ t , σ t )Tt=1 = f (x),                                              and synthetic data further, we fine-tune the pre-trained models,
+where f stands for either a unidirectional or bidirectional RNN                          using the training split of the new dataset (see Sec. 4.5). We found
+being trained on sequences of T frames. In other words, our model                        fine-tuning particularly effective in situations where specific usage
+f outputs µ and σ parameters of a Gaussian distribution at every                         scenarios or motion types were underrepresented in the training
+time step. In-line with the RNN literature, we found that this log-                      data. Hence, this procedure is an effective means of adapting our
+likelihood loss leads to slightly better performance than, for example,                  method to novel situations.
+mean-squared error (MSE).
+                                                                                         4 IMPLEMENTATION DETAILS
+   3.4.2 Reconstruction of acceleration. The input vector for a sin-
+gle frame, xt = [ot , at ], contains orientation ot and acceleration                     4.1 Network architecture
+at data as measured by the IMUs. We represent orientations as                            We implemented our network architecture in TensorFlow [Abadi
+3 × 3 rotation matrices in the SMPL body frame. Before feeding                           et al. 2015]. Fig. 12 in the appendix summarizes the architecture
+orientations and accelerations into the model, we normalize them                         details. We used the Adam optimizer [Kingma and Ba 2014] with an
+w.r.t. the root sensor (cf. Section 4.2-4.4). This results in 5 input                    initial learning rate of 0.001, which is exponentially decayed with a
+rotation matrices that are all stacked and vectorized into ot =                          rate of 0.96 and decay step 2000. In order to alleviate the exploding
+
+ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+                           Deep Inertial Poser: Learning to Reconstruct Human Pose from Sparse Inertial Measurements in Real Time • 185:7
+
+
+gradient problem, we applied gradient clipping with a norm of 1. We                   Y         FT                      Y               FB
+                                                                                                            R TB
+followed the early stopping training scheme by using the validation
+                                                                                                                                        X
+log-likelihood loss.                                                                                 X                   Z
+                                                                                            Z
+
+4.2    Sensors and calibration
+                                                                                  R TI
+   Sensors. We use Xsens IMU sensors 4 containing 3-axis accelerom-
+eters, gyroscopes and magnetometers; the raw sensor readings are                  Z             FI                                          FS
+in the sensor-local coordinate frame F S . Xsens also provides abso-                                        R IS
+lute orientation of each sensor relative to a global inertial frame F I .                            Y                          Xsens
+                                                                                                                                             X
+Specifically, the IMU readings that we use are orientation, provided                  X
+                                                                                                                            Y
+as a rotation RI S : F S → F I , which maps from the sensor-local
+frame to the inertial frame, and acceleration which is provided in          Fig. 4. Calibration overview. Left: Overview of coordinate frames. Right:
+local sensor coordinates.                                                   Sensor placement and straight pose held by subjects during calibration.
+   Calibration. Before feeding orientation and acceleration to our
+model, we must transform them to a common body-centric frame,               sensor s at time step t, we compute the normalized orientations and
+in our case the SMPL body frame F T . Concretely, we must find the          accelerations as follows:
+map RT I : F I → F T , relating the inertial frame to the SMPL body                                                    −1
+                                                                                                         R̄Ts B (t) = Rroot (t) · RTs B (t),                            (9)
+frame. To this end, we place the head sensor onto the head such that
+                                                                                                                      −1
+the sensor axes align with the SMPL body frame. Consequently, in                                           ās (t) = Rroot (t) · (as (t) − a root (t)).            (10)
+this configuration, the mapping from head sensor to SMPL frame              This is performed per time-step, both for training and testing. We
+F T is the identity. This allows us to set RT I as the inverse of the       also experimented with other normalization schemes, such as (i) nor-
+orientation RHead read from the head sensor at calibration time. All        malizing the root only w.r.t. the first frame in each sequence and
+IMU readings can then be expressed in the SMPL body frame:                  (ii) removing only the heading. We found no significant advantages
+                                             −1
+                       RTt S = RT I RtI S = RHead RtI S .            (6)    in either of these schemes compared to the one proposed here. Please
+                                                                            refer to the appendix C for details.
+   Lastly, due to surrounding body tissue, the sensors are offset
+from the corresponding bones. We denote this constant offset by             4.4           Inputs and targets
+RBS : F S → F B , where F B is the respective bone coordinate frame.
+                                                                            The inputs to DIP are the normalized orientations and accelerations.
+In the first frame of each sequence, each subject stands in a known
+                                                                            Using 6 IMUs, the input for one frame,
+straight pose with known bone orientation R0BT , and we compute
+the per-sensor bone offset as:                                                xt = [ot , at ]T = [vec(R̄T1 B (t), . . . , R̄T5 B (t)), ā 1 (t), . . . , ā 5 (t)]T ,
+                            RBS = inv(RT0 B )RT0 S ,                 (7)    is a vector of dimension d = (3 · 3 + 3) · 5 = 60. We experimented
+                                                                            with more compact representations of orientation than rotation
+where inv(·) denotes matrix inverse. This lets us transform the
+                                                                            matrices, such as exponential maps or quaternions; these performed
+sensor orientations to obtain virtual bone orientations at every frame
+                                                                            significantly worse than using rotation matrices directly. Rotation
+                               RTt B = RBS RTt S ,                   (8)    matrices elements are bounded between {−1, 1} which is good for
+which we use for training and testing. The interpretation of virtual        training neural networks. Similarly for the targets y, instead of
+bone orientations is straightforward: they are the bone orientations        regressing to the pose parameters θ of SMPL in axis-angle space, we
+as measured by the IMU. The acceleration data is transformed to             transform them to rotation matrices and regress them directly. This
+the SMPL coordinate frame after subtracting gravity, and is denoted         may seem counter-intuitive because the representation is redundant,
+as a. Calibration only requires the subject to hold a straight pose         but we found empirically that performance is better.
+for a couple of seconds at the beginning of the recording. Fig. 4
+                                                                            4.5           Data collection
+provides an overview of the different coordinate frames involved in
+our calibration process.                                                    To overcome discrepancies between the sensor data characteristics
+                                                                            of the synthetic and real data and to complement the activities por-
+4.3    Normalization                                                        trayed in existing Mocap-based datasets, we recorded an additional
+                                                                            dataset of real IMU data, which we call DIP-IMU.
+For better generalization, the input data should be invariant to the
+                                                                               We recorded data from 10 subjects (9 male, 1 female) wearing 17
+facing direction of the person (e.g. a running motion while the
+                                                                            Xsens sensors (see Fig. 4). All the subjects gave informed consent
+subject is facing north or south should produce the same inputs for
+                                                                            to share their IMU data. To attain ground-truth, we ran SIP [von
+our learning model). To this end, we normalize all bone orientations
+                                                                            Marcard et al. 2017] on all 17 sensors. To compensate for different
+with respect to the root sensor, mounted at the base of the user’s
+                                                                            magnetic offsets across IMUs, a heading reset is performed first. The
+spine. With Rroot (t) denoting the orientation of the root at time
+                                                                            sensors are aligned in a known spatial configuration, after which
+step t, and RTs B (t), the orientation of the bone corresponding to
+                                                                            the heading is reset. Subsequently, the sensors are mounted on the
+4 https://www.xsens.com/
+                                                                            subject and the calibration procedure (cf. Section 4.2) is performed.
+
+                                                                                  ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+185:8 •      Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J. Black, Otmar Hilliges, and Gerard Pons-Moll
+
+
+Participants were then asked to repeatedly carry out motions in five                            0.06
+                                                                                                                                               BiRNN                                                          BiRNN (fine-tuning)
+                                                                                                                                                                                                              BiRNN
+
+
+different categories, including controlled motion of the extremities                            0.05
+                                                                                                                                                                    0.04
+
+(arms, legs), locomotion, and also more natural full-body activities                            0.04                                                                0.03
+
+
+
+
+                                                                                   Percentage
+
+
+
+
+                                                                                                                                                       Percentage
+(e.g., jumping jacks, boxing) and interaction tasks with everyday                               0.03
+                                                                                                                                                                    0.02
+objects. In total, we captured approximately 90 minutes of additional                           0.02
+data resulting in the largest dataset of real IMU data (appendix F).                            0.01
+                                                                                                                                                                    0.01
+
+
+                                                                                                0.00                                                                0.00
+                                                                                                       0   10      20            30       40    50                         0   10      20            30       40             50
+5     EXPERIMENTS                                                                                               Anguler Error in Degree                                             Anguler Error in Degree
+
+
+To assess the proposed method, we performed a variety of quan-
+                                                                                   Fig. 5. Histogram of joint angle errors (◦ ). Left: Error distribution on Total-
+titative and qualitative evaluations. We compare our method to
+                                                                                   Capture with the offline BiRNN model. Right: Performance on DIP-IMU
+the offline baselines SIP [von Marcard et al. 2017] and SOP (re-                   before and after fine-tuning as described in Section 5.1.2.
+duced version of SIP not leveraging accelerations), and perform
+self-comparisons between the variants of our architecture. Here
+we distinguish between two distinct settings. First, we compare
+performance in the offline setting. That is, we use test sequences
+from existing real datasets (TotalCapture and DIP-IMU). Second,
+one of the main contributions of our work is the real-time (online)
+capability of our system. To demonstrate this, we implemented an
+end-to-end live system, taking IMU data as input and predicting
+SMPL parameters as output.
+
+5.1    Quantitative evaluation                                                     Fig. 6. Performance of BiRNN as function of past and future frames on Total-
+In this section we show how our approach performs on several test                  Capture. Numbers are mean joint angle error in degrees. Zero frames means
+datasets. We report both mean joint angle error, computed as in                    no frames contribute to the prediction from the past or future respectively,
+[von Marcard et al. 2017], and positional error.                                   i.e. only use the current frame.
+
+   5.1.1 Offline evaluation. First, we report results from the offline
+setting, in which all models have access to the whole sequence. This
+setting is a fair comparison between our model and the baselines                      5.1.3 Online evaluation. Next, we select our best performing
+since SIP and SOP solve an optimization problem over the whole                     configuration and evaluate it in the online setting. We do not evalu-
+sequence. Table 2 summarizes the results with our models perform-                  ate performance of SIP and SOP since these baselines can not run
+ing close to or better than the SIP baseline. The best configuration               online. Note that now the RNN configurations no longer have access
+(BiRNN (Acc+Dropout)) outperforms SIP by more than one degree.                     to the entire sequence, but only to past frames in the case of the uni-
+Fig. 5 (left) shows the angular error distribution over the entire                 directional RNN, and to a sliding window of past and a few future
+TotalCapture dataset. The peak is around 8◦ error.                                 frames in the case of the BiRNN. Table 3 indicates that the networks
+   The combination of dropouts on the inputs and use of the accel-                 obtain good pose accuracy in the online setting. Notably, the BiRNN
+eration loss improve both RNN and BiRNN models. Note that, due                     with access to 50 past frames even slightly outperforms the offline
+to its access to the future steps, BiRNNs perform qualitatively better             setting on TotalCapture. This may be due to the accumulation of
+and produce smoother predictions than the uni-directional RNNs.                    error in the hidden state of the RNN and the stochasticity of human
+                                                                                   motion over longer time spans.
+   5.1.2 Fine-tuning on real data. While the techniques shown in                      In the online setting, the influence of the acceleration loss is most
+the previous section perform reasonably well on TotalCapture, a                    evident. If evaluated on 20 past and 5 future frames on TotalCapture,
+significant performance drop is evident on DIP-IMU. This is due to                 a BiRNN without acceleration loss performs worse (16.26◦ ± 13.54◦ )
+the difference in motions in our new dataset and the aforementioned                than one using the acceleration loss (15.88◦ ± 13.57◦ ). For 50 past
+gap between real and synthetic data distributions. However, the                    and 5 future frames the error increases to 16.10◦ ± 13.42◦ (compared
+results we have analyzed so far stem from models trained without                   to 15.77◦ ± 13.41◦ ).
+access to the DIP-IMU data and hence have not seen the types of
+poses and motions contained in DIP-IMU. We now report the results                     5.1.4 Influence of future window length. Our final implementa-
+from our best configurations after fine-tuning on the DIP-IMU data.                tion leverages a BiRNN to learn motion dynamics from the data.
+We fine tune the network on the training split and test it on the                  At training time, the entire sequence is processed, but at runtime,
+held-out set. Tables 2 and 3 show results from the offline and online              only a subset of frames is made available to the network. Fig. 6 sum-
+setting. We find a clear performance increase on DIP-IMU, which                    marizes the performance of the network as function of how many
+is now comparable to TotalCapture. This is further illustrated by                  frames of past and future information are available at test time. We
+the error histogram on DIP-IMU before and after fine-tuning (cf.                   experimentally found that using 5 future and 20 past frames is the
+Fig. 5). Note that the performance on TotalCapture decreases only                  best compromise between prediction accuracy and latency penalty;
+minimally, indicating that no catastrophic forgetting takes place.                 we use this setting in our live system.
+
+ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+                      Deep Inertial Poser: Learning to Reconstruct Human Pose from Sparse Inertial Measurements in Real Time • 185:9
+
+Table 2. Offline evaluation of SOP, SIP, RNN and BiRNN models on TotalCapture [Trumble et al. 2017] and DIP-IMU. Errors reported as joint angle errors
+in degrees and positional erros in centimeters. Models with Dropout are trained by applying dropout on input sequences. Acc corresponds to acceleration
+reconstruction loss. SOP, SIP and BiRNN have access to the whole input sequence while RNN models only use inputs from the past. BiRNN (after fine-tuning)
+is BiRNN (Acc+Dropout) fined-tuned on DIP-IMU using acceleration reconstruction loss and dropout as well.
+
+                                                         TotalCapture                                                 DIP-IMU
+                                       µ anд [deg]    σanд [deg] µpos [cm]       σpos [cm]      µ anд [deg]     σanд [deg] µpos [cm]           σpos [cm]
+       SOP                                22.18         17.34      8.39            7.57            27.78          19.50       8.23               6.74
+       SIP                                16.98         13.26      5.97            5.50            24.00          16.91       6.34               5.86
+       RNN (Dropout)                      16.83         13.41      6.27            6.32            35.66          19.96      13.38               8.84
+       RNN (Acc)                          16.07         13.16      6.06            6.01            41.00          29.36      15.30               12.96
+       RNN (Acc+Dropout)                  16.08         13.46      6.21            6.27            30.90          18.66      11.84               8.59
+       BiRNN (Dropout)                    15.86         13.12      6.09            6.01            34.55          19.62      12.85               8.62
+       BiRNN (Acc)                        16.31         12.28      5.78            5.62            37.88          24.68      14.31               11.30
+       BiRNN (Acc+Dropout)                15.85         12.87      5.98            6.03            31.70          17.30      12.07               8.72
+       BiRNN (after fine-tuning)          16.84         13.22      6.51            6.17            17.54          11.54       6.49               5.36
+
+Table 3. Online evaluation of BiRNN models on TotalCapture [Trumble et al. 2017] and DIP-IMU. We select the best performing model from our offline
+evaluation, i.e., (Acc+Dropout). Numbers in brackets (x, y) mean that this model is evaluated in online mode using x past and y future frames. (fine-tuning)
+means that the model was fine-tuned on DIP-IMU.
+
+                                                         TotalCapture                                                  DIP-IMU
+                                        µ anд [deg]   σanд [deg] µpos [cm]        σpos [cm]     µ anд [deg]      σanд [deg] µpos [cm]           σpos [cm]
+      BiRNN (20, 5)                        15.88        13.57      6.00             6.16           38.42           25.06      14.49               11.42
+      BiRNN (50, 5)                        15.77        13.41      5.96             6.13           39.11           24.70      14.81               11.52
+      BiRNN (fine-tuning)                  16.84        13.22      6.51             6.17           17.54           11.54       6.49               5.36
+      BiRNN (20, 5) (fine-tuning)          16.90        13.83      6.46             6.26           18.49           12.88       6.63               5.54
+      BiRNN (50, 5) (fine-tuning)          16.74        13.64      6.42             6.22           18.14           12.75       6.52               5.48
+
+
+                                                                                    5.2.1 Playground (real). First, we compare to SIP and SOP on
+                                                                                 the Playground dataset [von Marcard et al. 2017]. Playground is
+                                                                                 challenging because it is captured outdoors and contains uncom-
+                                                                                 mon poses and motions. Since the dataset contains no ground truth,
+                                                                                 we provide only qualitative results. Fig. 7 shows selected frames
+                                                                                 from a sequence where the subject climbs over an obstacle. We find
+                                                                                 that SOP has a lot of trouble in reconstructing the leg motion and
+                                                                                 systematically underestimates arm and knee bending. Our results
+                                                                                 are comparable to SIP although sometimes the limbs are more out-
+                                                                                 stretched than in the baseline. However, note that SIP optimizes over
+                                                                                 the whole sequence and is hence computationally very expensive,
+                                                                                 whereas ours produces predictions in milliseconds.
+
+                                                                                    5.2.2 TotalCapture (real). Here we provide a qualitative compar-
+                                                                                 ison of our method and the baseline on the TotalCapture dataset
+                                                                                 [Trumble et al. 2017]. Fig. 8 summarizes three different sample
+                                                                                 frames from the dataset. We note that for challenging motions such
+            Fig. 7. Selected frames from Playground dataset.
+                                                                                 as back bending (bottom row) and leg raises (middle row), our model
+                                                                                 outperforms both SIP and SOP and is very close to the reference. Fig.
+                                                                                 8 also shows a case where our model successfully reconstructs a leg-
+                                                                                 raise when SIP and SOP fail. Note however, that this difficult motion
+5.2   Qualitative evaluation
+                                                                                 also fails to be reconstructed by our model at times (cf. Section 6.2).
+We now further assess our approach via qualitative evaluations.
+Based on the above quantitative results, we only report results                     5.2.3 DIP-IMU (real). Lastly, we illustrate results on our own
+from our best model (BiRNN). We use the model in offline mode to                 DIP-IMU dataset (cf. Sec. 3.3 and Appendix F). Here the reference
+produce the results in this section. Section 5.3 discusses the results           (“ground truth") is obtained by running SIP using all 17 IMUs. At
+when using it in online mode. Please see the accompanying video.                 test time, however, we only use 6 IMUs as input for our method, and
+
+                                                                                     ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+185:10 •       Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J. Black, Otmar Hilliges, and Gerard Pons-Moll
+
+
+                                                                                   from the future. The system runs at approximately 29 fps while still
+                                                                                   producing faithful results (cf. appendix E).
+
+                                                                                   6 DISCUSSION AND LIMITATIONS
+                                                                                   6.1 Generalization
+                                                                                   In this paper we have shown that our model is able to generalize
+                                                                                   well to unseen data based on the following observations. (i) We
+                                                                                   achieve good results on a held-out dataset with real IMU recordings
+                                                                                   (Total Capture) despite training on synthetic data only (cf. Section
+                                                                                   5.1). (ii) We show good qualitative performance on another held-out
+                                                                                   dataset, Playground, and in the live demo (cf. Section 5.2). This is
+                                                                                   challenging to achieve due to differences in motions, sensors, and
+      Fig. 8. Sample frames from TotalCapture data set (S1, ROM1).                 data preprocessing across the datasets. (iii) The system is robust
+                                                                                   w.r.t. different root orientations (cf. Fig. 1).
+                                                                                      However, robustness to even more poses, datasets and settings is
+                                                                                   still the subject of future work. We hypothesize that one of the main
+                                                                                   limitations is the difficulty of modeling accelerations (synthetic and
+                                                                                   real) effectively. This is the main reason for fine-tuning on DIP-IMU,
+                                                                                   which improves generalization but certainly does not have to be the
+                                                                                   final solution to this problem. In the following we report additional
+                                                                                   experiments to provide insight into these issues.
+
+                                                                                      Synthetic vs. real. We first train a BiRNN on a smaller, real dataset
+                                                                                   (DIP-IMU) as opposed to a large, synthetic one (AMASS). We sub-
+                                                                                   sequently evaluate this model on TotalCapture, where we notice
+                                                                                   a drop in performance of around 5.2◦ (21.03◦ ±16.35◦ ). Testing on
+                                                                                   the DIP-IMU held-out set yields an error of (18.84◦ ±14.08◦ ), which
+                                                                                   is comparable to the performance when training with synthetic and
+                                                                                   fine-tuning with DIP-IMU (17.54◦ ). However, the latter yields better
+                                                                                   performance on TotalCapture. These results illustrate the benefits
+            Fig. 9. Sample frames from DIP-IMU (S10, Motion4).                     of a large synthetic motion database.
+
+                                                                                      Re-Synthesis. To analyze the impact of differences between syn-
+for the baselines SIP and SOP. Fig. 9 summarizes several sequences                 thetic and real data, we synthesize the IMU measurements for the
+from the dataset. It is evident that our model outperforms both SIP                real datasets (TotalCapture and DIP-IMU). We then evaluate our
+and SOP qualitatively in a consistent way. We see that SIP/SOP                     best BiRNN on these synthetic versions of TotalCapture and DIP-
+creates a lot of inter-penetrations between limbs and the torso. Our               IMU and compare it with the performance on real data. The model
+model more faithfully reproduces the arm motions over a large                      performs better on the synthetic version of both TotalCapture (im-
+range of frames and poses. Interestingly, our model rarely produces                provement by 2.71◦ to 13.14◦ ±10.50◦ ) and DIP-IMU (improvement
+inter-penetrations and produces smooth motion despite noise in                     by 8.84◦ to 22.86◦ ±15.70◦ ), highlighting domain differences that
+the inputs (see video) and without any explicit smoothness or inter-               need to be addressed. Appendix D provides a more detailed discus-
+penetration constraints. Hence, DIP learns a mapping from IMU                      sion and additional experiments. In summary, we hypothesize that
+data to the space of valid poses and motion. Smoothness may be                     differences in accelerations lie at the core of this problem.
+explained by the regularization of training via dropouts.
+                                                                                   6.2   Failure cases
+5.3    Live demo                                                                   Fig. 11 (top) shows typical failure cases, taken from an example
+To demonstrate that our model runs in real-time, we implemented                    sequence in TotalCapture. While the model is robust to various
+an on-line system that streams the sensor data directly into the                   root orientations in the live demo, extreme cases, where the body
+model and displays the output poses. The raw IMU readings are                      is parallel to the floor (such as push-ups), are challenging. Finally,
+retrieved via the Xsens SDK, the model’s output is displayed via                   we compute the worst 5% poses on the test set of DIP-IMU, which
+Unity and all communication is performed via the network. Example                  results in a mean joint angle error of 43.68◦ ±8.53◦ degrees and
+frames from the live demo are shown in Fig. 1 and Fig. 10. The                     show the worst poses in appendix B. Leg raises are among the most
+results are best viewed in the supplementary video. For the live                   difficult motions as the sensors show very similar orientation read-
+demo we use the online version of the fine-tuned BiRNN model as                    ings while performing this motion. Hence, only acceleration can
+explained in Section 5.2, i.e. using 20 frames from the past and 5                 disambiguate these [von Marcard et al. 2017]. However, sensitivity
+
+ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+                      Deep Inertial Poser: Learning to Reconstruct Human Pose from Sparse Inertial Measurements in Real Time •                              185:11
+
+
+
+
+                 Fig. 10. Sample frames from the live demo showing that our model is able to handle various motion types. See also Fig. 1.
+
+
+                                                                                 produces accurate pose estimates at a latency of only 85ms. Even
+                                                                                 satisfying the real-time requirement, DIP performs comparably to,
+                                                                                 or better than, the competing off-line approach, SIP. Furthermore,
+                                                                                 DIP produces results that are smooth and generally without inter-
+                                                                                 penetrations. This demonstrates that DIP learns a mapping to the
+                                                                                 space of valid human poses without requiring explicit smoothness
+                                                                                 or joint angle limits.
+                                                                                    Future work should address capturing multi-person interactions
+                                                                                 and people interacting with objects and the environment. While
+                                                                                 the focus of this work has been a system based purely on wearable
+                                                                                 sensors, some applications admit external, or body mounted cam-
+                                                                                 eras [Rhodin et al. 2016]. It would be interesting to integrate visual
+                                                                                 input with our tracker in order to obtain even better pose estimates,
+                                                                                 especially to capture contact points, knee bends and sitting-down
+                                                                                 poses, which are difficult to recover using only 6 IMUs. While our
+                                                                                 approach runs in real-time, transferring the motion data over the
+                                                                                 Internet may introduce latency, which is a problem for virtual social
+                                                                                 interaction. Hence, we will explore ways to predict into the future
+                                                                                 to reduce latency. Finally, unlike [von Marcard et al. 2017], no global
+Fig. 11. Top: Per-frame average angular error over a sequence from Total-        translation is considered in our method. This limitation can be crit-
+Capture (S3, ROM1) including 3 maximum error poses. The mean angular
+                                                                                 ical in some application scenarios. We see two possible solutions
+error for this sequence is 16.73◦ ± 8.55◦ . Bottom: Typical failure case from
+TotalCapture. Our model and both baselines fail to reconstruct the leg raise.
+                                                                                 to this. First, a GPS signal, which is integrated into most phones,
+                                                                                 could be integrated into DIP to obtain reasonable global position.
+                                                                                 Another potential way is to regress the global translations directly
+to IMU placement, environmental factors, and different noise char-               from the temporal IMU inputs. We leave this for future work.
+acteristics per sensor make it extremely challenging to integrate                   We have demonstrated the capabilities of DIP by displaying its
+them effectively into a learning-based approach. Fig. 11 (bottom)                pose predictions in real time. We believe that real-time pose esti-
+shows how both our model and the baselines fail to reconstruct a                 mation methods, which require only a small number of wearable
+leg raise. We believe that these problems arise from the fact that our           sensors like DIP, will play a key role for emerging interactive tech-
+model struggles to fully exploit the acceleration information. Hence,            nologies such as VR and AR.
+future work should focus on addressing this challenge by modeling
+the noise in acceleration and exploring new sensor placement.
+                                                                                 ACKNOWLEDGMENTS
+7   CONCLUSION AND FUTURE WORK                                                   We would like to express our gratitude to Timo von Marcard for pro-
+We presented a new learning-based pose-estimation method that re-                viding code and support to run SIP/SOP and for fruitful discussions
+quires only 6 IMUs as input, runs in real-time, and avoids the direct            throughout this project. We thank the reviewers for their valuable
+line-of-sight requirements of camera-based systems. We leverage                  comments and all participants for their efforts spent in recording
+a large Mocap corpus to synthesize IMU data (orientation and ac-                 DIP-IMU. We are also grateful to Velko Vechev for his extensive help
+celeration) using the SMPL body model. From this synthetic data,                 with the live demo and Jonathan Williams and Benjamin Pellkofer
+we show how to learn a model (DIP) that generalizes to real IMU                  for web development. This work was supported in part by the ERC
+data, obtaining an accuracy of 15.85◦ angular error on TotalCapture.             Grant OPTINT (StG-2016-717054). We thank the NVIDIA Corpora-
+We exploit temporal information by using a bi-directional RNN that               tion for the donation of GPUs used in this work. Disclosure: MJB
+propagates information forward and backwards in time; at training                has received research gift funds from Intel, Nvidia, Adobe, Facebook,
+time DIP has access to full sequences, whereas at test time the model            and Amazon. While MJB is a part-time employee of Amazon, his
+has access to the last 20 frames and only 5 frames in the future. This           research was performed solely at, and funded solely by, MPI.
+
+
+                                                                                    ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+185:12 •        Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J. Black, Otmar Hilliges, and Gerard Pons-Moll
+
+
+REFERENCES                                                                                   Sepp Hochreiter and Jürgen Schmidhuber. 1997. Long short-term memory. Neural
+2018. Unifying Motion Capture Datasets by Automatically Solving for Full-body Shape              computation 9, 8 (1997), 1735–1780.
+    and Motion. In preparation (2018).                                                       Daniel Holden, Taku Komura, and Jun Saito. 2017. Phase-functioned neural networks
+Martín Abadi, Ashish Agarwal, Paul Barham, Eugene Brevdo, Zhifeng Chen, Craig Citro,             for character control. ACM Transactions on Graphics (TOG) 36, 4 (2017), 42.
+    Greg S. Corrado, Andy Davis, Jeffrey Dean, Matthieu Devin, Sanjay Ghemawat,              Yinghao Huang, Federica Bogo, Christoph Lassner, Angjoo Kanazawa, Peter V. Gehler,
+    Ian Goodfellow, Andrew Harp, Geoffrey Irving, Michael Isard, Yangqing Jia, Rafal             Javier Romero, Ijaz Akhter, and Michael J. Black. 2017. Towards Accurate Marker-
+    Jozefowicz, Lukasz Kaiser, Manjunath Kudlur, Josh Levenberg, Dandelion Mané,                 less Human Shape and Pose Estimation over Time. In International Conference on
+    Rajat Monga, Sherry Moore, Derek Murray, Chris Olah, Mike Schuster, Jonathon                 3D Vision (3DV). 421–430.
+    Shlens, Benoit Steiner, Ilya Sutskever, Kunal Talwar, Paul Tucker, Vincent Vanhoucke,    Catalin Ionescu, Dragos Papava, Vlad Olaru, and Cristian Sminchisescu. 2014. Hu-
+    Vijay Vasudevan, Fernanda Viégas, Oriol Vinyals, Pete Warden, Martin Wattenberg,             man3.6M: Large Scale Datasets and Predictive Methods for 3D Human Sensing in
+    Martin Wicke, Yuan Yu, and Xiaoqiang Zheng. 2015. TensorFlow: Large-Scale                    Natural Environments. IEEE Transactions on Pattern Analysis and Machine Intelli-
+    Machine Learning on Heterogeneous Systems. (2015). https://www.tensorflow.org/               gence 36, 7 (jul 2014), 1325–1339.
+    Software available from tensorflow.org.                                                  Angjoo Kanazawa, Michael J. Black, David W. Jacobs, and Jitendra Malik. 2018. End-to-
+Ijaz Akhter and Michael J Black. 2015. Pose-conditioned joint angle limits for 3D human          end Recovery of Human Shape and Pose. In IEEE Conference on Computer Vision
+    pose reconstruction. In Proceedings of the IEEE Conf. on Computer Vision and Pattern         and Pattern Recognition (CVPR). IEEE Computer Society.
+    Recognition. IEEE, 1446–1455.                                                            Diederik P Kingma and Jimmy Ba. 2014. Adam: A method for stochastic optimization.
+Thiemo Alldieck, Marcus Magnor, Weipeng Xu, Christian Theobalt, and Gerard Pons-                 arXiv preprint arXiv:1412.6980 (2014).
+    Moll. 2018. Video Based Reconstruction of 3D People Models. In IEEE Conference on        Huajun Liu, Xiaolin Wei, Jinxiang Chai, Inwoo Ha, and Taehyun Rhee. 2011. Realtime
+    Computer Vision and Pattern Recognition. CVPR Spotlight.                                     human motion control with a small number of inertial sensors. In Symposium on
+Sheldon Andrews, Ivan Huerta, Taku Komura, Leonid Sigal, and Kenny Mitchell. 2016.               Interactive 3D Graphics and Games. ACM, 133–140.
+    Real-time Physics-based Motion Capture with Sparse Sensors. In Proceedings of the        Matthew Loper, Naureen Mahmood, and Michael J Black. 2014. MoSh: Motion and
+    13th European Conference on Visual Media Production (CVMP 2016). ACM, 5.                     shape capture from sparse markers. ACM Transactions on Graphics (TOG) 33, 6
+Luca Ballan, Aparna Taneja, Jürgen Gall, Luc Van Gool, and Marc Pollefeys. 2012.                 (2014), 220.
+    Motion capture of hands in action using discriminative salient points. Computer          Matthew Loper, Naureen Mahmood, Javier Romero, Gerard Pons-Moll, and Michael J
+    Vision–ECCV 2012 (2012), 640–653.                                                            Black. 2015. SMPL: A skinned multi-person linear model. ACM Transactions on
+Federica Bogo, Angjoo Kanazawa, Christoph Lassner, Peter Gehler, Javier Romero, and              Graphics (TOG) 34, 6 (2015), 248.
+    Michael J. Black. 2016. Keep it SMPL: Automatic Estimation of 3D Human Pose              Charles Malleson, Marco Volino, Andrew Gilbert, Matthew Trumble, John Collomosse,
+    and Shape from a Single Image. In Computer Vision – ECCV 2016 (Lecture Notes in              and Adrian Hilton. 2017. Real-time Full-Body Motion Capture from Video and IMUs.
+    Computer Science). Springer International Publishing, 561–578.                               In 2017 Fifth International Conference on 3D Vision (3DV). 449–457.
+Christoph Bregler and Jitendra Malik. 1998. Tracking people with twists and exponential      Julieta Martinez, Michael J Black, and Javier Romero. 2017. On human motion prediction
+    maps. In Computer Vision and Pattern Recognition, 1998. Proceedings. 1998 IEEE               using recurrent neural networks. In 2017 IEEE Conference on Computer Vision and
+    Computer Society Conference on. IEEE, 8–15.                                                  Pattern Recognition (CVPR). IEEE, 4674–4683.
+Zhe Cao, Tomas Simon, Shih-En Wei, and Yaser Sheikh. 2016. Realtime multi-person             Dushyant Mehta, Oleksandr Sotnychenko, Franziska Mueller, Weipeng Xu, Srinath
+    2d pose estimation using part affinity fields. arXiv preprint arXiv:1611.08050 (2016).       Sridhar, Gerard Pons-Moll, and Christian Theobalt. 2018. Single-Shot Multi-Person
+Jinxiang Chai and Jessica K Hodgins. 2005. Performance animation from low-                       3D Pose Estimation From Monocular RGB. In International Conference on 3D Vision
+    dimensional control signals. In ACM Transactions on Graphics (TOG), Vol. 24. ACM,            (3DV).
+    686–696.                                                                                 Dushyant Mehta, Srinath Sridhar, Oleksandr Sotnychenko, Helge Rhodin, Moham-
+Xianjie Chen and Alan L Yuille. 2014. Articulated pose estimation by a graphical model           mad Shafiei, Hans-Peter Seidel, Weipeng Xu, Dan Casas, and Christian Theobalt.
+    with image dependent pairwise relations. In NIPS. 1736–1744.                                 2017. Vnect: Real-time 3d human pose estimation with a single rgb camera. ACM
+Alvaro Collet, Ming Chuang, Pat Sweeney, Don Gillett, Dennis Evseev, David Calabrese,            Transactions on Graphics (TOG) 36, 4 (2017), 44.
+    Hugues Hoppe, Adam Kirk, and Steve Sullivan. 2015. High-quality streamable               Christos Mousas. 2017. Full-Body Locomotion Reconstruction of Virtual Characters
+    free-viewpoint video. ACM Transactions on Graphics 34, 4 (2015), 69.                         Using a Single Inertial Measurement Unit. Sensors 17, 11 (2017), 2589.
+Edilson de Aguiar, Carsten Stoll, Christian Theobalt, Naveed Ahmed, Hans-Peter Seidel,       Richard A Newcombe, Dieter Fox, and Steven M Seitz. 2015. Dynamicfusion: Recon-
+    and Sebastian Thrun. 2008. Performance Capture from Sparse Multi-view Video. In              struction and tracking of non-rigid scenes in real-time. In Proceedings of the IEEE
+    ACM SIGGRAPH 2008 Papers (SIGGRAPH ’08). ACM, New York, NY, USA, Article 98,                 conference on computer vision and pattern recognition. 343–352.
+    10 pages. https://doi.org/10.1145/1399504.1360697                                        Alejandro Newell, Kaiyu Yang, and Jia Deng. 2016. Stacked hourglass networks for
+Fernando De la Torre, Jessica Hodgins, Adam Bargteil, Xavier Martin, Justin Macey, Alex          human pose estimation. In ECCV. 483–499.
+    Collado, and Pep Beltran. 2008. Guide to the carnegie mellon university multimodal       Iasonas Oikonomidis, Nikolaos Kyriazis, and Antonis A Argyros. 2012. Tracking the
+    activity (cmu-mmac) database. Robotics Institute (2008), 135.                                articulated motion of two strongly interacting hands. In Computer Vision and Pattern
+Mingsong Dou, Sameh Khamis, Yury Degtyarev, Philip Davidson, Sean Ryan Fanello,                  Recognition (CVPR), 2012 IEEE Conference on. IEEE, 1862–1869.
+    Adarsh Kowdle, Sergio Orts Escolano, Christoph Rhemann, David Kim, Jonathan              Mohamed Omran, Christoph Lassner, Gerard Pons-Moll, Peter Gehler, and Bernt Schiele.
+    Taylor, Pushmeet Kohli, Vladimir Tankovich, and Shahram Izadi. 2016. Fusion4D:               2018. Neural Body Fitting: Unifying Deep Learning and Model Based Human Pose
+    Real-time Performance Capture of Challenging Scenes. ACM Trans. Graph. 35, 4,                and Shape Estimation. In International Conference on 3D Vision (3DV).
+    Article 114 (July 2016), 13 pages. https://doi.org/10.1145/2897824.2925969               Xue Bin Peng, Glen Berseth, Kangkang Yin, and Michiel Van De Panne. 2017. DeepLoco:
+Ahmed Elhayek, Edilson de Aguiar, Arjun Jain, J Thompson, Leonid Pishchulin,                     Dynamic Locomotion Skills Using Hierarchical Deep Reinforcement Learning. ACM
+    Mykhaylo Andriluka, Christoph Bregler, Bernt Schiele, and Christian Theobalt.                Trans. Graph. 36, 4, Article 41 (July 2017), 13 pages. https://doi.org/10.1145/3072959.
+    2017. MARCOnIâĂŤConvNet-Based MARker-Less Motion Capture in Outdoor and                      3073602
+    Indoor Scenes. IEEE transactions on pattern analysis and machine intelligence 39, 3      Gerard Pons-Moll, Andreas Baak, Juergen Gall, Laura Leal-Taixe, Meinard Mueller,
+    (2017), 501–514.                                                                             Hans-Peter Seidel, and Bodo Rosenhahn. 2011. Outdoor Human Motion Capture
+Katerina Fragkiadaki, Sergey Levine, Panna Felsen, and Jitendra Malik. 2015. Recur-              using Inverse Kinematics and von Mises-Fisher Sampling. In IEEE International
+    rent network models for human dynamics. In Computer Vision (ICCV), 2015 IEEE                 Conference on Computer Vision (ICCV). 1243–1250.
+    International Conference on. IEEE, 4346–4354.                                            Gerard Pons-Moll, Andreas Baak, Thomas Helten, Meinard Müller, Hans-Peter Seidel,
+Varun Ganapathi, Christian Plagemann, Daphne Koller, and Sebastian Thrun. 2012.                  and Bodo Rosenhahn. 2010. Multisensor-Fusion for 3D Full-Body Human Motion
+    Real-time human pose tracking from range data. In European conference on computer            Capture. In IEEE Conference on Computer Vision and Pattern Recognition (CVPR).
+    vision. Springer, 738–751.                                                               Gerard Pons-Moll, Sergi Pujades, Sonny Hu, and Michael Black. 2017. ClothCap:
+Partha Ghosh, Jie Song, Emre Aksan, and Otmar Hilliges. 2017. Learning Human                     Seamless 4D Clothing Capture and Retargeting. ACM Transactions on Graphics 36,
+    Motion Models for Long-term Predictions. arXiv preprint arXiv:1704.02827 (2017).             4 (2017), 73:1–73:15.
+Julius Hannink, Thomas Kautz, Cristian Pasluosta, Karl-Gunter Gassmann, Jochen               Gerard Pons-Moll, Javier Romero, Naureen Mahmood, and Michael J Black. 2015a.
+    Klucken, and Bjoern Eskofier. 2016. Sensor-based Gait Parameter Extraction with              Dyna: A model of dynamic human shape in motion. ACM Transactions on Graphics
+    Deep Convolutional Neural Networks. IEEE Journal of Biomedical and Health                    (TOG) 34, 4 (2015), 120.
+    Informatics (2016), 85–93.                                                               Gerard Pons-Moll, Jonathan Taylor, Jamie Shotton, Aaron Hertzmann, and Andrew
+Kaiming He, Georgia Gkioxari, Piotr Dollár, and Ross Girshick. 2017. Mask r-cnn. In              Fitzgibbon. 2015b. Metric Regression Forests for Correspondence Estimation. Inter-
+    Computer Vision (ICCV), 2017 IEEE International Conference on. IEEE, 2980–2988.              national Journal of Computer Vision (IJCV) (2015), 1–13.
+Thomas Helten, Meinard Muller, Hans-Peter Seidel, and Christian Theobalt. 2013. Real-        Helge Rhodin, Christian Richardt, Dan Casas, Eldar Insafutdinov, Mohammad Shafiei,
+    time body tracking with one depth camera and inertial sensors. In Proceedings of             Hans-Peter Seidel, Bernt Schiele, and Christian Theobalt. 2016. EgoCap: egocentric
+    the IEEE International Conference on Computer Vision. 1105–1112.                             marker-less motion capture with two fisheye cameras. 35, 6 (2016), 162.
+
+
+
+ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+                          Deep Inertial Poser: Learning to Reconstruct Human Pose from Sparse Inertial Measurements in Real Time •                                       185:13
+
+
+Helge Rhodin, Nadia Robertini, Christian Richardt, Hans-Peter Seidel, and Christian             31, 6 (2012), 188.
+    Theobalt. 2015. A versatile scene model with differentiable visibility applied to        Xiaowei Zhou, Menglong Zhu, Spyridon Leonardos, Konstantinos G Derpanis, and
+    generative pose estimation. In Proceedings of the IEEE International Conference on          Kostas Daniilidis. 2016. Sparseness meets deepness: 3D human pose estimation
+    Computer Vision. 765–773.                                                                   from monocular video. In Proceedings of the IEEE Conference on Computer Vision
+Daniel Roetenberg, Henk Luinge, and Per Slycke. 2007. Moven: Full 6dof human motion             and Pattern Recognition. 4966–4975.
+    tracking using miniature inertial sensors. Xsen Technologies, December (2007).           Michael Zollhöfer, Matthias Nießner, Shahram Izadi, Christoph Rehmann, Christopher
+Nikolaos Sarafianos, Bogdan Boteanu, Bogdan Ionescu, and Ioannis A Kakadiaris. 2016.            Zach, Matthew Fisher, Chenglei Wu, Andrew Fitzgibbon, Charles Loop, Christian
+    3d human pose estimation: A review of the literature and analysis of covariates.            Theobalt, et al. 2014. Real-time non-rigid reconstruction using an RGB-D camera.
+    Computer Vision and Image Understanding 152 (2016), 1–20.                                   ACM Transactions on Graphics (TOG) 33, 4 (2014), 156.
+Mike Schuster and Kuldip K Paliwal. 1997. Bidirectional recurrent neural networks.
+    IEEE Transactions on Signal Processing 45, 11 (1997), 2673–2681.
+L. Schwarz, D. Mateus, and N. Navab. 2009. Discriminative Human Full-Body Pose               A    ADDITIONAL ARCHITECTURES
+    Estimation from Wearable Inertial Sensor Data. Modelling the Physiological Human
+    (2009), 159–172.                                                                         Along with the models discussed in the paper, we experimented
+Jamie Shotton, Toby Sharp, Alex Kipman, Andrew Fitzgibbon, Mark Finocchio, Andrew            with other, non-recurrent structures. Specifically, we implemented a
+    Blake, Mat Cook, and Richard Moore. 2013. Real-time human pose recognition in            WaveNet architecture [van den Oord et al. 2016] and a simple feed-
+    parts from single depth images. Commun. ACM 56, 1 (2013), 116–124.
+L. Sigal, A.O. Balan, and M.J. Black. 2010. Humaneva: Synchronized video and motion          forward network (FFN). The FFN is composed of 5 fully-connected
+    capture dataset and baseline algorithm for evaluation of articulated human motion.       layers with 256, 512, 512, 256, and 256 units per layer respectively.
+    International Journal on Computer Vision (IJCV) 87, 1 (2010), 4–27.
+R. Slyper and J. Hodgins. 2008. Action capture with accelerometers. In Proceedings of
+                                                                                             At a single time step t the model is fed a temporal window of 20
+    the 2008 ACM SIGGRAPH/Eurographics Symposium on Computer Animation (SCA                  past and 5 future frames. Table 4 summarizes the results in terms of
+   ’08). Eurographics Association, Aire-la-Ville, Switzerland, Switzerland, 193–199.         mean joint angle error.
+    http://dl.acm.org/citation.cfm?id=1632592.1632620
+Jonathan Starck and Adrian Hilton. 2003. Model-based multiple view reconstruction of            The FFN performs around 4.4◦ worse on TotalCapture than our
+    people. In null. IEEE, 915.                                                              best BiRNN evaluated on 20 past and 5 future frames. Additionally,
+Carsten Stoll, Nils Hasler, Juergen Gall, Hans-Peter Seidel, and Christian Theobalt. 2011.   the output is greatly corrupted by jerkiness and trembling artifacts.
+    Fast articulated motion tracking using a sums of gaussians body model. In Computer
+    Vision (ICCV), 2011 IEEE International Conference on. IEEE, 951–958.                     WaveNet performs better both in terms of the joint angle error and
+Yu Tao, Zerong Zheng, Kaiwen Guo, Jianhui Zhao, Dai Quionhai, Hao Li, Gerard Pons-           visual quality. Although WaveNet is able to considerably reduce the
+    Moll, and Yebin Liu. 2018. DoubleFusion: Real-time Capture of Human Performance
+    with Inner Body Shape from a Depth Sensor, In IEEE Conf. on Computer Vision and
+                                                                                             trembling artifacts, they are still apparent, resulting in displeasing
+    Pattern Recognition. IEEE Conf. on Computer Vision and Pattern Recognition. CVPR         visual output.
+    Oral.                                                                                       Furthermore, the BiRNN model proposed in this paper offers
+Jochen Tautges, Arno Zinke, Björn Krüger, Jan Baumann, Andreas Weber, Thomas
+    Helten, Meinard Müller, Hans-Peter Seidel, and Bernd Eberhardt. 2011. Motion             much greater flexibility. Increasing the input window size in a feed-
+    reconstruction using sparse accelerometer data. ACM Transactions on Graphics             forward network requires both retraining the model and incurs a
+    (TOG) 30, 3 (2011), 18.                                                                  large growth in trainable parameters. This is not the case for the
+Jonathan Taylor, Jamie Shotton, Toby Sharp, and Andrew Fitzgibbon. 2012. The vitru-
+    vian manifold: Inferring dense correspondences for one-shot human pose estimation.       BiRNN; the window length can be changed “on the fly” for the same
+    In Computer Vision and Pattern Recognition (CVPR), 2012 IEEE Conference on. IEEE,        model and hence does not affect the number of parameters.
+    103–110.
+Bugra Tekin, Pablo Márquez-Neila, Mathieu Salzmann, and Pascal Fua. 2016. Fusing
+    2D Uncertainty and 3D Cues for Monocular Body Pose Estimation. arXiv preprint            Table 4. Performance of WaveNet and a feed-forward network (FFN) on
+    arXiv:1611.05708 (2016).                                                                 TotalCapture and DIP-IMU in terms of the mean joint angle error in degrees.
+Jonathan J Tompson, Arjun Jain, Yann LeCun, and Christoph Bregler. 2014. Joint training
+    of a convolutional network and a graphical model for human pose estimation. In           Both models were trained on the synthetic AMASS training set.
+    NIPS. 1799–1807.
+Alexander Toshev and Christian Szegedy. 2014. Deeppose: Human pose estimation via
+    deep neural networks. In CVPR. 1653–1660.                                                                                TotalCapture           DIP-IMU
+Matthew Trumble, Andrew Gilbert, Charles Malleson, Adrian Hilton, and John Col-                                                 µ(±std)              µ(±std)
+    lomosse. 2017. Total capture: 3d human pose estimation fusing video and inertial
+    sensors. In Proceedings of 28th British Machine Vision Conference. 1–13.                            WaveNet              17.26 (±13.91)       30.79 (±17.98)
+Aäron van den Oord, Sander Dieleman, Heiga Zen, Karen Simonyan, Oriol Vinyals,                          Feed-forward         20.32 (±15.67)       31.88 (±20.63)
+    Alex Graves, Nal Kalchbrenner, Andrew W. Senior, and Koray Kavukcuoglu. 2016.
+    WaveNet: A Generative Model for Raw Audio. CoRR abs/1609.03499 (2016).
+    arXiv:1609.03499 http://arxiv.org/abs/1609.03499
+Daniel Vlasic, Rolf Adelsberger, Giovanni Vannucci, John Barnwell, Markus Gross,
+    Wojciech Matusik, and Jovan Popović. 2007. Practical motion capture in everyday          B    ADDITIONAL FIGURES
+    surroundings. ACM Transactions on Graphics (TOG) 26, 3, 35.                              Fig. 12 shows the architecture details of the BiRNN as reported in
+Timo von Marcard, Roberto Henschel, Michael Black, Bodo Rosenhahn, and Gerard
+    Pons-Moll. 2018. Recovering Accurate 3D Human Pose in The Wild Using IMUs                the paper. In Fig. 13 we show the three poses with the highest mean
+    and a Moving Camera. In European Conference on Computer Vision (ECCV).                   joint angle error taken from the test set of DIP-IMU.
+Timo von Marcard, Gerard Pons-Moll, and Bodo Rosenhahn. 2016. Human Pose
+    Estimation from Video and IMUs. IEEE Transactions on Pattern Analysis and Machine
+    Intelligence (TPAMI) 38, 8 (aug 2016), 1533–1547.                                        C    NORMALIZATION
+Timo von Marcard, Bodo Rosenhahn, Michael J Black, and Gerard Pons-Moll. 2017.
+    Sparse inertial poser: Automatic 3D human pose estimation from sparse IMUs. In
+                                                                                             In Section 4.3 we show how the data is normalized w.r.t. the root.
+    Computer Graphics Forum, Vol. 36. Wiley Online Library, 349–360.                         We experimented with more normalization schemes, which we did
+Jindong Wang, Yiqiang Chen, Shuji Hao, Xiaohui Peng, and Lisha Hu. 2017. Deep learn-         not find to be beneficial and explain in the following.
+    ing for sensor-based activity recognition: A survey. arXiv preprint arXiv:1707.03502
+    (2017).
+Shih-En Wei, Varun Ramakrishna, Takeo Kanade, and Yaser Sheikh. 2016. Convolutional
+                                                                                               Per-sequence normalization. Instead of normalizing the sensor
+    pose machines. In CVPR. 4724–4732.                                                       measurements per frame, we experimented with normalizing them
+Xiaolin Wei, Peizhao Zhang, and Jinxiang Chai. 2012. Accurate realtime full-body             only to the root orientation in the initial frame of the sequence. In
+    motion capture using a single depth camera. ACM Transactions on Graphics (TOG)
+                                                                                             this case, we feed measurements of all 6 sensors into the model
+
+                                                                                                 ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+185:14 •       Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J. Black, Otmar Hilliges, and Gerard Pons-Moll
+
+
+
+
+Fig. 12. Network architecture details. Numbers in brackets are input/output dimensions or number of units in the respective layer. From left to right: The
+normalized accelerations and orientations are passed to a dense layer before being fed into the two bidirectional recurrent layers as outlined in Fig. 3. The
+output of the last recurrent layer is mapped to two output vectors: the mean SMPL parameters µ t and mean accelerations µ a t and the respective standard
+deviations σ t and σ a t . The output of the second dense layer is activated using SoftPlus to enforce non-negativity of the standard deviations.
+
+
+(instead of 5 in the current architecture), whereby the root orien-
+tation in the first frame is always the identity. In other words, the
+normalization is performed as follows for all sensors s ∈ {1, . . . , 6}:
+
+                                 −1
+                   R̄Ts B (t) = Rroot (0) · RTs B (t),
+                                −1
+                     ās (t) = Rroot (0) · (as (t) − a root (t))
+
+                                                                                   Fig. 13. The three poses with the highest mean joint angle error taken
+   Per-frame heading removal. Another option is to normalize only
+                                                                                   from the test set of DIP-IMU. Left: The orientation of the lower arm is
+w.r.t. the heading of the root sensor. We implemented this strategy
+                                                                                   reasonable but the model failed to disambiguate the orientation of the
+as follows: We extract the yaw angle γ from the root orientation and               upper arms. Middle: Same observation but for lower extremities. Right: Poor
+create a new rotation matrix Ryaw that rotates around the y-axis                   reconstruction of the arms.
+by γ . Ryaw then replaces Rroot in Equations (9) and (10) to perform
+the normalization for all sensors s ∈ {1, . . . , 6} and all time steps
+t. Training our BiRNN with this normalization scheme results in a                  Table 5. Performance of a BiRNN that does not use accelerations as inputs
+mean angular error of 40.18◦ (±21.74◦ ) on TotalCapture, which is                  (no acc) compared to the best model as reported in the paper.
+24.41◦ worse than the per-frame normalization we adopt.
+                                                                                                                       TotalCapture         DIP-IMU
+   Zero-mean unit-variance. Note that after we normalize orienta-                                                         µ(±std)            µ(±std)
+tions and accelerations to the root, we subtract the mean and divide                   BiRNN (fine-tuning)             16.84 (±13.22)     17.54 (±11.54)
+by the standard deviation to rescale the inputs; i.e., the input to the                BiRNN (fine-tuning, no acc)     19.45 (±15.67)     18.89 (±15.24)
+model is (xt − µ)/σ , where the statistics µ, σ ∈ R60 are computed
+over the entire training data set. The same normalization procedure
+is applied to the outputs.
+                                                                                   E     HARDWARE SPECIFICATIONS
+                                                                                   We trained our models on a NVIDIA GTX Titan X (Pascal, 12 GB),
+D    INFLUENCE OF ACCELERATION
+                                                                                   which took roughly 3 hours for our best BiRNN model. In the live
+To better understand the influence of acceleration on final pose                   demo, both the visualization (in Unity) and the model inference (in
+estimates we conduct a further experiment in which we compare our                  Python) run on the same machine, i.e., both processes access the
+best network configuration (BiRNN, fine-tuning with accelerations)                 Titan X GPU. Because Unity and Python communicate through the
+with a BiRNN configuration that does not use any accelerations in                  network stack, it is possible to run the visualization component on a
+the input. In this experiment, we make two observations. First, the                different, less potent machine. To test this, we run the visualization
+error on both TotalCapture and DIP-IMU is higher (both the mean                    on a commodity laptop, an Asus Zenbook (CPU i7-3632QM @ 2.20
+and the standard deviations). Second, the error on TotalCapture                    GHz, 8 GB RAM, NVIDIA GeForce GT 650M (2 GB)).
+increases to 19.45◦ after fine-tuning. These findings indicate that                   Table 7 summarizes the resulting FPS for these different settings
+both orientations and accelerations are indeed essential to produce                and for 4 different models. Reported is the time it takes to grab the
+accurate predictions, especially for the more challenging poses in                 current measurements from the IMUs, send them to the model over
+DIP-IMU. Furthermore, the higher error on TotalCapture indicates                   the network and retrieve the model’s predictions for that time step;
+that without accelerations the network overfits to DIP-IMU.                        i.e., the FPS displayed by Unity might differ. Furthermore, the actual
+
+ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+                    Deep Inertial Poser: Learning to Reconstruct Human Pose from Sparse Inertial Measurements in Real Time •                            185:15
+
+                                             Table 6. Dataset capture protocol used to record DIP-IMU.
+
+
+    Categories    Motions (# Repetitions)                                                                                  # Frames               Minutes
+    Upper Body    Arm raises, stretches, and swings (10). Arm crossings on torso and behind head (10).                      116,817                32.45
+    Lower Body    Leg raises (10). Squats (shoulder-width and wide) (5). Lunges (5).                                        70,743                 19.65
+    Locomotion    Walking straight (3). Walking in circle (2). Sidesteps, crossing legs (1). Sidesteps, touching feet (1).  73,935                 20.54
+    Freestyle     The subject can select one of the following activities: jumping jacks, tennis, kicking/boxing, push- 18,587                      5.16
+                  ups, basketball. Choice of jumping jacks is predominant.
+    Interaction   The subject sits at a table and interacts with everyday objects, such as keyboard, mobile device,         50,096                  13.92
+                  toys, grabbing objects in front of them, touching mounted screen displays. Freestyle for 1 minute.
+
+
+runtime of the RNN model is technically capped by the update rate            Table 7. Average running time in FPS for the model inference component
+of the Xsens sensors (60 Hz).                                                of our live demo. Measured is the time it takes to grab the current measure-
+                                                                             ments from the IMUs, send them to the model over the network and retrieve
+                                                                             the predictions for that time step. Local means visualization and model infer-
+F    DATA COLLECTION
+                                                                             ence run on the same machine (here the machine used for training). Remote
+Table 6 summarizes the protocol we used for collecting our new               Laptop means the visualization runs on a commodity laptop.
+real dataset, DIP-IMU. Particular attention was paid to recording
+activities that are underrepresented in existing Mocap datasets.
+                                                                                                                Local [fps]        Remote
+                                                                                                                                 Laptop [fps]
+                                                                                          RNN                      173.3             67.3
+                                                                                          BiRNN (20, 5)            29.7              25.1
+                                                                                          BiRNN (50, 5)            15.7              14.8
+                                                                                          BiRNN (100, 5)            9.3              8.7
+
+
+
+
+                                                                                ACM Trans. Graph., Vol. 37, No. 6, Article 185. Publication date: November 2018.
+

@@ -1,0 +1,1391 @@
+                                                            DPoser: Diffusion Model as
+                                                           Robust 3D Human Pose Prior
+
+                                                              Junzhe Lu1 , Jing Lin2 , Hongkun Dou1 ,
+                                                   Ailing Zeng3 , Yue Deng1 , Yulun Zhang4 , and Haoqian Wang2
+                                                            1
+                                                              Beihang University, 2 Tsinghua University,
+                                                 3
+                                                   International Digital Economy Academy (IDEA), 4 ETH Zürich
+arXiv:2312.05541v2 [cs.CV] 23 Mar 2024
+
+
+
+
+                                                                    https://dposer.github.io
+
+
+
+                                                 Abstract. This work targets to construct a robust human pose prior.
+                                                 However, it remains a persistent challenge due to biomechanical con-
+                                                 straints and diverse human movements. Traditional priors like VAEs
+                                                 and NDFs often exhibit shortcomings in realism and generalization, no-
+                                                 tably with unseen noisy poses. To address these issues, we introduce
+                                                 DPoser, a robust and versatile human pose prior built upon diffusion
+                                                 models. DPoser regards various pose-centric tasks as inverse problems
+                                                 and employs variational diffusion sampling for efficient solving. Accord-
+                                                 ingly, designed with optimization frameworks, DPoser seamlessly benefits
+                                                 human mesh recovery, pose generation, pose completion, and motion de-
+                                                 noising tasks. Furthermore, due to the disparity between the articulated
+                                                 poses and structured images, we propose truncated timestep scheduling
+                                                 to enhance the effectiveness of DPoser. Our approach demonstrates con-
+                                                 siderable enhancements over common uniform scheduling used in image
+                                                 domains, boasting improvements of 5.4%, 17.2%, and 3.8% across hu-
+                                                 man mesh recovery, pose completion, and motion denoising, respectively.
+                                                 Comprehensive experiments demonstrate the superiority of DPoser over
+                                                 existing state-of-the-art pose priors across multiple tasks.
+
+                                                 Keywords: Human Pose Prior, Diffusion Model
+
+
+                                         1     Introduction
+
+                                         Accurate modeling of human pose is a fundamental research topic that can bene-
+                                         fit various applications, from human-robot interaction to augmented and virtual
+                                         reality experiences. Many real-world applications rely on a prior distribution of
+                                         valid human poses to perform tasks like body model fitting, motion capture,
+                                         and gesture recognition. The complexity of human biomechanics, coupled with
+                                         the extensive kinematic variability in movement patterns, presents a significant
+                                         challenge in constructing a robust and realistic human pose prior.
+                                              Previous efforts to model human pose prior have mainly employed tech-
+                                         niques such as Gaussian Mixture Models (GMMs) [1], Variational Autoencoders
+                                         (VAEs) [37], and Neural Distance Fields (NDFs) [49]. Each technique, however,
+                                             Corresponding authors: Yulun Zhang and Haoqian Wang.
+2              J. Lu et al.
+
+       Novel Poses        Monocular Image   Recovered Mesh   Noisy 3D Joints    Denoised Poses   Partial Poses
+
+                                                                                                                                 VPoser
+
+
+
+
+                                                                                                                                DPoser(Ours)
+
+
+    (a) Pose Generation       (b) Human Mesh Recovery               (c) Motion Denoising            (d) Multi-hypothesis Pose Completion
+
+
+Fig. 1: An overview of DPoser’s versatility and performance across multiple pose-
+related tasks. Built on diffusion models, DPoser serves as a robust and adaptable pose
+prior. Shown are scenarios in (a) pose generation, (b) human mesh recovery, (c) motion
+denoising, and (d) pose completion. DPoser consistently outstrips existing priors like
+VPoser [37] in performance benchmarks.
+
+faces its own set of limitations. GMMs, for instance, might lead to the gener-
+ation of implausible poses due to their unbounded nature. VAEs, restricted by
+their Gaussian assumptions, tend to generate average poses that may not accu-
+rately capture the full spectrum of human actions. Meanwhile, NDFs have shown
+promise in 3D surface modeling but struggle with generalizing across the com-
+plex, high-dimensional landscape of human pose manifolds. These limitations
+highlight a pressing need for a more comprehensive and dependable approach to
+modeling human pose priors, an endeavor this work seeks to address.
+    Recently, Diffusion models [11,16,20,48] have gained traction for their prowess
+in capturing complex, high-dimensional data distributions and enabling versa-
+tile sampling techniques. Their application has been seen in generating lifelike
+human motion sequences [42, 56] and functioning as multi-hypothesis pose esti-
+mators from 2D inputs [8, 17]. However, these models are designed for specific
+generation tasks or tailored to work with conditional input data, which lim-
+its their applicability in broader contexts. The potential of diffusion models as a
+universal human pose prior remains largely untapped, and effective optimization
+methods for diverse tasks remain unanswered.
+    In this work, we propose DPoser, a novel approach that leverages time-
+dependent denoiser learned from expansive motion capture datasets to construct
+a robust human pose prior. We regard various pose-centric tasks as inverse prob-
+lems and suggest the integration of DPoser via variational diffusion sampling
+techniques [33] as a regularization component within optimization frameworks
+like SMPLify [1]. Furthermore, our investigations reveal that significant pose-
+related information during diffusion is predominantly located at the latter stages
+of the diffusion trajectory. This revelation inspired us to develop a novel trun-
+cated timestep scheduling strategy for optimization. Our method outperforms
+the standard uniform scheduling, showing gains of 5.4%, 17.2%, and 3.8% in
+human mesh recovery, pose completion, and motion denoising, respectively.
+    In summary, our main contributions are as follows:
+
+    – We introduce DPoser, a novel framework based on diffusion models to craft a
+      robust and flexible human pose prior, geared for seamless integration across
+      diverse pose-related tasks via test-time optimization.
+    – We analyze the impact of diffusion timesteps in the pose domain and propose
+      truncated scheduling for more efficient optimization.
+                   DPoser: Diffusion Model as Robust 3D Human Pose Prior          3
+
+ – Through extensive experiments, we establish that DPoser outshines state-
+   of-the-art (SOTA) pose priors in a variety of downstream tasks.
+
+
+2     Related Work
+2.1   Human Pose Priors
+Human body models such as SMPL [31] serve as powerful tools for parame-
+terizing both pose and shape, thereby offering a comprehensive framework for
+describing human gestures. Within the SMPL model, body poses are captured
+using rotation matrices or joint angles linked to a kinematic skeleton. Adjusting
+these parameters enables the representation of a diverse range of human actions.
+Nonetheless, feeding unrealistic poses into these models can result in non-viable
+human figures, primarily because plausible human poses are confined within a
+complex, high-dimensional manifold due to biomechanical constraints.
+    Various strategies [1, 9, 37, 49] have been put forward to build human pose
+priors. Generative frameworks like GMMs, VAEs [22], and Generative Adver-
+sarial Networks (GANs) [13] have shown promise in encapsulating the multi-
+faceted pose distribution, facilitating advancements in tasks like human mesh
+recovery [12, 19]. Further, some studies have delved into conditional pose pri-
+ors tailored to specific tasks, incorporating extra information such as image fea-
+tures [3,39], 2D joint coordinates [8], or sequences of preceding poses [28,40]. Our
+initiative leans towards an unconditional pose prior approach, training DPoser on
+extensive motion capture data without relying on additional inputs like images
+or text, aiming for a versatile application across various pose-related scenarios.
+
+2.2   Diffusion Models for Pose-centric Tasks
+Diffusion models [16, 44, 47, 48] have emerged as powerful tools for capturing in-
+tricate data distributions, aligning particularly well with the demands of multi-
+hypothesis estimation in ambiguous human poses. Notable works include Diff-
+Pose [17], which leverages a Gaussian Mixture Model-guided forward diffusion
+process [36] and employs a Graph Convolutional Network (GCN) [23] archi-
+tecture conditioned on 2D pose sequences for 3D pose estimation by learned
+reverse process (i.e., generation). In a similar vein, DiffusionPose [39] and GF-
+Pose [8] employ the generation-based pipeline but take different approaches in
+conditioning. Further, ZeDO [18] concentrates on 2D-to-3D pose lifting, while
+Diff-HMR [3] and DiffHand [24] explore estimating SMPL parameters and hand
+mesh vertices, respectively. BUDDI [34] stands out for using diffusion models
+to capture the joint distribution of interacting individuals and leveraging SDS
+loss [38, 52] for optimization during testing phases.
+    While DPoser shares a similar optimization implementation with BUDDI,
+it sets itself apart by introducing a wider perspective of inverse problems and
+equipping an innovative timestep scheduling strategy tailored to the character-
+istics of human poses. Unlike other approaches [8, 17,18,39] that primarily focus
+on 3D location-based representation, DPoser takes on the more demanding task
+4              J. Lu et al.
+
+of modeling SMPL-based rotation pose representation. This adds complexity
+due to the intricacies involved in representing rotations, positioning DPoser as
+a more versatile solution within the realm of pose-centric tasks.
+
+
+3        Methods
+
+3.1         Preliminary: Score-based Diffusion Models
+
+Diffusion models [16, 43, 47, 48] operationalize generative processes by inverting
+a predefined forward diffusion process, typically formulated as a linear stochas-
+tic differential equation (SDE). Formally, the data trajectory \left \{\mathbf {x}(t)\in \mathbb {R}^n\right \}_{t\in [0,1]}
+follows the forward SDE given by:
+
+                                                                                              \mathrm {d} \mathbf {x}= \mu (t) \mathbf {x} \mathrm {d} t+ g(t) \mathrm {d} \mathbf {w}, \label {eq:forward SDE}                                                             (1)
+
+where \mu (t) \mathbf {x} \in \mathbb {R}^n and g(t) \in \mathbb {R} represent the drift and diffusion coefficients,
+while \protect \mathbf  {w} is a standard Wiener process.
+    The affine drift coefficients ensure analytically tractable Gaussian perturba-
+tion kernels, denoted by p_{0t}(\mathbf {x}_t \mid \mathbf {x})=\mathcal {N}(\mathbf {x}_t;\alpha _{t}\mathbf {x},\sigma _{t}^{2}\mathbf {I}), where the exact coeffi-
+cients \alpha _{t}, \sigma _{t} can be obtained with standard techniques [41]. Using appropriately
+designed \alpha _{t} and \sigma _{t} , this allows the data distribution \protect \mathbf  {x}_0 \sim p_{data} to morph into a
+tractable isotropic Gaussian distribution \protect \mathbf  {x}_1 \sim \mathcal {N}(\mathbf {0},\mathbf {I}) via forward diffusion.
+    To recover data distribution p_{data} from the Gaussian distribution \protect \mathcal  {N}(\mathbf {0},\mathbf {I}),
+we can simulate the corresponding reverse SDE of Eq. (1) [48]:
+
+                                      \mathrm {d}\mathbf {x} = [ \mu (t) \mathbf {x} - g(t)^2 \nabla _{\mathbf {x}_t}\log p_t\left (\mathbf {x}_t\right ) ] \mathrm {d}t + g(t) \mathrm {d}\bar {\mathbf {w}}. \label {eq:reverse SDE}                                      (2)
+
+The so-called score function [29], \nabla _{\mathbf {x}_t}\log p_t\left (\mathbf {x}_t\right ), serves as an unknown term
+in Eq. (2) and can be approximated by a neural network parameterized as
+\epsilon _\phi (\mathbf {x}_t;t) \approx -\sigma _t \nabla _{\mathbf {x}_t}\log p_t\left (\mathbf {x}_t\right )1 . To learn the score functions, employing denoising
+score matching techniques [50], we perturb the data points with noise as per:
+
+                                                                                 \mathbf {x}_t = \alpha _{t}\mathbf {x}_0+\sigma _{t}\epsilon , \epsilon \sim \mathcal {N}(\mathbf {0},\mathbf {I}) \label {eq:forward diffusion}.                                          (3)
+
+Subsequently, feeding \protect \mathbf  {x}_t and t as input, we train the time-dependent noise pre-
+dictor \epsilon _\phi (\mathbf {x}_t;t) using an L2-loss defined as [16]:
+
+                                   \mathbb {E}_{\mathbf {x}_0\sim p_{\mathrm {data}},\epsilon \sim \mathcal {N}(\mathbf {0}, \mathbf {I}),t\sim \mathcal {U}[0,1]} \left [w(t)||\epsilon -\epsilon _\phi (\mathbf {x}_t;t)||_2^2\right ], \label {eq:training objective}    (4)
+
+where w(t) denotes a positive weighting function.
+    Upon successful training, the score functions can be estimated and used to
+solve the reverse SDE (Eq. (2)). Through techniques like Euler-Maruyama dis-
+cretization, we can generate novel samples by simulating the reverse SDE.
+ 1
+     This parameterization is obtained from the deep connection between the noise pre-
+     diction in diffusion models and score function estimation in score-based models. We
+     provide a brief recap in the Appendix.
+                                   DPoser: Diffusion Model as Robust 3D Human Pose Prior                                                                                                                                        5
+
+3.2        Learning Pose Prior with Unconditional Diffusion Models
+
+SMPL-based pose representation. To build a flexible 3D human pose prior,
+we propose to utilize the SMPL body model [31], which can be viewed as a
+differentiable function [J, V] = M(\theta ,\beta ) that maps body joint angles \theta \in \mathbb {R}^{3\times 21}
+and shape parameters \beta \in \mathbb {R}^{10} to mesh vertices V \in \mathbb {R}^{3\times 6890}  and joint positions
+J \in \mathbb {R}^{3\times 22}  . Our target is to model the distribution of joint angles p(\theta ).
+Training of unconditional diffusion models. To this end, we adopt an un-
+conditional diffusion model to learn the pose representation \theta . This approach
+aligns with a task-agnostic strategy, focusing solely on the distribution of 3D
+poses. We employ sub-VP SDEs as outlined in [48], which have demonstrated
+efficacy in sampling quality, for constructing our diffusion model. Specifically,
+our chosen forward SDE (Eq. (1)) is given by:
+
+                                 \mathrm {d}\mathbf {x}=-\frac {1}{2}\xi (t)\mathbf {x}\mathrm {d}t+\sqrt {\xi (t)(1-e^{-2\int _0^t\xi (s)\mathrm {d}s})}\mathrm {d}\mathbf {w},                                               (5)
+
+where \xi (t) denotes linear scheduled noise scales. The coefficients needed in
+Eq. (3) can be obtained as \alpha _{t}=e^{-\frac {1}{2}\int _{0}^{t}\xi (s)\mathrm {d}s}, \sigma _{t}=1-e^{-\int _{0}^{t}\xi (s)\mathrm {d}s} .
+    During training, we initiate with a clean data point \protect \mathbf  {x}_0 —essentially, our pose
+representation \theta —and introduce noise to generate samples \protect \mathbf  {x}_t according to the
+forward process detailed in Eq. (3). Then we apply the objective in Eq. (4) to
+train the noise predictor \epsilon _\phi (\mathbf {x}_t;t) with weights w(t)=\sigma _{t}^2 as suggested in [48].
+
+
+3.3        Optimization Leveraging Diffusion Priors
+
+The acquired score functions or noise predictors, denoted as \epsilon _\phi (\mathbf {x}_t;t), permit the
+direct generation of plausible poses through Eq. (2). Yet, the broader integration
+of diffusion priors into general optimization frameworks remains an open avenue.
+We address this by reframing pose-related tasks as inverse problems and applying
+variational diffusion sampling techniques [33] for efficient resolution.
+Inverse problem formulation. Consider an original signal \protect \mathbf  {x}_0 . Inverse prob-
+lems can be encapsulated by Eq. (6) as:
+                                             \mathbf {y}=\mathcal {A}(\mathbf {x}_0)+\mathbf {n},\quad \mathbf {y},\mathbf {n}\in \mathbb {R}^d,~\mathbf {x}_0\in \mathbb {R}^n, \label {eq:inverse problem} \vspace {-2mm}    (6)
+where \protect \mathcal  {A} symbolizes the measurement operator and \protect \mathbf  {n} constitutes noise, assumed
+to be white Gaussian \protect \mathcal  {N}(\mathbf {0}, \sigma _n^2\mathbf {I}). In the context targeted in this study, \protect \mathbf  {x}_0 always
+refers to body poses in SMPL [31]. This formulation allows us to approach various
+pose-centric tasks by adapting \protect \mathcal  {A} and interpreting \protect \mathbf  {y} accordingly:
+
+  – Pose completion: Here, \protect \mathcal  {A} serves as a mask matrix to simulate partially
+    observed poses, with \protect \mathbf  {y} being the incomplete pose data.
+  – Motion denoising: In this scenario, \protect \mathcal  {A} applies SMPL’s forward kinematics,
+    treating \protect \mathbf  {y} as the observed noisy 3D joints.
+  – Human mesh recovery: \protect \mathcal  {A} integrates SMPL’s forward kinematics and
+    camera projection to relate \protect \mathbf  {y} to 2D joint observations in images.
+6               J. Lu et al.
+
+
+                                                                                                                                                                                                                    One-step
+                      Reproj.                                                                                                                                                                                       denoiser
+                                                         2D
+                       Loss                                                                                                                        � ∽ �(�, �)                                                   Weighted sum
+                                                        kps.
+                                                                                                                Denoised                                                                  Diffused
+                                                                                                                  pose                                                                     pose
+
+
+                      Fidelity                                                                                                                                     (b) DPoser Regularization
+                                                      Partial                    Task-specific
+                       Loss
+                                                      poses                          Loss
+
+                                                                                                                                   Total
+                                                                                                                                   Loss
+                     Fidelity                          Pose
+                                                                                                                                    ...                                 OptimizerStep
+                                                                                                                                                                                                                ...
+                      Loss                             seq.
+
+
+       Task input                                                                                  Initial pose                                Current pose                                                           Fitted pose
+           (a) Pose-related Tasks                                                                                                                 (c) Optimization Framework
+
+
+Fig. 2: Overview of the DPoser Methodology. Panel (a) presents three tasks: human
+mesh recovery, pose completion, and motion denoising, with omissions like camera
+optimization for clarity. Panel (b) demonstrates the DPoser regularization process,
+introducing noise to the current pose and applying a one-step denoiser to achieve a
+denoised pose. L_\text {DPoser} is computed between the denoised and current pose. Panel (c)
+outlines the optimization process from initial to fitted poses via loss minimization.
+
+The aim is to recover the original signal \protect \mathbf  {x}_0 , where, within the Bayesian frame-
+work, our objective shifts to sampling from the posterior distribution p\left (\mathbf {x}_0 \mid \mathbf {y}\right ).
+Solving inverse problems with diffusion models. Various techniques [6, 7,
+14,21,33,45] have been explored to simulate this posterior sampling process based
+on unconditional diffusion priors p\left (\mathbf {x}_0;\phi \right ). Among them, the sampling-based
+scheme is widely explored and applied in tasks like image restoration. These
+methods incorporate the observation information \protect \mathbf  {y} into the generation process of
+\protect \mathbf  {x}_0 through techniques like gradient guidance [6,7] and back projection [7,21,48].
+However, such methods rooted in generation are inconvenient for handling di-
+verse pose-related tasks. To navigate these challenges, we adopt variational dif-
+fusion sampling [33] to build general optimization frameworks. Specifically, it
+employs a variational distribution  q\left (\mathbf {x}_0 \mid \mathbf {y}\right ):= \mathcal {N}(\mu , \sigma ^2\mathbf {I})  and aims to minimize
+the Kullback-Leibler (KL) divergence between this variational distribution and
+the true posterior, mathematically expressed as  KL\big (q\left (\mathbf {x}_0 \mid \mathbf {y}\right ) \parallel p\left (\mathbf {x}_0 \mid \mathbf {y}\right )\big ) . Fur-
+ther, under the assumption of zero variance ( \sigma \approx 0 ), the optimization problem
+of seeking \protect \mathbf  {x}_0 (i.e., \mu ) can be formulated as minimizing [33, 46]:
+                                            \|\mathbf {y}-\mathcal {A}(\mathbf {x}_0)\|^2+w_t(\mathtt {sg}[\epsilon _\phi (\mathbf {x}_t;t)-\epsilon ])^\top \mathbf {x}_0, \label {eq:RED} \vspace {-1.5mm}                    (7)
+where w_t denotes the loss weights and \epsilon  is sampled from the standard Gaus-
+sian distribution. Here,  \mathtt {sg}  signifies the stopped-gradient operator, indicating
+that backpropagation through the trained diffusion models is not required. The
+optimization procedure initiates by selecting a timestep  t  and applying a per-
+turbation to the target  \mathbf {x}_0  as per Eq. (3), resulting in  \mathbf {x}_t  . Subsequently, the
+gradients  [\epsilon _\phi (\mathbf {x}_t;t) - \epsilon ]  are applied to the optimization variable  \mathbf {x}_0  . In a nutshell,
+this framework [33] provides a flexible yet robust strategy for employing diffusion
+priors in generic optimization problems, serving as a cornerstone for our work.
+                                              DPoser: Diffusion Model as Robust 3D Human Pose Prior                                                                                                                                                                                                                                                                                                                                                                         7
+
+Introducing DPoser regularization. To shed more light on the working
+mechanism, we propose to reformulate the regularization term as:
+                                                                                               L_\mathrm {DPoser} &= w_t||\mathbf {x}_0-\mathtt {sg}[\mathbf {\hat {x}}_0(t)]||_2^2, \text {where} \label {eq:DPoser}\\ \mathbf {\hat {x}}_0(t) &= \frac {\mathbf {x}_t - \sigma _{t}\epsilon _\phi (\mathbf {x}_t;t)}{\alpha _{t}}.
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                           (9)
+
+Here, \protect \mathbf  {\hat {x}}_0(t) functions as a precise one-step denoising prediction using the dif-
+fusion model \epsilon _\phi (\mathbf {x}_t;t). This approach effectively encourages the current pose
+\protect \mathbf  {x}_0 towards a denoised, plausible pose distribution, employing a straightforward
+L2-loss within the DPoser regularization framework. Further, the theoretical
+foundation of our regularization demonstrates its alignment with the gradient
+direction of variational diffusion sampling (Eq. (7)).
+                        Proof: Differentiating Eq. (8) with respect to \protect \mathbf  {x}_0 yields:
+
+                       \nabla _{\mathbf {x}_0} L_{\mathrm {DPoser}}&=2w_t(\mathbf {x}_0-\mathbf {\hat {x}}_0(t)) \notag \\ &=2w_t(\frac {\mathbf {x}_t - \sigma _{t}\epsilon }{\alpha _{t}} -\frac {\mathbf {x}_t - \sigma _{t}\epsilon _\phi (\mathbf {x}_t;t)}{\alpha _{t}} ) \notag \\ &=2w_t\frac {\sigma _{t}}{\alpha _{t}} (\epsilon _\phi (\mathbf {x}_t;t)-\epsilon ) \notag \\ &\propto (\epsilon _\phi (\mathbf {x}_t;t)-\epsilon ). \label {eq:SDS gradient}
+
+
+
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                          (10)
+
+    Thus, L_\mathrm {DPoser} represents a more intuitive approach to variational diffusion
+sampling. By incorporating alongside task-specific loss functions, this regular-
+ization term enhances the plausibility of the resultant poses.
+DPoser across pose-related tasks. DPoser excels in versatility, enabling its
+seamless application in a spectrum of human pose-related tasks. Its adaptabil-
+ity is especially evident in our human mesh recovery approach, as depicted in
+Fig. 2. For an exhaustive examination of DPoser’s utility across tasks like pose
+completion and motion denoising, we direct the reader to our Appendix.
+    Human mesh recovery aims to deduce the human pose and shape from single-
+image inputs. In this context, we refine the optimization function derived from
+the SMPLify framework [1], integrating DPoser as a regularization term, L_\mathrm {DPoser} ,
+and streamlining the process by omitting the intricate interpenetration error
+component. The modified optimization objective, engaging both pose \theta  and
+shape \beta  parameters from the SMPL model [31], is defined as:
+
+                                                   L(\theta ,\beta ) = L_J + w_\theta L_\theta + w_\beta L_\beta + w_\alpha L_\mathrm {DPoser}. \label {eq:HMR}                                                                                                                                                                                                                                                                                                           (11)
+
+The reprojection loss L_J , acting as the data fidelity measure, is defined by:
+
+                                                              L_J &= \sum _{i \in \text {Joints}} \lambda _i \rho \left (\Pi _C\left (M_J(\theta , \beta )_i\right ) - J^{\text {est}}_i\right ),                                                                                                                                                                                                                                                                         (12)
+
+
+where M_J(\theta , \beta ) calculates the 3D joint coordinates through SMPL’s forward
+kinematics. The function \Pi _C maps these 3D coordinates into 2D space, aligning
+with the camera’s perspective. J^{\text {est}} refers to the 2D keypoints estimated using
+8           J. Lu et al.
+
+an off-the-shelf 2D pose estimator (in our case, ViTPose [55]), with \lambda _i reflecting
+the confidence score for each joint i. The Geman-McClure error function (\rho ) is
+employed to assess the discrepancy in 2D joint locations reliably.
+       To mitigate the issue of overfitting, which often leads to unrealistic poses
+when solely minimizing reprojection loss, several regularization terms are intro-
+duced. Specifically, alongside our body prior L_\mathrm {DPoser} , the bending term L_\theta  is
+incorporated to penalize excessive bending at the elbows and knees, formulated
+as L_\theta = \sum _{i \in \text {(elbows, knees)}} \exp (\boldsymbol {\theta }_i). Additionally, the shape regularization term
+L_\beta = \|\beta \|_2^2 is employed to maintain the body shape within plausible bounds.
+The weights for prior terms are denoted as w_\theta , w_\beta  and w_\alpha  , respectively.
+       Given the structure of L_\mathrm {DPoser} (as seen in Eq. (8)), a crucial aspect lies in
+judiciously selecting the diffusion timestep t during the iterative optimization
+process. In the subsequent section, we address this concern by introducing our
+novel truncated timestep scheduling strategy.
+
+3.4      Test-time Truncated Timestep Scheduling
+
+Motivation from pose generation. Adapting techniques from the image do-
+main to pose data requires a nuanced understanding of the differences between
+the two. Previous image-based research [4] shows that initial timesteps (larger t)
+correspond to the perceptual content, while later timesteps refine details. Pose
+data, however, lacks this structured layering and spatial redundancy, indicating
+a need for a tailored timestep approach in the diffusion process.
+    As depicted in Fig. 3, we find that
+pose generation doesn’t benefit from
+the early timesteps as image gener- (a)
+ation does. The significant stages of                                ...
+pose refinement occur at smaller t,             N = 10; timesteps: [1.0, 0.9, ..., 0.4, 0.3, 0.2, 0.1]; SI: 1.85%
+specifically when t\le 0.3. A uniform
+distribution of timesteps, as tested in (b)
+(b) with only five steps, proves less ef-
+fective for pose data. In contrast, al-             N = 5; timesteps: [1.0, 0.8, 0.6, 0.4, 0.2]; SI: 5.11%
+
+locating these steps toward the latter
+end of the diffusion process, as in (c), (c)
+yields significantly better samples, im-
+plying the critical information is not        Truncation: N = 5; timesteps: [0.5, 0.4, 0.3, 0.2, 0.1]; SI: 1.13%
+evenly distributed but rather is con-
+centrated toward the end.                 Fig. 3: Illustration of the rationale behind
+Truncated timestep scheduling. our proposed truncated timestep schedul-
+                                          ing. We employ the deterministic DDIM
+Based on these insights, we propose a
+                                          sampler [44] with limited steps and assess
+shift from standard uniform timestep the quality of generated poses using the
+sampling to a truncated strategy, es- Self-Intersection percentage (SI).
+pecially for pose data. By focusing on
+the last timesteps, particularly between 0.2 and 0.0, we target the interval rich in
+pose-specific information. Specifically, based on the linear descending scheduling,
+                                           DPoser: Diffusion Model as Robust 3D Human Pose Prior                                                                                              9
+
+Algorithm 1 Test-time Optimization with DPoser
+Require: A trained diffusion model  \epsilon _\phi (\mathbf {x}_t; t) , task-specific loss  L_{\text {task}}  , range of
+    diffusion timesteps [t_{\text {max}}, t_{\text {min}}], number of optimization iterations  N  .
+Ensure: Initialization of SMPL body pose parameters  \mathbf {x}_0 
+ 1: for  \text {iter} = 0, 1, \ldots , N-1  do
+ 2:      t \leftarrow t_{\text {max}} - \frac {(t_{\text {max}} - t_{\text {min}}) \times \text {iter}}{N-1}                               \triangleright  Timestep scheduling
+ 3:     Sample  \epsilon \sim \mathcal {N}(0, I) 
+ 4:      \mathbf {x}_t \leftarrow \alpha _t \mathbf {x}_0 + \sigma _t \epsilon                                                                                  \triangleright  Forward diffusion
+ 5:      \mathbf {\hat {x}}_0(t) \leftarrow \frac {\mathbf {x}_t - \sigma _t \epsilon _\phi (\mathbf {x}_t; t)}{\alpha _t}                                 \triangleright  One-step denoiser
+ 6:      L_{\text {DPoser}} \leftarrow w_t \lVert \mathbf {x}_0 - \text {sg}[\mathbf {\hat {x}}_0(t)] \rVert _2^2           \triangleright  DPoser regularization
+ 7:     L_{\text {total}} \leftarrow L_{\text {task}} + L_{\text {DPoser}} 
+ 8:    Update  \mathbf {x}_0  via backpropagation on  L_{\text {total}} 
+ 9: end for
+10: return  \mathbf {x}_0 
+
+
+
+the truncated timestep t for each optimization step can be expressed as:
+
+                                                            t = t_{\text {max}} - \frac {(t_{\text {max}} - t_{\text {min}}) \times \text {iter}}{N-1}.                                (13)
+
+where N denotes the total number of optimization iterations, and \protect \text  {iter} signifies
+the current iteration. This formulation is integral to our proposed optimization
+framework, which is comprehensively summarized in Algorithm 1. The practical
+implementation typically involves setting the truncated range to [0.2, 0.05].
+
+4          Experiments
+In this section, we showcase the robustness and versatility of DPoser across a
+spectrum of pose-centric tasks, including pose generation, human mesh recov-
+ery, pose completion, and motion denoising. Due to the page limit, we leave
+experimental details and more qualitative assessments in the Appendix.
+
+4.1 Experimental Setup
+Implementation details. We train our DPoser model on the AMASS dataset [32],
+adhering to the same training partition as previous works [37, 49]. The model
+employs axis-angle representation for joint rotations, which we normalize to have
+zero mean and unit variance. The architecture consists of a fully connected neu-
+ral network with approximately 8.28M parameters. It draws inspiration from
+GFPose [8] but omits conditional input pathways for our unconditional setting.
+To stabilize training, we use an exponential moving average with a decay factor
+of 0.9999, as advised by [48]. The Adam optimizer, a learning rate of 2 \times 10^{-4} ,
+and a batch size of 1280 govern the optimization process. The training of 800,000
+iterations takes roughly 8 hours on a single Nvidia RTX 3090Ti GPU.
+Evaluation metrics. To comprehensively evaluate our models across various
+tasks, following Pose-NDF [49], we adopt task-specific metrics:
+10      J. Lu et al.
+
+
+
+
+       (a) GAN-S [9]              (b) DPoser (ours)            (c) DPoser (ours)*
+
+
+
+
+       (d) GMM [1]                (e) Pose-NDF [49]             (f ) VPoser [37]
+
+Fig. 4: Qualitative comparison of generated human poses: (b) illustrates naturalistic
+poses aligned with real-world data, whereas (c) shows poses that, despite superior
+metrics, lack natural appearance. *We use a DDIM sampler [44] with only 10 steps.
+
+ – Pose Generation: Diversity and fidelity are evaluated using Average Pairwise
+   Distance (APD) and Self-Intersection rates (SI), respectively.
+ – Human Mesh Recovery: The Procrustes-aligned Mean Per Joint Position
+   Error (PA-MPJPE) measures the accuracy of recovered human meshes.
+ – Pose Completion: The Mean Per Joint Position Error (MPJPE) for masked
+   body joints serves as the metric, focusing on the inferred occluded parts.
+ – Motion Denoising: Both MPJPE and the Mean Per-Vertex Position Error
+   (MPVPE) are calculated to assess the denoising effectiveness.
+
+All errors are reported in millimeter units.
+
+4.2   Pose Generation
+To commence, we delve into the capa-
+bilities of our DPoser model by gener-    Sample source             APD ↑ SI ↓
+ating samples from the learned man-       Real-world (AMASS) [32] 15.44 0.79
+ifold. Employing a standard Euler-
+                                          GMM [1]                    16.28 1.54
+Maruyama discretization with 1000
+                                          VPoser [37]                10.75 1.51
+steps, we assess both the diversity
+                                          Pose-NDF [49]              18.75 1.97
+and realism of the generated poses        GAN-S [9]                  15.68 1.27
+(Fig. 4). While DPoser’s outputs are      DPoser (ours)              14.28 1.21
+visually diverse and realistic, poses     DPoser (ours)*             19.03 1.13
+generated from competing methods
+like GMM [1] and Pose-NDF [49] fall Table 1: Comparative analysis of pose gen-
+short in naturalism, and VPoser [37] eration metrics. The discrepancy between
+exhibits limited diversity.             visual impressions and APD/SI metrics is
+    Interestingly, quantitative metrics discussed, with reference to Fig. 4. *Indi-
+such as APD and SI (Tab. 1) do not cates the use of a reduced 10-step sampler.
+always corroborate our qualitative findings. For instance, a 10-step DDIM sam-
+pler [44]—suboptimal by design—outperformed real-world data [32] in APD,
+which we attribute to the generation of exaggerated poses. In summary, our
+                   DPoser: Diffusion Model as Robust 3D Human Pose Prior                     11
+
+ Initialization No fitting GMM [1] VPoser [37] Pose-NDF [49] GAN-S [9] DPoser(Ours)
+ from scratch   108.57   58.32         58.08            57.87      57.26           56.05
+ CLIFF [25]     56.62    51.02         49.39            49.50      49.58           49.05
+
+Table 2: Performance comparison of human mesh recovery on the EHF dataset [37]
+using two initialization methods. PA-MPJPE is reported as the metric.
+
+
+findings underscore the need for a balanced evaluation strategy that merges
+quantitative metrics with qualitative observations.
+
+4.3   Human Mesh Recovery
+
+
+
+
+(a)
+
+
+
+
+      Images      GMM       Pose-NDF           VPoser      GAN-S    DPoser(Ours)     GT*
+
+
+
+
+(b)
+
+
+
+
+      Images      GMM       Pose-NDF           VPoser      GAN-S    DPoser(Ours)     CLIFF
+
+Fig. 5: Human mesh recovery. (a) Fitting from scratch. *Ground truth for the EHF
+dataset is annotated in SMPL-X [37], which extends SMPL [31] with fully articulated
+hands and an expressive face. (b) Initialization using the CLIFF [25] prediction.
+
+
+    We probe the efficacy of DPoser in human mesh recovery (HMR), focusing
+on estimating human pose and shape from monocular images. We conduct ex-
+periments on the EHF dataset [37] and benchmark our method against existing
+SOTA priors. Our optimization-based framework incorporates two initialization
+paradigms: (1) a baseline initialization that utilizes mean pose values and a de-
+fault camera setup, and (2) an advanced initialization scheme that leverages
+CLIFF [25], a pre-trained regression-based model tailored for HMR. Moreover,
+GAN-S [9] implementations require a GAN-inversion phase to convert initial
+poses into their latent representations, which is notably time-consuming.
+    Tab. 2 and Fig. 5 showcase the comparative performance of DPoser, highlight-
+ing its exceptional ability in HMR tasks. Notably, when fitting from scratch, it
+surpasses established SOTA priors like GAN-S [9] and Pose-NDF [49] and rivals
+the specific regression-based model [25]. The integration of CLIFF as initial-
+ization further amplifies DPoser’s performance, underscoring its efficiency and
+the benefits of employing refined starting conditions. Fig. 6 further confirms
+DPoser’s superior efficacy and adaptability across multiple datasets including
+EHF [37], MSCOCO [27], 3DPW [51], and UBody [26].
+12     J. Lu et al.
+
+
+
+
+             (a) EHF dataset                        (b) MSCOCO dataset
+
+
+
+
+            (c) 3DPW dataset                         (d) UBody dataset
+
+Fig. 6: Qualitative evaluations of human mesh recovery leveraging DPoser as pose
+prior. CLIFF [25] serves as the optimization initializer.
+
+
+4.4 Pose Completion
+In practical scenarios like those encountered in the UBody dataset [26] (refer to
+Fig. 6d), HMR algorithms often grapple with occlusions leading to incomplete
+3D pose estimates. In this context, our ambition is to recover full 3D poses from
+partially observed data, initializing the occluded parts with random noise. Our
+DPoser model is employed to refine these initially implausible poses into feasible
+ones, utilizing an L2 loss on the visible parts to ensure data consistency.
+    In parallel, we employ a compara-
+ble optimization strategy for both Pose-
+NDF [49] and VPoser [37]. Notably, Initialization VPoser Pose-NDF DPoser
+Tab. 3 reveals that Pose-NDF strug-
+gles with poorly initialized poses un- Zeros             180.90 157.50      73.92
+                                            10mm noise 181.86 172.50        74.69
+seen during its training phase. To mit-
+                                            100mm noise 180.25 511.51       74.19
+igate this issue, we have to initialize
+the occluded poses near zero (close to Table 3: Pose completion on the
+rest pose) for Pose-NDF to prevent op- AMASS [32] dataset (left leg under oc-
+timization divergence. Additionally, as clusion, single-hypotheses) using various
+a task-specific baseline, we adapt the initialization strategies. DPoser demon-
+original VPoser model into CVPoser by strates its effectiveness across all condi-
+                                            tions.
+incorporating conditional inputs within
+its VAE framework [22]. This modification enables the encoder and decoder to
+process additional partial poses, facilitating end-to-end conditional sampling.
+    Given the inherent uncertainties within this task, we generate multiple solu-
+tions and evaluate them based on their minimum, mean, and standard deviation
+errors against the ground truth. As illustrated in Tab. 4, DPoser exhibits supe-
+rior performance across different occlusion scenarios compared to existing pose
+priors and even the task-specific CVPoser, highlighting its effectiveness in pose
+completion. The qualitative evaluations are presented in Fig. 7. Here, we observe
+that DPoser can generate a multitude of plausible poses, a capability lacking in
+                           DPoser: Diffusion Model as Robust 3D Human Pose Prior                    13
+
+Methods                       Occ. left leg          Occ. legs       Occ. arms         Occ. trunk
+PoseNDF (S=1) [49]       158.21               159.19             201.00            75.42
+PoseNDF (S=5)      147.66/158.11/7.62 151.86/159.21/5.33 196.36/200.92/3.30 70.88/75.39/3.25
+PoseNDF (S=10)     144.38/158.06/8.31 149.38/159.14/5.90 194.79/200.87/3.63 69.45/75.38/3.54
+VPoser (S=1) [37]        180.78              198.18              159.86             37.75
+VPoser (S=5)       167.92/181.30/10.53 178.77/198.15/14.51 148.17/159.65/8.64 31.83/37.79/4.54
+VPoser (S=10)      162.82/181.09/12.21 172.83/198.31/16.30 144.53/159.80/9.69 30.06/37.78/4.99
+CVPoser (S=10) ^\dagger    71.66/145.52/51.68 90.49/148.30/38.46 83.02/136.82/36.47 18.77/37.83/13.12
+DPoser(ours) (S=1)       74.48             97.39             81.49             28.58
+DPoser(ours) (S=5) 42.64/73.85/24.36 67.70/97.06/22.29 58.52/82.37/18.33 17.11/28.59/8.92
+DPoser(ours) (S=10) 35.37/74.01/26.47 59.25/96.77/24.55 51.27/81.76/20.04 13.95/28.57/9.85
+
+Table 4: Performance metrics (min/mean/std of MPJPE across multiple hypotheses)
+for pose completion under varying occlusion scenarios. S denotes the number of hy-
+potheses. ^\dagger  Task-specific baseline trained with partial poses as conditional input.
+
+
+
+
+              VPoser                          Pose-NDF                 DPoser(Ours)            GT
+
+Fig. 7: Qualitative evaluations of pose completion. Three hypotheses are drawn for
+each method. DPoser uniquely offers multiple plausible solutions for partially observed
+poses, a scenario where competitors often struggle due to limited generalization.
+
+
+VPoser [37]. Pose-NDF [49], meanwhile, struggles with generalizing to unseen
+noisy poses and making plausible adjustments from its rest pose initialization.
+
+4.5     Motion Denoising
+Though not initially designed for temporal tasks, DPoser shows remarkable pro-
+ficiency in motion denoising. The task aims to estimate clean body poses from
+noisy 3D joint positions in motion capture sequences. Adhering to the setup
+outlined in HuMoR [40], we utilize 60-frame sequences from the AMASS [32]
+dataset and artificially introduce Gaussian noise with a standard deviation of
+40 mm to the 3D joint positions. Moreover, we conduct experiments on HPS
+datasets [15] without additional training to validate the generalization.
+     As presented in Tab. 5, DPoser sets a new standard in motion denoising,
+outperforming even specialized motion priors like HuMoR [40]. To further con-
+firm the robustness of DPoser, we conduct evaluations under varying conditions
+to gauge DPoser’s denoising capabilities. The results, detailed in Tab. 6, reveal
+that DPoser consistently achieves significant reductions in MPJPE, maintaining
+robust performance under extreme noise conditions.
+14        J. Lu et al.
+
+
+     Methods         AMASS [32] HPS [15]
+                                                  Noise std AMASS [32]     HPS [15]
+     No prior            24.19      23.67
+     VPoser [37]         23.42      22.78         20.00      31.93/13.64 31.93/13.45
+     Pose-NDF [49]       22.13      21.60         40.00      63.81/19.87 63.81/20.54
+     MVAE [28]           26.80      N/A           100.00    159.78/33.18 159.78/35.32
+     HuMoR [40]          22.69      N/A          Table 6: DPoser in motion denois-
+     DPoser (ours)       19.87      20.54        ing under varying noise scales. MPJPE
+                                                 is reported as before/after applying
+Table 5: Performance metrics (MPJPE)             DPoser denoising.
+for motion denoising under 40 mm noise.
+
+                                 HMR         Pose Completion      Motion Denoising
+     Timestep scheduling
+                            PA-MPJPE ↓      MPJPE (S=10) ↓       MPVPE ↓    MPJPE ↓
+     Random                      58.84      86.23/121.57/23.16    43.33       23.87
+     Fixed                       56.55       36.99/71.68/23.41    45.69       22.54
+     Uniform                     59.28      42.72/75.70/21.84     39.72       20.80
+     Truncated                   56.05      35.37/74.01/26.47     38.21       19.87
+Table 7: Evaluation of timestep scheduling strategies on key pose-related tasks, high-
+lighting the superior efficacy of the proposed truncated scheduling.
+
+
+4.6     Ablation Study
+In our ablation study, we initially focus on the impact of truncated timestep
+scheduling on DPoser’s performance. This involves contrasting our proposed
+scheduling strategy against three established methods—random, fixed, and uni-
+form scheduling [6, 33, 34, 48]. As Tab. 7 demonstrates, our strategy consistently
+outperforms these alternatives across all evaluated tasks. Additionally, we delve
+into the training aspects of DPoser, such as rotation representations and the in-
+tegration of an auxiliary loss akin to HuMoR [40]. Using the same trained prior,
+we also compare DPoser’s capabilities with SOTA diffusion-based solvers [6,7,48]
+on pose completion, revealing its superior versatility and performance. Detailed
+findings and analyses from these ablation studies are presented in the Appendix.
+
+5      Conclusion
+We introduce DPoser, to our best knowledge, the first unconditional diffusion-
+based pose prior, tailored for an expansive array of pose-related tasks. Engineered
+for flexibility, DPoser can be implemented as a straightforward L2-loss regular-
+izer and enhanced by our innovative truncated timestep scheduling for test-time
+optimization. Comprehensive experiments substantiate DPoser’s superior per-
+formance over existing state-of-the-art pose priors.
+Limitation and future work. While our framework benefits from variational
+diffusion sampling [33], it also shares its limitations, such as the mode-seeking
+behavior. Future research could look into enhancing solution diversity via tech-
+niques like particle-based variational inference [30, 53]. Furthermore, within the
+                   DPoser: Diffusion Model as Robust 3D Human Pose Prior           15
+
+broader context of inverse problems we have framed, a plethora of existing meth-
+ods [2,5,35,45] could be adapted to leverage our diffusion-based prior. Exploring
+these methods holds great potential for future progress.
+Ethical Considerations. For a discussion on the potential negative impacts of
+our work, please refer to the Appendix.
+
+
+References
+
+ 1. Bogo, F., Kanazawa, A., Lassner, C., Gehler, P., Romero, J., Black, M.J.: Keep it
+    smpl: Automatic estimation of 3d human pose and shape from a single image. In:
+    ECCV (2016) 1, 2, 3, 7, 10, 11
+ 2. Boys, B., Girolami, M., Pidstrigach, J., Reich, S., Mosca, A., Akyildiz, O.D.:
+    Tweedie moment projected diffusions for inverse problems. arXiv preprint
+    arXiv:2310.06721 (2023) 15
+ 3. Cho, H., Kim, J.: Generative approach for probabilistic human mesh recovery using
+    diffusion models. In: ICCV (2023) 3
+ 4. Choi, J., Lee, J., Shin, C., Kim, S., Kim, H., Yoon, S.: Perception prioritized
+    training of diffusion models. In: CVPR (2022) 8
+ 5. Chung, H., Kim, J., Kim, S., Ye, J.C.: Parallel diffusion models of operator and
+    image for blind inverse problems. In: CVPR (2023) 15, 24
+ 6. Chung, H., Kim, J., Mccann, M.T., Klasky, M.L., Ye, J.C.: Diffusion posterior sam-
+    pling for general noisy inverse problems. arXiv preprint arXiv:2209.14687 (2022)
+    6, 14, 23
+ 7. Chung, H., Sim, B., Ryu, D., Ye, J.C.: Improving diffusion models for inverse
+    problems using manifold constraints. NeurIPS (2022) 6, 14, 23
+ 8. Ci, H., Wu, M., Zhu, W., Ma, X., Dong, H., Zhong, F., Wang, Y.: Gfpose: Learning
+    3d human pose prior with gradient fields. In: CVPR (2023) 2, 3, 9
+ 9. Davydov, A., Remizova, A., Constantin, V., Honari, S., Salzmann, M., Fua, P.:
+    Adversarial parametric pose prior. In: CVPR (2022) 3, 10, 11
+10. Deng, J., Dong, W., Socher, R., Li, L.J., Li, K., Fei-Fei, L.: Imagenet: A large-
+    scale hierarchical image database. In: 2009 IEEE conference on computer vision
+    and pattern recognition. pp. 248–255. Ieee (2009) 24
+11. Dhariwal, P., Nichol, A.: Diffusion models beat gans on image synthesis. NeurIPS
+    (2021) 2, 24
+12. Georgakis, G., Li, R., Karanam, S., Chen, T., Košecká, J., Wu, Z.: Hierarchical
+    kinematic human mesh recovery. In: ECCV (2020) 3
+13. Goodfellow, I., Pouget-Abadie, J., Mirza, M., Xu, B., Warde-Farley, D., Ozair, S.,
+    Courville, A., Bengio, Y.: Generative adversarial networks. Communications of the
+    ACM (2020) 3
+14. Graikos, A., Malkin, N., Jojic, N., Samaras, D.: Diffusion models as plug-and-play
+    priors. NeurIPS (2022) 6
+15. Guzov, V., Mir, A., Sattler, T., Pons-Moll, G.: Human poseitioning system (hps):
+    3d human pose estimation and self-localization in large scenes from body-mounted
+    sensors. In: CVPR (2021) 13, 14, 20
+16. Ho, J., Jain, A., Abbeel, P.: Denoising diffusion probabilistic models. NeurIPS
+    (2020) 2, 3, 4, 18, 19
+17. Holmquist, K., Wandt, B.: Diffpose: Multi-hypothesis human pose estimation using
+    diffusion models. In: ICCV (2023) 2, 3
+16      J. Lu et al.
+
+18. Jiang, Z., Zhou, Z., Li, L., Chai, W., Yang, C.Y., Hwang, J.N.: Back to op-
+    timization: Diffusion-based zero-shot 3d human pose estimation. arXiv preprint
+    arXiv:2307.03833 (2023) 3, 23
+19. Kanazawa, A., Black, M.J., Jacobs, D.W., Malik, J.: End-to-end recovery of human
+    shape and pose. In: CVPR (2018) 3
+20. Karras, T., Aittala, M., Aila, T., Laine, S.: Elucidating the design space of diffusion-
+    based generative models. NeurIPS (2022) 2
+21. Kawar, B., Elad, M., Ermon, S., Song, J.: Denoising diffusion restoration models.
+    NeurIPS (2022) 6, 23
+22. Kingma, D.P., Welling, M.: Auto-encoding variational bayes. arXiv preprint
+    arXiv:1312.6114 (2013) 3, 12
+23. Kipf, T.N., Welling, M.: Semi-supervised classification with graph convolutional
+    networks. arXiv preprint arXiv:1609.02907 (2016) 3
+24. Li, L., Zhuo, L., Zhang, B., Bo, L., Chen, C.: Diffhand: End-to-end hand mesh
+    reconstruction via diffusion models. arXiv preprint arXiv:2305.13705 (2023) 3
+25. Li, Z., Liu, J., Zhang, Z., Xu, S., Yan, Y.: Cliff: Carrying location information in
+    full frames into human pose and shape estimation. In: ECCV (2022) 11, 12, 27
+26. Lin, J., Zeng, A., Wang, H., Zhang, L., Li, Y.: One-stage 3d whole-body mesh
+    recovery with component aware transformer. In: CVPR (2023) 11, 12
+27. Lin, T.Y., Maire, M., Belongie, S., Bourdev, L., Girshick, R., Hays, J., Perona, P.,
+    Ramanan, D., Zitnick, C.L., Dollár, P.: Microsoft coco: common objects in context
+    (2014). arXiv preprint arXiv:1405.0312 (2019) 11
+28. Ling, H.Y., Zinno, F., Cheng, G., Van De Panne, M.: Character controllers using
+    motion vaes. TOG (2020) 3, 14
+29. Liu, Q., Lee, J., Jordan, M.: A kernelized stein discrepancy for goodness-of-fit tests.
+    In: ICML (2016) 4
+30. Liu, Q., Wang, D.: Stein variational gradient descent: A general purpose bayesian
+    inference algorithm. NeurIPS (2016) 14
+31. Loper, M., Mahmood, N., Romero, J., Pons-Moll, G., Black, M.J.: Smpl: A skinned
+    multi-person linear model. ACM Transactions on Graphics 34(6) (2015) 3, 5, 7,
+    11, 20, 22, 27
+32. Mahmood, N., Ghorbani, N., Troje, N.F., Pons-Moll, G., Black, M.J.: Amass:
+    Archive of motion capture as surface shapes. In: ICCV (2019) 9, 10, 12, 13, 14, 20,
+    21, 23
+33. Mardani, M., Song, J., Kautz, J., Vahdat, A.: A variational perspective on solving
+    inverse problems with diffusion models. arXiv preprint arXiv:2305.04391 (2023) 2,
+    5, 6, 14, 23, 24
+34. Müller, L., Ye, V., Pavlakos, G., Black, M., Kanazawa, A.: Generative proxemics: A
+    prior for 3d social interaction from images. arXiv preprint arXiv:2306.09337 (2023)
+    3, 14
+35. Murata, N., Saito, K., Lai, C.H., Takida, Y., Uesaka, T., Mitsufuji, Y., Ermon, S.:
+    Gibbsddrm: A partially collapsed gibbs sampler for solving blind inverse problems
+    with denoising diffusion restoration. arXiv preprint arXiv:2301.12686 (2023) 15,
+    24
+36. Nachmani, E., Roman, R.S., Wolf, L.: Non gaussian denoising diffusion models.
+    arXiv preprint arXiv:2106.07582 (2021) 3
+37. Pavlakos, G., Choutas, V., Ghorbani, N., Bolkart, T., Osman, A.A., Tzionas, D.,
+    Black, M.J.: Expressive body capture: 3d hands, face, and body from a single
+    image. In: CVPR (2019) 1, 2, 3, 9, 10, 11, 12, 13, 14, 20, 27
+38. Poole, B., Jain, A., Barron, J.T., Mildenhall, B.: Dreamfusion: Text-to-3d using
+    2d diffusion. arXiv preprint arXiv:2209.14988 (2022) 3, 19
+                    DPoser: Diffusion Model as Robust 3D Human Pose Prior             17
+
+39. Qiu, Z., Yang, Q., Wang, J., Wang, X., Xu, C., Fu, D., Yao, K., Han, J., Ding, E.,
+    Wang, J.: Learning structure-guided diffusion model for 2d human pose estimation.
+    arXiv preprint arXiv:2306.17074 (2023) 3
+40. Rempe, D., Birdal, T., Hertzmann, A., Yang, J., Sridhar, S., Guibas, L.J.: Humor:
+    3d human motion model for robust pose estimation. In: ICCV (2021) 3, 13, 14, 22
+41. Särkkä, S., Solin, A.: Applied stochastic differential equations, vol. 10. Cambridge
+    University Press (2019) 4
+42. Shafir, Y., Tevet, G., Kapon, R., Bermano, A.H.: Human motion diffusion as a
+    generative prior. arXiv preprint arXiv:2303.01418 (2023) 2
+43. Sohl-Dickstein, J., Weiss, E., Maheswaranathan, N., Ganguli, S.: Deep unsuper-
+    vised learning using nonequilibrium thermodynamics. In: ICML (2015) 4
+44. Song, J., Meng, C., Ermon, S.: Denoising diffusion implicit models. arXiv preprint
+    arXiv:2010.02502 (2020) 3, 8, 10, 22
+45. Song, J., Vahdat, A., Mardani, M., Kautz, J.: Pseudoinverse-guided diffusion mod-
+    els for inverse problems. In: ICLR (2022) 6, 15
+46. Song, Y., Durkan, C., Murray, I., Ermon, S.: Maximum likelihood training of score-
+    based diffusion models. NeurIPS (2021) 6
+47. Song, Y., Ermon, S.: Generative modeling by estimating gradients of the data
+    distribution. NeurIPS (2019) 3, 4, 18
+48. Song, Y., Sohl-Dickstein, J., Kingma, D.P., Kumar, A., Ermon, S., Poole, B.: Score-
+    based generative modeling through stochastic differential equations. arXiv preprint
+    arXiv:2011.13456 (2020) 2, 3, 4, 5, 6, 9, 14, 18, 23, 24
+49. Tiwari, G., Antić, D., Lenssen, J.E., Sarafianos, N., Tung, T., Pons-Moll, G.: Pose-
+    ndf: Modeling human pose manifolds with neural distance fields. In: ECCV (2022)
+    1, 3, 9, 10, 11, 12, 13, 14, 20
+50. Vincent, P.: A connection between score matching and denoising autoencoders.
+    Neural computation (2011) 4, 18
+51. Von Marcard, T., Henschel, R., Black, M.J., Rosenhahn, B., Pons-Moll, G.: Re-
+    covering accurate 3d human pose in the wild using imus and a moving camera. In:
+    ECCV (2018) 11
+52. Wang, H., Du, X., Li, J., Yeh, R.A., Shakhnarovich, G.: Score jacobian chaining:
+    Lifting pretrained 2d diffusion models for 3d generation. In: CVPR (2023) 3, 19
+53. Wang, Z., Lu, C., Wang, Y., Bao, F., Li, C., Su, H., Zhu, J.: Prolificdreamer: High-
+    fidelity and diverse text-to-3d generation with variational score distillation. arXiv
+    preprint arXiv:2305.16213 (2023) 14, 19
+54. Wu, J., Gao, X., Liu, X., Shen, Z., Zhao, C., Feng, H., Liu, J., Ding, E.: Hd-fusion:
+    Detailed text-to-3d generation leveraging multiple noise estimation. arXiv preprint
+    arXiv:2307.16183 (2023) 19
+55. Xu, Y., Zhang, J., Zhang, Q., Tao, D.: ViTPose: Simple vision transformer baselines
+    for human pose estimation. In: Advances in Neural Information Processing Systems
+    (2022) 8
+56. Zhao, M., Liu, M., Ren, B., Dai, S., Sebe, N.: Modiff: Action-conditioned 3d
+    motion generation with denoising diffusion probabilistic models. arXiv preprint
+    arXiv:2301.03949 (2023) 2
+57. Zhou, Y., Barnes, C., Lu, J., Yang, J., Li, H.: On the continuity of rotation repre-
+    sentations in neural networks. In: CVPR (2019) 22
+58. Zhu, J., Zhuang, P.: Hifa: High-fidelity text-to-3d with advanced diffusion guidance.
+    arXiv preprint arXiv:2305.18766 (2023) 19
+18                       J. Lu et al.
+
+                      Appendix for DPoser: Diffusion Model as
+                          Robust 3D Human Pose Prior
+
+
+
+    In this appendix, we first briefly recap the parameterization of diffusion mod-
+els and their connection to score functions in Sec. A, followed by the perspective
+of Score Distillation Sampling (SDS) to understand our DPoser regularization
+in Sec. B. We detail the experimental setup and nuances in Sec. C and dissect
+various training aspects of DPoser in Sec. D. The exploration of extended op-
+timization techniques is discussed in Sec. E, and considerations for truncated
+timestep scheduling in image domains are presented in Sec. F. Additional qual-
+itative results are showcased in Sec. G. Lastly, potential negative impacts such
+as biases in data and ethical concerns in application are considered in Sec. H.
+
+
+
+A                Parameterization of Score-based Diffusion Models
+
+
+In the seminal work by Song et al . [48], it is demonstrated that both score-based
+generative models [47] and diffusion probabilistic models [16] can be understood
+as discretized versions of stochastic differential equations (SDEs) defined by score
+functions. This unification allows the training objective to be interpreted either
+as learning a time-dependent denoiser or as learning a sequence of score functions
+that describe increasingly noisy versions of the data.
+    We begin by revisiting the training objective for score-based models [47] to
+elucidate the link with diffusion models [16]. Consider the transition kernel of
+the forward diffusion process p_{0t}(\mathbf {x}_t | \mathbf {x}_0)=\mathcal {N}(\mathbf {x}_t;\alpha _{t}\mathbf {x}_0,\sigma _{t}^2\mathbf {I}). Our goal is to learn
+score functions  \nabla _{\mathbf {x}_t} \log p_t(\mathbf {x}_t)  through a neural network  s_\theta (\mathbf {x}_t; t) , by minimizing
+the L2 loss as follows (we omit the expectation operator for conciseness) :
+
+                                                                      \mathbb {E} \left [w(t)||s_\theta (\mathbf {x}_t;t)-\nabla _{\mathbf {x}_t}\log p_t\left (\mathbf {x}_t\right )||_2^2\right ]. \label {eq:ESM}     (14)
+
+Here, \protect \mathbf  {x}_t = \alpha _{t}\mathbf {x}_0+\sigma _{t}\epsilon , where \epsilon \sim \mathcal {N}(\mathbf {0}, \mathbf {I}).
+   Based on denoising score matching [50], we know the minimizing objective
+Eq. (14) is equivalent to the following tractable term:
+
+                                                                 \mathbb {E} \left [w(t)||s_\theta (\mathbf {x}_t;t)-\nabla _{\mathbf {x}_t}\log p_{0t}(\mathbf {x}_t | \mathbf {x}_0)||_2^2\right ]. \label {eq:DSM}    (15)
+
+To link this with the noise predictor  \epsilon _\theta (\mathbf {x}_t; t)  in diffusion models, we can employ
+the reparameterization  s_\theta (\mathbf {x}_t; t) = - \frac {\epsilon _\theta (\mathbf {x}_t; t)}{\sigma _t}  . Then, Eq. (15) can be simplified as
+                                   DPoser: Diffusion Model as Robust 3D Human Pose Prior                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     19
+
+
+                                   HMR                                                                                                                                                                                                                                                                                                     Pose Completion                                                                                                                                                                                                                               Motion Denoising
+     Strategy              PA-MPJPE ↓                                                                                                                                                                                                                                                                        MPJPE (S=10) ↓                                                                                                                                                                                                                                                             MPVPE ↓   MPJPE ↓
+     1 step                        56.05                                                                                                                                                                                                                                                                            35.37/74.01/26.47                                                                                                                                                                                                                                                    38.21      19.87
+     5 steps                       56.16                                                                                                                                                                                                                                                                            36.59/80.82/31.22                                                                                                                                                                                                                                                    40.22      21.21
+     10 steps                      56.18                                                                                                                                                                                                                                                                            36.78/82.59/32.32                                                                                                                                                                                                                                                    40.69      21.34
+          Table S-1: Efficacy of different denoising steps in DPoser’s optimization.
+
+
+follows:
+
+                                         &w(t)||- \frac {\epsilon _\theta (\mathbf {x}_t;t)}{\sigma _t} - \nabla _{\mathbf {x}_t}\log p_{0t}(\mathbf {x}_t \mid \mathbf {x}_0)||_2^2 \notag \\ =&w(t)||- \frac {\epsilon _\theta (\mathbf {x}_t;t)}{\sigma _t} + \frac {(\mathbf {x}_t-\alpha _t\mathbf {x}_0)}{\sigma _{t}^2} ||_2^2 \notag \\ =&w(t)||- \frac {\epsilon _\theta (\mathbf {x}_t;t)}{\sigma _t} + \frac {\sigma _{t}\epsilon }{\sigma _{t}^2})||_2^2 \notag \\ =&\frac {w(t)}{\sigma _{t}^2} ||\epsilon _\theta (\mathbf {x}_t;t) - \epsilon )||_2^2 \label {eq:DSM2}
+
+
+
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            (16)
+
+    The resulting form of Eq. (16) aligns precisely with the noise prediction form
+of diffusion models [16] (refer to Eq. (4) in the main text). This implies that by
+training  \epsilon _\theta (\mathbf {x}_t; t)  in a diffusion model context, we simultaneously get a handle
+on the score function, approximated as  \nabla _{\mathbf {x}_t} \log p_t(\mathbf {x}_t) \approx - \frac {\epsilon _\theta (\mathbf {x}_t; t)}{\sigma _t}  .
+
+B         View DPoser as Score Distillation Sampling
+Interestingly, the gradient of DPoser (Eq. (10) in the main text) coincides with
+Score Distillation Sampling (SDS) [38, 52], which can be interpreted as aiming
+to minimize the following KL divergence:
+                                                                                                                                          KL\big (p_{0t}\left (\mathbf {x}_t\mid \mathbf {x}_0\right ) \parallel p_t^\mathtt {SDE}\left (\mathbf {x}_t;\theta \right )\big ), \label {eq:SDS KL}                                                                                                                                                                                                                                                                                                            (17)
+where p_t^\mathtt {SDE}\left (\mathbf {x}_t;\theta \right ) denote the marginal distribution whose score function is es-
+timated by \epsilon _\theta (\mathbf {x}_t;t). For the specific case where t \to 0, this term encourages
+the Dirac distribution \delta (\mathbf {x}_0) (i.e., the optimized variable) to gravitate toward
+the learned data distribution p_0^\mathtt {SDE}\left (\mathbf {x}_0;\theta \right ), while the Gaussian perturbation like
+Eq. (17) softens the constraint. Building on this understanding, we can borrow
+advanced techniques from SDS [38,52]—a rapidly evolving area ripe for method-
+ological innovations [53, 54, 58]. To extend this, we experiment with a multi-step
+denoising strategy adapted from HiFA [58], substituting our original one-step
+denoising process. This alternative, however, yields suboptimal results across
+all evaluation metrics, as demonstrated in Tab. S-1. A plausible explanation
+could be that our proposed truncated timestep scheduling effectively manages
+low noise levels (i.e., small t), thus negating the need for more denoising steps.
+In addition, iterative denoising in each optimization step may cause error accu-
+mulations, leading to inaccurate gradients.
+20         J. Lu et al.
+
+
+                                                                    AMASS [32]                                                         HPS [15]
+                      Methods
+                                                              20mm                         100mm                            20mm                      100mm
+                   No prior                                   15.33                          51.48                          16.26                     50.87
+                   VPoser [37]                                15.20                          49.10                          17.24                     46.69
+                   Pose-NDF [49]                              13.84                          46.10                          15.62                     47.50
+                   DPoser (ours)                              13.64                          33.18                          13.45                     35.32
+Table S-2: Performance comparison of motion denoising under varying noise scales.
+MPJPE is reported afters denoising.
+
+
+C      Experimental Details
+This section elaborates on the specifics of our pose completion and motion de-
+noising experiments.
+
+C.1      Pose Completion
+For partial observations \protect \mathbf  {y}, the measurement operator \protect \mathcal  {A} is modeled as a mask
+matrix M \in \mathbb {R}^{d\times n} . Based on our optimization framework (Algorithm 1 in the
+main text), we define the task-specific loss, L_\text {comp} , as follows:
+
+                                                          L_\text {comp} = ||M \mathbf {x}_0 - \mathbf {y}||_2^2.                                             (18)
+
+Here, \protect \mathbf  {x}_0 denotes the complete body pose \theta  we try to recover, where the unseen
+parts are initialized as random noise. In the following ablated studies, if not
+specified, the evaluation is performed using 10 hypotheses on the AMASS [32]
+dataset with left leg occlusion.
+
+C.2      Motion Denoising (Noisy Input)
+Adhering to Pose-NDF settings [49], we aim to refine noisy joint positions J_{\text {obs}}^t
+over N frames to obtain clean poses \theta ^t , initialized from mean poses in SMPL
+with small noise. We formulate the task-specific loss combining an observation
+fidelity term L_\text {obs} and a temporal consistency term L_\text {temp} :
+
+
+                                        L_\text {obs} = \sum _{t=0}^{N-1} ||M_J(\theta ^t, \beta _0) - J_{\text {obs}}^t||_2^2, \label {eq:motion}            (19)
+
+
+
+                            L_\text {temp} = \sum _{t=1}^{N-1} ||M_J(\theta ^{t-1}, \beta _0) - M_J(\theta ^t, \beta _0)||_2^2,                               (20)
+
+where M_J denotes the 3D joint positions regressed from SMPL [31] and \beta _0 is
+the constant mean shape parameters.
+   In complement to the comparative analysis presented in Table 4 of our main
+text, we extend our evaluation to include scenarios with varying noise levels.
+                    DPoser: Diffusion Model as Robust 3D Human Pose Prior                21
+
+
+                                                   MPJPE               MPVPE
+            Methods          Occlusion
+                                            Vis.     Occ.      All.      All.
+          No prior           Legs          0.26     14.72     5.52       5.45
+          VPoser             Legs          1.75     14.29     6.31       7.38
+          PoseNDF            Legs          0.25     15.71     5.87       5.64
+          DPoser (ours)      Legs          0.28     12.24     4.63       3.65
+          No prior           Left Arm      0.26     24.87     4.74       9.91
+          VPoser             Left Arm      1.21     13.23     3.40       7.68
+          PoseNDF            Left Arm      0.25     17.70     3.42       7.86
+          DPoser (ours)      Left Arm      0.27     7.80      1.64       3.81
+Table S-3: Comparative analysis of methods for motion denoising with different oc-
+clusions (Legs and Left Arm) on the AMASS dataset. Errors (in cm) are evaluated
+in terms of MPJPE across visible (Vis.), occluded (Occ.), and all joints, along with
+MPVPE for all vertices.
+
+
+
+This extended examination, detailed in Tab. S-2, showcases DPoser’s excep-
+tional performance against state-of-the-art (SOTA) pose priors, especially under
+conditions of high noise, manifesting DPoser’s resilience to noise.
+
+
+
+C.3    Motion Denoising (Partial Input)
+
+
+This task focuses on reconstructing clean poses, \theta ^t , from partially observed
+joint positions, J_{\text {obs}}^t , across N frames, employing a known mask matrix to iden-
+tify visible joints. The optimization objective mirrors that of motion denoising
+(Sec. C.2), but incorporates a mask in Eq. (19) to specifically target visible parts,
+ensuring that only these segments guide the recovery process.
+    We conducted experiments on the AMASS dataset [32] to assess our model’s
+performance on this task with two types of occlusions: legs and left arm. The
+quantitative results of these experiments are detailed in Tab. S-3, and the ac-
+companying visualizations are provided in Sec. G.
+    In leg occlusion scenarios, the AMASS dataset primarily showcases straight
+poses, offering minimal diversity. This scenario permits decent outcomes with-
+out incorporating a pose prior, since the optimization’s starting point closely
+aligns with these prevalent poses. However, VPoser’s mean-centered characteris-
+tic hinders its ability to faithfully replicate the visible areas. On the other hand,
+Pose-NDF falls short in enhancing the occluded parts. DPoser accurately han-
+dles visible parts and guides occluded ones for more realistic poses. For left arm
+occlusions, which involve more varied movements, DPoser markedly surpasses
+other methods, underlining its adaptability and precision in handling diverse
+motion patterns.
+22             J. Lu et al.
+
+
+                                                     HMR                               Pose Completion                                            Motion Denoising
+  Normalization                           PA-MPJPE ↓                                MPJPE (S=10) ↓                                          MPVPE ↓                          MPJPE ↓
+  w/o norm                                          57.88                           45.37/102.28/41.08                                            44.82                           24.04
+  min-max                                           59.17                           47.41/107.00/43.42                                            42.70                           21.29
+  z-score                                           56.49                           34.37/72.47/26.32                                             38.57                           20.24
+
+Table S-4: Evaluation of DPoser’s performance under different normalization meth-
+ods, specifically for the axis-angle rotation representation.
+
+
+                                                      HMR                               Pose Completion                                             Motion Denoising
+ Representation                            PA-MPJPE ↓                                MPJPE (S=10) ↓                                          MPVPE ↓                          MPJPE ↓
+ axis-angle                                          56.05                            34.76/72.41/26.09                                            38.21                           19.87
+ 6D rotations                                        57.54                            40.89/81.43/27.31                                            38.44                           20.12
+
+Table S-5: Comparative performance of rotation representations under z-score nor-
+malization across multiple tasks and metrics.
+
+
+
+D        Ablated DPoser’s Training
+
+This section dissects the impact of different rotation representations and nor-
+malization techniques on DPoser’s performance. Initially, we examine axis-angle
+representation, comparing various normalization strategies: min-max scaling, z-
+score normalization, and no normalization. Our findings, summarized in Tab. S-
+4, indicate that z-score normalization is generally the most effective. Subse-
+quently, using this optimal normalization, we explore 6D rotations [57] as an
+alternative. As evidenced by Tab. S-5, axis-angle representation offers superior
+performance. This preference can be attributed to the effective modeling capa-
+bilities of diffusion models, along with the inherent advantages of axis-angle in
+capturing bounded joint rotations for regression tasks like human mesh recovery.
+    Inspired by HuMoR [40], we experiment with integrating the SMPL body
+model [31] as a regularization term during training. Alongside the prediction of
+additive noise, as outlined in Equation (4) in the main text, we employ a 10-
+step DDIM sampler [44] to recover a “clean” version of the pose, denoted as \protect \tilde  {\mathbf {x}}_0 ,
+from the diffused \protect \mathbf  {x}_t . The regularization loss aims to minimize the discrepancy
+between the original and recovered poses under the SMPL body model M :
+
+       L_\mathrm {reg} = ||M_J(\tilde {\mathbf {x}}_0, \beta _0) - M_J(\mathbf {x}_0, \beta _0)||_2^2 + ||M_V(\tilde {\mathbf {x}}_0, \beta _0) - M_V(\mathbf {x}_0, \beta _0)||_2^2 .    (21)
+
+Here, \beta _0 represents the mean shape parameters in SMPL. To account for denois-
+ing errors, we scale the regularization loss by \protect \mathrm  {log} (1+\frac {\alpha _t}{\sigma _t}), thereby increasing the
+weight for samples with smaller t values (less noise).
+    Fig. S-1 visualizes the impact of this regularization on MPJPE during the
+training, specifically for pose completion tasks with occlusion of both legs.
+                             DPoser: Diffusion Model as Robust 3D Human Pose Prior                                           23
+
+ Methods                  Occ. left leg                         Occ. legs         Occ. arms                Occ. trunk
+ ScoreSDE [48] 48.73/106.32/41.30 74.68/128.32/37.27 66.89/127.86/48.15 16.69/34.54/12.21
+ DPS [6]       40.51/104.32/54.57 64.26/113.46/33.71 60.63/119.85/42.78 15.10/33.90/13.27
+ MCG [7]       49.04/106.37/41.07 74.90/128.53/37.40 66.17/127.72/48.15 16.69/34.66/12.23
+ DPoser(ours) 35.37/74.01/26.47 59.25/96.77/24.55 51.27/81.76/20.04 13.95/28.57/9.85
+
+Table S-6: Comparative evaluation of diffusion-based solvers for pose completion on
+the AMASS dataset [32] (hypotheses number S=10).
+
+
+We observe that weighted reg-                                                                   Z  R  O R V V
+                                                                                             Z H L J K W H G  O R V V
+ularization offers slight per-
+                                                                                                X Q Z H L J K W H G  O R V V
+formance gains in the early         
+training process, while the
+absence of weighting intro-                      0 3 - 3 (
+duces instability and dete-
+                                     
+rioration in results. Despite
+these insights, the computa-         
+tional cost of incorporating
+the SMPL model—especially            
+for our large batch size of
+                                     
+1280—makes the training ap-                                                                            
+proximately 8 times slower.                            7 U D L Q L Q J  , W H U D W L R Q V
+Therefore, we opted not to Fig. S-1: MPJPE evolution in DPoser training for
+include this regularization in pose completion, assessed on AMASS [32] with 10
+our main experiments.          hypotheses under legs occlusion scenarios.
+
+
+E       Extended DPoser’s Optimization
+
+In addressing pose-centric tasks as inverse problems, we propose a versatile
+optimization framework, which employs variational diffusion sampling as its
+foundational approach [33]. Our exploration extends to an array of diffusion-
+based methodologies for solving these complex inverse problems. Among the
+techniques considered are ScoreSDE [48], MCG [7], and DPS [6]. These meth-
+ods augment standard generative processes with observational data, either by
+employing gradient-based guidance or back-projection techniques. We compare
+these methods with our DPoser for pose completion tasks. Our findings, cap-
+tured in Tab. S-6, reveal that DPoser outperforms the competitors under most
+occlusion conditions. Consequently, DPoser emerges not merely as a universally
+applicable solution to pose-related tasks, but also as an exceptionally efficient
+one.
+   It is worth mentioning that methods rooted in generative frameworks [6, 7,
+21,48] can pose challenges for broader applicability in pose-centric tasks. For in-
+stance, in blind inverse problems—certain parameters in \protect \mathcal  {A} (e.g., camera models
+in HMR) are unknown—generative methods are less straightforward to imple-
+ment. ZeDO [18], a recent study focusing on the 2D-3D lifting task, adopts the
+24       J. Lu et al.
+
+
+
+
+(a)
+
+
+
+
+(b)
+
+
+
+
+Fig. S-2: Image inpainting using standard (a) and truncated (b) timestep scheduling.
+The process evolution is shown over iterations with the middle row depicting the log-
+magnitude spectrum and the bottom row the phase spectrum.
+
+
+
+ScoreSDE [48] framework and refines camera translations by solving an opti-
+mization sub-problem after each generative step. However, directly porting this
+strategy to HMR is non-trivial, owing to the added complexity of body shape pa-
+rameter optimization—a feature currently absent in our DPoser model. Although
+some state-of-the-art techniques [5,35] offer solutions by jointly modeling opera-
+tor \protect \mathcal  {A} and data distributions, a full-fledged discussion on this subject is beyond
+this paper’s purview and remains an open question for future work.
+
+
+F     Truncated Timestep Scheduling on Images
+
+Exploring truncated timestep scheduling for image-based tasks, we find its suit-
+ability for human poses doesn’t translate well to images. Initial timesteps are
+critical in image domains for generating foundational perceptual content.
+    In our study, we employed a 256x256 unconditional diffusion model [11]
+trained on ImageNet [10] with variational diffusion sampling [33] for image in-
+painting. Comparing standard (timesteps 990 to 0) and truncated scheduling
+(timesteps 495 to 0), both with 100 steps, the experiments confirmed that trun-
+cation compromises image quality (Fig. S-2). The standard approach preserved
+perceptual content, while truncation produced disjointed patches, misaligned
+with the original image context.
+    These results affirm that truncated timestep scheduling excels in pose data
+where key information emerges in later stages but falls short in image tasks
+where early timesteps are essential. This scheduling is thus bespoke to the char-
+                  DPoser: Diffusion Model as Robust 3D Human Pose Prior           25
+
+acteristics of human pose estimation and is unsuitable for image processes that
+rely on the full diffusion timeline for content fidelity.
+
+
+G    More Qualitative Results
+We show more qualitative results for pose generation (Fig. S-3), pose completion
+(Fig. S-4), human mesh recovery (Fig. S-5) and motion denoising (Fig. S-6,
+Fig. S-7).
+
+
+H    Potential Negative Impacts
+ – Bias and Fairness Concerns: Human pose prior learning models may
+   inadvertently encode biases present in the training data, leading to biased
+   predictions or discriminatory outcomes. This can perpetuate existing societal
+   biases and inequalities, particularly if the training data is not representative
+   or balanced across diverse demographics.
+ – Ethical Considerations: The use of human pose prior learning models in
+   applications such as surveillance, security, or healthcare raises ethical con-
+   cerns regarding individual privacy, autonomy, and consent. There are debates
+   about the appropriate use of such technologies and the potential for unin-
+   tended consequences or misuse.
+ – Dependency on Data Quality: Human pose prior learning models heavily
+   rely on the quality and diversity of the training data. Poorly annotated or
+   biased datasets can negatively impact the performance and reliability of
+   these models, leading to inaccurate or unreliable predictions.
+
+
+
+
+    Fig. S-3: Pose generation. DPoser can generate diverse and realistic poses.
+26     J. Lu et al.
+
+
+
+
+(a)
+
+
+
+
+           VPoser                 Pose-NDF                DPoser(Ours)        GT
+
+
+
+
+(b)
+
+
+
+
+           VPoser                 Pose-NDF                DPoser(Ours)        GT
+
+Fig. S-4: Pose completion. (a) Left leg under occlusion. (b) Trunk under occlusion.
+                   DPoser: Diffusion Model as Robust 3D Human Pose Prior                27
+
+
+
+
+(a)
+
+
+
+
+      Images       GMM       Pose-NDF     VPoser      GAN-S      DPoser(Ours)   GT*
+
+
+
+
+(b)
+
+
+
+
+      Images       GMM       Pose-NDF     VPoser      GAN-S      DPoser(Ours)   CLIFF
+
+
+Fig. S-5: Human mesh recovery. (a) Initialization using mean poses and default cam-
+era. *Ground truth for the EHF dataset is annotated in SMPL-X [37], which extends
+SMPL [31] with fully articulated hands and an expressive face. (b) Initialization using
+the CLIFF [25] prediction.
+28         J. Lu et al.
+
+
+
+
+      Input
+
+
+
+
+     VPoser
+
+
+
+
+(a) Pose-NDF
+
+
+
+     DPoser
+     (Ours)
+
+
+
+      GT
+
+
+
+              Motion sequence
+
+
+      Input
+
+
+
+
+     VPoser
+
+
+
+
+(b) Pose-NDF
+
+
+
+     DPoser
+     (Ours)
+
+
+
+      GT
+
+
+
+              Motion sequence
+
+Fig. S-6: Motion denoising with noisy observations. (a) Gaussian noise with 40mm
+standard deviation. (b) Gaussian noise with 100mm standard deviation. We visualize
+every 20^{th} of the sequence.
+                        DPoser: Diffusion Model as Robust 3D Human Pose Prior   29
+
+
+
+
+     Input
+
+
+
+
+    VPoser
+
+
+
+
+(a) Pose-NDF
+
+
+
+    DPoser
+    (Ours)
+
+
+
+      GT
+
+
+
+             Motion sequence
+
+
+     Input
+
+
+
+
+    VPoser
+
+
+
+
+(b) Pose-NDF
+
+
+
+    DPoser
+    (Ours)
+
+
+
+      GT
+
+
+
+             Motion sequence
+
+Fig. S-7: Motion denoising with partial observations. (a) Legs under occlusion. (b)
+Left arm under occlusion. We visualize every 20^{th} of the sequence.
+

@@ -1,0 +1,191 @@
+URL: https://arxiv.org/abs/2607.16000
+
+[2607.16000] Inertial Human Motion Capture: From Biomechanics to Recent Sensor Fusion Methods and Back
+Skip to main content
+Search arXiv
+Press Enter to search ·
+Advanced search
+Electrical Engineering and Systems Science > Signal Processing
+arXiv:2607.16000
+(eess)
+[Submitted on 17 Jul 2026]
+Title:
+Inertial Human Motion Capture: From Biomechanics to Recent Sensor Fusion Methods and Back
+Authors:
+Manon Kok
+,
+Ive Weygers
+,
+Hassan Osman
+,
+Daniel Weber
+,
+Ruiyuan Li
+,
+Thomas Seel
+,
+Ajay Seth
+View a PDF of the paper titled Inertial Human Motion Capture: From Biomechanics to Recent Sensor Fusion Methods and Back, by Manon Kok and 6 other authors
+View PDF
+HTML (experimental)
+Abstract:
+Inertial measurement units (IMUs) are a promising means to capture human motion, yet obtaining meaningful biomechanical quantities from IMU measurements remains non-trivial. This tutorial-style review focuses on kinematics and introduces four key aspects (inertial human motion capture objective, environmental conditions, subject & attributes, and motion characteristics) to determine how to translate biomechanical problems into adequate formulations for the fusion of inertial sensor measurements. We identify three fundamental challenges for kinematics estimation from IMUs: IMUs do not provide direct information about the joint angle, IMUs do not measure their own orientation, and real-world environments and dynamics compromise sensor reliability. Though there exist widely-used methods to overcome these challenges, they suffer from severe limitations in real-life applications, e.g., the need for sensor-to-segment calibration, and the fact that magnetic field disturbances degrade joint angle accuracy. The full potential for many use-cases hence remains untapped in terms of accuracy and reliability. We share insights into recently proposed methods, e.g. exploiting the human body's kinematic chain constraints, having the potential to overcome these limitations. We also present guiding questions related to the four key aspects and illustrate their use for navigating the methodological landscape for the use-case of lower-extremity joint angle estimation, for which we share open-access code and compare the traditional workflow with three alternatives. Our aim is to bridge the gap between the sensor fusion community developing methods for human motion capture and the biomechanics community in need of accurate, easy-to-use, and reliable methods to study human motion outside of the laboratory.
+Comments:
+31 pages, 5 figures
+Subjects:
+Signal Processing (eess.SP)
+Cite as:
+arXiv:2607.16000
+[eess.SP]
+(or
+arXiv:2607.16000v1
+[eess.SP]
+for this version)
+https://doi.org/10.48550/arXiv.2607.16000
+Focus to learn more
+arXiv-issued DOI via DataCite
+Submission history
+From: Manon Kok [
+view email
+]
+[v1]
+Fri, 17 Jul 2026 14:38:47 UTC (5,984 KB)
+Full-text links:
+Access Paper:
+View a PDF of the paper titled Inertial Human Motion Capture: From Biomechanics to Recent Sensor Fusion Methods and Back, by Manon Kok and 6 other authors
+View PDF
+HTML (experimental)
+TeX Source
+view license
+Current browse context:
+eess.SP
+< prev
+|
+next >
+new
+|
+recent
+|
+2026-07
+Change to browse by:
+eess
+References & Citations
+NASA ADS
+Google Scholar
+Semantic Scholar
+export BibTeX citation
+Loading...
+BibTeX formatted citation
+×
+loading...
+Data provided by:
+Bookmark
+Bibliographic Tools
+Bibliographic and Citation Tools
+Bibliographic Explorer Toggle
+Bibliographic Explorer
+(
+What is the Explorer?
+)
+Connected Papers Toggle
+Connected Papers
+(
+What is Connected Papers?
+)
+Litmaps Toggle
+Litmaps
+(
+What is Litmaps?
+)
+scite.ai Toggle
+scite Smart Citations
+(
+What are Smart Citations?
+)
+Code, Data, Media
+Code, Data and Media Associated with this Article
+alphaXiv Toggle
+alphaXiv
+(
+What is alphaXiv?
+)
+Links to Code Toggle
+CatalyzeX Code Finder for Papers
+(
+What is CatalyzeX?
+)
+DagsHub Toggle
+DagsHub
+(
+What is DagsHub?
+)
+GotitPub Toggle
+Gotit.pub
+(
+What is GotitPub?
+)
+Huggingface Toggle
+Hugging Face
+(
+What is Huggingface?
+)
+ScienceCast Toggle
+ScienceCast
+(
+What is ScienceCast?
+)
+Demos
+Demos
+Replicate Toggle
+Replicate
+(
+What is Replicate?
+)
+Spaces Toggle
+Hugging Face Spaces
+(
+What is Spaces?
+)
+Spaces Toggle
+TXYZ.AI
+(
+What is TXYZ.AI?
+)
+Related Papers
+Recommenders and Search Tools
+Link to Influence Flower
+Influence Flower
+(
+What are Influence Flowers?
+)
+Core recommender toggle
+CORE Recommender
+(
+What is CORE?
+)
+Author
+Venue
+Institution
+Topic
+About arXivLabs
+arXivLabs: experimental projects with community collaborators
+arXivLabs is a framework that allows collaborators to develop and share new arXiv features directly on our website.
+Both individuals and organizations that work with arXivLabs have embraced and accepted our values of openness, community, excellence, and user data privacy. arXiv is committed to these values and only works with partners that adhere to them.
+Have an idea for a project that will add value for arXiv's community?
+Learn more about arXivLabs
+.
+Which authors of this paper are endorsers?
+|
+Disable MathJax
+(
+What is MathJax?
+)
+We gratefully acknowledge support from
+        our
+major funders
+,
+member institutions
+,
+,
+        and all contributors.
+Major funding support from

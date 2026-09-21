@@ -1,0 +1,917 @@
+                                                      IMUCoCo: Enabling Flexible On-Body IMU Placement
+                                                       for Human Pose Estimation and Activity Recognition
+                                                                          Haozhe Zhou                                                                   Riku Arakawa
+                                                                 Carnegie Mellon University                                                       Carnegie Mellon University
+                                                                    Pittsburgh, PA, USA                                                              Pittsburgh, PA, USA
+                                                                   haozhezh@cs.cmu.edu                                                              rarakawa@cs.cmu.edu
+
+                                                                        Yuvraj Agarwal                                                                   Mayank Goel
+                                                                 Carnegie Mellon University                                                       Carnegie Mellon University
+                                                                    Pittsburgh, PA, USA                                                              Pittsburgh, PA, USA
+arXiv:2508.01894v1 [cs.HC] 3 Aug 2025
+
+
+
+
+                                                                    yuvraj@cs.cmu.edu                                                               mayankgoel@cmu.edu
+
+
+
+
+                                                                      Brooch                                                      Chest Pocket   Thigh Pockets
+                                                                                                           Arm Pocket
+
+
+                                                   Armband
+
+                                                                                                                Belly Pocket
+
+
+
+
+                                                                                                                   Thigh Pocket
+
+                                                            Anklet
+
+
+
+
+                                                                      (a)                                                (b)                                         (c)
+
+                                        Figure 1: (a) IMUCoCo enables pose estimation from atypical locations like the upper arm, upper chest, and ankle. (b) IMUCoCo
+                                        allows users to put their IMU sensing devices in different pockets of their clothing for convenience. (c) With IMUCoCo, users
+                                        can move the sensors to appropriate locations according to different application requirements (e.g., IMUs in the thigh pockets
+                                        to track leg movements during soccer).
+                                        Abstract                                                                                   We introduce IMU over Continuous Coordinates (IMUCoCo), a
+                                        IMUs are regularly used to sense human motion, recognize activ-                            novel framework that maps signals from a variable number of IMUs
+                                        ities, and estimate full-body pose. Users are typically required to                        placed on the body surface into a unified feature space based on
+                                        place sensors in predefined locations that are often dictated by                           their spatial coordinates. These features can be plugged into down-
+                                        common wearable form factors and the machine learning model’s                              stream models for pose estimation and activity recognition. Our
+                                        training process. Consequently, despite the increasing number of                           evaluations demonstrate that IMUCoCo supports accurate pose
+                                        everyday devices equipped with IMUs, the limited adaptability                              estimation in a wide range of typical and atypical sensor place-
+                                        has significantly constrained the user experience to only using a                          ments. Overall, IMUCoCo supports significantly more flexible use
+                                        few well-explored device placements (e.g., wrist and ears). In this                        of IMUs for motion sensing than the state-of-the-art, allowing users
+                                        paper, we rethink IMU-based motion sensing by acknowledging                                to place their sensors-laden devices according to their needs and
+                                        that signals can be captured from any point on the human body.                             preferences. The framework also supports the ability to change
+                                                                                                                                   device locations depending on the context and suggests placement
+                                                                                                                                   depending on the use case.
+
+                                        This work is licensed under a Creative Commons Attribution 4.0 International License.
+                                        UIST ’25, Busan, Republic of Korea                                                         CCS Concepts
+                                        © 2025 Copyright held by the owner/author(s).
+                                        ACM ISBN 979-8-4007-2037-6/2025/09                                                         • Human-centered computing → Ubiquitous and mobile com-
+                                        https://doi.org/10.1145/3746059.3747695                                                    puting systems and tools; Interactive systems and tools.
+UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea                                                                          Zhou et al.
+
+
+Keywords                                                                     there is no existing dataset that includes data from nearly infinite
+pose estimation, activity recognition, on-body IMU                           possible IMU locations. To our knowledge, the most comprehensive
+                                                                             IMU-based dataset yet uses 17 real IMUs [15], which is still far
+ACM Reference Format:                                                        from our goal. Third, a training framework to learn the relationship
+Haozhe Zhou, Riku Arakawa, Yuvraj Agarwal, and Mayank Goel. 2025.            between the large number of IMU signals on the body surface and
+IMUCoCo: Enabling Flexible On-Body IMU Placement for Human Pose
+                                                                             the underlying human motion has not yet been built.
+Estimation and Activity Recognition. In The 38th Annual ACM Symposium
+                                                                                In this paper, we present IMUCoCo, a novel approach enabling
+on User Interface Software and Technology (UIST ’25), September 28-October
+1, 2025, Busan, Republic of Korea. ACM, New York, NY, USA, 16 pages.         IMU placement over “Continuous Coordinates” that maps IMU
+https://doi.org/10.1145/3746059.3747695                                      signals obtained from different locations on the body into a uni-
+                                                                             fied feature space defined by the spatial coordinates of the sensor.
+                                                                             IMUCoCo models the kinematic relationship between body loca-
+1    Introduction                                                            tions using a self-supervised learning strategy trained on exten-
+The ubiquity offered by IMUs has made them an attractive sen-                sive synthetic IMU signals generated from existing motion capture
+sor for sensing human motion and pose [2, 18]. Consumer IMUs                 datasets [11, 13, 15, 24, 26, 29, 31]. To address the scalability chal-
+are used for many applications, such as gait analysis using foot-            lenge, IMUCoCo learns to align IMU signals placed flexibly on the
+mounted devices [49], fall risk estimation using a smartphone [16],          body’s surface with a constant number of human joint movements.
+hyperactivity monitoring using smartwatches [3], and human pose              The unified mechanism for modeling body motion is driven by the
+estimation using different consumer devices [46, 48].                        insight that signals across the body surface are influenced by the
+   However, the inherent assumption in these approaches is that              shared kinematic structure connected by the joints of the human
+each IMU, while part of a consumer device, is still a specialized            body, thus leading to a model of the body motion regardless of the
+device, worn at specific locations. Under this assumption, machine           number of input signals and does not need to be retrained when
+learning models have to be trained for specific devices and place-           placements change.
+ments, which limits their practicality. For example, IMUPoser [28]              To demonstrate the performance of our system, we conducted a
+inferred 3D body pose using a few common device placements,                  series of evaluations. In Evaluation #1, we collected a custom dataset
+such as pants pocket, ear, and wrist. The authors built a model that         for IMU data at atypical locations on a user’s body and ground truth
+adapted to varying availability of devices and worked on consumer            recorded using camera-based motion capture. We demonstrated that
+products. However, a user might want to move the same device to              our approach generalizes well to all atypical locations that are not
+different locations over the course of a day. Current models fail to         covered by prior approaches. In Evaluation #2, we showed that for
+adapt when users choose to carry their phone in a jacket pocket,             typical locations, our approach achieves competitive performance
+wear it on an armband while exercising, or mount it on their back            compared to the existing work [46, 51–53]. Finally, we demonstrate
+as a posture tracker while seated. For each new location, the ML             IMUCoCo’s utility in supporting different usage scenarios ranging
+models need to be retrained, and that severely limits the flexibility        from allowing users to use atypical device placements, the ability to
+of any ML model aimed at ubiquitous human motion sensing.                    change device locations depending on the context, and suggesting
+   To bridge this gap, we need to reconsider the potential source            placement based on the use case. Thus, IMUCoCo provides a human
+of IMU signals for training the models and not remain limited to a           motion sensing model that allows users to wear their devices as they
+set of key locations, but to any point on the human body’s surface.          need or prefer. It also supports users in tracking their bodies for
+Figure 2 shows the full-body acceleration of a golf swing captured           specific applications by allowing them to move devices as needed.
+by a camera-based motion capture system. Each arrow in the figure
+represents the acceleration vector synthesized at that point. It also
+plots the temporal changes in synthesized acceleration for 6 key             2     Related Work
+points on the user’s arm. Signals from devices placed on regions that        Our research builds on existing studies that utilize on-body IMUs for
+move together appear to be kinematically related, with some cases            human motion sensing. In this section, we provide a brief overview
+observed in previous studies [14, 43]. Although sometimes certain            of these efforts. We also surveyed recent advances in other on-body
+parts of the body can move entirely independently, in many other             sensors that might augment IMUs for motion sensing in the future.
+situations, these correlations suggest the existence of an underlying
+mechanism that connects such signals. Inspired by this observation,
+the question arises: Can we create a unified model that can                  2.1    Body Pose Tracking from IMUs
+take the IMU data captured from any point on the human                       Inside-out full-body pose tracking from sparse sensor sets has
+body surface for human motion sensing?                                       been intensively studied using different sensing modalities, such
+   To achieve this vision, there are several technical challenges that       as vision [2, 18, 37], RFID [19], pressure [10], acoustic [25], and
+need to be addressed. First, no existing machine learning architec-          electromagnetic-field [5, 45]. Among these, IMU-based solutions
+ture for IMU data is designed to process input from all possible             are often more deployable, as they are present on many consumer
+points on the human body surface. Existing approaches rely on                devices. These solutions learn the mapping between the IMU signals
+creating separate feature encoders for each location (e.g., [17]) or         from designated locations on the body to the body pose parameters,
+training together with multiple inputs (e.g., [28]). Thus, learning a        which is often represented as the SMPL model [23]. For instance,
+model for a large number of inputs remains unscalable, especially            Sparse Inertial Poser [42] and Deep Inertial Poser [15] are pose
+when the number of possible input locations is infinite. Second,             tracking systems with 6-17 on-body IMUs. Several other works
+IMUCoCo: Enabling Flexible On-Body IMU Placement ...                                   UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea
+
+
+
+
+Figure 2: Synthesized acceleration signals across the body surface from a person swinging a golf club from T=0.0s to T=1.5s. The
+direction and magnitude of acceleration are visualized as arrows (Left Figure). The acceleration selected from 6 “devices” on
+the right arm from hand to shoulder is plotted (Right Figure), corresponding to the six devices on the avatar’s right arm. The
+magnitude and timing of the peak in the acceleration signal at each location are different. IMUCoCo models such differences
+and supports placement and movement of the IMU to different points on the body to give the user flexibility.
+
+
+have been proposed to improve the accuracy of these pose track-          yield superior accuracy and usability. In this paper, we explore this
+ing systems [51–53, 57]. Researchers have also explored ways for         opportunity and demonstrate its benefits.
+more practical device placements; for example, IMUPoser [28] and
+MobilePoser [48] support different combinations of commercial            2.2    Physical Activity Recognition from IMUs
+devices, including earbuds, phones, and watches.                         Body motion data can also enable human activity recognition [4, 6]
+   Although current systems achieve high accuracy in pose esti-          and exercise tracking [40, 47]. Several datasets have been developed
+mation, they rely on placing IMUs on predefined body parts. This         that collect sensor data from diverse devices such as smartphones
+rigidity restricts adaptability, particularly when encountering place-   and smartwatches during various daily physical activities, including
+ments not represented in the training data. For example, what if a       walking and climbing stairs [8, 21, 35]. Using these datasets, numer-
+user prefers to wear an anklet instead of a watch? While recent ap-      ous machine learning-based approaches have emerged [7, 34, 56].
+proaches such as DiffusionPoser [46] attempt to generalize by using      For example, Müller et al. [30] developed a method specifically for
+diffusion models to infer missing sensor data, they are still con-       exercise tracking using IMUs placed on the wrists and ankles. Ad-
+fined to 13 predetermined sensor locations. Consequently, sensor         ditionally, Kwon et al. [22] introduced a technique for synthesizing
+placements outside these predefined points remain unsupported.           IMU data from videos, allowing more flexible activity recognition.
+Additionally, the computationally intensive multi-step diffusion            However, these methods continue to follow the fixed-placement
+process significantly hampers real-time deployment on resource-          approach previously discussed in body pose tracking research, re-
+limited devices. Crucially, existing research overlooks opportunities    lying on a predetermined set of IMU locations. To overcome this
+to explore the vast and continuous space of the human body for           limitation, some studies have investigated location-invariant meth-
+sensor placement, potentially missing configurations that could          ods. Rey et al. [36] proposed a method to transfer sensor data across
+UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea                                                                     Zhou et al.
+
+
+
+
+Figure 3: Overview of the IMUCoCo system during test time. IMU data is mapped into a placement-adaptive representation,
+which can be easily tuned for downstream tasks, such as pose estimation and activity recognition. Modules and synthetic IMUs
+that are only used during training time are omitted from the figure for brevity of presentation.
+
+
+typical placements (e.g., from wrist to ankle). SenseHAR [17] com-        motion data in the future. Our proposed system, IMUCoCo, can
+bined multiple sensor types from wearables and phones into a              potentially benefit from these advances to enable rapid prototyp-
+shared latent feature space, enabling downstream activity recogni-        ing of motion sensing systems without requiring additional data
+tion models to train on unified features. Adaimi et al. [1] developed     collection or extensive model training.
+a location-invariant model using a large-scale dataset suitable for
+diverse activities such as driving. Still, these location-invariant ap-
+proaches are limited to the sensor placements explicitly captured in      3 Design of IMUCoCo
+their datasets. In contrast, we demonstrate that IMUCoCo can seam-
+lessly integrate into activity recognition pipelines, accommodating       3.1 System Overview
+a continuous range of sensor placements beyond those predefined           3.1.1 Insights. IMUCoCo’s architecture aims to enable scalable
+locations.                                                                learning of mapping countless potential placements of IMUs into
+                                                                          a tractable space. Unlike conventional approaches, IMUCoCo enu-
+                                                                          merates a massive number of possible placements at training time.
+2.3     Advancements in On-Body Devices                                   For this reason, we must restrict the growth of the architecture size
+Existing on-body sensing research predominantly utilizes com-             with respect to the number of IMU placements.
+mon wearable locations, such as glasses, wrists, and thigh pockets.          We draw insights from several related fields. Articulated hu-
+Beyond these typical placements, researchers have also explored           man pose models [23] render realistic human body meshes from
+other locations and form factors, such as embedding sensors within        compact parameters, such as joint rotations and body shapes. Tech-
+everyday accessories [12], magnetic sensing through rings [32],           niques such as blend skinning formulate mesh surfaces as weighted
+multimodal eating detection via necklaces [55], and touch input           bone transformations. Inspired by this, IMUCoCo is designed to
+through belts [9]. Recent advances in fabrication technologies and        align IMU signals to joint movement representations, limiting the
+robotics have further expanded feasible sensor placements across          target space to a constant size. In addition, coordinate-based or im-
+continuous body surfaces. For instance, Yu et al. [54] introduced a       plicit neural representation approaches model signals as a neurally
+scarf-shaped device integrated with electrical impedance tomogra-         parameterized function of coordinates, demonstrating a powerful
+phy for activity recognition. Similarly, SkinMarks [44] used stretch-     ability to perform tasks such as view synthesis [27] and compres-
+able electronic tattoos strategically placed on epidermal landmarks,      sion [38]. Leveraging this idea, IMUCoCo modulates the IMU signals
+transforming natural skin features and limb movements into in-            by their coordinates, effectively encompassing the spatial relation-
+teractive touch inputs. We anticipate that these innovations will         ship among various placements without repeatedly increasing the
+facilitate the integration of IMU sensors to capture complete body        size of the input layers.
+IMUCoCo: Enabling Flexible On-Body IMU Placement ...                                    UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea
+
+
+3.1.2 Architecture. The IMUCoCo maps a variable number of IMU
+devices placed on the body to a unified space, so that downstream
+models, such as a pose estimation model, can function without
+retraining for different IMU placements. The placements of the
+devices are represented as spatial coordinates in the 3-dimensional
+space, formally as r = (𝑥, 𝑦, 𝑧). This spatial coordinate is measured
+relative to the root of the human body during a standard T-pose and
+remains unchanged until the IMU device is repositioned or removed
+from the human body. Such location information can be easily
+obtained for users and does not need to be error-free. For example,     Figure 4: The detailed architecture of the Sensor Coordinate
+one approach is simply to tap on the corresponding location on a        Encoder (SCE) module. The standardized sensor coordinates
+rendered avatar or simply state one of the predefined locations, such   (𝑥, 𝑦, 𝑧) are encoded using periodic functions. The sensor re-
+as the neck, ankle, or elbow. We discuss other potential approaches     gion category (𝑘) is encoded using a learnable embedding
+to obtain coordinates in real life in Section 6.                        layer. The concatenated features are passed through fully
+   Inspired by the kinematic trees used for articulated human body      connected (FC) layers, producing multi-layers of placement
+models [23], IMUCoCo breaks the whole body feature space into 24
+                                                                        codes q (𝑙 ) for each layer 𝑙.
+joint nodes, represented as z = {z1, .., z24 }, which corresponds to
+the motion of each joint. Each of these joint nodes is then processed
+through a separate pathway that maps the IMU device’s signal into       of SCE is shown in Figure 4. First, we standardize the raw spatial
+the corresponding joint node features.                                  coordinates to have the origin at the target joint location 𝑟 𝑗 , divided
+   As shown in Figure 3, IMUCoCo comprises several modules.             by the range of all vertex spatial coordinates. Formally, this is
+First, each IMU’s signal is passed through a Motion Feature En-         represented by 𝑟𝑠𝑡 = (𝑟 − 𝑟 𝑗 )/(𝑟𝑚𝑎𝑥 − 𝑟𝑚𝑖𝑛 ) , where 𝑟𝑚𝑎𝑥 and
+coder (MFE) to encode the raw IMU data. At the same time, device        𝑟𝑚𝑖𝑛 are obtained by taking the maximum and minimum values of
+placement is encoded using a Sensor Coordinate Encoder (SCE)            each of the three axes on the coordinates of all vertices. Previous
+to derive placement codes that inform the transfer function for         research has shown that applying positional encoding helps extract
+the corresponding features into the target joint node feature. After    high-frequency changes along coordinates [27]. Following this, the
+this step, the Joint Node Modulator (JNM) takes both the extracted      standardized coordinate r𝑠𝑡 is passed through a positional encoding
+IMU features and the placement codes. It modulates the features to      using periodic functions. This mapping is defined as:
+produce a representation that describes the target joint’s movement.
+                                                                                      𝜙 𝑓 (r𝑠𝑡 ) = [sin(2𝜋 𝑓 · r𝑠𝑡 ), cos(2𝜋 𝑓 · r𝑠𝑡 )]             (1)
+To train these modules, the features transferred to the joint node
+are passed to auxiliary regression tasks using Kinematics Regres-       , where 𝑓 represents the frequency bands in increasing powers of
+sors (KRs) to regress to kinematics attributes, including velocity,     2, i.e., 𝑓 = 2𝑝 for 𝑝 = 0, 1, . . . , 𝑛 𝑓 𝑟𝑒𝑞 − 1. This encoding transforms
+position, and orientation, as well as a full-body Pose Regressor        𝑟𝑠𝑡 into a high-dimensional feature space that provides multi-scale
+(PR) to infer the full-body pose. The KRs and PR are dropped once       spatial information.
+the training is completed. A detailed training architecture and pro-        Additionally, we partition the human body surface into 24 re-
+cedure are illustrated in Appendix A.2. In the next subsections,        gions based on joint positions. Our intuition is that the region where
+we describe each module of IMUCoCo, placement adaptation, and           the sensor is placed provides a semantic meaning that is useful to
+applying IMUCoCo for downstream tasks in further detail.                determine the transference as well. A detailed illustration of the par-
+                                                                        tition is provided in Appendix A.2. Thus, for each IMU sensor, we
+3.2    IMUCoCo Modules                                                  categorize its placement region into one of the 24 regions, denoted
+3.2.1 Motion Feature Encoder (MFE). The Motion Feature Encoder          as 𝑘, based on the provided coordinate 𝑟 . Subsequently, we encode
+(MFE) module encodes the raw IMU input into the IMU feature rep-        the category of regions 𝑘 corresponding to the spatial coordinate
+resentations. This module is analogous to the conventional method       using a learnable embedding layer, denoted as 𝐸𝑚𝑏. The positional
+of feature extraction for IMU signals. The MFE module first projects    encodings and the region embedding are concatenated to form the
+the data from a single IMU’s 9 channels into higher dimensions          input feature vector, denoted as q (0) = [𝜙 (𝑟𝑠𝑡 ), Emb(𝑘)], to the
+using a linear layer with ReLU activations. We implement MFE            subsequent 𝐿 fully-connected (FC) layers.
+using an LSTM model following previous studies [15, 28, 53]. We             The first FC layer takes input from q0 , while subsequent fully
+chose a single-directional LSTM over a bi-directional one to pre-       connected layers produce placement codes. Formally, for layer 𝑙:
+                                                                                                                            
+serve historical information without the limitation of fixed window                              q (𝑙 ) = FC (𝑙 ) q (𝑙 −1)                       (2)
+sizes [51]. Formally, the MFE module for a joint node is represented
+by h = MFE(s), where s is one input IMU signal from one point on        , where q (𝑙 ) = (𝛾 (𝑙 ) , 𝛽 (𝑙 ) ) are the placement codes that subse-
+the body, and h is the extracted feature.                               quently inform the modulation of the motion features based on
+                                                                        placement. Finally, the output of the SCE module is a list of place-
+3.2.2 Sensor Coordinate Encoder (SCE). The Sensor Coordinate
+                                                                        ment codes q = {q (1) , . . . , q (𝐿) }, one for each MLP layer.
+Encoder (SCE) module encodes the sensor coordinate 𝑟 = (𝑥, 𝑦, 𝑧)
+into placement codes 𝑞 that instruct the subsequent modules of          3.2.3 Joint Node Modulator (JNM). The Joint Node Modulator
+IMUCoCo to adapt to the sensor’s placement. The detailed structure      (JNM) modulates the features obtained from the MFE module to
+UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea                                                                              Zhou et al.
+
+
+the features representing the corresponding joint kinematics on            focus of previous research. This section explains the approach,
+the body based on 𝑞, the placement codes generated from the SCE            followed by details of our training approach.
+module. Similar to MFE, we adopt an LSTM-based structure to en-
+code the temporal information of the motion feature corresponding          3.3.1 Virtual IMU Synthesis. Training IMUCoCo requires IMU data
+to each joint node. For each layer, we applied Feature-wise Linear         sampled from all over the body surface, for which relying on real
+Modulation (FiLM) [33] to the LSTM outputs to allow modulating             IMU data is not feasible. We synthesized our IMU data based on
+the motion features based on the inferred placement codes. The             human pose datasets, including AMASS [24], DIP-IMU [15], and
+input to the first layer is just the output of the corresponding MFE       other XSens-based datasets [11, 13, 26, 29, 31]. From these datasets,
+module z (0) = h. Formally, for layer 𝑙 in the JNM module,                 we obtained full body pose and used the SMPL model [23] for
+                                                                         forward kinematics to determine the positions of joints and mesh.
+                z (𝑙 ) = LSTM (𝑙 ) 𝛾 (𝑙 ) ⊙ z (𝑙 −1) + 𝛽 (𝑙 )     (3)         To calculate the acceleration, we applied the second derivative
+                                                                           of the positions. Existing work typically simplifies bone orienta-
+                                                                           tion to synthesize IMU orientation (e.g., [28]). While this approach
+Finally, the output of the JNM module is the last layer’s output 𝑧 (𝐿) .
+                                                                           may function well when the IMU is attached to areas that do not
+3.2.4 Kinematics Regressor (KR) and Pose Regressor (PR). We used           deform, such as the middle of the upper arm, it is inaccurate for
+regressions to kinematic attributes as an auxiliary task to learn          areas that deform, such as abdominal regions and areas close to
+useful representations of cross-placement IMU signals. To achieve          each joint (e.g., the elbow). Thus, we calculate the orientation based
+this, we used two linear layers with ReLU activation as a Kinematics       on the faces of the mesh. These virtual IMUs are also virtually cali-
+Regressor (KR). We used this straightforward architecture for KR           brated using a T-pose [52] We include a more detailed illustration
+primarily to enforce the quality of representations learned only           in Appendix A.1.
+from the previous modules instead of letting a complex model
+                                                                           3.3.2 Loss Functions. We used a combination of loss functions to es-
+excessively compensate for the performance of the regression task.
+                                                                           tablish learning feature representations suitable for the downstream
+For each joint node, we used five joint-level KR modules to predict
+                                                                           tasks. First, we used kinematic loss Lkinematic for multiple kine-
+the joint’s velocity, position, local orientation, global orientation,
+                                                                           matic attributes, including velocity, root velocity, position, global
+and the body root’s velocity. In addition, we used one body-level
+                                                                           orientation, and local orientation, to facilitate the model in extract-
+Pose Regressor(PR) module, with the same architecture as KR, that
+                                                                           ing kinematic quantities. For velocity, position, global orientation,
+takes the features from all 24 joints and together regresses to the
+                                                                           and local orientation, we used Mean Squared Error (MSE) loss. For
+full-body pose. Note that the KRs and PR are used as auxiliary
+                                                                           root velocity, we used multi-frame losses at consecutive 1, 3, 9, and
+regressors only and will be removed from the model once it is
+                                                                           27 frames [52]. Second, we used the full-body pose loss Lpose in
+trained.
+                                                                           the global frame, also implemented as an MSE loss, to encourage
+3.2.5 Matchmaker. When IMUCoCo is supplied with a variable                 the model to coordinate organically with the representation from
+number of IMUs, the Matchmaker module dynamically allocates                different joint nodes. Note that this fully-body pose loss can only be
+joint nodes to the optimal IMU device based on a loss map. Specif-         calculated when all the joint nodes have completed their forward
+ically, after training, for each joint node, we iterate through all        passes, which, if done at the same time, can add an excessive mem-
+vertices on the body, assuming that an IMU is placed at each vertex,       ory burden during training. We used a buffered approach to resolve
+and compute the loss values for transferring information to the tar-       this, as described in Appendix A.2. Third, we used an alignment loss
+get joint node. This process is repeated for all 24 joints, producing      Lalign based on cosine similarity to encourage IMUCoCo to pro-
+a loss table M ∈ R24×𝑉 , where 𝑉 is the total number of vertices in        duce a feature representation for the sampled mesh synthetic IMUs
+the articulated pose model, and M( 𝑗, 𝑣) represents the loss value of      similar to the representation for the joint synthetic IMU. Formally,
+a virtual IMU placed at the vertex 𝑣 when transferred to the target        the training loss can be represented as:
+joint node 𝑗. With the constructed loss table, each of the 24 joint
+                                                                                      L 𝑗 (z 𝑗 ) = 𝜆kinematic Lkinematic (𝐾𝑅(z 𝑗 ), K 𝑗GT )
+nodes will be assigned to one IMU device that gives the lowest loss.
+Formally, given a set D of IMU devices attached to the body, where                               + 𝜆pose Lpose (𝑃𝑅(z 𝑗 , zbuffer ), PGT )            (4)
+the IMU 𝑑 is located at the coordinate r𝑑 , the optimally assigned                               + 𝜆align Lalign (z 𝑗 , zref )
+IMU for the joint node 𝑗 is computed as 𝑑 ∗𝑗 = argmin𝑑 ∈ D M( 𝑗, 𝑣 r𝑑 ),
+where 𝑣 r𝑑 denotes the nearest vertex in the loss table to the pro-        , where K 𝑗GT are the true kinematics of the joint, PGT is the ground
+vided coordinate r𝑑 . For a newly attached or moved device, we use         truth pose, z 𝑗 is the representation obtained from the mesh IMU,
+its coordinates to query the table and retrieve 24 loss values, and        zref is the reference representation obtained from joint virtual IMU,
+update the assignment accordingly. Note that this module is only           and zbuffer is the buffered representations initially filled with the
+used during test time.                                                     joint virtual IMU representations while gradually replaced by the
+                                                                           mesh IMU representations, and 𝜆kinematic, 𝜆pose, 𝜆align are hyperpa-
+                                                                           rameters for weighing the losses.
+3.3     Training Process
+As mentioned in the introduction, the absence of a dedicated dataset       3.3.3 Training Setup. Training such a model consumes a large
+for IMU data on continuous body coordinates presents a technical           dataset, and we designed a training scheme to minimize the com-
+challenge. We introduce an approach to synthesizing virtual IMU            puting resources needed. Our training process is split into two
+data across the entire body mesh, expanding beyond the joint-only          phases. In phase one, we train the IMUCoCo model only with the
+IMUCoCo: Enabling Flexible On-Body IMU Placement ...                                   UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea
+
+
+24 joint virtual IMUs using kinematic loss and pose loss until con-
+vergence. In phase two, with the warmed-up model, we sampled
+mesh IMUs and trained them with kinematic and pose loss while
+aligning them to joint IMUs. A more detailed procedure is illustrated
+in Appendix A.2. Overall, we trained our model on one L40S GPU,
+which has 48GB CUDA VRAM, for 200 hours, including 90 hours
+of training in the joint-only phase and 110 hours of training in the
+end-to-end phase. While training IMUCoCo is relatively prolonged,
+mainly due to the need to consume a large number of samples on
+the human body surface, this model is still very lightweight with
+only 23M parameters and feasible for inference without excessive
+computing.
+
+3.4    Applying IMUCoCo to Downstream Tasks
+The features extracted from IMUCoCo enable the downstream
+model, such as a pose estimation model, to process without wor-
+rying about the number or locations of IMU devices. To train a
+downstream task, one can freeze the IMUCoCo model and feed
+                                                                        Figure 5: Illustration of the dense IMU placement configura-
+the IMU data from the devices existing in this dataset for the task.
+                                                                        tions used in Evaluation #1 shown on a right-handed person.
+During training, each provided IMU went through the placement
+                                                                        We started with the standard 3 IMU placement (wrist, thigh,
+adaptation process and was matched to the joint node to produce
+                                                                        ear) to mimic the most popular consumer devices [28]. Addi-
+the extracted representations. For our paper, we explored pose
+                                                                        tionally, we placed a dense set of IMUs on one of the three
+estimation and activity recognition as our downstream tasks.
+                                                                        body sections (arm, leg, or torso). On the arm, we chose the
+   For pose estimation, we mainly adopt the DynaIP [58] archi-
+                                                                        shoulder, the middle of the upper arm, the upper arm just
+tecture, as a state-of-the-art pose estimation model using 6-IMU
+                                                                        above the elbow, the forearm just below the elbow, and the
+inputs. As DynaIP itself does not give translation estimation, we
+                                                                        hand. On the leg, we chose the upper thigh, lower thigh, shin,
+adopt the translation estimation module from TransPose [52]. We
+                                                                        ankle, and foot. On the torso, we chose the neck, upper chest,
+use the abbreviation DTP (DynaIP with TransPose) to denote this
+                                                                        lower chest, upper abdomen, and waist. For a left-handed
+pose estimation model. For convenience of presentation, in the
+                                                                        person, the placements were mirrored accordingly.
+evaluation section, we use IMUCoCo to refer to IMUCoCo + DTP
+in the context of pose estimation. We then trained a pose estimator
+using the conventional 6 IMUs (pelvis, head, left lower arm, right      For Evaluation #1, we used our newly collected custom dataset to
+lower arm, left lower leg, right lower leg) from AMASS, DIP-IMU,        assess performance in body pose tracking and activity recognition
+and XSens dataset [58].                                                 across sensor placements. For Evaluation #2, we utilized multiple
+   For activity recognition, we used a Spatial-Temporal Graph Con-      existing datasets to evaluate body pose tracking capabilities.
+volutional Neural Network (ST-GCN) targeted for skeleton-based
+activity recognition [50]. We then trained our activity recognition     4.2    Evaluation #1: Motion Sensing at Atypical
+model using the 3 IMUs (wrist, pocket, ear) using custom datasets              Locations
+that we collected ourselves. For convenience of presentation, in
+                                                                        4.2.1 Data Collection. Due to the absence of datasets with dense
+the evaluation section, we use IMUCoCo to refer to IMUCoCo +
+                                                                        IMU placement, we collected our own custom dataset to understand
+ST-GCN in the context of activity recognition. Both models are
+                                                                        IMUCoCo’s performance at fine-grained placement variations. We
+trained when freezing the IMUCoCo model and only using the IMU
+                                                                        utilized 8 Apple Watches (Series 7 or newer) with a custom data
+data at the different locations provided in the dataset. We conducted
+                                                                        collection application that we implemented to record IMU data
+separate ablation experiments that verified that the improved per-
+                                                                        at 50 Hz. We collected motion capture data using the OptiTrack
+formance is attributable to IMUCoCo rather than the downstream
+                                                                        system.
+models.
+                                                                           We recruited 12 participants from our institution (8 males, 4
+                                                                        females; age range 23-33; 1 left-handed, 11 right-handed) and col-
+4 Evaluation                                                            lected their motion capture data. Participants wore a mocap suit
+4.1 Evaluation Overview                                                 with optical markers, followed by skeleton calibration in the Opti-
+                                                                        Track system. The participants also wore watches at three typical
+We conducted two studies to evaluate the following hypotheses:
+                                                                        locations (ear, wrist, and pocket). Additionally, we placed five more
+   (1) IMUCoCo achieves consistent body motion sensing perfor-          devices on one of the three dense placement configurations: arm,
+       mance when IMUs are placed at atypical locations.                leg, and torso, as illustrated in Figure 5. Participants then performed
+   (2) IMUCoCo delivers comparable body motion sensing perfor-          jumps to align timestamps across all IMU devices. For each place-
+       mance to existing systems when IMUs are placed at typical        ment configuration, participants performed a set of predefined ac-
+       locations.                                                       tivities inspired by previous research [17], designed to encompass
+UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea                                                                                       Zhou et al.
+
+
+
+
+                                                           (a)                                                                         (b)
+
+Figure 6: (a) Pose tracking Global Angular Error (GAE) is measured at different sensor placements, averaged over all activities.
+IMUCoCo achieves lower error than the state-of-the-art [48] when IMUs are placed at typical positions (bar graph on the right
+in (a)). A similar effect is seen at all atypical positions (i.e., bars on the left). Error bars show standard deviation. (b) The same
+effect was seen for cumulative translation error using different sensor placements for the lower body. IMUCoCo achieves
+consistently lower translation error than MobilePoser over time. The effect remains the same as the participant changes the
+device location along their leg.
+
+
+diverse body movements: walking, running, vacuuming, watching                             along the arm, leg, and torso regions. In particular, we observed only
+television, drinking water, table cleaning, golf swing, shot put, and                     slight variation as the IMU is repositioned along the arm. Slightly
+squats. Before each activity, the participants performed a T-pose                         higher errors appear when the ear sensor is moved to the lower
+for calibration purposes [52], with each activity lasting 30 seconds.                     chest. We attribute this mainly to the flexibility of clothing, where
+Participants rested between placement configurations as needed,                           the physical IMU often folds or shifts together with the fabric, in-
+and the entire data collection process required approximately one                         troducing additional motion artifacts that are not representative of
+hour per participant. All activities were video-recorded with times-                      true body movement. In addition, IMUCoCo demonstrated superior
+tamps for subsequent annotation. Following data collection, we                            performance (GAE = 27.6°) in pose estimation than MobilePoser [48]
+extracted the OptiTrack body pose data, synchronized it with all                          (GAE = 31.8°) (𝑝 < .001). Similarly, IMUCoCo showed resistance in
+IMU sensor readings, and annotated the dataset with activity labels.                      translation estimation as the user moves the leg IMU from thigh
+Overall, our collected dataset consists of 3 hours of body motion                         pockets to other areas across the leg, as shown in Figure 6b. It is im-
+data in total. All studies are approved by our institution’s IRB.                         portant to note here that, unlike MobilePoser, IMUCoCo or DTP are
+                                                                                          not specifically trained or fine-tuned with the IMU at these locations
+4.2.2 Body Pose Tracking. We first evaluated the body pose track-                         (wrist, thigh pocket, ear), and thus even the standard placement
+ing performance of IMUCoCo by comparing different sensor place-                           relies on IMUCoCo’s capability to transfer input IMU signals to the
+ments, specifically examining how error metrics vary as the IMU                           DTP model that were trained using the 6-IMU configuration.
+sensor is progressively moved along a body part (i.e., arm, leg, or                          We then measured the pose estimation performance from IMU-
+torso). Consistent with prior research [46], we employ Global An-                         CoCo using standard placement (wrist, thigh pocket, ear) to the
+gular Error (GAE) 1 that serves as our primary metric for pose                            optimal placement for each type of activity. Figure 7 summarizes
+estimation quality, which quantifies the rotational discrepancy be-                       the result. We see that selecting the best placement for IMUCoCo
+tween the ground truth and the reconstructed global segment ori-                          enables greater tracking performance (GAE = 24.8°) compared to
+entations. It is important to note that state-of-the-art systems, such                    the standard location (GAE = 27.6°) (𝑝 < .001). For some specific
+as MobilePoser [48], do not support IMUs positioned at unconven-                          activities, changing the placement appears to have more impact on
+tional locations. Therefore, to keep the comparison fair, we compare                      the pose estimation accuracy. For instance, golf swings are better
+IMUCoCo and previous work for sensors placed in standard loca-                            captured by moving the IMU from the wrist to below the elbow
+tions. For atypical positions, we compare the performance within                          (or the forearm). For computer work, moving the IMU from the
+IMUCoCo’s output.                                                                         thigh pocket to the ankle produces less error (GAE=22.8°) than the
+   These comparisons are summarized in Figure 6a. Overall, IMU-                           standard location of keeping the sensor in the pocket (GAE=30.9°).
+CoCo showed consistency in performance as the IMU device moves                            We examined the inferred pose difference and observed that the
+1We followed the procedure with DiffusionPoser [46], where we ignored root, wrists,       primary difference is the angle of the hip with respect to the ground
+fingers, and toes joints and excluded them from averaging the final error calculations.   when sitting. We consider that this difference arises mainly due to
+For this, our reported error values may appear greater than their originally reported     the more rigid nature of the lower leg clothing and bones, compared
+ones.
+IMUCoCo: Enabling Flexible On-Body IMU Placement ...                                                                                          UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea
+
+
+
+                                                                                                                                                                                        MobilePoser Standard Placement
+                                                                                                                                                                                        IMUCoCo Standard Placement
+                             50                                                                                                                                                         IMUCoCo Optimal Placement
+Global Angular Error (deg)
+
+
+
+
+                             40
+
+                             30
+
+
+
+
+                                                                                                                              upper abdomen
+                             20
+
+
+
+
+                                                                                  below elbow
+
+
+                                                                                                        below elbow
+
+
+
+
+                                                                                                                                                    below elbow
+
+
+                                                                                                                                                                          upper thigh
+
+
+                                                                                                                                                                                                   upper thigh
+                             10
+                                                     ankle
+                                         neck
+
+
+
+
+                                                                      neck
+
+
+
+
+                                                                                                                                                                                                                          shin
+                              0
+                                          ing          er          ing         lf                    ing                        ut                    s                                            ing                         TV
+                                        n            ut          nk          Go                    nn                         P                   uat                cuum                     lk
+                                   le a           mp         Dri                                Ru                        hot                 S q                 Va                       Wa                         chi
+                                                                                                                                                                                                                          ng
+                                  C             Co                                                                      S                                                                                          t
+                                                                                                                                                                                                                 Wa
+
+Figure 7: Comparison of Global Angular Error (GAE) when the sensor is placed at Standard Placements (wrist, pocket, ear) and
+when one of the three sensors is moved to an optimal location. For example, for the Golf activity, the model generates a better
+pose (i.e., lower error) when the IMU on the wrist is moved below the elbow. The Figure also shows MobilePoser’s GAE for the
+standard placement. Error bars show standard deviation.
+
+
+                                                                                                                         We also evaluated the pose estimation results with different sen-
+                                                                                                                      sor placements in more detail to understand the sources of errors.
+                                                                                                                      Consistent with our hypothesis, IMUCoCo effectively adapts the
+                                                                                                                      sensor based on its placement coordinate, and renders the pose
+                                                                                                                      reasonably based on the sensor placement. Figure 8 shows an exam-
+                                                                                                                      ple motion of sweeping to clean a table, which primarily involves
+                                                                                                                      arm movements while leaning forward. As the IMU is repositioned
+                                                                                                                      from the wrist to the upper arm (below the shoulder), IMUCoCo
+                                                                                                                      can adapt the signal and accurately infer the upper arm motion. We
+                                                                                                                      attempted to retrieve the pose estimation from MobilePoser [48],
+                                                                                                                      which is not designed to take IMU input from the upper arm. As
+                                                                                                                      expected, the state-of-the-art that is not designed to adapt to new
+                                                                                                                      sensor placements did not render the pose accurately. It is impor-
+                                                                                                                      tant to note that IMUCoCo still lacks sensor input from the lower
+                                                                                                                      arm and can only provide its best prediction by naturally extend-
+                                                                                                                      ing the lower arm. In this case, some error in lower arm tracking
+                                                                                                                      is anticipated. Based on these observations, we conclude that un-
+Figure 8: A demonstration of pose estimation when the sen-                                                            derstanding tracking confidence for all body parts, given specific
+sor on the arm is moved, i.e., from the wrist (top row) to just                                                       sensor placements, and controlling the level of model hallucination
+below the shoulder (bottom row). When the user performs a                                                             is essential for critical applications.
+sweeping motion (ground truth), IMUCoCo is able to adapt
+to the new IMU placement and infer the upper arm motion                                                               4.2.3 Body Activity Recognition. We divided our 12 participants
+accurately (bottom row, third column). MobilePoser still as-                                                          into six groups of 2 and performed a 6-fold cross-validation to exam-
+sumes the input was at the wrist and incorrectly only slightly                                                        ine the activity recognition performance of our approach. Figure 9
+raises the forearm (bottom row, fourth column).                                                                       summarizes the results of the averaged macro F1-score from 6-fold
+                                                                                                                      cross validation. Overall, using the three standard placements, IMU-
+                                                                                                                      CoCo achieves 73.7 in macro F1 score. We then tested performance
+to the IMU in the upper thigh pocket, which introduces additional                                                     by repositioning the wrist IMU at other locations along the arm.
+flexibility when sitting. Thus, if a user wants to better capture a                                                   As shown in Figure 9, relocation of the IMU to the hand or lower
+specific type of posture, IMUCoCo can recommend and support                                                           arm (below the elbow) has minimal impact on overall performance,
+optimal sensor placement.                                                                                             while relocation to the upper arm decreases activity recognition
+UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea                                                                           Zhou et al.
+
+
+                                                                               Table 2: Comparison of Global Angular Error (GAE) between
+                                                                               IMUCoCo + DTP and DiffusionPoser under different test
+                                                                               placements using the TotalCapture dataset. Lower is better.
+                                                                               (P = pelvis; H = head; RLA = right lower arm; LLA = left lower arm;
+                                                                               RLL = right lower leg; LLL = left lower leg)
+
+
+                                                                                Test Placement                  IMUCoCo       DiffusionPoser [46]
+                                                                                All 6 IMUs                         14.0                 14.4
+                                                                                P+H+RLA+LLA+RLL                    15.7                 19.4
+                                                                                P+H+RLL+LLL                        21.8                 24.9
+                                                                                P+RLL+LLL                          23.8                 36.4
+Figure 9: Activity recognition results in macro F1-score across                 RLL+LLL                            26.6                 39.2
+10 activities with 6-fold cross validation on our custom                        H                                  32.0                 39.2
+dataset when placing the arm IMU at different locations.
+Higher is better. Error bars show standard deviation.
+                                                                               different facing directions. This normalization approach is used in
+Table 1: Comparison of pose estimation approaches using the                    several prior works, such as PNP [53], DynaIP [58], PIP [51], and
+conventional 6 IMUs (pelvis, head, left wrist, right wrist, left               Transpose [52]. For Diffusion Poser [46], IMUPoser [28], Mobile-
+shank, right shank) on TotalCapture dataset. Lower Global                      Poser [48], and our work, we can only use the global frame IMU
+Angular Error (GAE) is better.                                                 measurements as these use cases do not always have a pelvis IMU.
+                                                                               4.3.2 Body Pose Tracking from Flexible IMUs. Next, we examined
+  Method                      Compatible Placement                 GAE (deg)   the performance of IMUCoCo using a flexible combination from a
+                                                                               set of sensor locations. DiffusionPoser [46] employs a generative
+  Transpose [52]                      Fixed 6                        16.1
+                                                                               diffusion process to infer the missing sensor and pose features and
+  PIP [51]                            Fixed 6                        14.4
+                                                                               supports IMU placement from at most 13 possible locations. To
+  PNP [53]                            Fixed 6                        10.4
+                                                                               the best of our knowledge, DiffusionPoser is currently the most
+  DiffusionPoser [46]             Select From 13                     14.4
+                                                                               flexible IMU-based full-body pose method. Table 2 summarizes
+  IMUCoCo                       Anywhere on Body                     14.0
+                                                                               the comparison result using 6, 5, 3, 2, and 1 IMU sensors on the
+                                                                               TotalCapture dataset. IMUCoCo performs better on all the listed
+                                                                               sensor combinations than DiffusionPoser [46].
+
+accuracy. This decrease is reasonable, as fine-grained hand or lower           4.4    Ablation Analysis
+arm motions cannot be directly captured from an upper arm place-
+                                                                               In this section, we provide a more detailed analysis of the indi-
+ment, but must instead be inferred by the model, naturally creating
+                                                                               vidual components of the IMUCoCo system and its application
+additional challenges for activity recognition.
+                                                                               performance. The evaluation is conducted on both the benchmark
+                                                                               dataset and our custom datasets. We first implemented DTP as our
+4.3     Evaluation #2: Motion Sensing at Typical                               pose estimation model using the same configuration in the experi-
+        Locations Using Existing Datasets                                      ment (Section 3.4), but without using IMUCoCo at all, denoted as
+4.3.1 Body Pose Tracking from 6 IMUs. We systematically analyzed               w/o IMUCoCo. To ensure the model has the same dimension and
+the performance of IMUCoCo in tracking body poses with state-                  depth, we mapped the original IMU inputs using 24 different linear
+of-the-art models using the TotalCapture dataset [41] for ease of              projections so that it shared the same dimensions as the extracted
+comparison with previous work. Following Wouwe et al. [46], we                 features from IMUCoCo. We hypothesize that while these mod-
+evaluated using all six real IMU sensors placed in the pelvis, head,           els should still provide reasonable performance on the benchmark
+wrists, and shanks, and also subsets of them. In this section, we use          datasets with the same 6-IMU configurations, they will generalize
+different terminology for sensor locations to remain consistent with           poorly to new sensor locations in our custom dataset.
+the datasets used. In consistency with previous work [46, 51–53],                 Then, we specifically tested the detailed designs of the IMUCoCo
+we used TotalCapture only for testing and excluded it from our                 model by evaluating the impact of the sensor coordinate informa-
+training data set at all stages.                                               tion. For this testing, we drop the sensor coordinate information by
+   The comparison using the conventional 6 IMUs (pelvis, head,                 always setting it to zero; we name this approach IMUCoCo w/o Sen-
+left wrist, right wrist, left shank, right shank) on the TotalCapture          sor Coordinates or w/o SC. In this test, each joint node will transfer
+datasets is summarized in Table 1. Overall, IMUCoCo with DTP                   the matched IMU signal, but without knowing where exactly the
+still achieves reasonable performance, even when compared with                 sensor comes from.
+pose estimation models specifically designed for 6-IMU setups. We                 Regardless of the models used in the ablation analysis, the input
+believe that the 6-IMU configuration offers a unique advantage for             dimensions were still allocated the same using the IMUCoCo’s
+estimating pose, as it converts all the leaf IMU to be relative to             transfer loss map based on the spatial location of the provided real
+the pelvis IMU, which eliminates the signal variation caused by                IMU sensors, as otherwise, the downstream model will have no
+IMUCoCo: Enabling Flexible On-Body IMU Placement ...                                    UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea
+
+
+Table 3: Ablation analysis of IMUCoCo for pose estimation                 5   Application Scenarios
+measured in Global Angular Error (GAE) on TotalCapture
+datasets. Lower is better. (P = pelvis; H = head; RLA = right lower       IMUCoCo allows users to put their devices with IMUs anywhere
+arm; LLA = left lower arm; RLL = right lower leg; LLL = left lower        they prefer. This capability opens up a wide variety of novel appli-
+leg)                                                                      cations (e.g., Figure 1).
+                                                                              IMUCoCo allows end-users to utilize the myriad of smart devices
+                                                                          they may have that are equipped with an IMU. Prior work has fo-
+ Test Placement             IMUCoCo         w/o IMUCoCo     w/o SC
+                                                                          cused on enabling motion and pose sensing from the most common
+ All 6 IMUs                     14.0               16.6       26.8        devices. We support the user to use the device they have or need.
+ P+H+RLA+LLA+RLL                15.7               18.1       26.5        For example, runners typically do not like to keep their phones in
+ P+H+RLL+LLL                    21.9               33.8       27.2        their pants pockets. We enable them to track their running form,
+ P+RLL+LLL                      23.8               35.7       27.9        if they like, from an armband placement. Similarly, if a user has a
+ RLL+LLL                        26.7               42.9       35.0        necklace or smart innerwear, which sometimes has an IMU built
+ H                              32.0               43.5       37.2        into the waistband, we do not need to retrain a model that is tuned
+                                                                          to estimate torso movements from the ear.
+                                                                              IMUCoCo adapts to shifts in sensor placement that may occur
+Table 4: Ablation analysis of IMUCoCo for pose estimation                 throughout the day. For example, a user might prefer to keep their
+measured in Global Angular Error (GAE) on our custom                      phone in different pockets throughout the day or in various ac-
+datasets. Lower is better. The arrow indicates moving one                 tivities. As this user moves their phone from their pant pocket to
+standard placement (wrist, thigh, and ear) to another place-              their sweatshirt’s kangaroo pocket to their pants’ back pocket to
+ment.                                                                     the forearm pocket in their ski jacket, IMUCoCo adapts to these
+                                                                          changing placements and provides accurate pose and activity esti-
+ Test Placement             IMUCoCo         w/o IMUCoCo     w/o SC        mates for those specific activities. As long as IMUCoCo is aware of
+ wrist, pocket, ear             27.6               43.4       35.0        the active sensor’s location, it can adjust to these changes without
+ wrist → arm                    28.6               43.5       34.9        the need for switching models. This flexibility in changing device
+ pocket → leg                   29.3               42.0       36.2        locations dynamically supports adaptive sensing, aligning with the
+ ear → torso                    29.1               42.9       35.2        variable contexts of daily activities.
+                                                                              Moreover, IMUCoCo also supports changing or suggesting place-
+                                                                          ments to meet the user’s specific needs. Khurana et al. [20]proposed
+                                                                          a detachable smartwatch that can be placed on different parts of the
+information on where to take the input of various IMU sensors to          body depending on the end need. IMUCoCo can now support such
+produce a meaningful comparison.                                          scenarios with accurate motion sensing. For example, a person with
+   Table 3 shows the GAE on the approaches above for pose esti-           two IMU devices can record their footwork when playing soccer by
+mation on the TotalCapture dataset. In comparison with DTP w/o            attaching them to two thigh pockets (See Figure 1C). If the user’s
+IMUCoCo, which is specifically trained only using the 6-IMU con-          focus then shifts to upper-body posture, the user can move the
+figuration as used for this dataset, IMUCoCo still achieves better        sensor to their chest or arms. Or, if the user wants to track their
+performance. We attribute this improvement to the known IMUs,             squat form more accurately, we can recommend an optimal place-
+primarily to the architecture of IMUCoCo, which not only enables          ment for the watch (perhaps wear it as an anklet) and help the user
+flexibility in testing, but its scalable architecture during the pre-     ensure that their knees do not go beyond their toes. Throughout
+training phase allows utilizing the information from rich augmented       these adjustments, IMUCoCo consistently provides tracking and
+mesh IMU signals, which helps to learn a more robust motion fea-          analysis without the need to switch or retrain models. No doubt,
+ture representation. Comparing w/o SC to w/o IMUCoCo, we found            the placement recommendations will need to take into account the
+a significant degradation of performance if using IMUCoCo without         user’s device form factor and available adapters/straps.
+providing the correct IMU device coordinate. In this case, the joint
+node module in IMUCoCo confuses how to transfer the provided
+signal correctly. This also verifies that IMUCoCo has learned to
+adapt based on the sensor coordinate of IMU devices.                      6   Limitations and Future Work
+   Table 4 presents GAE for different IMU placement configurations        The current implementation of IMUCoCo is not without limitations.
+on our custom dataset, where each row corresponds to a variant of         First, the current synthetic IMU data generation method is based
+the standard 3-IMU setting (wrist, thigh pocket, ear) with one IMU        on the assumption of a rigid human body. However, in practical
+repositioned at each time. The model trained without IMUCoCo              scenarios, IMU devices are often attached to clothing, which intro-
+fails immediately across all configurations, as it cannot generalize to   duces variability due to the flexibility and movement of the fabric.
+these unseen or altered IMU placements from its training. Note that       This discrepancy between the synthetic data and real-world data
+this model is trained using the 6-IMU combinations, rather than the       results in inaccuracies in the signals, as the synthetic model does
+wrist, thigh pocket, and ear. The version without sensor coordinate       not account for the flux caused by clothing. Future work should
+(w/o SC) still shows significant degradation in comparison with           continue refining the synthesis process to include models that simu-
+IMUCoCo, confirming that IMUCoCo utilizes the sensor coordinate           late the impact of clothing [59] and other factors such as contacting
+information to adapt accurately to the input IMU signals.                 objects. Enhancing the realism of synthetic datasets will improve
+UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea                                                                                      Zhou et al.
+
+
+the robustness and applicability of the system across more realistic     References
+human activity scenarios.                                                 [1] Rebecca Adaimi, Abdelkareem Bedri, Jun Gong, Richard Kang, Joanna Arreaza-
+   Secondly, it is challenging to accurately estimate full-body move-         Taylor, Gerri-Michelle Pascual, Michael Ralph, and Gierad Laput. 2024. Advancing
+                                                                              Location-Invariant and Device-Agnostic Motion Activity Recognition on Wear-
+ments from sparse sensors placed at any location, especially when             able Devices. CoRR abs/2402.03714 (2024). https://doi.org/10.48550/ARXIV.2402.
+the point of interest is far from the sensor. When the placement is           03714
+                                                                          [2] Karan Ahuja, Sven Mayer, Mayank Goel, and Chris Harrison. 2021. Pose-on-
+not ideal for an application, IMUCoCo will still produce its estimate         the-Go: Approximating User Pose with Smartphone Sensor Fusion and Inverse
+but with higher errors. The model outputs can involve hallucina-              Kinematics. In CHI Conference on Human Factors in Computing Systems. ACM,
+tions, relying on learned correlations within the training data rather        Yokohama, Japan, 9:1–9:12. https://doi.org/10.1145/3411764.3445582
+                                                                          [3] Riku Arakawa, Karan Ahuja, Kristie Mak, Gwendolyn Thompson, Sam Shaaban,
+than on direct observations. This approach may suffice for certain            Oliver Lindhiem, and Mayank Goel. 2023. LemurDx: Using Unconstrained Passive
+applications, but it falls short when precise and reliable full-body          Sensing for an Objective Measurement of Hyperactivity in Children with no
+tracking is required. Future improvements should aim to increase              Parent Input. Proc. ACM Interact. Mob. Wearable Ubiquitous Technol. 7, 2 (2023),
+                                                                              46:1–46:23. https://doi.org/10.1145/3596244
+the transparency of model predictions by visualizing which body           [4] Riku Arakawa, Hiromu Yakura, Vimal Mollyn, Suzanne Nie, Emma Russell,
+parts IMUCoCo estimates with confidence and which parts are less              Dustin P. DeMeo, Haarika A. Reddy, Alexander K. Maytin, Bryan T. Carroll,
+                                                                              Jill Fain Lehman, and Mayank Goel. 2022. PrISM-Tracker: A Framework for
+accurately represented. This enhancement will provide users with              Multimodal Procedure Tracking Using Wearable Sensors and State Transition
+a clearer understanding of the model’s capabilities and limitations,          Information with User-Driven Handling of Errors and Uncertainty. Proc. ACM
+facilitating a more informed application of the technology in com-            Interact. Mob. Wearable Ubiquitous Technol. 6, 4 (2022), 156:1–156:27. https:
+                                                                              //doi.org/10.1145/3569504
+plex scenarios. Moreover, it is crucial to understand what potential      [5] Riku Arakawa, Bing Zhou, Gurunandan Krishnan, Mayank Goel, and Shree K.
+placement might be preferable by users and by applications. Such              Nayar. 2023. MI-Poser: Human Body Pose Tracking Using Magnetic and Inertial
+consideration extends beyond optimizing performance to include                Sensor Fusion with Metal Interference Mitigation. Proc. ACM Interact. Mob.
+                                                                              Wearable Ubiquitous Technol. 7, 3 (2023), 85:1–85:24. https://doi.org/10.1145/
+factors such as comfort and the stability of device attachment.               3610891
+   Finally, future work shall consider further simplifying the speci-     [6] Sara Ashry, Tetsuji Ogawa, and Walid Gomaa. 2020. CHARM-Deep: Continuous
+                                                                              Human Activity Recognition Model Based on Deep Neural Network Using IMU
+fication of the on-body IMU placement by exploring an intuitive               Sensors of Smartwatch. IEEE Sensors Journal 20, 15 (Aug. 2020), 8757–8770.
+interface or calibration step. For instance, Sztyler and Stucken-             https://doi.org/10.1109/jsen.2020.2985374
+schmidt [39] have proposed a method to recognize the on-body              [7] Andreas Bulling, Ulf Blanke, and Bernt Schiele. 2014. A tutorial on human activity
+                                                                              recognition using body-worn inertial sensors. ACM Comput. Surv. 46, 3 (2014),
+location of each device from IMU signals. In addition, using a ded-           33:1–33:33. https://doi.org/10.1145/2499621
+icated network or sensing technology to identify the location of          [8] Ricardo Chavarriaga, Hesam Sagha, Alberto Calatroni, Sundara Tejaswi Digu-
+the device might also be possible. These developments would lower             marti, Gerhard Tröster, José del R. Millán, and Daniel Roggen. 2013. The
+                                                                              Opportunity challenge: A benchmark database for on-body sensor-based ac-
+the barriers for configuring IMUCoCo and support the application              tivity recognition. Pattern Recognit. Lett. 34, 15 (2013), 2033–2042. https:
+scenarios we discussed above.                                                 //doi.org/10.1016/J.PATREC.2012.12.014
+                                                                          [9] David Dobbelstein, Philipp Hock, and Enrico Rukzio. 2015. Belt: An Unobtrusive
+                                                                              Touch Input Device for Head-worn Displays. In CHI Conference on Human Factors
+                                                                              in Computing Systems. ACM, Seoul, South Korea, 2135–2138. https://doi.org/10.
+7    Conclusion                                                               1145/2702123.2702450
+                                                                         [10] Yang Gao, Wenbo Zhang, Junbin Ren, Ruihao Zheng, Yingcheng Jin, Di Wu, Lin
+The integration of IMUs into consumer devices has significantly               Shu, Xiangmin Xu, and Zhanpeng Jin. 2024. PressInPose: Integrating Pressure
+advanced the field of human motion and pose estimation. Our eval-             and Inertial Sensors for Full-Body Pose Estimation in Activities. Proc. ACM
+uations demonstrated that IMUCoCo can effectively utilize IMUs                Interact. Mob. Wearable Ubiquitous Technol. 8, 4 (2024), 197:1–197:28. https:
+                                                                              //doi.org/10.1145/3699773
+placed at flexible locations on the body by projecting their signals     [11] Jack H Geissinger and Alan T Asbeck. 2020. Motion inference using sparse
+onto a placement-adaptive representation, which can be adjusted               inertial sensors, self-supervised learning, and a new dataset of unscripted human
+                                                                              motion. Sensors 20, 21 (2020), 6330.
+for downstream tasks such as pose tracking and activity recog-           [12] Francine Gemperle, Chris Kasabach, John Stivoric, Malcolm Bauer, and Richard
+nition. IMUCoCo offers numerous advantages that enhance the                   Martin. 1998. Design for Wearability. In Second International Symposium on
+practicality of on-body motion sensing: it accommodates devices               Wearable Computers. IEEE Computer Society, Pittsburgh, PA, USA, 116–122.
+                                                                              https://doi.org/10.1109/ISWC.1998.729537
+at unconventional locations, allows for the seamless movement            [13] Mattia Guidolin, Emanuele Menegatti, and Monica Reggiani. 2022. Unipd-bpe:
+of devices throughout the day, and optimizes sensor placement                 Synchronized rgb-d and inertial data for multimodal body pose estimation and
+based on specific activities, all while using a single model without          tracking. Data 7, 6 (2022), 79.
+                                                                         [14] Halim Hicheur, Alexander V Terekhov, and Alain Berthoz. 2006. Intersegmental
+the need for retraining. We believe our approach enables a wide               coordination during human locomotion: does planar covariation of elevation
+range of practical applications, from personal fitness tracking to            angles reflect central constraints? Journal of Neurophysiology 96, 3 (2006), 1406–
+                                                                              1419.
+rehabilitation. More broadly, we hope our work encourages fur-           [15] Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J. Black, Otmar Hilliges,
+ther research in scaling up the development of IMU-based sensing              and Gerard Pons-Moll. 2018. Deep inertial poser: learning to reconstruct human
+models for human motion understanding.                                        pose from sparse inertial measurements in real time. ACM Trans. Graph. 37, 6
+                                                                              (2018), 185. https://doi.org/10.1145/3272127.3275108
+                                                                         [16] Takuya Isho, Hideyuki Tashiro, and Shigeru Usuda. 2015. Accelerometry-Based
+                                                                              Gait Characteristics Evaluated Using a Smartphone and Their Association with
+Acknowledgments                                                               Fall Risk in People with Chronic Stroke. Journal of Stroke and Cerebrovascular Dis-
+                                                                              eases 24, 6 (June 2015), 1305–1311. https://doi.org/10.1016/j.jstrokecerebrovasdis.
+This work was supported in part by the Center for Machine Learn-              2015.02.004
+ing and Health at CMU, Samsung, and Masason Foundation. We also          [17] Jeya Vikranth Jeyakumar, Liangzhen Lai, Naveen Suda, and Mani B. Srivastava.
+                                                                              2019. SenseHAR: a robust virtual activity sensor for smartphones and wearables.
+thank Vasco Xu, Karan Ahuja, and Vimal Mollyn for their valuable              In Proceedings of the 17th Conference on Embedded Networked Sensor Systems.
+advice and for sharing their implementations, and David Lindl-                ACM, New York, NY, USA, 15–28. https://doi.org/10.1145/3356250.3360032
+bauer and Yi Fei Cheng for their assistance with motion capture          [18] Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa Laich, Patrick Snape,
+                                                                              and Christian Holz. 2022. AvatarPoser: Articulated Full-Body Pose Tracking from
+equipment.
+IMUCoCo: Enabling Flexible On-Body IMU Placement ...                                                          UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea
+
+
+     Sparse Motion Sensing. In The European Conference on Computer Vision, Vol. 13665.      [39] Timo Sztyler and Heiner Stuckenschmidt. 2016. On-body localization of wearable
+     Springer, Tel Aviv, Israel, 443–460. https://doi.org/10.1007/978-3-031-20065-6_26           devices: An investigation of position-aware activity recognition. In 2016 IEEE
+[19] Haojian Jin, Jingxian Wang, Zhijian Yang, Swarun Kumar, and Jason I. Hong.                  International Conference on Pervasive Computing and Communications. IEEE
+     2018. RF-Wear: Towards Wearable Everyday Skeleton Tracking Using Passive                    Computer Society, Sydney, Australia, 1–9. https://doi.org/10.1109/PERCOM.
+     RFIDs. In Proceedings of the 2018 ACM International Joint Conference and 2018               2016.7456521
+     International Symposium on Pervasive and Ubiquitous Computing and Wearable             [40] Jiacheng Tian, Pan Zhou, Fangmin Sun, Tao Wang, and Hexiang Zhang. 2021.
+     Computers. ACM, Singapore, 369–372. https://doi.org/10.1145/3267305.3267567                 Wearable IMU-based Gym Exercise Recognition Using Data Fusion Methods.
+[20] Rushil Khurana, Mayank Goel, and Kent Lyons. 2019. Detachable smartwatch:                   In The Fifth International Conference on Biological Information and Biomedical
+     More than a wearable. Proceedings of the ACM on Interactive, Mobile, Wearable               Engineering. ACM, Hangzhou, China, 27:1–27:7. https://doi.org/10.1145/3469678.
+     and Ubiquitous Technologies 3, 2 (2019), 1–14.                                              3469705
+[21] Jennifer R. Kwapisz, Gary M. Weiss, and Samuel Moore. 2010. Activity recognition       [41] Matthew Trumble, Andrew Gilbert, Charles Malleson, Adrian Hilton, and John
+     using cell phone accelerometers. SIGKDD Explor. 12, 2 (2010), 74–82. https:                 Collomosse. 2017. Total capture: 3d human pose estimation fusing video and
+     //doi.org/10.1145/1964897.1964918                                                           inertial sensors. In Proceedings of 28th British Machine Vision Conference. BMVA
+[22] HyeokHyen Kwon, Catherine Tong, Harish Haresamudram, Yan Gao, Gregory D.                    Press, Cardiff, UK, 1–13.
+     Abowd, Nicholas D. Lane, and Thomas Plötz. 2020. IMUTube: Automatic Extrac-            [42] Timo von Marcard, Bodo Rosenhahn, Michael J. Black, and Gerard Pons-Moll.
+     tion of Virtual on-body Accelerometry from Video for Human Activity Recogni-                2017. Sparse Inertial Poser: Automatic 3D Human Pose Estimation from Sparse
+     tion. Proc. ACM Interact. Mob. Wearable Ubiquitous Technol. 4, 3 (2020), 87:1–87:29.        IMUs. Comput. Graph. Forum 36, 2 (2017), 349–360. https://doi.org/10.1111/CGF.
+     https://doi.org/10.1145/3411841                                                             13131
+[23] Matthew Loper, Naureen Mahmood, Javier Romero, Gerard Pons-Moll, and                   [43] Osamu Wada, Hiroshige Tateuchi, and Noriaki Ichihashi. 2014. The correlation
+     Michael J. Black. 2015. SMPL: a skinned multi-person linear model. ACM Trans.               between movement of the center of mass and the kinematics of the spine, pelvis,
+     Graph. 34, 6 (2015), 248:1–248:16. https://doi.org/10.1145/2816795.2818013                  and hip joints during body rotation. Gait & posture 39, 1 (2014), 60–64.
+[24] Naureen Mahmood, Nima Ghorbani, Nikolaus F. Troje, Gerard Pons-Moll, and               [44] Martin Weigel, Aditya Shekhar Nittala, Alex Olwal, and Jürgen Steimle. 2017.
+     Michael J. Black. 2019. AMASS: Archive of Motion Capture As Surface Shapes.                 SkinMarks: Enabling Interactions on Body Landmarks Using Conformal Skin
+     In 2019 IEEE/CVF International Conference on Computer Vision. IEEE, Seoul, South            Electronics. In CHI Conference on Human Factors in Computing Systems. ACM,
+     Korea, 5441–5450. https://doi.org/10.1109/ICCV.2019.00554                                   Denver, CO, USA, 3095–3105. https://doi.org/10.1145/3025453.3025704
+[25] Saif Mahmud, Ke Li, Guilin Hu, Hao Chen, Richard Jin, Ruidong Zhang, François          [45] Eric Whitmire, Farshid Salemi Parizi, and Shwetak N. Patel. 2019. Aura: Inside-out
+     Guimbretière, and Cheng Zhang. 2023. PoseSonic: 3D Upper Body Pose Es-                      Electromagnetic Controller Tracking. In Proceedings of the 17th Annual Inter-
+     timation Through Egocentric Acoustic Sensing on Smartglasses. Proc. ACM                     national Conference on Mobile Systems, Applications, and Services. ACM, Seoul,
+     Interact. Mob. Wearable Ubiquitous Technol. 7, 3 (2023), 111:1–111:28. https:               South Korea, 300–312. https://doi.org/10.1145/3307334.3326090
+     //doi.org/10.1145/3610895                                                              [46] Tom Van Wouwe, Seunghwan Lee, Antoine Falisse, Scott L. Delp, and C. Karen
+[26] Pauline Maurice, Adrien Malaisé, Clélie Amiot, Nicolas Paris, Guy-Junior Richard,           Liu. 2024. DiffusionPoser: Real-Time Human Motion Reconstruction From Ar-
+     Olivier Rochel, and Serena Ivaldi. 2019. Human movement and ergonomics: An                  bitrary Sparse Sensors Using Autoregressive Diffusion. In IEEE/CVF Conference
+     industry-oriented dataset for collaborative robotics. The International Journal of          on Computer Vision and Pattern Recognition. IEEE, Seattle, WA, USA, 2513–2523.
+     Robotics Research 38, 14 (2019), 1529–1537.                                                 https://doi.org/10.1109/CVPR52733.2024.00243
+[27] Ben Mildenhall, Pratul P Srinivasan, Matthew Tancik, Jonathan T Barron, Ravi           [47] Chengshuo Xia, Xinrui Fang, Riku Arakawa, and Yuta Sugiura. 2022. VoLearn: A
+     Ramamoorthi, and Ren Ng. 2021. Nerf: Representing scenes as neural radiance                 Cross-Modal Operable Motion-Learning System Combined with Virtual Avatar
+     fields for view synthesis. Commun. ACM 65, 1 (2021), 99–106.                                and Auditory Feedback. Proc. ACM Interact. Mob. Wearable Ubiquitous Technol. 6,
+[28] Vimal Mollyn, Riku Arakawa, Mayank Goel, Chris Harrison, and Karan Ahuja.                   2 (2022), 81:1–81:26. https://doi.org/10.1145/3534576
+     2023. IMUPoser: Full-Body Pose Estimation using IMUs in Phones, Watches,               [48] Vasco Xu, Chenfeng Gao, Henry Hoffmann, and Karan Ahuja. 2024. MobilePoser:
+     and Earbuds. In CHI Conference on Human Factors in Computing Systems. ACM,                  Real-Time Full-Body Pose Estimation and 3D Human Translation from IMUs in
+     Hamburg, Germany, 529:1–529:12. https://doi.org/10.1145/3544548.3581392                     Mobile Consumer Devices. In Proceedings of the 37th Annual ACM Symposium
+[29] Aurélie Mourot, Silke Girard, Frédéric Bevilacqua, Nicolas Szezepanski, Sophie              on User Interface Softwareand Technology. ACM, Pittsburgh, PA, USA, 70:1–70:11.
+     Dubuisson, Patrik Vuilleumier, and Donald Glowinski. 2024. Emokine: A kine-                 https://doi.org/10.1145/3654777.3676461
+     matic dataset and computational framework for scaling up the creation of highly        [49] Masataka Yamamoto, Koji Shimatani, Yuto Ishige, and Hiroshi Takemura. 2022.
+     controlled emotional full-body movement datasets. Behavior Research Methods                 Verification of gait analysis method fusing camera-based pose estimation and an
+     56 (2024), 7498–7542. https://doi.org/10.3758/s13428-024-02433-0                            IMU sensor in various gait conditions. Scientific Reports 12, 1 (Oct. 2022), 17719.
+[30] Philipp Niklas Müller, Alexander Josef Müller, Philipp Achenbach, and Stefan                https://doi.org/10.1038/s41598-022-22246-5
+     Göbel. 2024. IMU-Based Fitness Activity Recognition Using CNNs for Time Series         [50] Sijie Yan, Yuanjun Xiong, and Dahua Lin. 2018. Spatial temporal graph convo-
+     Classification. Sensors 24, 3 (2024), 742. https://doi.org/10.3390/S24030742                lutional networks for skeleton-based action recognition. In Proceedings of the
+[31] Manuel Palermo, Sara M Cerqueira, João André, António Pereira, and Cristina P               AAAI conference on artificial intelligence, Vol. 32. AAAI, New Orleans, LA, USA,
+     Santos. 2022. From raw measurements to human pose-a dataset with low-cost                   7444–7452.
+     and high-end inertial-magnetic sensor data. Scientific Data 9, 1 (2022), 591.          [51] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada, Vladislav Golyanik,
+[32] Farshid Salemi Parizi, Eric Whitmire, and Shwetak N. Patel. 2022. AuraRing:                 Christian Theobalt, and Feng Xu. 2022. Physical Inertial Poser (PIP): Physics-
+     precise electromagnetic finger tracking. Commun. ACM 65, 10 (2022), 85–92.                  aware Real-time Human Motion Tracking from Sparse Inertial Sensors. In
+     https://doi.org/10.1145/3556639                                                             IEEE/CVF Conference on Computer Vision and Pattern Recognition. IEEE, New
+[33] Ethan Perez, Florian Strub, Harm de Vries, Vincent Dumoulin, and Aaron                      Orleans, LA, USA, 13157–13168. https://doi.org/10.1109/CVPR52688.2022.01282
+     Courville. 2018. FiLM: visual reasoning with a general conditioning layer. In          [52] Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2021. TransPose: real-time 3D human
+     Proceedings of the AAAI conference on artificial intelligence, Vol. 32. AAAI, New           translation and pose estimation with six inertial sensors. ACM Trans. Graph. 40,
+     Orleans, Louisiana, USA, 3942–3951.                                                         4 (2021), 86:1–86:13. https://doi.org/10.1145/3450626.3459786
+[34] E. Ramanujam, Thinagaran Perumal, and S. Padmavathi. 2021. Human Activ-                [53] Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2024. Physical Non-inertial Poser (PNP):
+     ity Recognition With Smartphone and Wearable Sensors Using Deep Learning                    Modeling Non-inertial Effects in Sparse-inertial Human Motion Capture. In
+     Techniques: A Review. IEEE Sensors Journal 21, 12 (June 2021), 13029–13040.                 ACM SIGGRAPH 2024 Conference Papers. ACM, Denver, CO, USA, 50. https:
+     https://doi.org/10.1109/jsen.2021.3069927                                                   //doi.org/10.1145/3641519.3657436
+[35] Attila Reiss and Didier Stricker. 2012. Creating and benchmarking a new dataset        [54] Tianhong Catherine Yu, Riku Arakawa, James McCann, and Mayank Goel. 2023.
+     for physical activity monitoring. In The 5th International Conference on PErvasive          uKnit: A Position-Aware Reconfigurable Machine-Knitted Wearable for Gestural
+     Technologies Related to Assistive Environments, PETRA 2012, Fillia Makedon (Ed.).           Interaction and Passive Sensing using Electrical Impedance Tomography. In CHI
+     ACM, Heraklion, Crete, Greece, 40. https://doi.org/10.1145/2413097.2413148                  Conference on Human Factors in Computing Systems. ACM, Hamburg, Germany,
+[36] Vítor Fortes Rey, Sungho Suh, and Paul Lukowicz. 2022. Learning from the Best:              628:1–628:17. https://doi.org/10.1145/3544548.3580692
+     Contrastive Representations Learning Across Sensor Locations for Wearable              [55] Shibo Zhang, Yuqi Zhao, Dzung Tri Nguyen, Runsheng Xu, Sougata Sen, Josiah D.
+     Activity Recognition. In Proceedings of the 2022 ACM International Symposium on             Hester, and Nabil Alshurafa. 2020. NeckSense: A Multi-Sensor Necklace for
+     Wearable Computers. ACM, Cambridge, United Kingdom, 28–32. https://doi.org/                 Detecting Eating Activities in Free-Living Conditions. Proc. ACM Interact. Mob.
+     10.1145/3544794.3558464                                                                     Wearable Ubiquitous Technol. 4, 2 (2020), 72:1–72:26. https://doi.org/10.1145/
+[37] Takaaki Shiratori, Hyun Soo Park, Leonid Sigal, Yaser Sheikh, and Jessica K.                3397313
+     Hodgins. 2011. Motion capture from body-mounted cameras. ACM Trans. Graph.             [56] Ye Zhang, Longguang Wang, Huiling Chen, Aosheng Tian, Shilin Zhou, and Yulan
+     30, 4 (2011), 31. https://doi.org/10.1145/2010324.1964926                                   Guo. 2022. IF-ConvTransformer: A Framework for Human Activity Recognition
+[38] Yannick Strümpler, Janis Postels, Ren Yang, Luc Van Gool, and Federico Tombari.             Using IMU Fusion and ConvTransformer. Proc. ACM Interact. Mob. Wearable
+     2022. Implicit neural representations for image compression. In European Con-               Ubiquitous Technol. 6, 2 (2022), 88:1–88:26. https://doi.org/10.1145/3534584
+     ference on Computer Vision. Springer, Tel Aviv, Israel, 74–91.
+UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea                                                                                              Zhou et al.
+
+
+[57] Yu Zhang, Songpengcheng Xia, Lei Chu, Jiarui Yang, Qi Wu, and Ling Pei. 2024.         Conference on Computer Vision and Pattern Recognition. IEEE, Seattle, WA, USA,
+     Dynamic Inertial Poser (DynaIP): Part-Based Motion Dynamics Learning for              1889–1899. https://doi.org/10.1109/CVPR52733.2024.00185
+     Enhanced Human Pose Estimation with Sparse Inertial Sensors. In IEEE/CVF         [59] Chengxu Zuo, Yiming Wang, Lishuang Zhan, Shihui Guo, Xinyu Yi, Feng Xu,
+     Conference on Computer Vision and Pattern Recognition. IEEE, Seattle, WA, USA,        and Yipeng Qin. 2024. Loose Inertial Poser: Motion Capture with IMU-attached
+     1889–1899. https://doi.org/10.1109/CVPR52733.2024.00185                               Loose-Wear Jacket. In 2024 IEEE/CVF Conference on Computer Vision and Pat-
+[58] Yu Zhang, Songpengcheng Xia, Lei Chu, Jiarui Yang, Qi Wu, and Ling Pei. 2024.         tern Recognition. IEEE, Seattle, WA, USA, 2209–2219. https://doi.org/10.1109/
+     Dynamic Inertial Poser (DynaIP): Part-Based Motion Dynamics Learning for              CVPR52733.2024.00215
+     Enhanced Human Pose Estimation with Sparse Inertial Sensors. In 2024 IEEE/CVF
+IMUCoCo: Enabling Flexible On-Body IMU Placement ...                                    UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea
+
+
+                                                                         right wrist instead of the right elbow. For the leaf joint in the head,
+                                                                         hands, and feet, we created five additional vertices on the body on
+                                                                         the top of the head, fingertips, and toes to calculate acceleration,
+                                                                         velocity, and position.
+
+                                                                         A.2     Training Architecture and Procedure
+                                                                         Figure 10 shows the categorization 𝑘 by sensor coordinates. The
+                                                                         regions are partitioned by horizontal and vertical planes passing
+                                                                         through the joints at T-pose. Vertices in each of the categorized
+                                                                         regions often exhibit more similarities than those in distant region
+                                                                         categories. Together with frequency-based positional encoding of
+                                                                         the coordinates, the concatenated features are fed into the MLP
+                                                                         layers to derive placement codes.
+                                                                            Figure 11 shows the full architecture, including the auxiliary
+                                                                         components and mesh IMU sampling, during the training process.
+                                                                            We used a two-phase training procedure. In the first phase, we
+Figure 10: Illustration of categorizing body regions based on            warm up the model using joint IMUs. The advantage of this phase
+horizontal and vertical planes passing through the joints at             lies in the small size of the input (24 joint signals), but at the same
+T pose.                                                                  time, this input contains enough high-quality information that can
+                                                                         lead to an accurate description of the full-body motion. Therefore,
+A System Details                                                         this step allows the model to provide a warm start to all the modules,
+                                                                         especially to learn accurate KRs and PR that are used for supervision
+A.1 Virtual IMU Synthesis                                                in the next phase.
+For virtual mesh IMU, we synthesize the orientation based on faces.         In phase two, we extensively sample the full-body dense mesh
+Specifically, for each vertex on the human body mesh, we took the        virtual IMUs from the body surface. We freeze the KRs, as each
+face norm as all the faces connecting to this vertex and took the        sample is trained repeatedly on the 24 joint nodes; otherwise, the
+average norm vector of the faces as the 𝑦-axis. The 𝑦-axis then          KRs will overfit to this batch quickly. To focus on the regions that are
+always points outside the body surface and is perpendicular to the       physically plausible for transference, we apply a weighted stratified
+tangent plane of the body surface. 𝑧-axis is then determined by the      sampling scheme. We calculate a weight decay based on the number
+direction orthogonal to the plane formed by the bone direction and       of hops from the sampled point to each joint node, as well as the
+the face norm, and the 𝑥-axis is orthogonal to both 𝑦 and 𝑧-axis.        initial vertex density of the articulated pose model, so that fewer
+   We also synthesize IMU from the joints in addition to the vertices    hops lead to higher chances of being sampled. For each motion
+on the body surface to create a reference for IMUCoCo during             sequence, we first perform a forward pass using the 24 virtual joint
+training. To synthesize IMU and kinematics attributes for joints,        IMUs, and save this representation as a buffer. Next, for each joint
+we did not use the original joint positions. This is because the         node, we sample a large amount (384 points per motion sequence in
+original joint’s acceleration and orientation do not fall into the       our training) of mesh virtual IMUs for each joint node, and perform
+same distribution as an IMU attached to the surface. For example,        a forward pass. The inferred feature from this forward pass will
+the orientation at the right elbow joint is similar to the orientation   replace the corresponding joint feature from the buffer, and together,
+of an IMU attached to the lower arm, but its acceleration is more        pass through the full-body pose regression. The advantage of this
+similar to the acceleration of an IMU attached to the upper arm.         buffered approach is that gradient updates are applied to each joint
+Thus, we modified the locations to sample the acceleration, velocity,    node for each forward pass using the mesh virtual IMU, without the
+and position of the joint from its child joint while keeping the joint   need to save the gradient and wait until all 24 joint nodes finish their
+orientation from its own. For example, the joint node at the right       forward pass (for which our GPU does not have enough memory
+elbow will synthesize its acceleration from the right wrist, while       to execute). We then applied the kinematic loss to both the output
+keeping its own orientation at the right elbow. The coordinates          using the joint virtual IMU and the mesh virtual IMU, as well as
+of this joint node are defined by the root-centered position of the      the alignment loss between the two.
+UIST ’25, September 28-October 1, 2025, Busan, Republic of Korea                                          Zhou et al.
+
+
+
+
+                                        Figure 11: Overview of the IMUCoCo system during training time.
+

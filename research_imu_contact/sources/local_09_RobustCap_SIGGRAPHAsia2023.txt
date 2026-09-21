@@ -1,0 +1,625 @@
+                                        Fusing Monocular Images and Sparse IMU Signals for Real-time
+                                                          Human Motion Capture
+                                                        Shaohua Pan                                        Qi Ma                                    Xinyu Yi
+                                                shaohua-pan@outlook.com                        mq19@mails.tsinghua.edu.cn                yixy20@mails.tsinghua.edu.cn
+                                               School of software and BNRist,                 School of software and BNRist,             School of software and BNRist,
+                                                   Tsinghua University                            Tsinghua University                         Tsinghua University
+                                                           China                                          China                                      China
+
+                                                        Weifeng Hu                                     Xiong Wang                              Xingkang Zhou
+                                                   huweifeng@oppo.com                            wangxiong1@oppo.com                       zhouxingkang@oppo.com
+arXiv:2309.00310v1 [cs.CV] 1 Sep 2023
+
+
+
+
+                                                  OPPO Research Institute                        OPPO Research Institute                    OPPO Research Institute
+                                                          China                                         China                                       China
+                                                                                Jijunnan Li                                   Feng Xu
+                                                                           lijijunnan@oppo.com                         xufeng2003@gmail.com
+                                                                          OPPO Research Institute                   School of software and BNRist,
+                                                                                    China                                Tsinghua University
+                                                                                                                                China
+
+
+
+
+                                        Figure 1: Comparison with state-of-the-art vision-based method PARE [Kocabas et al. 2021] and IMU-based method TIP [Jiang
+                                        et al. 2022b]. Left (user in the camera view): PARE suffers occlusion and uniform texture, and TIP suffers pose ambiguity. Right
+                                        (user out of the camera view, gray region indicating the outside): PARE cannot see the user, and TIP suffers the drift artifact
+                                        (our method could use previous visible frames to reduce the drift).
+                                        ABSTRACT                                                                their own drawbacks in extreme input cases. Thus our method
+                                        Either RGB images or inertial signals have been used for the task of    can easily switch between the two kinds of signals or combine
+                                        motion capture (mocap), but combining them together is a new and        them in different cases to achieve a robust mocap. Quantitative
+                                        interesting topic. We believe that the combination is complementary     and qualitative results demonstrate that by delicately designing
+                                        and able to solve the inherent difficulties of using one modality       the fusion method, our technique significantly outperforms the
+                                        input, including occlusions, extreme lighting/texture, and out-of-      state-of-the-art vision, IMU, and combined methods on both global
+                                        view for visual mocap and global drifts for inertial mocap. To this     orientation and local pose estimation. Our codes are available for
+                                        end, we propose a method that fuses monocular images and sparse         research at https://shaohua-pan.github.io/robustcap-page/.
+                                        IMUs for real-time human motion capture. Our method contains
+                                        a dual coordinate strategy to fully explore the IMU signals with
+                                                                                                                1     INTRODUCTION
+                                        different goals in motion capture. To be specific, besides one branch
+                                        transforming the IMU signals to the camera coordinate system to         Human motion capture (mocap) is an important research topic in
+                                        combine with the image information, there is another branch to          computer vision and graphics and has many applications in virtual
+                                        learn from the IMU signals in the body root coordinate system to        reality, medical care, games, and animation. Traditional multi-view
+                                        better estimate body poses. Furthermore, a hidden state feedback        techniques achieve high accuracy and robustness, but they are
+                                        mechanism is proposed for both two branches to compensate for           heavy and expensive and thus difficult to be used by end users.
+                                                                                                                Recently, with the development of mobile sensing techniques, RGB
+                                                                 Shaohua Pan, Qi Ma, Xinyu Yi, Weifeng Hu, Xiong Wang, Xingkang Zhou, Jijunnan Li, and Feng Xu
+
+
+cameras and Inertial Measurement Units (IMUs) have been inte-                     Within the dual coordinate strategy, hidden state feedback is
+grated into daily devices like phones, smartwatches, and eyeglasses.           further proposed to enable information exchange between the two
+They can be easily accessed, and mocap with these sensors will                 coordinate systems. In either coordinate system, human motion
+have much broader applications.                                                is estimated independently based on the historical input signals
+    Human motion can be captured from a monocular camera or,                   through deep temporal modeling. As a result, the internal state
+alternatively, a sparse set of IMUs. The former [Kocabas et al. 2020,          in the coordinate system may deviate from the optimal state dur-
+2021; Kolotouros et al. 2019b; Sun et al. 2021] has become increas-            ing motion tracking. For example, due to error accumulation, hu-
+ingly effective with the development of deep learning techniques.              man global motion cannot be faithfully estimated in the IMU-only
+However, they still fail in extreme lighting conditions, severe occlu-         branch. On the other hand, the global motion information is di-
+sions, or humans moving out of the camera view. While IMU-based                rectly measured by the visual signals in the other branch. By our
+methods [Huang et al. 2018; Jiang et al. 2022b; Yi et al. 2022, 2021]          hidden state feedback technique, this error accumulation problem
+can get rid of these limitations, they cannot accurately estimate              is solved as the hidden state in the IMU-only branch is calibrated
+human translation due to the substantial drifts caused by sensor               by the other branch. Specifically, instead of frequently updating the
+error accumulation.                                                            states or assuming a fixed time interval, our algorithm dynamically
+    We propose to fuse monocular images with sparse IMUs to                    detects the need for hidden state updates and performs the strategy
+achieve real-time mocap with high accuracy and robustness for                  only when required. This guarantees the high efficiency of our
+estimating both body pose and translation. Our method fuses visual             algorithm. Furthermore, instead of calibrating one branch using the
+and inertial information to estimate better human motion when                  other, we use the final fused results, which is better than either of
+the performer is in the camera view. While for some extreme cases              the two branches. This effectively forms a feedback loop where the
+where the performer is severely occluded, poorly lighted, or moving            final combined result is used for hidden state updates in the two
+out of the camera view, our technique majorly uses IMUs to track               coordinate systems. In summary, the hidden state feedback mecha-
+the human motion. Compared with the pure visual solutions, our                 nism effectively and efficiently achieves information interchange
+technique outputs plausible mocap results robustly in the afore-               between dual coordinate systems.
+mentioned extreme cases. On the other hand, when the performer                    In this paper, our main contributions are:
+is visible to the camera, the visual information is used as an online                • An accurate and robust approach that fuses monocular
+calibration to solve the drifting problem caused by cumulative er-                     images with sparse IMU signals for real-time human motion
+rors in the inertial signals. So the inertial and visual information                   capture.
+leverage each other in our system to achieve a real-time lightweight                 • A dual coordinate strategy that makes the neural network
+mocap with high accuracy and robustness.                                               better learn from the inertial signals in different cases.
+    Our technique is based on a dual coordinate strategy, which                      • A hidden state feedback mechanism that leverages the com-
+makes the model training adaptive to the two input modalities.                         bined results in the loop by using them to improve the
+Specifically, the IMU signals are transformed into the camera coor-                    performance of individual components.
+dinate system when integrated with visual signals but are processed
+in the human root coordinate system when used solely. This design              2 RELATED WORK
+fully utilizes the characteristics of the two input modalities: visual
+signals capture both global position and local pose information of             2.1 Vision-based Mocap Methods
+humans, while inertial measurements majorly track the human’s                  In vision-based mocap, the approaches using multi-view input have
+local movements with global motion drift caused by inertial error              achieved remarkable results [Chun et al. 2023; Iskakov et al. 2019;
+accumulation. When the visual signal is available and confident,               Pavlakos et al. 2017; Qiu et al. 2019; Reddy et al. 2021; Remelli et al.
+we align the IMU signal to the camera coordinate system as a com-              2020], but the system is heavy, and the recording space is limited.
+plement, in which the human’s absolute pose and motion dynamics                Some works use a single monocular camera, and they represent 3D
+are both well represented, and thus learning in this coordinate                human poses by skeletons [Pavllo et al. 2019; Sharma et al. 2019;
+system makes full use of the visual signal. Differently, when the              Xu et al. 2020; Zhen et al. 2020], i.e., the 3D positions of all the body
+inertial measurements are used solely (visual signals not available            joints, which cannot represent the body shape and the exact 3D
+nor confident), the camera coordinate system becomes a suboptimal              motion between two recorded image frames. So some other works
+choice as the global part of the input modalities (i.e., visual signals)       use human body parametric models, such as SMPL [Loper et al.
+does not exist. We thus seek a change from a global "third-person              2015], and thus the shape and pose parameters of the models are
+perspective" (i.e., camera coordinate system) to a local "first-person         used to represent the body shape and the rotations of the body
+perspective" (i.e., root coordinate system) to capture the human mo-           joints. To obtain the parameters, the optimization-based methods
+tion. The key is that human motions may be seen differently from               [Bogo et al. 2016a; Lassner et al. 2017; Pavlakos et al. 2018; Xiang
+the camera’s view but are exactly the same from a local view, e.g.,            et al. 2019] fit the parametric body models to 2D observations, while
+walking straight in different directions. To this end, the problem             the regression-based methods [Kanazawa et al. 2018, 2019; Kocabas
+is simplified, and we achieve better results in the root coordinated           et al. 2020; Kolotouros et al. 2019a; Li et al. 2022; Shimada et al.
+system for local pose estimation. In summary, the delicate design              2021; Zanfir et al. 2021; Zhang et al. 2022; Zhou et al. 2021] train
+of the dual coordinate strategy for the two branches explores the              neural networks to estimate the model parameters directly from the
+inertial signals as much as possible in different use cases.                   input or some low-level features. In general, vision-based methods
+                                                                               are severely affected by the invisibility issue caused by challenging
+Fusing Monocular Images and Sparse IMU Signals for Real-time Human Motion Capture
+
+
+lighting or occlusions. Recent works, such as ROMP[Sun et al. 2021],                [Gilbert et al. 2019; Trumble et al. 2017]. However, the combina-
+PARE[Kocabas et al. 2021] have been devoted to better handling                      tion sometimes is not sufficient and may involve the errors of the
+this problem, using a collision-aware representation or part-guided                 two results together. To solve this problem, [Zhang et al. 2020b]
+attention mechanism. Other works [Huang et al. 2022; Sun et al.                     proposes to fuse information at an earlier stage. FusePose [Bao
+2022; Yuan et al. 2022] also focus on solving occlusions, and they                  et al. 2022] combines the IMU and visual information in the train-
+design unique mechanisms, such as a deep generative motion infiller                 ing stage so that they can adaptively compensate for each other.
+or a hypothetical bird’s eye view. Although these methods have                      For the methods combining monocular RGB with IMUs, the task
+handled occlusions to a certain extent, they still have difficulties                is more challenging as monocular RGB contains less information
+handling extreme occlusions or cases of people out of the camera                    than RGBD or multi-view RGB. [Henschel et al. 2019, 2020] only
+view.                                                                               estimate the global root translation. Both [Kaichi et al. 2020] and
+                                                                                    [von Marcard et al. 2018] are involved in estimating body poses,
+                                                                                    but while [Kaichi et al. 2020] necessitates dense IMUs, [von Mar-
+2.2    IMU-based Mocap Methods                                                      card et al. 2018] functions as an offline technique. Recently, one
+Unlike vision-based methods, inertial sensor-based methods are                      concurrent work HybridCap [Liang et al. 2022] combines 4 IMUs
+unaffected by challenging lighting, occlusions, and camera view                     and the 2D keypoint positions in the image domain to estimate
+limitations. Commercial inertial mocap solutions such as Xsens                      the pose and translation. They consider the situation that the two
+[Schepers et al. 2018] have achieved high accuracy but require                      kinds of inputs are both available and they fail when the visual
+dense sensors (17 IMUs), making them inconvenient and expensive.                    information is unavailable, as it is difficult for 4 IMUs to perform
+Recently, mocap with sparse sensors has drawn much more atten-                      mocap. We consider the visual and IMU fusion task in a different
+tion. SIP [von Marcard et al. 2017] successfully reduces the number                 manner that we do not want the fused system to suffer the inherent
+of sensors to 6, but is limited by the speed of the optimization-                   limitation of visual motion capture, i.e., we handle the situation
+based approach and thus could not support real-time motion cap-                     that the visual input is bad (challenging lighting, severe occlusion,
+ture. [Huang et al. 2018; Nagaraj et al. 2020] use recurrent neural                 or human out of viewing field). By this design, we achieve the first
+networks to achieve real-time pose estimation with sparse IMUs                      real-time system that combines monocular RGB and sparse IMUs to
+for the first time, but they cannot estimate the global translation                 achieve robust and accurate motion capture even when the visual
+of people. TransPose [Yi et al. 2021] combines supporting-foot de-                  signal is unavailable or severely polluted.
+duction and network prediction, and achieves real-time pose and
+global translation estimation with only 6 IMUs. [Schreiner et al.                   3     METHOD
+2021] focuses on the real-time estimation of precise position based
+                                                                                    As shown in Fig. 2, the inputs of our method consist of sequential
+on pose and orientation data. Later, PIP [Yi et al. 2022] introduces
+                                                                                    2D joint detections of a moving subject from monocular images,
+physical constraints [Shimada et al. 2020] to achieve higher accu-
+                                                                                    as well as the accelerations and orientations of 6 IMUs mounted
+racy, and a novel RNN initialization method to resolve the action
+                                                                                    on the left and right forearms, left and right lower legs, head, and
+ambiguity of long time sitting or standing still. Meanwhile, TIP
+                                                                                    pelvis of the subject. The output of our system is the 3D motion of
+[Jiang et al. 2022b] proposes stationary body points to mitigate the
+                                                                                    the subject, represented on the kinematic model of SMPL [Loper
+effects of drift. Additionally, [Aliakbarian et al. 2022; Jiang et al.
+                                                                                    et al. 2015]. Note that a calibration step is performed to calibrate the
+2022a; Winkler et al. 2022; Ye et al. 2022] use VR devices on the
+                                                                                    relative orientation between the IMUs’ coordinate system and the
+user’s head and hands to estimate full-body poses. However, due to
+                                                                                    camera coordinate system, detailed in the supplementary materials.
+the pose ambiguity of the sparse IMU setting and the sensor error
+                                                                                    Given this calibration, we can align the two input modalities by
+accumulation, these methods suffer from jittery or drift in motion
+                                                                                    transforming either one to the coordinate system of the other. In
+estimation.
+                                                                                    the following, we introduce our dual coordinate strategy which
+                                                                                    estimates both the global motion and local pose of the performer
+2.3    Vision-inertia Fusion Methods                                                (Sec. 3.1) as well as the hidden state feedback to make the estimation
+                                                                                    more robust and accurate (Sec. 3.2).
+Depending on the type of visual input, the vision-inertia fusion
+methods can be divided into three categories: fusing multi-view
+video with IMUs [Bao et al. 2022; Gilbert et al. 2019; Huang et al.                 3.1    Dual Coordinate Strategy
+2020; Malleson et al. 2020, 2017; Moniruzzaman et al. 2021; Pons-                   Deep learning has shown its great power in vision and graphic
+Moll et al. 2010; Trumble et al. 2017; von Marcard et al. 2016; Zhang               tasks. How to represent its input and output significantly influence
+et al. 2020b], fusing monocular RGBD video with IMUs [Helten                        its performance in real applications. In our deep learning-based
+et al. 2013; Zheng et al. 2018], and fusing monocular RGB video                     technique, we propose to use two coordinate systems to represent
+with IMUs [Henschel et al. 2019, 2020; Kaichi et al. 2020; Liang et al.             our input in different situations and fuse them together to pursue
+2022; von Marcard et al. 2018]. In the former two categories, some                  a better estimation. Our key observation is that the visual signals
+methods use optimization techniques by defining and minimizing                      contain both the global and local motion of the performer in the
+energy functions that are correlated with both visual and IMU fea-                  camera coordinate system while the inertial signals majorly con-
+tures [Malleson et al. 2020, 2017; Pons-Moll et al. 2010; von Marcard               tain the local body movement information but the global motion
+et al. 2016]. Other methods use dual-stream networks to estimate                    information always drifts due to the inertial error accumulation. So
+the pose from IMU and vision separately and then combine them                       when the two modalities are both available, the camera coordinate
+                                                                          Shaohua Pan, Qi Ma, Xinyu Yi, Weifeng Hu, Xiong Wang, Xingkang Zhou, Jijunnan Li, and Feng Xu
+
+
+                                                                                        where 𝒂 ∈ R3 represents the acceleration, 𝑹 ∈ R3×3 represents the
+                                                                                        rotation, the subscript r denotes the root coordinate system, and
+                                                                                        𝑛 = 6 represents the number of IMUs. RNN-P1 outputs the root-
+                                                                                        relative coordinates of all joints as 𝒑 er ∈ R3𝐽 , where 𝐽 represents
+                                                                                        the number of joints, and the superscript e indicates the estimation.
+                                                                                        The loss function used to train RNN-P1 is defined as:
+                                                                                                                      L𝑃 1 = ∥𝒑 er − 𝒑 GT  2
+                                                                                                                                       r ∥ 2,                       (1)
+
+                                                                                        where superscript GT indicates the ground truth.
+                                                                                          When estimating joint positions in the camera coordinate sys-
+                                                                                        tem, we first transform the inertial measurements into the camera
+                                                                                        coordinate system. We then reproject the 2D keypoints, detected
+                                                                                        by MediaPipe [Lugaresi et al. 2019], onto the 𝑍 = 1 plane using
+                                                                                        camera intrinsics to generalize to various camera settings. After
+                                                                                                                  ′
+                                                                                        this, we get 𝒑 2d ∈ R2𝐽 where 𝐽 ′ represents the number of detected
+                                                                                        keypoints from MediaPipe. Next, we perform root normalization
+                                                                                        to represent the keypoints as root-relative 2D key points and the
+Figure 2: Overview of our method. The inputs are inertial                               absolute position of the root in the camera coordinate system. After
+                                                                                                                              ′
+measurements of 6 IMUs and image domain 2D keypoints                                    the root normalization, we obtain 𝒑 2d . The input of RNN-P2 can be
+                                                                                                                 ′                        ′
+obtained by an off-the-shelf 2D human pose estimator. The                               represented as [𝒙 c, 𝒑 2d, 𝝈] ∈ R (3+9)𝑛+3𝐽 , where 𝒙 c ∈ R (3+9)𝑛 de-
+outputs are real-time human pose and translation. We adopt                              notes the IMU measurements in the camera coordinate system, and
+a dual coordinate strategy, where we estimate joint positions                                    ′
+                                                                                        𝝈 ∈ R 𝐽 represents the keypoints’ corresponding confidence scores
+and global movements in both the human’s root and camera
+                                                                                        given by MediaPipe. The output of RNN-P2 is root-relative joint
+coordinate systems and we fuse the results from two coor-
+                                                                                        positions in the camera coordinate system, denoted as 𝒑 ec ∈ R3𝐽 .
+dinate systems to get the human pose and translation. To
+                                                                                        The loss function for RNN-P2 is the same as the loss function for
+enable the information interchange between the two coordi-
+                                                                                        RNN-P1.
+nate systems and make them mutually help each other, we
+                                                                                           To fuse the results in the two coordinate system, we first trans-
+leverage a hidden state feedback mechanism to update the
+                                                                                        form 𝒑 ec ∈ R3𝐽 into the root coordinate system. Then, we can fuse
+hidden state of the two branches using the final fused results.
+                                                                                        them to get the final root-relative coordinates of all joints denoted
+                                                                                        as 𝒑 r . We use the average visual confidence of all keypoints 𝜎mean
+system is more adequate to represent the input. On the other hand,                      to determine the fusing process. Specifically, if the average confi-
+when the visual signals are not available (due to occlusions, extreme                   dence 𝜎mean is sufficiently high (i.e., visual information is of good
+lighting, or out-of-camera view) and only the inertial signals are                      quality), we take the results from the camera coordinate frame;
+available, the root coordinate system is adopted because the same                       if 𝜎mean is significantly low (i.e., visual information is unreliable
+poses may differ significantly from different camera views but are                      or absent), we take the joints estimated from solely IMUs. Other-
+precisely the same from a local view. Moreover, the IMU-estimated                       wise, a linear interpolation is performed between the two results
+root velocity in the root coordinate system is important to estimate                    to smooth the process. We experimentally set the lower bound and
+the absolute position of the tracking subject when visual clues are                     upper bound to 0.7 and 0.8, respectively. Finally, RNN-P3 takes the
+unavailable. As we have disentangled the local pose and global                          concatenated vector [𝒑 r, 𝒙 r ] as input to estimate the joint rotations
+translation estimation, we introduce our dual coordinate strategy                       in 6D representation [Zhou et al. 2019], denoted as 𝝋 ∈ R6𝐽 . We
+individually for the two tasks.                                                         can convert 𝝋 to axis-angle representation and obtain 𝜽 r . The loss
+                                                                                        of RNN-P3 is defined as:
+3.1.1 Local Pose Estimation. We first describe local pose estimation.
+To thoroughly learn the human motion prior, our algorithm first                                                L𝑃 3 = 𝜆rot Lrot + 𝜆pos Lpos .                       (2)
+estimates joint 3D positions and then estimates joint rotations (i.e.,
+                                                                                        Lrot , which constrains the estimated joint rotations, is defined as:
+local pose). The joint position estimation task is solved under dual
+coordinates adaptive for different use cases (demonstrated by RNN-                                                    Lrot = ∥𝝋 − 𝝋 GT ∥ 22 .                       (3)
+P1 for the root coordinate and RNN-P2 for the camera coordinate
+in Fig. 2). Then, we use linear interpolation to fuse the two results                   L𝑝𝑜𝑠 , which constrains the joint positions after forward kinematics,
+from the two coordinates and estimate the joint rotations under                         is defined as:
+the root frame by inverse kinematics (demonstrated by RNN-P3).                                           L𝑝𝑜𝑠 = ∥FK (𝜽 r ) − FK 𝜽 GT      ∥ 22,
+                                                                                                                                       
+                                                                                                                                    r                     (4)
+   Specifically, when estimating joint positions in the root coor-
+dinate system, we transform the inertial measurements into the                          where FK(·) is the forward kinematics function that calculates the
+root coordinate by the IMU mounted on the pelvis, obtaining a                           position of the joints. We experimentally set the parameters 𝜆rot = 1
+concatenated input vector as the input of RNN-P1. The input vec-                        and 𝜆pos = 100. By multiplying the orientation measurement of the
+tor is denoted as 𝒙 r = [𝒂 larm, · · ·, 𝒂 root, 𝑹 larm, · · ·, 𝑹 root ] ∈ R (3+9)𝑛      root IMU with the calibrated camera extrinsic, joint rotations 𝜽 r
+Fusing Monocular Images and Sparse IMU Signals for Real-time Human Motion Capture
+
+
+can be transformed into the camera coordinate system, resulting in                  position with the IMU-based relative translation, we perform an
+𝜽 c.                                                                                additional correction step leveraging the estimated root position in
+                                                                                    the camera frame.
+3.1.2 Global Translation Estimation. The translation estimation
+                                                                                        Finally, we optimize the joint rotations 𝜽 c and the global position
+differs from pose estimation because pure inertial-based methods
+                                                                                    𝒕 c to minimize the reprojection error and get the final motion output.
+suffer from large drifts due to accumulated errors, as demonstrated
+                                                                                    Our energy function is defined as:
+in [Yi et al. 2023]. Thus, we adopt a slightly different method for
+translation estimation. When the visual information is not reliable,                𝑬 (𝜽 c, 𝒕 c ) = 𝜆2D 𝑬 2D +𝜆3D 𝑬 3D +𝜆prior 𝑬 prior +𝜆angle 𝑬 angle +𝜆ori 𝑬 ori .
+we follow TransPose [Yi et al. 2021] to use IMU only to estimate the                                                                                            (8)
+translation. On the other hand, when visual information is reliable,                𝑬 2D enforces the final joint positions reprojects onto 2D close to the
+we directly estimate the absolute position of the human in the                      2D keypoints detected by MediaPipe. 𝑬 3D enforces the final joint
+camera coordinate system (as shown by RNN-T3). Then we use the                      positions close to the predicted one. Following [Bogo et al. 2016b],
+complementary filter algorithm to fuse the two results depending                    𝑬 prior penalizes the unrealistic human pose using a Geman-McClure
+on the reliability of the visual signals.                                           [Ganan and McClure 1985] error function. Following [Bogo et al.
+      To be more specific, RNN-T1 takes inertial measurements 𝒙 r as                2016b], 𝑬 angle penalizes unnatural bending of the knees and elbows.
+input to estimate foot-ground contact probability 𝑠. On the other                   And 𝑬 ori enforces the rotations of joints with IMU mounted close to
+hand, RNN-T2 takes 𝒙 r as input and estimates the root velocity                     the inertial measurements. We experimentally set 𝜆2D = 1, 𝜆3D = 1,
+𝒗 re ∈ R3 in the root coordinate system. To train the models (RNN-                  𝜆prior = 0.1, 𝜆prior = 15.2, and 𝜆ori = 0.5. We use the L-BFGS
+T1 and RNN-T2), we utilize the same loss function as TransPose [Yi                  [Liu and Nocedal 1989] algorithm to solve this optimization with 1
+et al. 2021]. We can calculate the foot velocity 𝒗 fr ∈ R3 using the                iteration.
+estimated pose 𝜽 r as:
+                      1                                                             3.2     Hidden State Feedback Mechanism
+               𝒗 fr =
+                                  (𝑘 )             (𝑘 −1)
+                         (GF(FK(𝜽 r − GF(FK(𝜽 r           )),        (5)
+                      Δ𝑡                                                            The aforementioned dual coordinate strategy can preserve the final
+where GF(·) represents the function that retrieves the supporting                   result by utilizing the benefits of both branches. However, the two
+                                              (𝑘 )
+foot position from all joint positions, 𝜽 r represents the joint                    branches do not mutually benefit from each other. For RNN-P1,
+rotations in the root coordinate system at frame 𝑘, and Δ𝑡 is the                   inspired by [Yi et al. 2022], utilizing a constant initial hidden state
+time interval between frames. If the foot-ground contact probability                for the RNN training is incorrect. This is because the subject may
+𝑠 is smaller than a threshold 0.7, we take the estimated root velocity              initiate from different poses, and if the initial state is incorrect, the
+𝒗 re . Otherwise, we derive the root velocity from the foot velocity 𝒗 fr           network can not learn how to change its hidden state according
+following TransPose. We denote the final root velocity as 𝒗 r in the                to the changing input signals. In the case of RNN-T3, when the
+root coordinate system and transform it into the camera coordinate                  subject is occluded for a while and reappears in the camera view,
+system as 𝒗 c . Notice that if we accumulate 𝒗 c to estimate the root               the network cannot immediately generate accurate root positions
+position, the result is prone to low-frequency drift due to the error               as its hidden states have not been correctly updated during the
+accumulation.                                                                       occlusion. For RNN-P2, RNN-T1, and RNN-T2, we consider them to
+      For RNN-T3, we concatenate the inertial measurements in the                   be less temporally dependent, i.e., these models primarily rely on
+camera coordinate 𝒙 c , the canonicalized keypoints 𝒑 2d , and the                  the input of the current frame rather than the historical information.
+corresponding confidence 𝝈 to estimate the global root position 𝒕 ec                This consideration motivates us to develop a hidden state feedback
+of the subject in the camera coordinate system. The loss function                   mechanism that can enhance the two branches.
+used to train this model is denoted as:                                                Considering the difference between RNN-P1 and RNN-T3, we
+                                                                                    propose different feedback schemes for each. For RNN-P1, as men-
+                          L𝑇 3 = ∥𝒕 ec − 𝒕 GT 2
+                                           c ∥2 .                        (6)
+                                                                                    tioned earlier, a constant initialization of the hidden state in the
+Also note that due to the noise in the off-the-shelf 2D keypoint                    RNN leads to inaccuracies. PIP utilizes the ground-truth pose to
+detector and depth ambiguity, this position estimation somehow                      initialize the hidden state of the RNN. This is possible for the first
+contains high-frequency noise.                                                      frame but not for the following frames, so after tracking a lot of
+    Next, we fuse the estimated root position 𝒕 ec and the global veloc-            frames, the initialization has no contribution to the tracking any-
+ity 𝒗 c to obtain the final position 𝒕 c in the camera coordinate system.           more. On the other hand, we have the visual input, and thus we
+For the fusion process, we utilize the average keypoint confidence                  could use the joint positions 𝒑 ec obtained from RNN-P2 to initialize
+𝜎mean as a reference to fuse the results using the complementary fil-               RNN-P1 in the middle of the tracking in case the visual signals
+ter algorithm. The fusion algorithm can be mathematically defined                   are good enough to estimate an accurate pose. By leveraging the
+as:                                                                                 visual information, this mechanism provides a more flexible and
+             (𝑘 )            (𝑘 −1)              (𝑘 )        e(𝑘 )
+           𝒕 c = (1 − 𝛼𝑘 )𝒕 c       + (1 − 𝛼𝑘 )𝒗 c Δ𝑡 + 𝛼𝑘 𝒕 c ,       (7)          adaptive initialization scheme for RNN-P1 during the tracking. This
+where 𝑘 represents the 𝑘th frame, Δ𝑡 is the time interval between                   mechanism significantly better distinguishes ambiguous motions,
+frames, and 𝛼𝑘 = 0.05𝜎mean,𝑘 is the coefficient dynamically deter-                  such as standing still and sitting still, because they share identical
+mined by the average keypoint confidence at the 𝑘th frame 𝜎mean,𝑘 .                 inertial measurements and the correct historical information is the
+Intuitively, when visual confidence is low, we directly add the rel-                key to solving the ambiguity.
+ative translation estimated solely by IMUs to the previous root                        For RNN-T3, since its visual input may be meaningless (e.g. when
+position. When visual confidence is high, after updating the root                   the performer is out of the camera view), we use the final fused
+                                                                     Shaohua Pan, Qi Ma, Xinyu Yi, Weifeng Hu, Xiong Wang, Xingkang Zhou, Jijunnan Li, and Feng Xu
+
+
+Table 1: Quantitative comparisons with state-of-the-art methods ROMP, PARE, TIP, PIP, HybridCap, and VIP. We show results
+on 3DPW (in the wild pose), 3DPW-OCC (in the wild occluded pose), AIST++ (challenging motion), and TotalCapture (with
+subject out-of-view scenarios) datasets.
+
+                          3DPW                           3DPW-OCC                             AIST++                                TotalCapture
+     Method
+                MPJPE    PA-MPJPE       PVE      MPJPE    PA-MPJPE     PVE     MPJPE      PA-MPJPE PVE           TE      MPJPE     PA-MPJPE PVE            TE
+     ROMP        91.3       54.9        108.3      -          -          -      90.3         60.0    128.1      16.91    145.4        64.6    184.5       60.31
+     PARE        82.0       50.9        97.9      90.5       56.6      107.9    83.7         50.9    116.5        -      143.5        60.9    196.8         -
+      TIP        82.5       58.2        109.9    100.5       68.7      131.6    85.1         62.1    115.5      69.52     69.3        35.7     88.9       56.18
+      PIP        78.0       49.8        100.0     97.8       66.0      126.1    87.1         62.0    116.5      45.17     49.1        34.6     66.0       43.77
+    Hybridcap    72.1        -            -        -          -          -      33.3          -        -          -        -           -         -          -
+      VIP         -          -            -        -          -          -       -            -        -          -        -          39.6       -          -
+      Ours       55.0      38.9         71.8      77.9      53.1       97.5     33.1        24.0     43.2       9.92      48.7       33.5      63.4       23.52
+
+
+                                                                                   4.1     Implementation Details
+                                                                                   All training and evaluation processes run on a computer with an
+                                                                                   Intel(R) Core(TM) i7-8700 CPU and an NVIDIA GTX2080Ti graphics
+                                                                                   card. We train each recurrent neural network separately with its
+                                                                                   own loss (without using previous results from other RNNs) and
+                                                                                   connect them to form our entire method. Following Transpose [Yi
+                                                                                   et al. 2021], we add a gravity velocity to the translation output.
+
+                                                                                      Datasets. We use the AIST++ dataset [Li et al. 2021] and the
+                                                                                   AMASS dataset [Mahmood et al. 2019] for training. Our model is
+                                                                                   trained on AIST++ using detected 2D keypoints and synthesized
+                                                                                   IMUs, and on AMASS using synthesized 2D keypoints and IMUs.
+                                                                                   We perform our evaluations on TotalCapture [Trumble et al. 2017],
+Figure 3: Qualitative results on the TotalCapture dataset that
+                                                                                   AIST++ test split, 3DPW test split [von Marcard et al. 2018], and
+the subjects are out of the camera view. Visual signals are not
+                                                                                   3DPW-OCC [von Marcard et al. 2018; Zhang et al. 2020a]. Since the
+available in the gray regions. From left to right: ROMP/PARE
+                                                                                   AIST++, 3DPW, and 3DPW-OCC datasets do not have IMU data,
+results, TIP results, PIP results, our method without the dual
+                                                                                   we utilize synthesized IMUs. Please refer to our supplementary for
+coordinate strategy, and our results.
+                                                                                   the network architecture and more details about datasets.
+
+                                                                                       Metrics. We use the following metrics to evaluate our method.
+result to update its hidden state if the mean visual confidence of                 1) MPJPE is the mean per joint position error in mm. 2) PA-MPJPE
+all joints 𝜎mean is less than the predefined lower bound. To be                    is the Procrustes-aligned mean per joint position error in mm. 3)
+specific, we use synthesized 2D keypoints 𝒑 2d instead of the unre-                PVE is a per-vertex error in mm. 4) TE is a translation error that
+liable MediaPipe-detected keypoints under these conditions. We                     measures the absolute position error in cm. Among these metrics,
+synthesize 𝒑 2d as:                                                                1), 2), and 3) measure the pose accuracy, and 4) measures the global
+                                                                                   translation accuracy.
+                        𝒑 2d = Π (FK (𝜽 c ) + 𝒕 c ) ,                   (9)
+where Π(·) represents the projection onto 𝑍 = 1 plane from 3D space.               4.2     Comparisons
+Then, we utilize [𝒙 c, 𝒑 2d, 𝝈] to run RNN-T3 to update its hidden                    Quantitative. We perform the comparisons with the state-of-the-
+state. Due to this hidden state feedback, when 𝜎mean increases, RNN-               art vision-based methods ROMP [Sun et al. 2021], PARE [Kocabas
+T3 will recover immediately to give a result that is both reasonable               et al. 2021], IMU-based methods TIP [Jiang et al. 2022b], PIP [Yi et al.
+and consistent with the previous output, avoiding sudden changes.                  2022] and combined method HybridCap [Liang et al. 2022], VIP
+The effectiveness of this feedback mechanism is noticeable when                    [von Marcard et al. 2018]. PARE and VIP are both offline solutions.
+the subject comes back after going outside of the camera view,                     Notice that PARE does not evaluate the global translation; it only
+especially when the re-entry position is different from the going-                 estimates camera parameters that can project the subject onto the
+out position. We will show this in the following section.                          image. For HybridCap and VIP, since they do not provide their
+                                                                                   codes, we compare them in the AIST++, 3DPW, and TotalCapture
+4     EXPERIMENTS                                                                  datasets with the numbers in the paper. For all the previous methods,
+In this section, we first provide more details of our implementation               we use their default settings.
+and the datasets (Sec. 4.1). Then we compare our method with                          The quantitative results are shown in Tab. 1. Our method demon-
+previous works (Sec. 4.2). Next, we evaluate our key components                    strates significant improvements in pose and translation accuracy
+(Sec. 4.3). Finally, we show more results and live demos in our                    compared to previous works. The TotalCapture dataset contains 8
+accompanying video (Sec. 4.4) and discuss our limitations (Sec. 4.5).              camera views, and there are instances where the subject experiences
+Fusing Monocular Images and Sparse IMU Signals for Real-time Human Motion Capture
+
+
+Table 2: Quantitative ablation study on the dual coordinate
+strategy, hidden state feedback mechanism, and optimization.
+We performed it on TotalCapture and 3DPW-OCC datasets as
+these two datasets contain cases where humans are occluded
+or out of the camera view, which are challenging and best
+demonstrate our key algorithms.
+
+                                TotalCapture                      3DPW-OCC
+      Method
+                       MPJPE   PA-MPJPE PVE        TE     MPJPE    PA-MPJPE   PVE
+ w/o dual coordinate    55.2      37.9     69.9   37.09    81.1       55.9    102.0
+    w/o feedback        49.5      34.0     64.2   23.82    78.1       53.4    98.0
+  w/o optimization      48.8      33.6     63.1   25.28    75.7      52.2     97.1    Figure 4: Qualitative ablation study on the hidden state feed-
+        Ours            48.7     33.5      63.4   23.52    77.9       53.1    97.5
+                                                                                      back mechanism. Visual signals are not available in the gray
+                                                                                      figure.
+
+severe occlusion or is out of the camera view. Pure vision-based
+method ROMP and PARE fail in these cases. With the help of our                        dual coordinate strategy makes significant performance improve-
+dual coordinate strategy and feedback mechanism, we achieve bet-                      ment. Qualitative results are also shown in Fig. 3. Without our dual
+ter results than ROMP and PARE. We also reduce the pose and                           coordinate strategy, in the camera coordinate system, the method
+translation errors compared to pure IMU-based methods such as                         struggles to estimate the translation accurately, and thus it becomes
+TIP, PIP, and the combined method VIP. Besides, the AIST++ dataset                    more challenging to estimate the pose from the IMUs.
+comprises 9 camera views, and the subjects perform numerous chal-
+lenging dancing motions, all captured within the camera view. We                         Hidden State Feedback. To examine the effect of the feedback
+significantly reduce pose and translation errors compared to ROMP,                    mechanism, we train two alternatives that do not update the hid-
+PARE, TIP, and PIP. Despite HybridCap being designed explicitly                       den states of RNN-T3 and RNN-P1, respectively. As discussed in
+for challenging poses, we consistently achieve superior results com-                  the Method section, the feedback for RNN-T3 is most effective in
+pared to it. Finally, even without training on in-the-wild datasets,                  determining translations when the subject is moving in again after
+we still perform better on 3DPW and 3DPW-OCC, representing                            moving out of the camera view. Since TotalCapture and 3DPW-
+in-the-wild and occlusion scenarios.                                                  OCC contain this kind of motion, the translation error is increasing
+                                                                                      on TotalCapture and 3DPW-OCC in Tab. 2 for the former alterna-
+   Qualitative. In Fig. 5, we present the qualitative results of our                  tive. To better demonstrate this, we pick a walking sequence in
+methods compared to ROMP, PARE, TIP, and PIP when the subject                         the TotalCapture dataset, and the result is shown in the left side of
+is within the camera view. Vision-based method ROMP and PARE                          Fig. 4, where the method without feedback fails when the subject
+can better estimate the positions, but the reconstructed poses of end                 moves in the camera view at a different place from where the sub-
+joints sometimes need to be corrected as these regions are small                      ject moved out. The error is because the networks learn to avoid
+and thus have limited pixels to guide the vision-based methods. On                    sudden translation changes. So, without the feedback mechanism,
+the other hand, IMU-based methods TIP and PIP are suffering drifts                    the vision branch remembers where the subject moves out of the
+indicated by the slightly worse overlay. Our approach leverages vi-                   camera view. When the branch is activated again (the subject comes
+sion and IMU inputs more effectively than previous works through                      in again), it leans to estimate the translation near the remembered
+our dual coordinate strategy and hidden state feedback mechanism.                     place. However, with the feedback, the synthesized input 𝒑 2d can
+As a result, we can achieve better pose and translation estimation in                 update the hidden state of RNN-T3. On the condition that the IMU
+challenging motion, occluded, and in-the-wild scenarios. In Fig. 3,                   mocap works well when the subject is out of the camera view, RNN-
+we show the qualitative comparison results when the subject is out                    T3 can be correctly restarted when the subject comes in again at a
+of the camera view. Each image’s left part (denoted by the gray                       new place.
+color) is regarded as out of the camera view in this experiment,                         The feedback for RNN-P1 is most helpful in reconstructing the
+and we show this part as a reference to evaluate different methods.                   ambiguous poses whose IMU measurements are identical. We addi-
+ROMP and PARE fail as the visual signal is not available. PIP and                     tionally select a sequence from the TotalCapture dataset, and the
+TIP estimate plausible poses but suffer the drift problem. Due to                     corresponding results are presented on the right side of Fig. 4. The
+the hidden state feedback, our IMU mocap branch is corrected from                     gray-colored region in this figure is regarded as out of the camera
+time to time to reduce the drift, so it estimates accurate pose and                   view in this experiment (the subject is in the camera view at the
+much better translation when subjects are out of view.                                beginning), and we show this region as a reference for better evalu-
+                                                                                      ation. In the beginning, the subject is visible to the camera, so the
+4.3     Evaluations                                                                   combined branch updates the hidden states of the IMU branch, thus
+We evaluate three critical components of our method: the dual                         making it known that the subject is bending rather than sitting.
+coordinate strategy, the hidden state feedback and the optimization.                  Then when the subject moved out of view, the method with the
+                                                                                      feedback still reconstructs a bending pose while the one without
+   Dual Coordinate Strategy. We compare our solution with a set-                      feedback solves a sitting pose as these two poses share similar IMU
+ting where all the estimations are in the camera coordinate. Quan-                    signals and sitting data is much more than the bending data in the
+titative results are shown in Tab. 2. We can clearly see that the                     training dataset.
+                                                                          Shaohua Pan, Qi Ma, Xinyu Yi, Weifeng Hu, Xiong Wang, Xingkang Zhou, Jijunnan Li, and Feng Xu
+
+
+   Optimization. As shown in Tab. 2, the final 1-iteration optimiza-                    Federica Bogo, Angjoo Kanazawa, Christoph Lassner, Peter Gehler, Javier Romero, and
+tion primarily aims to improve the 2D overlay, and it has a slight                          Michael J. Black. 2016a. Keep it SMPL: Automatic Estimation of 3D Human Pose
+                                                                                            and Shape from a Single Image. In Computer Vision – ECCV 2016 (Lecture Notes in
+effect on the pose result while reducing the translation error. In the                      Computer Science). Springer International Publishing.
+case of the 3DPW-OCC dataset, the pose error is larger when using                       Federica Bogo, Angjoo Kanazawa, Christoph Lassner, Peter Gehler, Javier Romero,
+                                                                                            and Michael J Black. 2016b. Keep it SMPL: Automatic estimation of 3D human
+optimization due to occlusion affecting the 2D detector.                                    pose and shape from a single image. In Computer Vision–ECCV 2016: 14th European
+                                                                                            Conference, Amsterdam, The Netherlands, October 11-14, 2016, Proceedings, Part V 14.
+4.4     More Results                                                                        Springer, 561–578.
+                                                                                        Sungho Chun, Sungbum Park, and Ju Yong Chang. 2023. Learnable human mesh trian-
+We test our method on various motions, including moving out and                             gulation for 3D human pose and shape estimation. In Proceedings of the IEEE/CVF
+                                                                                            Winter Conference on Applications of Computer Vision. 2850–2859.
+re-entry the camera view, extreme lighting, severe occlusion (e.g.,                     Stuart Ganan and D McClure. 1985. Bayesian image analysis: An application to single
+clothes, umbrellas, and boards), and challenging poses (e.g., rapid                         photon emission tomography. Amer. Statist. Assoc (1985), 12–18.
+jumps and large body movements). These results are shown in our                         Andrew Gilbert, Matthew Trumble, Charles Malleson, Adrian Hilton, and John Collo-
+                                                                                            mosse. 2019. Fusing visual and inertial sensors with semantics for 3d human pose
+accompanying video.                                                                         estimation. International Journal of Computer Vision 127, 4 (2019), 381–397.
+                                                                                        Thomas Helten, Meinard Muller, Hans-Peter Seidel, and Christian Theobalt. 2013.
+                                                                                            Real-time body tracking with one depth camera and inertial sensors. In Proceedings
+4.5     Limitations                                                                         of the IEEE international conference on computer vision. 1105–1112.
+In our method, two branches can help each other when at least                           Roberto Henschel, Timo von Marcard, and Bodo Rosenhahn. 2019. Simultaneous
+                                                                                            identification and tracking of multiple people using video and imus. In Proceedings
+one of the branches works well. So, it is easy to imagine that if the                       of the IEEE/CVF conference on computer vision and pattern recognition workshops.
+two branches both face their inherent difficulties, our system will                         0–0.
+also suffer. For example, when the subject moves out of the camera                      Roberto Henschel, Timo Von Marcard, and Bodo Rosenhahn. 2020. Accurate long-term
+                                                                                            multiple people tracking using video and body-worn IMUs. IEEE Transactions on
+view for a long time, the visual branch has no input, and the drift                         Image Processing 29 (2020), 8476–8489.
+of the IMU branch becomes large. In such circumstances, IMUs are                        Buzhen Huang, Yuan Shu, Jingyi Ju, and Yangang Wang. 2022. Occluded Human
+                                                                                            Body Capture with Self-Supervised Spatial-Temporal Motion Prior. arXiv preprint
+susceptible to error accumulation caused by magnetic disturbances.                          arXiv:2207.05375 (2022).
+We could consider modeling magnetic disturbance from combined                           Fuyang Huang, Ailing Zeng, Minhao Liu, Qiuxia Lai, and Qiang Xu. 2020. Deepfuse:
+modalities in the future. Our method neglects the shape of different                        An imu-aware network for real-time 3d human pose estimation from multi-view
+                                                                                            image. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer
+people and uses a mean shape for common adults. Since we have                               Vision. 429–438.
+visual signals, we could consider body shape in the future to get a                     Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J. Black, Otmar Hilliges, and
+more complete reconstruction.                                                               Gerard Pons-Moll. 2018. Deep Inertial Poser Learning to Reconstruct Human Pose
+                                                                                            from SparseInertial Measurements in Real Time. ACM Transactions on Graphics,
+                                                                                           (Proc. SIGGRAPH Asia) 37 (nov 2018).
+5     CONCLUSION                                                                        Karim Iskakov, Egor Burkov, Victor Lempitsky, and Yury Malkov. 2019. Learnable
+                                                                                            Triangulation of Human Pose. international conference on computer vision (2019).
+In this paper, we present a method that fuses monocular images                          Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa Laich, Patrick Snape, and
+                                                                                            Christian Holz. 2022a. Avatarposer: Articulated full-body pose tracking from sparse
+with 6 IMUs for real-time human motion capture, which can deal                              motion sensing. In European Conference on Computer Vision. Springer, 443–460.
+with extreme lighting, severe occlusion, and even subjects out of                       Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W. Winkler, and
+camera view. The dual coordinate strategy makes the neural net-                             C. Karen Liu. 2022b. Transformer Inertial Poser: Real-Time Human Motion Recon-
+                                                                                            struction from Sparse IMUs with Simultaneous Terrain Generation. In SIGGRAPH
+work better learn from the inertial signals in different cases. The                         Asia 2022 Conference Papers (Daegu, Republic of Korea) (SA ’22 Conference Papers).
+hidden state feedback enables the two branches in the dual coor-                            Article 3, 9 pages. https://doi.org/10.1145/3550469.3555428
+dinate strategy to exchange information from time to time, thus                         Tomoya Kaichi, Tsubasa Maruyama, Mitsunori Tada, and Hideo Saito. 2020. Resolving
+                                                                                            position ambiguity of imu-based human pose with a single rgb camera. Sensors 20,
+allowing the one with high confidence to help the other achieve                             19 (2020), 5453.
+better results. Quantitative and qualitative results show that our                      Angjoo Kanazawa, Michael J. Black, David W. Jacobs, and Jitendra Malik. 2018. End-to-
+                                                                                            end Recovery of Human Shape and Pose. In Computer Vision and Pattern Regognition
+method can reconstruct more robust and accurate motion over                                (CVPR).
+state-of-the-art methods.                                                               Angjoo Kanazawa, Jason Y Zhang, Panna Felsen, and Jitendra Malik. 2019. Learning 3d
+                                                                                            human dynamics from video. In Proceedings of the IEEE/CVF conference on computer
+                                                                                            vision and pattern recognition. 5614–5623.
+ACKNOWLEDGMENTS                                                                         Muhammed Kocabas, Nikos Athanasiou, and Michael J. Black. 2020. VIBE: Video
+                                                                                            Inference for Human Body Pose and Shape Estimation. In The IEEE Conference on
+This work was supported by the National Key R&D Program of                                  Computer Vision and Pattern Recognition (CVPR).
+China (2018YFA0704000), Beijing Natural Science Foundation (M22024),                    Muhammed Kocabas, Chun-Hao P. Huang, Otmar Hilliges, and Michael J. Black. 2021.
+the NSFC (No.62021002), and the Key Research and Development                                PARE: Part Attention Regressor for 3D Human Body Estimation. In Proc. Interna-
+                                                                                            tional Conference on Computer Vision (ICCV). 11127–11137.
+Project of Tibet Autonomous Region (XZ202101ZY0019G). This                              Nikos Kolotouros, Georgios Pavlakos, Michael J Black, and Kostas Daniilidis. 2019b.
+work was also supported by THUIBCS, Tsinghua University, and                                Learning to Reconstruct 3D Human Pose and Shape via Model-fitting in the Loop.
+BLBCI, Beijing Municipal Education Commission. Feng Xu is the                               In ICCV.
+                                                                                        Nikos Kolotouros, Georgios Pavlakos, and Kostas Daniilidis. 2019a. Convolutional
+corresponding author.                                                                       mesh regression for single-image human shape reconstruction. In Proceedings of
+                                                                                            the IEEE/CVF Conference on Computer Vision and Pattern Recognition. 4501–4510.
+                                                                                        Christoph Lassner, Javier Romero, Martin Kiefel, Federica Bogo, Michael J. Black, and
+REFERENCES                                                                                  Peter V. Gehler. 2017. Unite the People: Closing the Loop Between 3D and 2D
+Sadegh Aliakbarian, Pashmina Cameron, Federica Bogo, Andrew Fitzgibbon, and                 Human Representations. In IEEE Conf. on Computer Vision and Pattern Recognition
+   Thomas J Cashman. 2022. Flag: Flow-based 3d avatar generation from sparse               (CVPR). http://up.is.tuebingen.mpg.de
+   observations. In Proceedings of the IEEE/CVF Conference on Computer Vision and       Ruilong Li, Shan Yang, David A. Ross, and Angjoo Kanazawa. 2021. Learn to Dance
+   Pattern Recognition. 13253–13262.                                                        with AIST++: Music Conditioned 3D Dance Generation. arXiv:2101.08779 [cs.CV]
+Yiming Bao, Xu Zhao, and Dahong Qian. 2022. FusePose: IMU-Vision Sensor Fusion          Zhihao Li, Jianzhuang Liu, Zhensong Zhang, Songcen Xu, and Youliang Yan. 2022.
+   in Kinematic Space for Parametric Human Pose Estimation. IEEE Transactions on            Cliff: Carrying location information in full frames into human pose and shape
+   Multimedia (2022).                                                                       estimation. In European Conference on Computer Vision. Springer, 590–606.
+Fusing Monocular Images and Sparse IMU Signals for Real-time Human Motion Capture
+
+
+Han Liang, Yannan He, Chengfeng Zhao, Mutian Li, Jingya Wang, Jingyi Yu, and                    In 2017 British Machine Vision Conference (BMVC).
+   Lan Xu. 2022. HybridCap: Inertia-aid Monocular Capture of Challenging Human              Timo von Marcard, Roberto Henschel, Michael J. Black, Bodo Rosenhahn, and Gerard
+   Motions. arXiv preprint arXiv:2203.09287 (2022).                                             Pons-Moll. 2018. Recovering Accurate {3D} Human Pose in the Wild Using {IMUs}
+Dong C Liu and Jorge Nocedal. 1989. On the limited memory BFGS method for large                 and a Moving Camera. european conference on computer vision (2018).
+   scale optimization. Mathematical programming 45, 1-3 (1989), 503–528.                    Timo von Marcard, Gerard Pons-Moll, and Bodo Rosenhahn. 2016. Human Pose
+Matthew Loper, Naureen Mahmood, Javier Romero, Gerard Pons-Moll, and Michael J.                 Estimation from Video and IMUs. Transactions on Pattern Analysis and Machine
+   Black. 2015. SMPL: a skinned multi-person linear model. international conference             Intelligence (PAMI) (jan 2016).
+   on computer graphics and interactive techniques (2015).                                  Timo von Marcard, Bodo Rosenhahn, Michael Black, and Gerard Pons-Moll. 2017.
+Camillo Lugaresi, Jiuqiang Tang, Hadon Nash, Chris McClanahan, Esha Uboweja,                    Sparse Inertial Poser: Automatic 3D Human Pose Estimation from Sparse IMUs.
+   Michael Hays, Fan Zhang, Chuo-Ling Chang, Ming Guang Yong, Juhyun Lee, Wan-                  Computer Graphics Forum 36(2), Proceedings of the 38th Annual Conference of the
+   Teh Chang, Wei Hua, Manfred Georg, and Matthias Grundmann. 2019. MediaPipe:                  European Association for Computer Graphics (Eurographics) (2017).
+   A Framework for Building Perception Pipelines. arXiv:1906.08172 [cs.DC]                  Alexander Winkler, Jungdam Won, and Yuting Ye. 2022. QuestSim: Human Motion
+Naureen Mahmood, Nima Ghorbani, Nikolaus F. Troje, Gerard Pons-Moll, and Michael J.             Tracking from Sparse Sensors with Simulated Avatars. In SIGGRAPH Asia 2022
+   Black. 2019. AMASS: Archive of Motion Capture as Surface Shapes. In International            Conference Papers. 1–8.
+   Conference on Computer Vision. 5442–5451.                                                Donglai Xiang, Hanbyul Joo, and Yaser Sheikh. 2019. Monocular total capture: Posing
+Charles Malleson, John Collomosse, and Adrian Hilton. 2020. Real-time multi-person              face, body, and hands in the wild. In Proceedings of the IEEE/CVF conference on
+   motion capture from multi-view video and IMUs. International Journal of Computer             computer vision and pattern recognition. 10965–10974.
+   Vision 128, 6 (2020), 1594–1611.                                                         Jingwei Xu, Zhenbo Yu, Bingbing Ni, Jiancheng Yang, Xiaokang Yang, and Wenjun
+Charles Malleson, Andrew Gilbert, Matthew Trumble, John Collomosse, Adrian Hilton,              Zhang. 2020. Deep kinematics analysis for monocular 3d human pose estimation.
+   and Marco Volino. 2017. Real-Time Full-Body Motion Capture from Video and                    In Proceedings of the IEEE/CVF Conference on computer vision and Pattern recognition.
+   IMUs. international conference on 3d vision (2017).                                          899–908.
+Md Moniruzzaman, Zhaozheng Yin, Md Sanzid Bin Hossain, Zhishan Guo, and Hwan                Yongjing Ye, Libin Liu, Lei Hu, and Shihong Xia. 2022. Neural3Points: Learning
+   Choi. 2021. Wearable Motion Capture: Reconstructing and Predicting 3D Human                  to Generate Physically Realistic Full-body Motion for Virtual Reality Users. In
+   Poses from Wearable Sensors. TechRxviz. Preprint (2021).                                     Computer Graphics Forum, Vol. 41. Wiley Online Library, 183–194.
+Deepak Nagaraj, Erik Schake, Patrick Leiner, and Dirk Werth. 2020. An RNN-Ensemble          Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav Golyanik, Shaohua Pan, Christian
+   Approach for Real Time Human Pose Estimation from Sparse IMUs. In Proceedings                Theobalt, and Feng Xu. 2023. EgoLocate: Real-time Motion Capture, Localization,
+   of the 3rd International Conference on Applications of Intelligent Systems (Las Palmas       and Mapping with Sparse Body-mounted Sensors. arXiv preprint arXiv:2305.01599
+   de Gran Canaria, Spain) (APPIS 2020). Association for Computing Machinery, New               (2023).
+   York, NY, USA, Article 32, 6 pages. https://doi.org/10.1145/3378184.3378228              Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada, Vladislav Golyanik, Christian
+Georgios Pavlakos, Xiaowei Zhou, Konstantinos G Derpanis, and Kostas Daniilidis.                Theobalt, and Feng Xu. 2022. Physical Inertial Poser (PIP): Physics-aware Real-time
+   2017. Harvesting Multiple Views for Marker-less 3D Human Pose Annotations. In                Human Motion Tracking from Sparse Inertial Sensors. In IEEE/CVF Conference on
+   Computer Vision and Pattern Recognition (CVPR).                                              Computer Vision and Pattern Recognition (CVPR).
+Georgios Pavlakos, Luyang Zhu, Xiaowei Zhou, and Kostas Daniilidis. 2018. Learning          Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2021. TransPose: Real-time 3D Human Translation
+   to estimate 3D human pose and shape from a single color image. In Proceedings of             and Pose Estimation with Six Inertial Sensors. ACM Transactions on Graphics 40
+   the IEEE conference on computer vision and pattern recognition. 459–468.                     (08 2021).
+Dario Pavllo, Christoph Feichtenhofer, David Grangier, and Michael Auli. 2019. 3d           Ye Yuan, Umar Iqbal, Pavlo Molchanov, Kris Kitani, and Jan Kautz. 2022. GLAMR: Global
+   human pose estimation in video with temporal convolutions and semi-supervised                Occlusion-Aware Human Mesh Recovery with Dynamic Cameras. In Proceedings
+   training. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern           of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR).
+   Recognition. 7753–7762.                                                                  Andrei Zanfir, Eduard Gabriel Bazavan, Mihai Zanfir, William T Freeman, Rahul
+Gerard Pons-Moll, Andreas Baak, Thomas Helten, Meinard Müller, Hans-Peter Seidel,               Sukthankar, and Cristian Sminchisescu. 2021. Neural descent for visual 3d human
+   and Bodo Rosenhahn. 2010. Multisensor-fusion for 3d full-body human motion                   pose and shape. In Proceedings of the IEEE/CVF Conference on Computer Vision and
+   capture. In 2010 IEEE Computer Society Conference on Computer Vision and Pattern             Pattern Recognition. 14484–14493.
+   Recognition. IEEE, 663–670.                                                              Jinlu Zhang, Zhigang Tu, Jianyu Yang, Yujin Chen, and Junsong Yuan. 2022. MixSTE:
+Haibo Qiu, Chunyu Wang, Jingdong Wang, Naiyan Wang, and Wenjun Zeng. 2019.                      Seq2seq Mixed Spatio-Temporal Encoder for 3D Human Pose Estimation in Video. In
+   Cross View Fusion for 3D Human Pose Estimation. international conference on                  Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition.
+   computer vision (2019).                                                                      13232–13242.
+N Dinesh Reddy, Laurent Guigues, Leonid Pishchulin, Jayan Eledath, and Srinivasa G          T. Zhang, B. Huang, and Y. Wang. 2020a. Object-Occluded Human Shape and Pose
+   Narasimhan. 2021. Tessetrack: End-to-end learnable multi-person articulated 3d               Estimation From a Single Color Image. In 2020 IEEE/CVF Conference on Computer
+   pose tracking. In Proceedings of the IEEE/CVF Conference on Computer Vision and              Vision and Pattern Recognition (CVPR).
+   Pattern Recognition. 15190–15200.                                                        Zhe Zhang, Chunyu Wang, Wenhu Qin, and Wenjun Zeng. 2020b. Fusing Wearable
+Edoardo Remelli, Shangchen Han, Sina Honari, Pascal Fua, and Robert Wang. 2020.                 IMUs With Multi-View Images for Human Pose Estimation: A Geometric Approach.
+   Lightweight multi-view 3d pose estimation through camera-disentangled represen-              computer vision and pattern recognition (2020).
+   tation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern         Jianan Zhen, Qi Fang, Jiaming Sun, Wentao Liu, Wei Jiang, Hujun Bao, and Xiaowei
+   Recognition. 6040–6049.                                                                      Zhou. 2020. Smap: Single-shot multi-person absolute 3d pose estimation. In Euro-
+Martin Schepers, Matteo Giuberti, Giovanni Bellusci, et al. 2018. Xsens MVN: Consis-            pean Conference on Computer Vision. Springer, 550–566.
+   tent tracking of human motion using inertial sensing. Xsens Technol 1, 8 (2018).         Zerong Zheng, Tao Yu, Hao Li, Kaiwen Guo, Qionghai Dai, Lu Fang, and Yebin Liu.
+Paul Schreiner, Maksym Perepichka, Hayden Lewis, Sune Darkner, Paul G Kry, Kenny                2018. Hybridfusion: Real-time performance capture using a single depth sensor and
+   Erleben, and Victor B Zordan. 2021. Global position prediction for interactive               sparse imus. In Proceedings of the European Conference on Computer Vision (ECCV).
+   motion capture. Proceedings of the ACM on Computer Graphics and Interactive                  384–400.
+   Techniques 4, 3 (2021), 1–16.                                                            Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and Hao Li. 2019. On the continuity
+Saurabh Sharma, Pavan Teja Varigonda, Prashast Bindal, Abhishek Sharma, and Arjun               of rotation representations in neural networks. In Proceedings of the IEEE/CVF
+   Jain. 2019. Monocular 3d human pose estimation by generation and ordinal ranking.            Conference on Computer Vision and Pattern Recognition. 5745–5753.
+   In Proceedings of the IEEE/CVF international conference on computer vision. 2325–        Yuxiao Zhou, Marc Habermann, Ikhsanul Habibie, Ayush Tewari, Christian Theobalt,
+   2334.                                                                                        and Feng Xu. 2021. Monocular Real-time Full Body Capture with Inter-part Correla-
+Soshi Shimada, Vladislav Golyanik, Weipeng Xu, Patrick Pérez, and Christian Theobalt.           tions. In IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR).
+   2021. Neural Monocular 3D Human Motion Capture with Physical Awareness.
+   ACM Transactions on Graphics 40 (aug 2021).
+Soshi Shimada, Vladislav Golyanik, Weipeng Xu, and Christian Theobalt. 2020.
+   PhysCap: Physically Plausible Monocular 3D Motion Capture in Real Time. ACM
+   Trans. Graph. 39, 6, Article 235 (nov 2020), 16 pages. https://doi.org/10.1145/
+   3414685.3417877
+Yu Sun, Qian Bao, Wu Liu, Yili Fu, Black Michael J., and Tao Mei. 2021. Monocular,
+   One-stage, Regression of Multiple 3D People. In ICCV.
+Yu Sun, Wu Liu, Qian Bao, Yili Fu, Tao Mei, and Michael J. Black. 2022. Putting People
+   in their Place: Monocular Regression of 3D People in Depth. In IEEE/CVF Conf. on
+   Computer Vision and Pattern Recognition (CVPR).
+Matt Trumble, Andrew Gilbert, Charles Malleson, Adrian Hilton, and John Collomosse.
+   2017. Total Capture: 3D Human Pose Estimation Fusing Video and Inertial Sensors.
+                                                  Shaohua Pan, Qi Ma, Xinyu Yi, Weifeng Hu, Xiong Wang, Xingkang Zhou, Jijunnan Li, and Feng Xu
+
+
+
+
+Figure 5: Qualitative results on the AIST++ (columns 1-3), TotalCapture (columns 4-6), 3DPW, and the 3DPW-OCC Dataset
+(columns 7-9).
+

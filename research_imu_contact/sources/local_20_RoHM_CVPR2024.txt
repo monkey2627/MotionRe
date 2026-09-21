@@ -1,0 +1,781 @@
+                              This CVPR paper is the Open Access version, provided by the Computer Vision Foundation.
+                                           Except for this watermark, it is identical to the accepted version;
+                                     the final published version of the proceedings is available on IEEE Xplore.
+
+
+
+
+                        RoHM: Robust Human Motion Reconstruction via Diffusion
+
+   Siwei Zhang1,2∗             Bharat Lal Bhatnagar2 Yuanlu Xu2 Alexander Winkler2                                Petr Kadlecek2
+                                             Siyu Tang1 Federica Bogo2
+                                      1
+                                        ETH Zürich 2 Meta Reality Labs Research
+                                             {siwei.zhang, siyu.tang}@inf.ethz.ch
+                        {bharatbhatnagar, yuanluxu, winklera, petr.kadlecek, fbogo}@meta.com
+
+
+
+
+ Noisy/occluded Input                HuMoR
+
+
+
+
+ Ours                                 Ours
+
+
+Figure 1. Our method robustly reconstructs smooth and complete 3D human motion from different inputs, such as incomplete and noisy
+motion estimates (left), RGB-D (middle) and RGB (right) monocular videos. We learn diffusion-based models to denoise and infill both
+root trajectory in global space and local motion in body-root space for visible and occluded joints, predicting whether feet are in contact
+or not with the ground for improved physical plausibility. Compared with baselines such as HuMoR [67], our method reconstructs more
+plausible motions that faithfully match image evidence, especially under heavy occlusions.
+
+                             Abstract                                   – from motion reconstruction and denoising to spatial and
+    We propose RoHM, an approach for robust 3D human                    temporal infilling. Extensive experiments on three popu-
+motion reconstruction from monocular RGB(-D) videos in                  lar datasets show that our method outperforms state-of-the-
+the presence of noise and occlusions. Most previous ap-                 art approaches qualitatively and quantitatively, while be-
+proaches either train neural networks to directly regress               ing faster at test time. The code is available at https:
+motion in 3D or learn data-driven motion priors and com-                //sanweiliti.github.io/ROHM/ROHM.html.
+bine them with optimization at test time. The former do                 1. Introduction
+not recover globally coherent motion and fail under occlu-
+sions; the latter are time-consuming, prone to local minima,            In this paper, we tackle the problem of 3D human motion re-
+and require manual tuning. To overcome these shortcom-                  construction from monocular RGB(-D) videos in real sce-
+ings, we exploit the iterative, denoising nature of diffusion           narios – i.e., in the presence of noise and occlusions. Re-
+models. RoHM is a novel diffusion-based motion model                    constructing 3D human motions is crucial for many ap-
+that, conditioned on noisy and occluded input data, recon-              plications, ranging from augmented and virtual reality to
+structs complete, plausible motions in consistent global co-            robotics. Many methods in the literature tackle the prob-
+ordinates. Given the complexity of the problem – requiring              lem by training deep neural networks to directly regress 3D
+one to address different tasks (denoising and infilling) in             body pose and shape from monocular input [10, 19, 34, 39,
+different solution spaces (local and global motion) – we de-            59]. However, these approaches commonly suffer from two
+compose it into two sub-tasks and learn two models, one                 major shortcomings: 1) they estimate only local motion,
+for global trajectory and one for local motion. To cap-                 representing pose in body-root relative coordinates with-
+ture the correlations between the two, we then introduce                out plausible global motion, in world coordinates consistent
+a novel conditioning module, combining it with an itera-                over time; 2) they lack robustness when the body undergoes
+tive inference scheme. We apply RoHM to a variety of tasks              occlusions, in either the spatial or temporal dimension.
+                                                                            In such scenarios, optimization-based methods [67, 72,
+   * The work was done during an internship at Meta.                    100] have shown better performance. For instance, Hu-
+
+
+
+                                                                    14606
+MoR [67] and PhaseMP [72] explicitly address scenarios               at inference time, improves both local and global motion
+with noisy and incomplete input by combining data-driven             quality. Finally, to further encourage physically plausible
+motion priors with application-agnostic optimizers such as           motions that match image evidence, we guide sampling at
+L-BFGS [60]. Still, these methods may fail under heavy               test time with physics-based and image-based scores.
+occlusions (Fig. 1). Furthermore, test-time optimization is              In summary, our contributions are: 1) RoHM, a novel
+time-consuming, prone to local minima, and requires sig-             diffusion-based approach for Robust Human Motion recon-
+nificant manual tuning [11, 75].                                     struction in consistent global coordinates from monocular
+   To overcome these limitations, we propose to leverage             sequences with noise and occlusions; 2) a flexible con-
+the iterative, generative nature of diffusion models. Dif-           ditioning strategy to capture inter-dependencies between
+fusion models were initially proposed for 2D generation              root trajectory and local pose; 3) various applications en-
+tasks [12, 24, 25, 76]; recently, they achieved compelling           abled by RoHM, including motion reconstruction, denois-
+results in 3D human motion generation from input such                ing, spatial and temporal infilling. Extensive experiments
+as text and action labels [35, 71, 82, 95], music [83], and          on three widely used datasets show that RoHM achieves
+sparse (noise-free) keypoints [6, 13, 71]. In particular, these      superior accuracy and realism compared to state-of-the-art
+models proved effective in learning and modelling long-              optimization-based methods, while being 30 times faster at
+term motion dependencies over time [82], which go be-                inference time.
+yond the single-frame conditioning considered in [67, 72].
+Furthermore, their iterative denoising process poses them            2. Related Work
+as a data-driven alternative to the iterative minimization of        Regression-based methods. Many approaches in the lit-
+optimization-based techniques. However, so far diffusion-            erature focus on 3D human shape and pose reconstruc-
+based approaches have mostly focused on synthesizing mo-             tion from a single image [9, 14, 15, 33, 41–46, 49–51, 75,
+tion from user input, rather than reconstructing motion from         86, 90, 97], recently also considering robustness to occlu-
+monocular videos exhibiting noise and occlusions – where             sions [38, 40, 48, 53, 69, 102, 104]. Dealing with occlusions
+reconstructions need to match image evidence whenever                is even more challenging for monocular human motion re-
+available. Here, we explore how to leverage diffusion mod-           construction, requiring one to model plausible dynamics
+els in such reconstruction scenarios.                                over time for non-visible body parts. Many approaches
+    Given a monocular video, we obtain initial, per-frame            train neural networks to predict 3D motion from RGB
+3D pose estimates using off-the-shelf regressors [15, 49, 70]        videos and are not easily adaptable to different input modal-
+and/or per-frame optimization (similar to [67, 72, 100]).            ities [8, 10, 16, 19, 34, 39, 55, 59, 63, 65, 78, 88, 92, 96].
+These estimates are inaccurate and incomplete, with im-              Some methods introduce adversarial priors [34, 39], lever-
+plausible motions. From them, our goal is to reconstruct             age multi-view cues [63] or learn denoising models [59] to
+a smooth and complete 3D motion. This is a complex                   achieve robustness. Still, most of them estimate only lo-
+task, requiring us to address different problems (motion             cal motion in the camera frame without recovering global
+denoising and infilling) in different solution spaces (local         trajectory, thus suffering from jitter and motion artifacts.
+and global motion). We observe that previously proposed              [47, 79, 94] estimate plausible global trajectories from per-
+diffusion-based motion models [71, 82] do not work well              frame local features, but are not robust to occlusions [91].
+in this scenario: they expect noise-free, user-provided key-         In contrast, our method robustly recovers both global and
+points as input, model global and local motion together, and         local motion and can be applied to different inputs.
+cannot ensure alignment between reconstruction and im-               Optimization-based methods. These methods typically
+age evidence. Inspired by [79, 94], we therefore propose             fit a parametric body model [54] to observations (such as
+to decompose the problem. We leverage motions from the               body keypoints, depth, silhouettes etc.) by iteratively min-
+AMASS dataset [57] to learn two diffusion models condi-              imizing an objective function [3, 62, 67, 72, 91, 100]. To
+tioned on noisy input, one for global trajectory reconstruc-         regularize motion, such function contains one or more tem-
+tion and one for local motion prediction – showing the ben-          poral priors. Some approaches define hand-crafted priors
+efits of decoupling the two spaces. Still, this formulation          encouraging motion smoothness (e.g., on body joint ve-
+ignores the correlations between global and local motion             locity or acceleration) [1, 58], or constrain motion in a
+space. While [94] addresses this by predicting trajectory            low-dimensional space [30]; however, they may produce
+based only on infilled local motion, in our scenario we re-          over-smooth motions and foot skating [67]. Lately, the
+quire the estimated trajectory to remain faithful to the in-         availability of large-scale motion capture datasets such as
+put. Drawing inspiration from [98], we therefore propose a           AMASS [57] made it possible to learn powerful motion
+flexible conditioning strategy for trajectory reconstruction,        models from data [67, 72, 100]. LEMO [100] learns two
+exploiting both input data and denoised local motion. We             separate, fully deterministic priors for motion smoothness
+show that this module, combined with an iterative scheme             and infilling. HuMor [67] and PhaseMP [72] propose gen-
+
+
+
+                                                                  14607
+erative priors, modelling the distribution of state transitions      a Markov chain adding i.i.d. Gaussian noise at each step
+between frames via Conditional Variational Autoencoders              t ∈ {1, . . . T }:
+(CVAEs) [4, 52]. Learning transitions only between pair of                                         √
+frames, these methods struggle when occlusions span long                  q(X t |X t−1 ) = N (X t ; αt X t−1 , (1 − αt )I),        (1)
+time intervals (see Sec. 5). Optimization-based methods
+tend to match input data more closely than regression meth-          where αt ∈ [0, 1) defines the variance at each step accord-
+ods, thanks to their iterative minimization; but they are in         ing to a pre-defined schedule and I is the identity matrix.
+general slower, prone to local minima, and require signif-           [25] shows that X t can be directly sampled from X 0 :
+icant manual tuning [11, 75]. In contrast, we propose to                       √          √
+leverage the iterative nature of diffusion models.                      X t = αt X 0 + 1 − αt ϵ, where ϵ ∼ N (0, I). (2)
+Human motion models. A variety of approaches has
+                                                                     Starting from Gaussian noise X T , the inverse diffusion pro-
+been proposed for motion tracking and synthesis, including
+                                                                     cess reconstructs X 0 by iteratively denoising X T over T
+mixtures-of-Gaussians [27], Gaussian processes [84], pose
+                                                                     steps. In practice, we train a denoiser neural network D(·)
+embeddings [61, 64, 81, 85], VAEs [52, 103], 2D CNN [37],
+                                                                     to remove the added Gaussian noise based on condition sig-
+and normalizing flows [23]. These methods may not gener-
+                                                                     nal c and step t: X̂ 0 = D(X t , t, c) (cf. [82]). Leveraging
+alize well to unseen motions [67] and body-scene interac-
+                                                                     Eq. (2), the denoiser can be trained by sampling noise step
+tions. Physics-based methods [17, 18, 28, 55, 56, 66, 73,
+                                                                     t and optimizing the simple objective [25]:
+89, 93] address these challenges by enforcing physics laws
+via simulation. However, simulators are computationally                Lsimple = EX 0 ∼q(X 0 |c),t∼[1,T ] ∥X 0 − D(X t , t, c)∥22 . (3)
+                                                                                                                                
+expensive, non-differentiable, and may introduce discrep-
+ancies between predicted motions and observed input.                 In the following, we use the subscript t to denote the diffu-
+Diffusion models for human motion. Diffusion models                  sion step and n to denote the frame in the motion sequence.
+have demonstrated compelling results for human motion                   Note that conditioning is crucial in our setup, where we
+synthesis conditioned on input such as text and action la-           want to exploit input observations whenever available.
+bels [7, 32, 35, 36, 82, 87, 95, 99], music [83], environ-
+ment [29, 68], and (noise-free) 3D joints [71]. Given their          4. Method
+ability to model long-range spatio-temporal relationships,
+they have been applied to motion forecasting [2, 80] and in-         Our goal is to reconstruct realistic motions from monocular
+filling [71, 82]. [6, 13] use diffusion to synthesize lower          RGB(-D) sequences in the presence of noise and occlusions.
+body motion given head and wrist positions and rotations.            We use off-the-shelf, per-frame regressors [15, 49, 70]
+These methods do not focus on scenarios with noisy input or          and/or per-frame optimization to obtain initial SMPL-X es-
+body occlusion varying over time. Recently, diffusion has            timates for each frame (see Sec. 5.4 and Supp. Mat. for
+been leveraged for 3D body pose estimation [16, 20], even            more details). We stack these estimates into a motion se-
+under severe body truncations [102], but without consider-           quence X̃ ∈ RN ×d , where N is the number of frames and d
+ing the temporal dimension. In contrast, we leverage diffu-          the dimensionality of our representation. Such estimates are
+sion models to achieve robustness against varying ranges of          noisy, inaccurate under occlusions, and temporally incon-
+occlusion and noise over long temporal sequences.                    sistent. Given X̃, we aim to generate realistic motions X̂ 0
+                                                                     in consistent global coordinates. As reconstructing simulta-
+                                                                     neously global trajectory and local articulated pose is chal-
+3. Preliminaries
+                                                                     lenging, we learn their dynamics with two diffusion-based
+SMPL-X [62] is a parametric model that represents the                models, TrajNet and PoseNet (Sec. 4.1). To capture correla-
+human body as a function M(γ, Φ, θ, β, θ h , ϕ), parame-             tions between the two and further refine motion plausibility,
+terized by global translation γ, global orientation Φ, body          we introduce TrajControl, a flexible conditioning module
+pose θ, body shape β, hand pose θh and facial expression             (Sec. 4.2) that we leverage with an iterative schedule at in-
+ϕ. The function returns a triangle mesh M with 10,475                ference time (Sec. 4.3). We describe training objectives in
+vertices. In the following we do not use θ h and ϕ and con-          Sec. 4.4. Fig. 2 shows an overview of our approach.
+sider only the main body parameters, with a total of 22 body         Motion Representation. We represent an (input/output)
+joints. We use SMPL-X instead of SMPL [54] to leverage               motion sequence as X = (R, P ), where R ∈ RN ×dR ,
+the gender-neutral annotations from AMASS [57].                      P ∈ RN ×dP denote root trajectory and local body features,
+Conditional Diffusion Models. We adopt the Denoising                 respectively. At each frame n, xn = (r n , pn ) includes: (1)
+Diffusion Probabilistic Models (DDPMs) formulation [25].             global trajectory features r n , including root (pelvis) linear
+At the core of it are a forward diffusion process and an in-         position r l ∈ R2 , root angular rotation ra ∈ R, root height
+verse, iterative denoising process. Let X 0 ∼ q(X 0 ) be the         rz ∈ R, SMPL-X global translation γ ∈ R3 and global
+real motion distribution. The forward diffusion process is           orientation Φ ∈ R6 ; (2) local body features pn , including
+
+
+
+                                                                  14608
+ Input: Noisy & incomplete motion
+                                                                                                                                            TrajControl
+
+
+
+
+                TrajNet
+                                                              PoseNet
+
+
+
+
+                                                                                                                                              TrajNet
+
+
+                                                                                                                       Iteration i=1            Iteration i>1
+                                                                                                                       For all iterations       1D 1x1 conv
+Output: Complete 3D motion.
+
+Figure 2. Overview of our approach. Given an initial noisy motion sequence X̃ = (R̃, P̃ ) and the corresponding root/body joint
+occlusion masks M R and M P , we employ two diffusion-based models, TrajNet and PoseNet, to estimate global root trajectory R̂0
+and local pose P̂ 0 , separately (Sec. 4.1). We leverage an additional conditioning module, TrajControl, to fine-tune TrajNet and flexibly
+condition it on denoised local pose P̂ 0 , leading to improved trajectory reconstruction (Sec. 4.2). At inference time, TrajNet, PoseNet, and
+TrajControl are leveraged in an iterative inference scheme to refine local and global motion (Sec. 4.3).
+
+local joint positions J ∈ R21×3 , joint rotations θ ∈ R21×6 ,                    trajectory representation (Rt , R̃, R̂0 ) for TrajNet is param-
+body shape β ∈ R10 , and foot contact labels f ∈ {0, 1}4 :                       eterized as (r l , ra , rz , γ, Φ), excluding first derivatives to
+                                                                                 avoid global drifting caused by inaccurate velocities.
+             r n = (r l , ṙ l , ra , ṙa , rz , γ, γ̇, Φ, Φ̇),         (4)      PoseNet. Given denoised, infilled trajectory R̂0 from Tra-
+             pn = (J , J˙, θ, β, f ),                                   (5)      jNet, noisy local motion P̃ and joint occlusion mask M P ,
+                                                                                 we train a denoiser DP (·) to recover smooth and plausible
+where the dot indicates the first derivative (velocity). For                     local motion P̂ 0 :
+rotations, we adopt the 6D representation from [105]. See
+                                                                                              (R̂0 , Pˆ0 ) = DP ((R̂0 , P t ), t, cP ),                         (7)
+Supp. Mat for more details. For f , we select two joints
+per foot and set the corresponding contact label as 1 if the                     where P t denotes local motion at each diffusion denoising
+joint is in contact with the ground, else 0 [66, 97]. For each                   step t. The conditional signal cP = (R̂0 , M P ⊙ P̃ ) in-
+frame n, we define a local coordinate system such that lo-                       cludes TrajNet’s output and the corrupted initial local mo-
+cal joint positions are relative to the current frame pelvis                     tion. To leverage the clean and complete information from
+joint, projected on the ground [21, 26, 82, 100]. This over-                     TrajNet, we use the reconstructed trajectory R̂0 as both in-
+parameterized representation allows explicit modelling of                        put and output for DP (·), overwriting the global motion part
+both 3D skeleton joints and SMPL-X meshes, such that
+                                                                                 with R̂0 at each diffusion step.
+they can benefit the one from the other. Together with R
+                                                                                 Architectures. TrajNet adopts a U-Net encoder-decoder
+and P , we define root joint and local joint visibility masks
+                                                                                 structure built upon [31, 68]. An extra conditioning encoder
+M R ∈ {0, 1}N ×dR and M P ∈ {0, 1}N ×dP , respectively
+                                                                                 maps the conditional trajectory signal into multi-layer fea-
+(1 denotes visible, 0 otherwise). They are obtained by ran-
+                                                                                 tures, which are concatenated with U-Net encoder features
+domly masking joints at training time and computing joint
+                                                                                 at each intermediate layer. PoseNet employs a transformer
+visibility at test time (see Sec. 4.4 and Supp. Mat.).
+                                                                                 encoder structure akin to [82]. The conditioning signal cP
+                                                                                 is encoded via an MLP (Multilayer Perceptron) and fed into
+4.1. Diffusing Global and Local Motion
+                                                                                 the transformer. See Supp. Mat. for more details.
+We tackle the problem of denoising and infilling global and
+local motion by using two networks, TrajNet and PoseNet.                         4.2. Controlling Global Motion Reconstruction
+TrajNet. Given a noisy root trajectory R̃ and root occlusion                     Learning two distinct models for global and local motion
+mask M R , we train a denoiser DR (·) to recover smooth and                      does not capture the correlations between the two. In partic-
+plausible global trajectory R̂0 :                                                ular, we observe that, under significant noise, TrajNet out-
+                                                                                 puts might still lead to physically implausible motions with
+       R̂0 = DR (Rt , t, cR ), where cR = M R ⊙ R̃.                     (6)      foot skating (see Sec. 5.5). [94] proposes to first infill local
+                                                                                 pose and then use that to predict trajectory. However, in our
+Rt denotes root trajectory at each diffusion denoising step                      case we want to keep the estimated trajectory as close as
+t and ⊙ denotes element-wise matrix multiplication. The                          possible to input observations. Conditioning TrajNet on the
+
+
+
+                                                                              14609
+initial corrupted local motion P̃ is too challenging, since          Algorithm 1: Iterative inference with TrajControl.
+such initial poses are noisy and incomplete. Our solution is                                                 K      K
+                                                                         Result: Reconstructed motion (R̂0 , P̂ 0 )
+to adapt TrajNet such that it can be flexibly conditioned on             Init: Noisy motion (R̃, P̃ ), root occlusion mask M R , body joint
+local motion estimates, when they are available.                           occlusion mask M P , TrajNet DR (·), PoseNet DP (·),
+    Inspired by [98], we introduce TrajControl, an auxiliary               TrajControl E(·);
+module for fine-tuning TrajNet with additional control sig-              for i = 1 : K do
+                                                                                         i     i
+nal from local body pose (Fig. 2 right). Specifically, we                     compute R̂0 , P̂ 0 by Eq. (6) (7) (8) (9) if i = 1;
+                                                                                           i    i
+freeze the parameters of our pre-trained TrajNet and clone                     compute R̂0 , P̂ 0 by Eq. (6) (7) (10) (11) if i > 1;
+the encoder layers to a trainable duplicate, E(·), which                 end
+serves as the TrajControl module. Iteratively, we feed the
+output of PoseNet into E(·), thus improving TrajNet output          Score-guided sampling. Besides embedding condition
+based on denoised, complete local motion. In turn, the im-          signals in the decoder architecture, diffusion models en-
+proved TrajNet output can be leveraged to further refine lo-        able also test-time conditioning via classifier-based guid-
+cal body motion. We detail this iterative scheme in Sec. 4.3.       ance, which has been already leveraged for image gener-
+Architecture. E(·) is connected to the frozen pre-trained           ation [12, 74, 77], trajectory prediction [68], and human
+TrajNet with zero convolution layers (1D convolution layer          mesh recovery [102]. In a similar spirit, we enhance phys-
+with kernel size 1, initialized from zero bias and zero             ical plausibility and accuracy of reconstructed motions by
+weight), to ensure a smooth start for the fine-tuning. Dur-         guiding PoseNet sampling with two scores, penalizing foot
+ing fine-tuning, we update only the weights of E(·). In this        skating and enforcing 2D joint reprojection consistency:
+way, the fine-tuned TrajNet can still be conditioned on noisy            Jskate (P̂ 0 ) = ∥f̂ 0 J˙3D
+                                                                                                  foot
+                                                                                                       (R̂0 , P̂ 0 )∥2 ,                   (12)
+trajectory only, when clean local motion is not available.
+                                                                                                                                       2
+                                                                          J2D (P̂ 0 ) = ∥cconf (ΠK (J3D (R̂0 , P̂ 0 )) − Jdet )∥ , (13)
+4.3. Inference
+                                                                    where J3D and J˙3D denote body 3D joint positions and ve-
+Iterative inference. We leverage TrajNet, PoseNet, and              locities obtained via forward kinematics, respectively. Jdet
+TrajControl to iteratively refine local and global motion at        and cconf denote 2D body keypoints and their confidence
+inference time. Given the initial noisy/occluded motion,            scores, obtained by running OpenPose [5] on input images;
+we first run our “vanilla” TrajNet and PoseNet sequentially.        ΠK is the 3D-to-2D projection to image space with camera
+TrajNet is conditioned on the initial noisy input root trajec-      intrinsics K. The superscript ‘foot’ identifies foot joints.
+tory R̃ and root joint occlusion mask M R ; PoseNet is con-         f̂ 0 denotes the foot contact labels predicted by PoseNet,
+ditioned on the denoised trajectory R̂0 , noisy local motion        so that Jskate penalizes foot joint velocity when the joint is
+input P̃ , and body joint visibility mask M P :                     predicted as touching the ground [67, 100]. The gradients
+                                                                    ∇J(·) (P̂ 0 ) effectively guide the diffusion sampling to fur-
+                  cR = M R ⊙ R̃,                          (8)
+                                                                    ther alleviate foot skating and better align reconstructed mo-
+                          i
+                  cP = (R̂0 , M P ⊙ P̃ ).                 (9)       tion to image observations (if available). At each sampling
+                                                                    step t, PoseNet predicts P̂ 0 by Eq. (7), which is then noised
+For any subsequent iteration i, TrajNet is conditioned on           back to P t−1 by sampling from the Gaussian distribution:
+                       i−1                    i−1
+estimated trajectory R̂0 and local pose P̂ 0 , output of            P t−1 ∼ N (µt (P t , P̂ 0 ) + (λskate ∇Jskate + λ2D ∇J2D )Σt , Σt ),
+PoseNet at iteration i − 1, as the additional control signal;                                                                       (14)
+                                                       i
+PoseNet is conditioned on current TrajNet output R̂0 and            with µt as a linear combination of P t and P̂ 0 . The guid-
+              i−1
+local pose P̂ 0 predicted at iteration i − 1:                       ance is modulated by Σt , the variance of a pre-scheduled
+                                                                    Gaussian distribution [25], and by the scaling weights λskate
+                          i−1          i−1                          and λ2D .
+                 cR = (R̂0 , E(t, P̂ 0 )),               (10)
+                         i      i−1
+                 cP = (R̂0 , P̂ 0 ).                     (11)       4.4. Training
+                                                                    We train our diffusion denoisers DR (·) and DP (·) using
+    Algorithm 1 summarizes the approach. Note that at each          Lsimple in Eq. (3), plus losses enforcing consistency with the
+‘iteration’ i (i ∈ {1, . . . K}), we sample from TrajNet and        ground truth in terms of 3D joint position (LJ3D ) and 3D
+PoseNet running all T diffusion denoising steps. T is set           joint velocity (Lvel ), and penalizing foot skating (Lskate ):
+to 100 for TrajNet and 1000 for PoseNet. Empirically, we
+find that K = 2 iterations are sufficient to obtain accurate                      LJ3D = ∥J3D (R0 , P 0 ) − J3D (R, P̂ 0 )∥2 ,             (15)
+results. While one could still run this iterative inference                       Lvel = ∥J˙3D (R0 , P 0 ) − J˙3D (R, P̂ 0 )∥2 ,           (16)
+between TrajNet and PoseNet without using TrajControl,
+we show in Sec. 5.5 that this leads to degraded results.                         Lskate = ∥f 0 J˙3D
+                                                                                                 foot
+                                                                                                      (R0 , P̂ 0 )∥2 ,                     (17)
+
+
+
+                                                                 14610
+where (R0 , P 0 ) is the ground-truth motion; R refers to             Physical Plausibility. We report additional metrics to
+ground-truth root trajectory R0 for PoseNet, and predicted            assess motion and scene-interaction plausibility. When
+root trajectory R̂0 for TrajNet. f 0 denotes ground-truth             ground-truth motion is available (AMASS and EgoBody),
+foot contact labels, and J˙3D
+                           foot
+                                denotes the predicted foot joint      we report the acceleration error (Accel) as the difference
+velocities. The overall loss is defined as:                           in acceleration between predicted and ground-truth 3D
+                                                                      joints [39]; for PROX, we report the norm of mean per-
+  L = Lsimple + λJ3D LJ3D + λvel Lvel + λskate Lskate , (18)          joint acceleration (∥Accel∥). Both metrics are in m/s2 .
+                                                                      Foot skating ratio (Skating) measures how often feet slide
+    PoseNet and TrajNet are trained separately on the
+                                                                      on the floor. Following [100], we define sliding as happen-
+AMASS dataset [57], with each sequence trimmed into
+                                                                      ing when the velocity of all foot joints exceeds 10cm/s, toe
+short clips of N = 144 frames. For both training the
+                                                                      joints’ height above the ground is lower than 10cm, and an-
+“vanilla” TrajNet and fine-tuning TrajNet with TrajControl,
+                                                                      kle joints’ height is lower than 15cm. The mean ground
+we exclude Lskate , and only compute LJ3D and Lvel for the
+                                                                      penetration distance (Dist) [67, 72] measures to what extent
+root joint. We utilize ground-truth local pose P 0 as the con-
+                                                                      the toe joints penetrate into the ground, measured in mm.
+trol input of TrajControl to fine-tune TrajNet.
+    During training, we synthesize noisy and partially oc-
+                                                                      5.3. Motion from 3D Observations
+cluded motion X̃ by corrupting ground-truth motion X 0 :
+we add Gaussian noise to SMPL-X parameters, obtaining                 Experimental setup. To evaluate RoHM’s robustness to
+noisy joint positions by forward kinematics, and mask out             noisy and occluded data, we run two sets of experiments
+subsets of joints. We employ a curriculum training scheme             on AMASS: (1) motion denoising + infilling (Occ-L.), and
+by gradually increasing noise levels and occlusion rates as           (2) motion denoising + in-betweening (Occ-10%). Given a
+training progresses. See Supp. Mat. for more details.                 SMPL-X motion sequence from our AMASS test set, in (1)
+                                                                      we mask out all lower body joint parameters (both positions
+5. Experiments                                                        and rotations), simulating scenarios commonly occurring
+                                                                      when people move in a 3D scene; in (2), we mask out an en-
+5.1. Datasets
+                                                                      tire subsequence of frames (10% of the original sequence),
+AMASS [57] is a large-scale motion capture dataset col-               thus requiring the model to generate the in-between motion.
+lecting high-quality 3D human pose and shape annotations.             In both setups, we add Gaussian noise to SMPL-X pose and
+We use the official SMPL-X neutral body annotations for               translation parameters and use the resulting noisy and oc-
+training and evaluation. We downsample each sequence to               cluded 3D motion data as input for our model. We consider
+30fps. As in [100], we use TCD handMocap, TotalCapture,               different, increasing noise levels: noise level k corresponds
+and SFU for testing and the remaining subsets for training.           to Gaussian noise with standard deviation of (k ◦ , k ◦ , k cm)
+PROX [22] collects monocular RGB-D videos of people                   for (Φ, θ, γ). Note that the noise, defined on SMPL-X pa-
+interacting with various 3D indoor scenes. Since the dataset          rameters, will accumulate along the kinematic tree.
+does not provide ground-truth annotations, we use a subset            Baselines.      We compare RoHM with VPoser-t, Hu-
+of sequences to evaluate physical plausibility as in [67, 72].        MoR [67], and an adapted version of MDM [82]
+EgoBody [101] collects sequences of people interacting                (‘MDM++’). As in [67, 72], VPoser-t is an optimization-
+with each other in various 3D indoor environments, cap-               based method using VPoser [62] and 3D joint smooth-
+turing multi-modal input streams with both head-mounted               ing [30]. It serves as the initialization stage for HuMoR. We
+(first-person) and external (third-person) cameras. The               cannot directly apply MDM/PriorMDM [71] to our setup,
+dataset provides ground-truth SMPL/SMPL-X annotations.                since they require noise-free visible joints for infilling and
+We manually select a set of third-person RGB sequences                do not support explicit conditioning on noisy observations –
+(around 24k frames) exhibiting severe human-scene occlu-              resulting in both pose and trajectory drifting. We therefore
+sions, and use them for evaluation.                                   train an adapted and improved version, which allows condi-
+                                                                      tioning on the initial corrupted motion, using the same data
+5.2. Evaluation Metrics                                               augmentation as RoHM (see Supp. Mat. for details).
+Accuracy. We adopt the Mean Per-Joint Position Error in               Results. Tab. 1 reports results on the AMASS test set.
+mm to evaluate predicted body joint accuracy in the pelvis-           Our approach demonstrates significantly superior perfor-
+aligned coordinate system (MPJPE) and in the global coor-             mance, in both accuracy and physical plausibility. Specif-
+dinate system (GMPJPE). We report numbers for full-body               ically, when compared to HuMoR, we achieve ≥ 48% re-
+(all), visible (vis) and occluded (occ) body joints separately,       duction in GMPJPE for occluded body parts in both Occ-
+considering the 22 SMPL-X main body joints. Furthermore,              L. and Occ-10% setups. The reduced acceleration errors
+we measure foot-ground contact binary classification accu-            suggest RoHM can recover more realistic motion dynamics.
+racy (Contact) for the 4 foot joints as in [67].                      This facilitates also accurate foot contact label predictions,
+
+
+
+                                                                   14611
+                                                                     3                                                 0.25
+GMPJPE-vis (mm)
+
+
+
+                                 Ours                                          Ours                                                Ours w/o guide                                                      GMPJPE↓
+                  100            HuMoR                               2         HuMoR                                   0.20        Ours w/o guide w/o PC               Input   Noise Method                        Accel↓ Cont↑ Skat↓ Dist↓
+
+
+
+
+                                                          Freq (%)
+
+
+
+
+                                                                                                             Skating
+                                                                                                                       0.15                                                                         -vis -occ -all
+                  50                                                 1
+                                                                                                                       0.10
+                                                                                                                                                                                      VPoser-t   33.0 242.6 109.2       5.1        -     0.219 25.91
+                        1         3       5       7   9                  1          3       5       7    9                     1      3        5       7   9
+                                      Noise level                                       Noise level                                        Noise level                           3    HuMor [67] 42.4 167.9 88.0        3.3      0.68    0.230 2.59
+                                                                                                                                                                                      MDM++      36.2 71.9 49.2         3.0      0.94    0.102 0.67
+    Figure 3. Model performance wrt different input noise levels                                                                                                                      Ours       21.8 57.4 34.8         2.3      0.95    0.078 0.69
+    for the Occ-L. setup on the AMASS test set.                                                                                                                    Occ-L.
+                                                                                                                                                                                      VPoser-t     43.0 243.1 115.7     7.2        -     0.179 22.5
+                                                                                                                                                                                 5    HuMor        46.1 163.9 88.9      4.3      0.60    0.257 1.81
+                                                                                                                                                                                      MDM++        40.9 75.4 53.4       4.4      0.93    0.126 0.70
+                                                                                                                                                                                      Ours         31.3 66.1 44.0       3.0      0.94    0.105 0.69
+                                                                                                                                                                                      VPoser-t     55.1 247.6 125.1     9.4        -     0.116 18.93
+                                                                                                                                                                                 7    HuMor        70.7 186.2 112.7     5.9      0.52    0.269 2.56
+                                                                                                                                                                                      MDM++        53.5 100.0 77.5      9.3      0.74    0.287 0.70
+                                                                                                                                                                                      Ours         45.6 88.9 61.3       4.1      0.87    0.150 0.76
+                                                                                                                                                                                      VPoser-t   58.9 136.4 66.4        3.4        - 0.379 3.12
+                                                                                                                                                                  Occ-10%        3    HuMor [67] 50.0 109.0 55.7        2.6      0.88 0.192 0.66
+                                                                                                                                                                                      Ours       26.3 56.3 29.2         2.3      0.96 0.085 0.62
+                                      Input                                             HuMoR                                             Ours
+
+                                                                                                                                                                  Table 1. Evaluation on AMASS. The best / second best results are
+                                                                                                                                                                  in boldface, and underlined, respectively. ‘Cont’ denotes Contact,
+                                                                                                                                                                  and ‘Skat’ denotes Skating.
+
+                            GT                HuMoR                          Ours                   GT                        HuMoR                Ours
+                                                                                                                                                                                                 RGB-D                            RGB
+
+    Figure 4. Qualitative results on AMASS. Given noisy input with                                                                                                Method             Skating↓    ∥Accel∥↓   Dist↓     Skating↓    ∥Accel∥↓      Dist↓
+    occluded lower body, we reconstruct more accurate and realistic                                                                                               CLIFF [49]            -            -        -        0.707            49.6    61.80
+    motions (row 1-2), with fewer foot-ground penetrations (row 3)                                                                                                VPoser-t            0.286        3.4      48.75      0.219             3.2    50.14
+                                                                                                                                                                  LEMO [100]          0.176         1.8     34.22        -                -        -
+    than the baseline method.                                                                                                                                     HuMoR [67]          0.117         1.9     54.76      0.139             2.3    35.41
+                                                                                                                                                                  PhaseMP [72]          -            -        -        0.180             1.8    46.96
+                                                                                                                                                                  Ours-init           0.565        24.4     28.70      0.758            43.7    73.83
+    leading to ≥ 44% improvement in foot skating over Hu-                                                                                                         Ours                0.038        1.8      3.36       0.116             2.2     9.73
+    MoR and fewer foot-ground inter-penetrations (Fig. 4, row
+    3). MDM++ performs similarly to us in foot-ground col-                                                                                                        Table 2. Evaluation on PROX. The best / second best results are
+    lisions, but reconstruction accuracy and other plausibility                                                                                                   in boldface, and underlined, respectively.
+    metrics are noticeably inferior in comparison. In scenarios
+    with larger noise (e.g., level 7), baselines struggle to recover                                                                                              a fair quantitative comparison against baselines – factoring
+    plausible lower body motions, often leading to legs floating                                                                                                  out the impact of the initialization strategy. Please refer to
+    in the air (see Fig. 4, row 1-2). This is particularly evident                                                                                                the Supp. Mat. for more implementation details.
+    for VPoser-t, which therefore exhibits a low skating ratio,                                                                                                   Baselines. We compare our method against (1) a per-frame
+    as the skating score only considers frames with foot-ground                                                                                                   human mesh regressor, CLIFF [49] (RGB only) and (2)
+    contact. Fig. 3 (left, middle) compares robustness to noise                                                                                                   four optimization-based methods leveraging motion priors:
+    of our method and HuMoR. Increasing input noise levels                                                                                                        VPoser-t [62, 67], HuMoR [67], LEMO [100] (RGB-D
+    corresponds to a substantial decline in performance for Hu-                                                                                                   only) and PhaseMP [72] (RGB only) * . Note that methods
+    MoR, while RoHM shows more robustness. Note that our                                                                                                          of type (2) are currently the ones reporting the best results
+    method is only trained with a noise level of 2.                                                                                                               for robust monocular motion reconstruction. For reference,
+                                                                                                                                                                  we also include as a baseline our initialization stage (‘Ours-
+    5.4. Motion from RGB(-D) Videos                                                                                                                               init’).
+    We compare the performance of RoHM against baselines on                                                                                                       Results. Tab. 2 reports physical plausibility results ob-
+    motion reconstruction from RGB/RGB-D videos on PROX,                                                                                                          tained on PROX. CLIFF and Ours-init (RGB/RGB-D) are
+    and from RGB videos on EgoBody.                                                                                                                               per-frame methods, producing noticeable motion jitter and
+    Initialization. On PROX, we obtain initial noisy motion es-                                                                                                   foot skating. VPoser-t simply enforces 3D joint smoothness
+    timates X̃ by running off-the-shelf per-frame 3D pose and                                                                                                     and struggles to recover realistic motion dynamics. LEMO
+    shape regressors [15, 49, 70], returning per-frame SMPL-                                                                                                      tackles noise and occlusions separately, generalizing less
+    X parameters. We directly feed their output to our networks                                                                                                   well to such complex scenarios. HuMoR and PhaseMP
+    in RGB scenarios. For RGB-D sequences, we roughly align                                                                                                       model motion transitions between frames but are less effec-
+    the regressor estimates to depth data via optimization min-                                                                                                   tive in capturing longer-range temporal correlations – pro-
+    imizing joint errors. On EgoBody, we follow HuMoR and                                                                                                            * We compare with PhaseMP in the PROX-RGB setup using the results
+
+    use VPoser-t for initialization. This allows us to perform                                                                                                    kindly provided by PhaseMP authors.
+
+
+
+
+                                                                                                                                                               14612
+                                                                                                           RGB-D                         RGB
+                                                                                 Method         Skating↓   ∥Accel∥↓   Dist↓   Skating↓   ∥Accel∥↓   Dist↓
+                                                                                 Ours            0.038       1.8      3.36     0.116       2.2       9.73
+                                                                                 w/o TC itr=2    0.046       1.8      4.22     0.146       2.3      10.99
+                                                                                 w/o TC          0.056       2.1      4.62     0.165       2.7      11.51
+                                                                                 w/o J w/o TC    0.072       1.7      3.42     0.213       2.2      10.20
+
+
+                                                                                 Table 4. Ablation study on PROX. The best / second best re-
+                                                                                 sults are in boldface, and underlined, respectively. J denotes the
+                                                                                 test-time guidance in Eq. (12)(13), and ‘TC’ denotes TrajControl.
+                                                                                 ‘itr=2’ denotes two iterative iterations as in Sec. 4.3.
+
+
+
+
+      HuMoR             Ours                  HuMoR            Ours
+                                                                                 Figure 6. Ablation for test-time guidance J2D . For each exam-
+                                                                                 ple, left/right denote without and with J2D (Eq. (13)), respectively.
+Figure 5. Qualitative results on PROX (RGB-D input, left) and
+                                                                                 Sec. 4.3 without TrajControl (‘w/o TC itr=2’ in Tab. 4) im-
+EgoBody (RGB input, right).
+                                                                                 proves motion plausibility to some extent but is still sub-
+                                 MPJPE↓                                          optimal. Test-time score guidance further improves result-
+Method        GMPJPE↓                           Accel↓   Skating↓     Dist↓
+                               -vis  -occ
+                                                                                 observation alignment (see Fig. 6) and alleviates foot skat-
+VPoser-t        344.8          63.8   126.2       3.8     0.143       13.34      ing in all setups. As expected, test-time guidance slightly
+HuMoR [67]      340.3          74.5   164.6       3.5     0.147       17.44
+Ours            314.7          60.0   122.9       1.6     0.010        0.96      impacts motion smoothness – an aspect compensated by the
+                                                                                 iterative inference scheme.
+Table 3. Evaluation on EgoBody (RGB). The best / second best
+results are in boldface, and underlined, respectively.
+                                                                                 6. Conclusion
+ducing implausible results under heavy occlusions. In con-                       We proposed RoHM, an approach for robust human motion
+trast, RoHM reconstructs smooth motions with improved                            reconstruction. Differently from previous work relying on
+foot-ground interactions (Skating and Dist), and realistic                       test-time optimization [67, 72], the approach learns how to
+motions for occluded body parts, as shown in Fig. 5. No-                         reconstruct motion from data using diffusion models. The
+tably, our method starts from a much more challenging ini-                       approach decouples the problem of recovering global and
+tialization (Ours-init) compared to HuMoR and PhaseMP                            local motion by learning two models and conditioning them
+(VPoser-t), with more severe jitter and foot skating, as can                     on available image evidence; a flexible control module cap-
+be observed by comparing rows 2 and 6 in Tab. 2.                                 tures correlations between global and local dynamics, lever-
+    Factoring out the impact of the initialization stage, Tab. 3                 aged by an iterative inference scheme to refine motion plau-
+presents quantitative results on EgoBody. We start from the                      sibility. Experiments on three publicly available datasets
+same initialization as HuMoR (VPoser-t) and consistently                         show that the approach can reconstruct more realistic and
+outperform the baselines across all metrics. Qualitative re-                     accurate motions than state-of-the-art baselines, especially
+sults are shown in Fig. 5 (right). This indicates that RoHM                      in challenging scenarios exhibiting noise and occlusions.
+can generate more plausible motions, even in the highly oc-                      Limitations and Future Work. RoHM currently does
+cluded, challenging scenarios of this dataset.                                   not work online at real-time framerates. In the future, we
+Runtime. Our approach exhibits significantly reduced run-                        plan to evaluate accuracy-efficiency tradeoffs using differ-
+time compared to HuMoR, being 30 times faster factoring                          ent architectures (e.g., [13]). Moreover, adapting RoHM
+out the initialization stage (see details in Supp. Mat.).                        to further incorporate 3D environment conditions to model
+                                                                                 human-scene interactions is an exciting avenue for future
+5.5. Ablation Study
+                                                                                 research. Finally, while here we focused on full-body re-
+We perform ablation studies on AMASS (Fig. 3 right, with                         construction, future work should extend RoHM to model
+respect to different noise levels) and PROX (Tab. 4). Our it-                    also facial expressions and articulated hand poses over time.
+erative inference scheme leveraging TrajControl effectively                      Acknowledgements. Siyu Tang is partially funded by the
+alleviates foot skating by closing the gap between PoseNet                       SNSF project grant 200021 204840. We sincerely thank
+and TrajNet, particularly in the presence of large noise (see                    Korrawe Karunratanakul, Sebastian Starke, Marko Miha-
+Fig. 3 right, and ‘w/o TC’ versus ‘Ours’ in Tab. 4). Iter-                       jlovic, Tony Tung, Yuting Ye, Artsiom Sanakoyeu, and
+ating between TrajNet and PoseNet twice as described in                          Yuhua Chen for insightful discussions.
+
+
+
+                                                                              14613
+References                                                            [17] Erik Gärtner, Mykhaylo Andriluka, Erwin Coumans, and
+                                                                           Cristian Sminchisescu. Differentiable dynamics for artic-
+ [1] Anurag Arnab, Carl Doersch, and Andrew Zisserman. Ex-                 ulated 3d human motion reconstruction. In CVPR, 2022.
+     ploiting temporal context for 3d human pose estimation in             3
+     the wild. In CVPR, 2019. 2                                       [18] Erik Gärtner, Mykhaylo Andriluka, Hongyi Xu, and Cris-
+ [2] German Barquero, Sergio Escalera, and Cristina Palmero.               tian Sminchisescu. Trajectory optimization for physics-
+     Belfusion: Latent diffusion for behavior-driven human mo-             based reconstruction of 3d human pose from monocular
+     tion prediction. In ICCV, 2023. 3                                     video. In CVPR, 2022. 3
+ [3] Federica Bogo, Angjoo Kanazawa, Christoph Lassner, Pe-           [19] Shubham Goel, Georgios Pavlakos, Jathushan Rajasegaran,
+     ter Gehler, Javier Romero, and Michael J. Black. Keep it              Angjoo Kanazawa, and Jitendra Malik. Humans in 4D:
+     SMPL: Automatic estimation of 3D human pose and shape                 Reconstructing and tracking humans with transformers. In
+     from a single image. In ECCV, 2016. 2                                 ICCV, 2023. 1, 2
+ [4] Yujun Cai, Yiwei Wang, Yiheng Zhu, Tat-Jen Cham, Jianfei         [20] Jia Gong, Lin Geng Foo, Zhipeng Fan, Qiuhong Ke, Hos-
+     Cai, Junsong Yuan, Jun Liu, Chuanxia Zheng, Sijie Yan,                sein Rahmani, and Jun Liu. Diffpose: Toward more reliable
+     Henghui Ding, et al. A unified 3d human motion synthesis              3d pose estimation. In CVPR, 2023. 3
+     model via conditional variational auto-encoder. In ICCV,         [21] Chuan Guo, Shihao Zou, Xinxin Zuo, Sen Wang, Wei Ji,
+     2021. 3                                                               Xingyu Li, and Li Cheng. Generating diverse and natural
+ [5] Zhe Cao, Tomas Simon, Shih-En Wei, and Yaser Sheikh.                  3d human motions from text. In CVPR, 2022. 4
+     Realtime multi-person 2d pose estimation using part affin-       [22] Mohamed Hassan, Vasileios Choutas, Dimitrios Tzionas,
+     ity fields. In CVPR, 2017. 5                                          and Michael J. Black. Resolving 3D human pose ambigui-
+                                                                           ties with 3D scene constraints. In ICCV, 2019. 6
+ [6] Angela Castillo, Maria Escobar, Guillaume Jeanneret, Al-
+     bert Pumarola, Pablo Arbeláez, Ali Thabet, and Artsiom          [23] Gustav Henter, Simon Alexanderson, and Jonas Beskow.
+     Sanakoyeu. Bodiffusion: Diffusing sparse observations for             MoGlow: Probabilistic and controllable motion synthesis
+     full-body human motion synthesis. In ICCV, 2023. 2, 3                 using normalising flows. ACM TOG, 39(4):1–14, 2020. 3
+                                                                      [24] Jonathan Ho and Tim Salimans. Classifier-free diffusion
+ [7] Xin Chen, Biao Jiang, Wen Liu, Zilong Huang, Bin Fu, Tao
+                                                                           guidance. In NeurIPS 2021 Workshop on Deep Generative
+     Chen, and Gang Yu. Executing your commands via motion
+                                                                           Models and Downstream Applications, 2021. 2
+     diffusion in latent space. In CVPR, 2023. 3
+                                                                      [25] Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising dif-
+ [8] Yu Cheng, Bo Yang, Bo Wang, Yan Wending, and Robby                    fusion probabilistic models. In NeurIPS, 2020. 2, 3, 5
+     Tan. Occlusion-Aware Networks for 3D Human Pose Esti-            [26] Daniel Holden, Jun Saito, and Taku Komura. A deep learn-
+     mation in Video. In ICCV, 2019. 2                                     ing framework for character motion synthesis and editing.
+ [9] Junhyeong Cho, Kim Youwang, and Tae-Hyun Oh. Cross-                   ACM TOG, 35(4):1–11, 2016. 4
+     attention of disentangled modalities for 3D human mesh re-       [27] Nicholas Howe, Michael Leventon, and William Freeman.
+     covery with transformers. In ECCV, 2022. 2                            Bayesian reconstruction of 3D human motion from single-
+[10] Hongsuk Choi, Gyeongsik Moon, Ju Yong Chang, and Ky-                  camera video. In NeurIPS, 2000. 3
+     oung Mu Lee. Beyond static features for temporally con-          [28] Buzhen Huang, Liang Pan, Yuan Yang, Jingyi Ju, and Yan-
+     sistent 3d human pose and shape from a video. In CVPR,                gang Wang. Neural mocon: Neural motion control for
+     2021. 1, 2                                                            physically plausible human motion capture. In CVPR,
+[11] Vasileios Choutas, Federica Bogo, Jingjing Shen, and                  2022. 3
+     Julien Valentin. Learning to fit morphable models. In            [29] Siyuan Huang, Zan Wang, Puhao Li, Baoxiong Jia, Tengyu
+     ECCV, 2022. 2, 3                                                      Liu, Yixin Zhu, Wei Liang, and Song-Chun Zhu. Diffusion-
+[12] Prafulla Dhariwal and Alexander Nichol. Diffusion models              based generation, optimization, and planning in 3d scenes.
+     beat gans on image synthesis. In NeurIPS, 2021. 2, 5                  In CVPR, 2023. 3
+                                                                      [30] Yinghao Huang, Federica Bogo, Christoph Lassner, Angjoo
+[13] Yuming Du, Robin Kips, Albert Pumarola, Sebastian
+                                                                           Kanazawa, Peter V Gehler, Javier Romero, Ijaz Akhter,
+     Starke, Ali Thabet, and Artsiom Sanakoyeu. Avatars grow
+                                                                           and Michael J Black. Towards accurate marker-less human
+     legs: Generating smooth human motion from sparse track-
+                                                                           shape and pose estimation over time. In 2017 International
+     ing inputs with diffusion model. In CVPR, 2023. 2, 3, 8
+                                                                           Conference on 3D Vision (3DV), 2017. 2, 6
+[14] Qi Fang, Qing Shuai, Junting Dong, Hujun Bao, and Xi-            [31] Michael Janner, Yilun Du, Joshua B Tenenbaum, and
+     aowei Zhou. Reconstructing 3D human pose by watching                  Sergey Levine. Planning with diffusion for flexible behav-
+     humans in the mirror. In CVPR, 2021. 2                                ior synthesis. arXiv preprint arXiv:2205.09991, 2022. 4
+[15] Yao Feng, Vasileios Choutas, Timo Bolkart, Dimitrios             [32] Biao Jiang, Xin Chen, Wen Liu, Jingyi Yu, Gang Yu, and
+     Tzionas, and Michael J Black. Collaborative regression of             Tao Chen. Motiongpt: Human motion as a foreign lan-
+     expressive bodies using moderation. In 2021 International             guage. Advances in Neural Information Processing Sys-
+     Conference on 3D Vision (3DV), 2021. 2, 3, 7                          tems, 36, 2024. 3
+[16] Lin Geng Foo, Jia Gong, Hossein Rahmani, and Jun Liu.            [33] Angjoo Kanazawa, Michael J Black, David W Jacobs, and
+     Distribution-aligned diffusion for human mesh recovery. In            Jitendra Malik. End-to-end recovery of human shape and
+     ICCV, 2023. 2, 3                                                      pose. In CVPR, 2018. 2
+
+
+
+
+                                                                  14614
+[34] Angjoo Kanazawa, Jason Y Zhang, Panna Felsen, and Ji-             [50] Jing Lin, Ailing Zeng, Haoqian Wang, Lei Zhang, and Yu
+     tendra Malik. Learning 3d human dynamics from video. In                Li. One-stage 3d whole-body mesh recovery with compo-
+     CVPR, 2019. 1, 2                                                       nent aware transformer. In CVPR, 2023.
+[35] Korrawe Karunratanakul, Konpat Preechakul, Supasorn               [51] Kevin Lin, Lijuan Wang, and Zicheng Liu. End-to-end hu-
+     Suwajanakorn, and Siyu Tang. Guided motion diffusion                   man pose and mesh reconstruction with transformers. In
+     for controllable human motion synthesis. In ICCV, 2023.                CVPR, 2021. 2
+     2, 3                                                              [52] Hung Yu Ling, Fabio Zinno, George Cheng, and Michiel
+[36] Korrawe Karunratanakul, Konpat Preechakul, Emre Aksan,                 van de Panne. Character controllers using motion vaes.
+     Thabo Beeler, Supasorn Suwajanakorn, and Siyu Tang. Op-                ACM TOG, 39(4):1–12, 2020. 3
+     timizing diffusion noise can serve as universal motion pri-       [53] Qihao Liu, Yi Zhang, Song Bai, and Alan Yuille. Explicit
+     ors. In CVPR, 2024. 3                                                  occlusion reasoning for multi-person 3d human pose esti-
+[37] Manuel Kaufmann, Emre Aksan, Jie Song, Fabrizio Pece,                  mation. In ECCV, 2022. 2
+     Remo Ziegler, and Otmar Hilliges. Convolutional autoen-           [54] Matthew Loper, Naureen Mahmood, Javier Romero, Ger-
+     coders for human motion infilling. In 2020 International               ard Pons-Moll, and Michael J Black. SMPL: A skinned
+     Conference on 3D Vision (3DV), pages 918–927. IEEE,                    multi-person linear model. ACM TOG, 34(6):1–16, 2015.
+     2020. 3                                                                2, 3
+[38] Rawal Khirodkar, Shashank Tripathi, and Kris Kitani. Oc-          [55] Zhengyi Luo, S Alireza Golestaneh, and Kris M Kitani. 3d
+     cluded human mesh recovery. In CVPR, 2022. 2                           human motion estimation via motion compression and re-
+[39] Muhammed Kocabas, Nikos Athanasiou, and Michael J                      finement. In ACCV, 2020. 2, 3
+     Black. Vibe: Video inference for human body pose and              [56] Zhengyi Luo, Shun Iwase, Ye Yuan, and Kris Kitani. Em-
+     shape estimation. In CVPR, 2020. 1, 2, 6                               bodied scene-aware human pose estimation. In NeurIPS,
+                                                                            2022. 3
+[40] Muhammed Kocabas, Chun-Hao P. Huang, Otmar Hilliges,
+     and Michael J. Black. PARE: Part attention regressor for          [57] Naureen Mahmood, Nima Ghorbani, Nikolaus F. Troje,
+     3D human body estimation. In ICCV, 2021. 2                             Gerard Pons-Moll, and Michael J. Black. AMASS: Archive
+                                                                            of motion capture as surface shapes. In ICCV, 2019. 2, 3, 6
+[41] Muhammed Kocabas, Chun-Hao P. Huang, Joachim Tesch,
+                                                                       [58] Dushyant Mehta, Srinath Sridhar, Oleksandr Sotnychenko,
+     Lea Müller, Otmar Hilliges, and Michael J. Black. SPEC:
+                                                                            Helge Rhodin, Mohammad Shafiei, Hans-Peter Seidel,
+     Seeing people in the wild with an estimated camera. In
+                                                                            Weipeng Xu, Dan Casas, and Christian Theobalt. Vnect:
+     ICCV, 2021. 2
+                                                                            Real-time 3d human pose estimation with a single rgb cam-
+[42] Nikos Kolotouros, Georgios Pavlakos, Michael J Black, and
+                                                                            era. ACM TOG, 36(4):1–14, 2017. 2
+     Kostas Daniilidis. Learning to reconstruct 3D human pose
+                                                                       [59] Hyeongjin Nam, Daniel Sungho Jung, Yeonguk Oh, and
+     and shape via model-fitting in the loop. In ICCV, 2019.
+                                                                            Kyoung Mu Lee. Cyclic test-time adaptation on monocular
+[43] Nikos Kolotouros, Georgios Pavlakos, and Kostas Dani-                  video for 3d human mesh reconstruction. In ICCV, 2023.
+     ilidis. Convolutional mesh regression for single-image hu-             1, 2
+     man shape reconstruction. In CVPR, 2019.
+                                                                       [60] Jorge Nocedal and Stephen Wright. Numerical Optimiza-
+[44] Nikos Kolotouros, Georgios Pavlakos, and Kostas Dani-                  tion. Springer, 2006. 2
+     ilidis. Convolutional mesh regression for single-image hu-        [61] Dirk Ormoneit, Hedvig Sidenbladh, Michael Black, and
+     man shape reconstruction. In CVPR, 2019.                               Trevor Hastie. Learning and tracking cyclic human motion.
+[45] Christoph Lassner, Javier Romero, Martin Kiefel, Feder-                In NeurIPS, 2000. 3
+     ica Bogo, Michael J Black, and Peter V Gehler. Unite the          [62] Georgios Pavlakos, Vasileios Choutas, Nima Ghorbani,
+     people: Closing the loop between 3D and 2D human repre-                Timo Bolkart, Ahmed AA Osman, Dimitrios Tzionas, and
+     sentations. In CVPR, 2017.                                             Michael J Black. Expressive body capture: 3D hands, face,
+[46] Jiefeng Li, Chao Xu, Zhicun Chen, Siyuan Bian, Lixin                   and body from a single image. In CVPR, 2019. 2, 3, 6, 7
+     Yang, and Cewu Lu. HybrIK: A hybrid analytical-neural             [63] Georgios Pavlakos, Jitendra Malik, and Angjoo Kanazawa.
+     inverse kinematics solution for 3D human pose and shape                Human mesh recovery from multiple shots. In CVPR, 2022.
+     estimation. In CVPR, 2021. 2                                           2
+[47] Jiefeng Li, Siyuan Bian, Chao Xu, Gang Liu, Gang Yu, and          [64] Vladimir Pavlovic, James Rehg, and John MacCormick.
+     Cewu Lu. D&d: Learning human dynamics from dynamic                     Learning switching linear models of human motion. In
+     camera. In ECCV, 2022. 2                                               NeurIPS, 2001. 3
+[48] Jiahao Li, Zongxin Yang, Xiaohan Wang, Jianxin Ma,                [65] Jathushan Rajasegaran, Georgios Pavlakos, Angjoo
+     Chang Zhou, and Yi Yang. Jotr: 3d joint contrastive learn-             Kanazawa, and Jitendra Malik.         Tracking people by
+     ing with transformers for occluded human mesh recovery.                predicting 3d appearance, location and pose. In CVPR,
+     In ICCV, 2023. 2                                                       2022. 2
+[49] Zhihao Li, Jianzhuang Liu, Zhensong Zhang, Songcen Xu,            [66] Davis Rempe, Leonidas J Guibas, Aaron Hertzmann, Bryan
+     and Youliang Yan. Cliff: Carrying location information                 Russell, Ruben Villegas, and Jimei Yang. Contact and hu-
+     in full frames into human pose and shape estimation. In                man dynamics from monocular video. In ECCV, 2020. 3,
+     ECCV, 2022. 2, 3, 7                                                    4
+
+
+
+
+                                                                   14615
+[67] Davis Rempe, Tolga Birdal, Aaron Hertzmann, Jimei Yang,           [84] Raquel Urtasun, David Fleet, and Pascal Fua. 3D peo-
+     Srinath Sridhar, and Leonidas J. Guibas. HuMoR: 3D hu-                 ple tracking with gaussian process dynamical models. In
+     man motion model for robust pose estimation. In ICCV,                  CVPR, 2006. 3
+     2021. 1, 2, 3, 5, 6, 7, 8                                         [85] Raquel Urtasun, David Fleet, and Pascal Fua. Tempo-
+[68] Davis Rempe, Zhengyi Luo, Xue Bin Peng, Ye Yuan, Kris                  ral motion models for monocular and multiview 3d human
+     Kitani, Karsten Kreis, Sanja Fidler, and Or Litany. Trace              body tracking. CVIU, 104(2), 2006. 3
+     and pace: Controllable pedestrian animation via guided tra-       [86] Dongkai Wang and Shiliang Zhang. 3d human mesh recov-
+     jectory diffusion. In CVPR, 2023. 3, 4, 5                              ery with sequentially global rotation estimation. In ICCV,
+[69] Chris Rockwell and David Fouhey. Full-body awareness                   2023. 2
+     from partial observations. In ECCV, 2020. 2                       [87] Yin Wang, Zhiying Leng, Frederick WB Li, Shun-Cheng
+[70] István Sárándi, Timm Linder, Kai O. Arras, and Bastian              Wu, and Xiaohui Liang. Fg-t2m: Fine-grained text-driven
+     Leibe. MeTRAbs: metric-scale truncation-robust heatmaps                human motion generation via diffusion model. In ICCV,
+     for absolute 3D human pose estimation. IEEE Transactions               2023. 3
+     on Biometrics, Behavior, and Identity Science, 3(1):16–30,        [88] Wen-Li Wei, Jen-Chun Lin, Tyng-Luh Liu, and Hong-
+     2021. 2, 3, 7                                                          Yuan Mark Liao. Capturing humans in motion: Temporal-
+[71] Yonatan Shafir, Guy Tevet, Roy Kapon, and Amit H                       attentive 3d human pose and shape estimation from monoc-
+     Bermano. Human motion diffusion as a generative prior.                 ular video. In CVPR, 2022. 2
+     arXiv preprint arXiv:2303.01418, 2023. 2, 3, 6                    [89] Kevin Xie, Tingwu Wang, Umar Iqbal, Yunrong Guo, Sanja
+[72] Mingyi Shi, Sebastian Starke, Yuting Ye, Taku Komura, and              Fidler, and Florian Shkurti. Physics-based human motion
+     Jungdam Won. PhaseMP: Robust 3D pose estimation via                    estimation and synthesis from videos. In ICCV, 2021. 3
+     phase-conditioned human motion prior. In ICCV, 2023. 1,           [90] Yuanlu Xu, Song-Chun Zhu, and Tony Tung. Denserac:
+     2, 6, 7, 8                                                             Joint 3D pose and shape estimation by dense render-and-
+[73] Soshi Shimada, Vladislav Golyanik, Weipeng Xu, and                     compare. In ICCV, 2019. 2
+     Christian Theobalt. Physcap: Physically plausible monocu-         [91] Vickie Ye, Georgios Pavlakos, Jitendra Malik, and Angjoo
+     lar 3d motion capture in real time. ACM TOG, 39(6):1–16,               Kanazawa. Decoupling human and camera motion from
+     2020. 3                                                                videos in the wild. In CVPR, 2023. 2
+[74] Jascha Sohl-Dickstein, Eric Weiss, Niru Maheswaranathan,          [92] Yingxuan You, Hong Liu, Ti Wang, Wenhao Li, Runwei
+     and Surya Ganguli. Deep unsupervised learning using                    Ding, and Xia Li. Co-evolution of pose and mesh for 3d
+     nonequilibrium thermodynamics. In ICML, 2015. 5                        human body estimation from video. In ICCV, 2023. 2
+                                                                       [93] Ye Yuan, Shih-En Wei, Tomas Simon, Kris Kitani, and Ja-
+[75] Jie Song, Xu Chen, and Otmar Hilliges. Human body
+                                                                            son Saragih. Simpoe: Simulated character control for 3d
+     model fitting by learned gradient descent. In ECCV, 2020.
+                                                                            human pose estimation. In CVPR, 2021. 3
+     2, 3
+                                                                       [94] Ye Yuan, Umar Iqbal, Pavlo Molchanov, Kris Kitani, and
+[76] Jiaming Song, Chenlin Meng, and Stefano Ermon. Denois-
+                                                                            Jan Kautz. GLAMR: Global occlusion-aware human mesh
+     ing diffusion implicit models. In ICLR, 2021. 2
+                                                                            recovery with dynamic cameras. In CVPR, 2022. 2, 4
+[77] Yang Song, Jascha Sohl-Dickstein, Diederik P Kingma,              [95] Ye Yuan, Jiaming Song, Umar Iqbal, Arash Vahdat, and Jan
+     Abhishek Kumar, Stefano Ermon, and Ben Poole. Score-                   Kautz. Physdiff: Physics-guided human motion diffusion
+     based generative modeling through stochastic differential              model. In ICCV, 2023. 2, 3
+     equations. In ICLR, 2021. 5
+                                                                       [96] Andrei Zanfir, Eduard Gabriel Bazavan, Hongyi Xu,
+[78] Yu Sun, Yun Ye, Wu Liu, Wenpeng Gao, YiLi Fu, and Tao                  William T Freeman, Rahul Sukthankar, and Cristian Smin-
+     Mei. Human mesh recovery from monocular images via a                   chisescu. Weakly supervised 3d human pose and shape re-
+     skeleton-disentangled representation. In ICCV, 2019. 2                 construction with normalizing flows. In ECCV, 2020. 2
+[79] Yu Sun, Qian Bao, Wu Liu, Tao Mei, and Michael J. Black.          [97] Jianfeng Zhang, Dongdong Yu, Jun Hao Liew, Xuecheng
+     TRACE: 5D Temporal Regression of Avatars with Dynamic                  Nie, and Jiashi Feng. Body meshes as points. In CVPR,
+     Cameras in 3D Environments. In CVPR, 2023. 2                           2021. 2, 4
+[80] Julian Tanke, Linguang Zhang, Amy Zhao, Chengcheng                [98] Lvmin Zhang, Anyi Rao, and Maneesh Agrawala. Adding
+     Tang, Yujun Cai, Lezi Wang, Po-Chen Wu, Juergen Gall,                  conditional control to text-to-image diffusion models. In
+     and Cem Keskin. Social diffusion: Long-term multiple hu-               ICCV, 2023. 2, 5
+     man motion anticipation. In ICCV, 2023. 3                         [99] Mingyuan Zhang, Xinying Guo, Liang Pan, Zhongang Cai,
+[81] Graham Taylor, Geoffrey Hinton, and Sam Roweis. Mod-                   Fangzhou Hong, Huirong Li, Lei Yang, and Ziwei Liu. Re-
+     eling human motion using binary latent variables. In                   modiffuse: Retrieval-augmented motion diffusion model.
+     NeurIPS, 2007. 3                                                       arXiv preprint arXiv:2304.01116, 2023. 3
+[82] Guy Tevet, Sigal Raab, Brian Gordon, Yoni Shafir, Daniel         [100] Siwei Zhang, Yan Zhang, Federica Bogo, Marc Pollefeys,
+     Cohen-or, and Amit Haim Bermano. Human motion diffu-                   and Siyu Tang. Learning motion priors for 4d human body
+     sion model. In ICLR, 2023. 2, 3, 4, 6                                  capture in 3d scenes. In ICCV, 2021. 1, 2, 4, 5, 6, 7
+[83] Jonathan Tseng, Rodrigo Castellon, and Karen Liu. Human          [101] Siwei Zhang, Qianli Ma, Yan Zhang, Zhiyin Qian, Taein
+     motion diffusion as a generative prior. In CVPR, 2023. 2, 3            Kwon, Marc Pollefeys, Federica Bogo, and Siyu Tang.
+
+
+
+
+                                                                   14616
+      Egobody: Human body shape and motion of interacting
+      people from head-mounted devices. In ECCV, 2022. 6
+[102] Siwei Zhang, Qianli Ma, Yan Zhang, Sadegh Aliakbarian,
+      Darren Cosker, and Siyu Tang. Probabilistic human mesh
+      recovery in 3d scenes from egocentric views. In ICCV,
+      2023. 2, 3, 5
+[103] Yan Zhang and Siyu Tang. The wanderings of odysseus in
+      3d scenes. In CVPR, 2022. 3
+[104] Yi Zhang, Pengliang Ji, Angtian Wang, Jieru Mei, Adam
+      Kortylewski, and Alan Yuille. 3d-aware neural body fitting
+      for occlusion robust 3d human pose estimation. In ICCV,
+      2023. 2
+[105] Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and
+      Hao Li. On the continuity of rotation representations in
+      neural networks. In CVPR, 2019. 4
+
+
+
+
+                                                                   14617
+

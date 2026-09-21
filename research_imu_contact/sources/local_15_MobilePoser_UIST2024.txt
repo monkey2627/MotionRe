@@ -1,0 +1,650 @@
+                                               MobilePoser: Real-Time Full-Body Pose Estimation and 3D
+                                               Human Translation from IMUs in Mobile Consumer Devices
+                                                                                Vasco Xu                                                                   Chenfeng Gao
+                                                                        University of Chicago                                                       Northwestern University
+                                                                           Chicago, USA                                                                 Evanston, USA
+                                                                       vascoxu@uchicago.edu                                                   chenfenggao2029@u.northwestern.edu
+
+                                                                         Henry Hoffmann                                                                     Karan Ahuja
+                                                                    University of Chicago                                                             Northwestern University
+arXiv:2504.12492v1 [cs.HC] 16 Apr 2025
+
+
+
+
+                                                                        Chicago, USA                                                                      Evanston, USA
+                                                                hankhoffmann@cs.uchicago.edu                                                         kahuja@northwestern.edu
+
+
+
+
+                                         Figure 1: MobilePoser uses any subset of consumer mobile devices (phones, watches, earbuds) available to estimate full-body
+                                         pose and global translation.
+                                         ABSTRACT                                                                                    with a series of demonstrative applications to illustrate the unique
+                                         There has been a continued trend towards minimizing instrumen-                              potential of MobilePoser across a variety of fields, such as health
+                                         tation for full-body motion capture, going from specialized rooms                           and wellness, gaming, and indoor navigation to name a few.
+                                         and equipment, to arrays of worn sensors and recently sparse iner-
+                                         tial pose capture methods. However, as these techniques migrate                             CCS CONCEPTS
+                                         towards lower-fidelity IMUs on ubiquitous commodity devices, like                           • Human-centered computing → Ubiquitous and mobile com-
+                                         phones, watches, and earbuds, challenges arise including compro-                            puting.
+                                         mised online performance, temporal consistency, and loss of global
+                                         translation due to sensor noise and drift. Addressing these chal-                           KEYWORDS
+                                         lenges, we introduce MobilePoser, a real-time system for full-body                          Motion capture, sensors, inertial measurement units, mobile devices
+                                         pose and global translation estimation using any available subset
+                                                                                                                                     ACM Reference Format:
+                                         of IMUs already present in these consumer devices. MobilePoser
+                                                                                                                                     Vasco Xu, Chenfeng Gao, Henry Hoffmann, and Karan Ahuja. 2024. Mo-
+                                         employs a multi-stage deep neural network for kinematic pose esti-                          bilePoser: Real-Time Full-Body Pose Estimation and 3D Human Transla-
+                                         mation followed by a physics-based motion optimizer, achieving                              tion from IMUs in Mobile Consumer Devices. In The 37th Annual ACM
+                                         state-of-the-art accuracy while remaining lightweight. We conclude                          Symposium on User Interface Software and Technology (UIST ’24), Octo-
+                                                                                                                                     ber 13–16, 2024, Pittsburgh, PA, USA. ACM, New York, NY, USA, 11 pages.
+                                         Permission to make digital or hard copies of part or all of this work for personal or       https://doi.org/10.1145/3654777.3676461
+                                         classroom use is granted without fee provided that copies are not made or distributed
+                                         for profit or commercial advantage and that copies bear this notice and the full citation
+                                         on the first page. Copyrights for third-party components of this work must be honored.
+                                                                                                                                     1   INTRODUCTION
+                                         For all other uses, contact the owner/author(s).                                            Full-body motion capture has numerous applications in gaming,
+                                         UIST ’24, October 13–16, 2024, Pittsburgh, PA, USA                                          fitness, and virtual and augmented reality (VR/AR), enabling im-
+                                         © 2024 Copyright held by the owner/author(s).
+                                         ACM ISBN 979-8-4007-0628-8/24/10                                                            mersive experiences and context-aware interactions. While vision-
+                                         https://doi.org/10.1145/3654777.3676461                                                     based approaches for 3D human pose estimation have shown great
+UIST ’24, October 13–16, 2024, Pittsburgh, PA, USA                                                                                        Xu, et al.
+
+
+
+
+Figure 2: Real-time global pose estimation powered by MobilePoser: (A) Person with smartwatch (left wrist) waving their hands.
+(B) Person with smartwatch (left wrist) performing jumping jacks. (C) Person wearing a smartwatch (left wrist) and carrying a
+phone in their right pocket running.
+
+
+promise, they require subjects to be within the camera’s field of            estimation. Finally, such a system should operate directly on-device
+view, limiting their practicability for mobile and on-the-go applica-        for real-time use, anywhere, anytime.
+tions. In contrast, inertial measurement unit (IMU) based techniques            MobilePoser tackles these challenges by employing a multi-
+offer an attractive alternative, enabling less intrusive and occlusion-      stage approach. For pose estimation, it utilizes a deep neural net-
+free user digitization [3].                                                  work (DNN) to predict full-body pose from the available IMU data,
+    Commercial systems such as Xsens [45] use up to 17 special-              followed by a physics-based optimization step to ensure spatio-
+purpose sensors to provide highly accurate pose estimations. How-            temporal consistency and plausible kinematics. This greatly helps
+ever, such approaches are intrusive, making them undesirable for             resolve ambiguous instrumented joint motion profiles, such as dif-
+everyday use. Consequently, there has been a trend towards mini-             ferentiating between waving (Figure 2 A) versus jumping jacks
+mizing instrumentation. Sparse inertial pose capture methods, such           (Figure 2 B) from only a single smartwatch on the wrist. To aid
+as TransPose [49] and DIP [14], use 6 IMUs to achieve a balance              in generalizability, the model is trained on a large dataset of syn-
+between accuracy and practicality. Yet, these methods still require          thesized IMU measurements generated from high-quality motion
+expensive and special-purpose IMUs attached to specific body joints.         capture (MoCap) data. For global translation estimation, Mobile-
+To enable full-body motion tracking without any external infras-             Poser employs a hybrid approach that fuses predictions from a
+tructure, IMUPoser [28] leverages IMUs in devices we already carry           foot contact-based method and a DNN-based method that directly
+around with us, namely smartphones, smartwatches, and earbuds.               regresses the root joint velocity. This combination enables accurate
+These commodity devices, however, use lower-fidelity IMUs, which             and robust translation estimation, even in challenging scenarios
+compromises online performance, temporal consistency, and global             where both feet are in motion together (Figure 2 C). Importantly,
+translation estimation.                                                      MobilePoser is optimized to run on-device, achieving real-time per-
+    In this work, we present MobilePoser, a real-time user digitiza-         formance of 60 frames per second on a smartphone (iPhone 15 Pro),
+tion technique that tracks both poses and global movement (referred          making it suitable for mobile applications.
+to as translation) using consumer devices (Figure 1) such as watches,           In summary, MobilePoser makes the following key contributions:
+phones and earbuds. To enable on-the-go motion tracking with-
+out any external infrastructure, we must address a set of unique                (1) It presents a novel framework for inertial translation estima-
+challenges. First, the number of instrumented points is dynamically                 tion using consumer devices, enabling accurate tracking of
+changing and sparse (at most three devices, with as few as one)                     global movement without specialized hardware.
+1 , making the problem highly under-constrained. Second, IMUs
+                                                                                (2) It achieves state-of-the-art full-body pose estimation across
+do not directly measure positional data, making global translation                  various on-body configurations of commodity IMU devices,
+tracking non-trivial. Additionally, noise and drift from the low-cost               demonstrating robust performance with as few as one and
+IMUs found in commodity devices complicates pose and translation                    up to three wearable devices.
+                                                                                (3) It provides an open-source implementation that runs in real-
+                                                                                    time on edge devices, making it accessible and practical for
+1 Note, we count the left and right earbuds as a unified single IMU stream          widespread use.
+MobilePoser: Real-Time Full-Body Pose Estimation and 3D Human Translation from IMUs in Mobile Consumer Devices   UIST ’24, October 13–16, 2024, Pittsburgh, PA, USA
+
+
+              System                  # Inst. Joints FPS Consumer Device Translation MPJVE (cm)                                 Jitter (102𝑚/𝑠 3 )
+              Xsens [45]                    17       120       ×              ✓           -                                              -
+              SIP [43]                      6         60       ×              ✓          7.7                                            3.8
+              DIP [14]                      6         29       ×              ×          8.9                                          30.13
+              TransPose [49]                6         90       ×              ✓          7.1                                            1.4
+              PIP [48]                      6         60       ×              ✓          5.9                                           0.24
+              IMUPoser [28]                1–3        25       ✓              ×          12.1                                           1.9
+              MobilePoser (our work)       1–3        60       ✓              ✓          10.6                                          0.97
+                                Table 1: Comparison with key prior work on the DIP-IMU dataset.
+
+
+
+2 RELATED WORK                                                                      IMUs already found in consumer devices, such as smartphones,
+                                                                                    smartwatches, and earbuds.
+2.1 User Digitization with External Sensors
+Commercial motion capture systems such as OptiTrack [29] and                        2.3     User Digitization with IMU Worn Sensors
+Vicon [41] use specialized hardware, such as multiple calibrated
+                                                                                    Commercial motion capture systems, such as Xsens [45], use a large
+high-speed infrared cameras, to track retroreflective markers at-
+                                                                                    number of inertial sensors (typically 17) strapped to the body to
+tached to a user’s body. Such setups are commonly used in games,
+                                                                                    provide high-quality motion capture. These setups consist of ho-
+movies and character animations that require millimeter accuracy
+                                                                                    mogeneous, high-grade IMUs that are calibrated for noise and have
+and are the gold standard of motion capture. The expensive infras-
+                                                                                    known positions on the body, resulting in a less ill-posed problem
+tructure required by commercial systems, makes them impractical
+                                                                                    compared to using sparse, heterogeneous sensors. However, such
+for everyday use. Therefore, much research has been devoted to
+                                                                                    an approach is highly inconvenient and intrusive for everyday use.
+instrumentation-free approaches using monocular cameras. Such
+                                                                                       To address this limitation, researchers have explored reconstruct-
+approaches generally rely on RGB [9, 13, 36] or depth [27] cameras
+                                                                                    ing human motions from a reduced number of sensors. Works
+based computer vision techniques to predict body pose.
+                                                                                    such as SIP [43], DIP [14], PIP [48], TIP [17], and TransPose [49]
+   There also exists specialized external hardware for pose tracking
+                                                                                    have demonstrated the feasibility of using only 6 commercial-grade
+in Extended Reality (XR). For example, the HTC Vive [2], PlaySta-
+                                                                                    Xsens IMU sensors for full-body motion capture. Works have fur-
+tion VR [1] and Oculus Rift [32] track the head, handheld controllers
+                                                                                    ther explored integrating other input modalities (e.g. UWB [8] and
+and other limb-borne accessories using external sensor base sta-
+                                                                                    egocentric images [47]) in addition to the 6 IMUs for increased
+tions for Virtual Reality (VR) applications. The un-sensed joints are
+                                                                                    performance. All these approaches leverage the homogeneity and
+estimated with inverse kinematics [15] or learning-based methods
+                                                                                    known calibrated positions of the sensors to achieve accurate pose
+[16, 35]. Other non-optical external approaches for pose estimation
+                                                                                    estimation. However, even 6 sensors can be cumbersome for on-
+include capacitive sensing [50], magnetic fields [31, 33], RF [51],
+                                                                                    the-go applications, especially those that require passive sensing.
+and mechanical linkages [39].
+                                                                                       Recent research has investigated even sparser IMU configura-
+                                                                                    tions using commodity devices. IMUPoser [28], which is most
+                                                                                    closely related to our work, performs pose estimation using any
+2.2    User Digitization with non-IMU Worn                                          combination of smartphone, smartwatch, and earbuds. While IMU-
+       Sensors                                                                      Poser tackles the challenges of heterogeneous sensor quality for
+Wearable sensors provide a portable and flexible alternative to                     pose estimation, it lacks global translation due to IMU noise and
+external sensors. For example, MI-Poser [7] uses magnetic track-                    drift, and contains unrealistic spatio-temporal motion artifacts. Ad-
+ing in wristbands and AR glasses to estimate upper-body poses.                      ditionally, IMUPoser runs on a laptop at 25Hz, limiting its practi-
+Other works have explored wrist-worn cameras [20, 44], EMG sen-                     cality for real-time mobile applications.
+sors [24], EIT sensors [22], wrist-worn antennas [19] and depth                        In contrast, MobilePoser addresses these limitations by demon-
+sensor armbands [10]. However, these works focus solely on cap-                     strating improved pose estimation accuracy on widely used bench-
+turing the motion of specific body parts (e.g., wrist or upper-body).               marks while also estimating global translation (see Table 1). Fur-
+   To capture full-body motion, a popular approach is to use body-                  thermore, our system is designed to run fully on-device, achieving
+mounted cameras coupled with computer vision techniques [5, 38].                    real-time performance of 60 fps on edge mobile devices. This enables
+Other works have explored different sensor technologies such as                     MobilePoser to provide a more practical and accessible solution for
+ultrasonic sensors [42] and RFID [18]. Nevertheless, these works                    on-the-go motion capture using commodity devices.
+require users to wear sensors they do not already have. Pose-On-
+The-Go [4] addresses this by estimating full-body pose via extreme                  3     MOBILEPOSER
+sensor fusion, leveraging a phone’s front and rear cameras, thus                    Estimating a user’s full-body pose from a sparse set of IMU ob-
+requiring no special instrumentation. However, its computationally                  servations is a severely under-constrained problem as it aims to
+expensive and relies heavily on heuristics to power body poses,                     infer a high-dimensional quantity, i.e., the full-body pose, from low-
+often resulting in unnatural motions. MobilePoser differentiates                    dimensional observations that only capture partial motion at each
+itself by focusing on full-body pose estimation using power-efficient               instrumented point. Moreover, multiple possible solutions could
+UIST ’24, October 13–16, 2024, Pittsburgh, PA, USA                                                                                           Xu, et al.
+
+
+
+
+Figure 3: MobilePoser system overview. MobilePoser accepts any available subset of IMU data from the user and masks absent
+devices by setting their values to zero. The IMU data is then fed into two main modules: (1) Pose Estimation, which first
+estimates joint positions followed by joint rotations, and (2) Translation Estimation, which combines foot-ground contact
+probabilities with a direct neural network-based approach to regress global velocity. Finally, a Physics Optimizer refines the
+predicted joint rotations and global translation to ensure they satisfy physical constraints.
+
+
+explain the observed data, making it challenging to determine the         the need for training separate models for each possible combination,
+correct pose. To tackle these challenges, we introduce MobilePoser,       making the system more practical and efficient.
+a system that leverages data-driven learning and physics-based
+optimization to estimate accurate and plausible full-body poses           3.2    Full-Body Pose Estimation
+and global translations from sparse IMU inputs. Figure 3 provides         To learn a mapping from IMU input to full-body pose, we employ a
+an overview of our pipeline, which we describe in detail in the           data-driven, multi-stage neural network approach. Specifically, our
+following sections.                                                       pose estimation network consists of two submodules: Joint predictor
+                                                                          (F 𝑗𝑜𝑖𝑛𝑡 ) and Rotation predictor (F 𝜃 ). More specifically, F 𝑗𝑜𝑖𝑛𝑡 esti-
+                                                                          mates joint positions as an intermediate task and F 𝜃 solves for the
+3.1     System Input                                                      joint angle orientations. Both submodules use a bidirectional LSTM
+MobilePoser takes as input acceleration and orientation readings          (bi-LSTM), to model both spatial and temporal information [14].
+from IMUs across any subset of three consumer devices: smart-             We input data into both submodules in a sliding-window fashion
+phones, smartwatches, and earbuds. Each of these devices can be           with window length 𝑁 .
+placed at different body locations, resulting in various possible
+                                                                          3.2.1 Joint Pose Estimation (F 𝑗𝑜𝑖𝑛𝑡 ). This module estimates the
+combinations. For instance, a smartphone can be stored in the
+                                                                          joint positions from a sequence of IMU measurements. We explic-
+left or right pocket, held in the left or right hand, placed next to
+                                                                          itly estimate joint positions as an intermediate step, as it helps
+the head during a call, or not carried by the user at all. Similarly,
+                                                                          extract useful information from linear accelerations due to its lin-
+smartwatches can be worn on either wrist or not worn at all, while
+                                                                          ear correlation with joint positions [49]. The input to F 𝑗𝑜𝑖𝑛𝑡 is
+earbuds can be worn, placed in a charging case stored in either
+                                                                          𝒙 𝑖𝑚𝑢 (𝑡) = [𝒙𝑡 −𝑁 , . . . , 𝒙𝑡 ], where 𝑡 is the current time step and 𝑁 is
+pocket, or not carried by the user.
+                                                                          the time window length. The output are the root (pelvis) relative 3D
+   Following IMUPoser [28], we consider 24 plausible device-location
+                                                                          positions of the 24 SMPL body joints [25] 𝒑(𝑡) = [𝒑𝑡 −𝑁 , . . . , 𝒑𝑡 ] ∈
+combinations across five body locations: right pocket, left pocket,
+                                                                          R𝑁 ×72 . The loss function used to train this network is:
+right wrist, left wrist, and head. These combinations cover the vari-
+ous ways users might carry or wear their devices throughout the                                    L 𝑗𝑜𝑖𝑛𝑡 = ∥p − p𝐺𝑇 ∥ 22                         (1)
+day. Regardless of the input device combination, our model expects        where the subscript 𝐺𝑇 denotes the ground truth and 𝑝 represents
+IMU data from the five predefined body locations.                         the full-body SMPL joint positions.
+   The IMU signal at each location consists of acceleration (3 values)
+and orientation (a 3×3 rotation matrix), resulting in a total of 12 IMU   3.2.2 Joint Rotation and Body Mesh Estimation (F 𝜃 ). Here we em-
+values per location. Across all five locations, this yields an input      ploy a neural kinematic estimator to regress joint rotations from
+vector 𝒙 ∈ R60 . However, since at any given time only a subset of        the previously estimated positions. We concatenate the joint co-
+1–3 devices may be present, data from absent devices is masked            ordinates from F 𝑗𝑜𝑖𝑛𝑡 with IMU measurements, which serves as
+and set to zero. This masking approach allows us to build a unified       the input to F 𝜃 . Note, while the SMPL body encodes 24 joints,
+model that can handle the varying number of available devices and         only 18 are relevant from a rotation prediction perspective as the
+their changing on-body location seamlessly. This further eliminates       fingers, wrist and toes are independent of the on-body IMUs and
+MobilePoser: Real-Time Full-Body Pose Estimation and 3D Human Translation from IMUs in Mobile Consumer Devices        UIST ’24, October 13–16, 2024, Pittsburgh, PA, USA
+
+
+are hence set to identity rotation matrices [49]. The outputs of the                prediction, this module uses a unidirectional LSTM due to its ca-
+network are the 18 root relative joint orientations represented as                  pacity to capture longer historical context. The output is per-frame
+6D rotations: 𝜽 (𝑡) = [𝜽𝑡 −𝑁 , . . . , 𝜽𝑡 ] ∈ R𝑁 ×108 .                             root velocity, denoted as 𝑣𝑒 (𝑡) ∈ R3 . The network is trained using
+   Our joint rotation loss consists of three terms: L𝑜𝑟𝑖 , L𝑝𝑜𝑠 , L 𝑗𝑒𝑟𝑘 .          a cumulative L2 loss [49].
+The loss term L𝑜𝑟𝑖 is a standard L2 loss from the ground truth
+joint rotations. The term L𝑝𝑜𝑠 penalizes error accumulating along                   3.3.3 Module Fusion. Both modules offer different trade-offs in
+the kinematic chain. Finally, L 𝑗𝑒𝑟𝑘 promotes temporally smooth                     terms of predicting translation. Supporting foot provides more re-
+predictions, where 𝑗𝑒𝑟𝑘 (𝜃 ) = 𝜃 𝑡 −3 + 3𝜃 𝑡 −2 − 3𝜃 𝑡 −1 +𝜃 𝑡 is a function        alistic estimates by leveraging human kinematics but fails when
+that computes the jerk of a signal 𝜃 at time step 𝑡, penalizing the                 both feet are off the ground. On the other hand, directly estimat-
+deviation between neighboring frames [49].                                          ing root velocity is more general but is highly prone to unnatural
+   Our combined joint rotation loss function can be represented as,                 movements such as foot sliding [52]. To achieve the benefits of
+                                                                                    both, we adopt the heuristic-based fusion approach, inspired by
+                       L𝜃 = L𝑜𝑟𝑖 + L𝑝𝑜𝑠 + 𝜆L 𝑗𝑒𝑟𝑘                         (2)       TransPose [49]. In summary, when the foot contact 𝑐 is higher than
+                     L𝑜𝑟𝑖 = ∥𝜃 − 𝜃𝐺𝑇 ∥ 22                                 (3)       an upper-threshold 𝑞, we are confident of ground contact by a foot
+                                                                                    and hence we rely on (𝑣 𝑓 ) for translation estimation. When the
+                     L𝑝𝑜𝑠 = ∥FK(𝜃 ) − p𝐺𝑇 ∥ 22                            (4)       foot contact is below a lower-threshold, 𝑞, we rely on (𝑣𝑒 ). For in-
+                             𝑇
+                            ∑︁                                                      termediate probabilities, we fuse both velocity estimations using a
+                    L 𝑗𝑒𝑟𝑘 =        𝑗𝑒𝑟𝑘 (𝜃 )                             (5)       weighted sum, to output the final global velocity estimate 𝑣:
+                                𝑡
+                                                                                                                      𝑞 −𝑞      𝑞 −𝑞
+where 𝐹 𝐾 (·) is the forward kinematics function, that computes                                                  𝑣=        𝑣𝑒 +      𝑣                              (6)
+joint coordinates from joint rotations. Given the joint rotations,                                                    𝑞 −𝑞      𝑞 −𝑞 𝑓
+the parametric SMPL body model generates a corresponding body                       Following previous work [49], we use 𝑞 = 0.5 and 𝑞 = 0.9.
+mesh with 6890 vertices.
+                                                                                    3.4     Physics-Aware Refinement
+3.3    Global Translation Estimation
+                                                                                    Our pose and translation estimation networks output the user’s
+Translation estimation from IMUs is challenging as they lack di-
+                                                                                    global pose based on a history of IMU measurements. When trained
+rect distance measurements. Moreover, IMUs are prone to noise
+                                                                                    on sufficiently large amounts of data, the full-body pose estimation
+and biases, which causes techniques such as double-integration of
+                                                                                    and global translation estimation neural networks learn the human
+acceleration to rapidly accumulate errors [46]. Therefore, inspired
+                                                                                    motion manifold and produce realistic poses. However, despite the
+by prior work [23, 48, 49], we estimate per-frame velocity of the
+                                                                                    best modeling efforts, the outputs may still contain inter-mesh
+root joint using two submodules: a foot-ground contact (𝑣 𝑓 ) and
+                                                                                    penetration, temporal artifacts such as jitter, foot-floor penetration
+a neural network based root velocity estimator (𝑣𝑒 ). We fuse the
+                                                                                    and foot skating. To address these issues, we add an off-the-shelf
+output of the two submodules to obtain a final estimate of global
+                                                                                    physics motion optimizer [48]. The physics optimizer uses two
+translation.
+                                                                                    proportional derivative (PD) controllers to compute the desired
+3.3.1 Foot-Ground Contact based Root Velocity (𝑣 𝑓 ). Here we esti-                 acceleration of the simulated character that best reproduces the
+mate the probability of each foot contacting the ground indepen-                    estimated pose while satisfying physical constraints, such as the
+dently using a bi-LSTM network. The input to the model is the                       equation of motion [12]. The inputs to the physics optimizer are the
+concatenated vector of joint positions and IMU measurements. The                    estimated joint angles 𝜃 , the foot-ground contact probabilities 𝑐 𝑓 𝑜𝑜𝑡 ,
+output of the network is the likelihood                                             and the neural network based root velocity 𝑣𝑒 . The outputs are the
+                                         that each foot is contact-
+ing the ground, denoted as 𝒄 𝑓 𝑜𝑜𝑡 = 𝒄𝑙 𝑓 𝑜𝑜𝑡 , 𝒄𝑟 𝑓 𝑜𝑜𝑡 ∈ R2 . The                 optimized joint angles and global translation with reduced jitter
+foot with the higher foot-ground contact probability is defined                     and foot-ground penetration (Figure 4). For a detailed overview of
+as the supporting foot, 𝑠 = max{𝑐 lfoot, 𝑐 rfoot }. The root velocity,              the physics optimizer, we refer readers to PIP [48].
+𝑣 𝑓 (𝑡) ∈ R3 , is then computed as the coordinate difference of the
+supporting foot between consecutive frames. This approach helps
+capture natural body motions, as movement is significantly influ-
+enced by the supporting foot’s dynamics [37]. For example, when
+walking, the body’s movement is propelled forward and stabilized
+by the foot contacting the ground. The network is trained using
+binary cross-entropy loss.
+3.3.2 Neural Network based Root Velocity (𝑣𝑒 ). While the support-
+ing foot contact based method yields plausible human movement, it
+inherently fails when both feet are not contacting the ground (e.g.,
+when running or jumping). To accommodate such cases, we esti-
+mate per-frame root velocity directly using a neural network. We
+again use the predicted joint coordinates and IMU measurements                      Figure 4: Demonstration of the physics optimizer’s ability to
+as input. Compared to previous submodules that use a bi-LSTM for                    reduce foot-ground penetration.
+UIST ’24, October 13–16, 2024, Pittsburgh, PA, USA                                                                                        Xu, et al.
+
+
+3.5     Real-time Inference                                                ~6.7M trainable parameters. Each module is trained separately using
+We implement proof-of-concept applications in iOS, using an Apple          a batch size of 256 and the Adam optimizer [21] with a learning
+iPhone 15 Pro, Apple Watch Series 9 and Apple AirPods Pro. The             rate of lr = 10 −3 for 80 epochs. We also apply a gradient clipping
+iPhone, Apple Watch and AirPods sample IMU data at 60, 60 and              with norm of 1, to prevent the gradients from exploding.
+25 Hz respectively. For uniformity, we convert all the IMU data to            During training of F 𝜃 , 𝑣𝑒 , and 𝑣 𝑓 , we add Gaussian noise with
+60 Hz by upsampling the AirPods.                                           𝜎 = 0.04 to the joint positions to prevent overfitting and deal with
+   We employ the active device selection strategy proposed by              prediction errors from F 𝑗𝑜𝑖𝑛𝑡 . We empirically set 𝜆 = 10 −5 when
+IMUPoser [28], wherein the UWB and inertial data is used to track          training F 𝜃 , to encourage temporally smooth predictions.
+the active devices and their on-body locations. For initial proto-
+typing, the Apple Watch and AirPods communicate over Blue-                 5     EVALUATION
+tooth to the iPhone, which streams data to a MacBook Air 2022              We systematically isolate and analyze the efficacy of MobilePoser
+via socket. Post connection, a small calibration step is performed         across different datasets, evaluation metrics and protocols. We show
+to align the IMU measurements with the training data, similar to           both qualitative and quantitative results, and also run ablation
+prior work [14, 28, 49]. Following the setup, data is streamed to          studies to evaluate our translation estimation design choices.
+the laptop for pre-processing, inference and then relayed to Unity
+applications for visualization.                                            5.1     Datasets
+   To further prototype an on-device edge model, we convert our            We evaluate MobilePoser on three real-world, inertial datasets,
+trained PyTorch model into CoreML with mixed precision quan-               summarized in Table 2:
+tization and evaluate its performance. On an iPhone 15 Pro, our
+model incurs ~14ms model inference time running at 60 Hz, capped                 • DIP-IMU [14] contains data from 10 participants, collected us-
+by input IMU sampling rate.                                                        ing commercial-grade Xsens [45] IMUs at 60 Hz. It includes a
+                                                                                   rich variety of activities such as arm raises, stretches, lunges,
+4     DATA SYNTHESIS AND MODEL TRAINING                                            squats, and punches. However, DIP-IMU does not contain
+                                                                                   global translation data.
+Model training requires a large collection of synchronized IMU mea-
+                                                                                 • TotalCapture [40] provides real IMU measurements with
+surements and corresponding SMPL body poses. We leverage the
+                                                                                   ground-truth pose and translation, captured using commer-
+AMASS [26] MoCap dataset, which provides an extensive collection
+                                                                                   cial Xsens IMUs at 60 Hz. Following PIP [48], we re-calibrate
+of such data(~40 hours), including translation.
+                                                                                   the acceleration measurements to account for constant bias.
+                                                                                 • IMUPoser [28] is collected from 10 participants using consumer-
+4.1     Full-Body Pose Estimation
+                                                                                   grade devices: an iPhone 11 Pro, Apple Watch Series 6, and
+Our models expect IMU measurements as input. We synthesize IMU                     AirPods, at 25 Hz. It provides ground-truth pose and global
+data following the approach proposed in DIP [14]. In summary, we                   translation data.
+place virtual sensors on the corresponding SMPL mesh vertices (left
+and right wrists, left and right pockets, and the head) and obtain
+joint rotations via limb orientations, while acceleration values are
+                                                                           5.2     Full-Body Pose Estimation
+computed using finite differences. During training, we scale down          5.2.1 Evaluation Metrics. Like prior work, we use the following
+the acceleration by a factor of 30 𝑚/𝑠 2 , such that its values are on a   evaluation metrics for pose estimation (lower is better for all):
+similar scale to orientations, for better learning. Of note, we do not           • Mean Per Joint Rotation Error (MPJRE): Measure of mean
+normalize our IMU measurements to a root joint (e.g., the pelvis),                 angular error across all root aligned joints in degrees (°).
+as the number of available devices can vary.                                     • Mean Per Joint Position Error (MPJPE): Measure of mean
+                                                                                   Euclidean distance error across all root aligned joints in
+4.2     Global Translation Estimation                                              centimeters (cm).
+The translation estimation networks require (1) binary labels for                • Mean Per Joint Vertex Error (MPJVE): Measure of mean Eu-
+foot-ground contact states and (2) per-frame root velocity values.                 clidean distance error across all root aligned vertices of the
+To generate foot-ground contact states, we assume that a foot in                   SMPL body mesh in centimeters (cm).
+contact with the ground displays very little movement between                    • Mean Per Joint Jitter (Jitter): Measure of mean jerk across all
+frames. Therefore, when the movement of one foot between con-                      body joints of the predicted motion in 𝑚/𝑠 3 .
+secutive frames is less than a threshold 𝑢, then we consider it to           We use MPJVE as our primary metric of evaluation for ease of
+be contacting the ground. We set 𝑢 = 0.008, following previous             comparison with prior work [28].
+work [49]. To train 𝑣𝑒 , we require per-frame root velocities. Since
+the AMASS dataset provides root position data, we can compute
+root velocities as the coordinate difference of the root position             Dataset         Capture Device Translation Data FPS
+between consecutive frames.                                                   DIP-IMU           Commercial        ×          60 Hz
+                                                                              TotalCapture      Commercial        ✓          60 Hz
+4.3     Training Setup and Procedure                                          IMUPoser           Consumer         ✓          25 Hz
+We train our models on a NVIDIA A40 GPU, which takes roughly a             Table 2: Real-world IMU datasets for MobilePoser Evaluation.
+day for all modules and device-combinations. In total, our model has
+MobilePoser: Real-Time Full-Body Pose Estimation and 3D Human Translation from IMUs in Mobile Consumer Devices   UIST ’24, October 13–16, 2024, Pittsburgh, PA, USA
+
+
+                                                                                         System      # Inst. Joints MPJRE MPJVE Jitter
+                                                                                         DIP               6         17.2°  11.2    3.62
+                                                                                         TransPose         6         12.8°   7.4    0.95
+                                                                                         PIP               6         12.1°   6.5    0.20
+                                                                                         IMUPoser         1–3        25.6°  15.4    1.30
+                                                                                         MobilePoser      1–3        23.7°  12.6    0.55
+                                                                                    Table 3: Comparison with key prior work on the TotalCap-
+                                                                                    ture dataset.
+
+
+
+                                                                                    comparison against key prior work, evaluated on the DIP-IMU
+                                                                                    and TotalCapture, dataset respectively. Given that our system tar-
+                                                                                    gets a very sparse configuration of IMUs (1-3), it is unsurprising
+Figure 5: Comparison of MobilePoser’s Full-Body Pose Es-                            that we perform worse than systems utilizing 6 IMUs, strategically
+timation Error across different Evaluation Protocols on the                         placed around the body. On the DIP-IMU and TotalCapture dataset,
+DIP-IMU, IMUPoser and TotalCapture dataset respectively.                            compared to IMUPoser, which considers the same device-location
+                                                                                    combinations, we perform significantly better displaying a 12.4%
+                                                                                    and 18.2% decrease in vertex error respectively.
+5.2.2 Evaluation Protocol. We outline three evaluation protocols                       On the IMUPoser dataset, Figure 7 (A) provides a detailed break-
+for training and fine-tuning to evaluate MobilePoser’s efficacy                     down of accuracy for different on-body device locations. Averaging
+across different data sources and noise profiles.                                   across the 1, 2 and 3 device conditions, MobilePoser outperforms
+     • Base Model: We train our model on the synthetic data gen-                    IMUPoser by 24.1%, 14.2% and 8.7% respectively. Furthermore, Fig-
+       erated on the AMASS dataset.                                                 ure 7 (B) provides an accuracy breakdown for the instrumented
+     • Finetune DIP-IMU: Like prior work, we train on AMASS                         and non-instrumented joints in comparison with IMUPoser. If a
+       and then fine-tune on 8 DIP-IMU participants. The 2 holdout                  limb has an IMU placed on any part, we consider all the joints
+       participants are used for testing the Finetune DIP-IMU model                 pertaining to it as instrumented joints, while the rest are marked
+       on the DIP-IMU dataset.                                                      as non-instrumented. MobilePoser is 18.1% and 17.4% better than
+     • Finetune IMUPoser: We train on AMASS and fine-tune on                        IMUPoser for predicting instrumented and non-instrumented joints
+       the first 8 IMUPoser participants. The 2 holdout participants                respectively. This can be seen in Figure 6 which depicts a visual
+       are used for testing the Finetune IMUPoser model on the                      comparison of our pose estimation with IMUPoser.
+       IMUPoser dataset.
+5.2.3 Accuracy across Datasets. Figure 5 shows our full-body pose
+estimation accuracy for all three protocols across the three datasets
+listed in Section 5.1. Averaged across all three datasets, the MPJVE
+for the Base Model, Finetune DIP-IMU and Finetune IMUPoser pro-
+tocols are 11.89, 11.73 and 11.33 cm respectively. It is interesting to
+note that the addition of commercial-grade IMU data (Finetune DIP-
+IMU) only improves accuracy by 1.3% over the base model, while
+the addition of noisy IMU data from consumer devices (Finetune
+IMUPoser) results in a bigger improvement of 4.7%.
+5.2.4 Accuracy across Activities. We further analyze results on
+different activities on the IMUPoser dataset, as it provides activity
+label meta-data. MobilePoser’s accuracy generalizes across most
+everyday activity contexts: the error (MPJVE) for locomotion is 8.2
+cm (walking 7.6 cm, jogging 8.8 cm), exercises is 10 cm (kicking:
+7.5 cm, jumping jacks: 11.1 cm, boxing: 11.5 cm), sitting is 11.5 cm
+and freestyle motions such as tennis and basketball are 9.1 cm and
+11.7 cm respectively. The accuracy degrades for postures with the
+user lying/facing down, e.g. push-ups have higher error of 16.1 cm.
+5.2.5 Comparison with prior work. To aid in direct comparison
+with prior work [14, 28, 48, 49], we now make use of the Finetune
+DIP-IMU evaluation protocol, that is training a base model on the
+synthetic IMU data from AMASS and fine-tuning it on the 8 par-                      Figure 6: Qualitative comparisons between our method and
+ticipants from DIP-IMU dataset. Tables 1 and 3 offer a quantitative                 IMUPoser on the DIP-IMU and IMUPoser dataset.
+UIST ’24, October 13–16, 2024, Pittsburgh, PA, USA                                                                                  Xu, et al.
+
+
+
+
+Figure 7: MPJVE comparison between IMUPoser and MobilePoser (our system) on the IMUPoser Dataset for: (A) Different
+on-body device combinations (B) Instrumented vs Non Instrumented joints.
+
+
+5.3     Global Translation Estimation                                (Figure 8) (A), we see that a device in the pocket has a much lower
+5.3.1 Evaluation Protocol. We evaluate our Global Translation Es-    error (14.8 cm) compared to that on the wrist (25.7 cm) or the head
+timation module on the TotalCapture and IMUPoser datasets, as        (29.7 cm). This can be attributed to the legs capturing most of the lo-
+DIP-IMU lacks translation data. Like prior work [48, 49], we use     comotion data during translation, resulting in marginal gains from
+the Finetune DIP-IMU protocol (Section 5.2.2), that is we train on   sensors on the upper-body. Figure 8 (B) shows the the cumulative
+AMASS and fine-tune on 8 participants of DIP-IMU to track the        distance error over time.
+Root Translation Error (Euclidean norm of the cumulative distance    5.3.3 Ablation Study. We perform ablation studies to understand
+errors within 1 second).                                             the impact of key components in our system and their effects on
+5.3.2 Accuracy across Datasets and Body Regions. On the Total-       performance. At the core of our system lies a subtle yet powerful
+Capture and IMUPoser dataset, our mean root translation error        concept: higher-order digitization (e.g., body pose) improves lower-
+across all device combinations is 27.55 and 17.63 cm respectively.   order digitizations (e.g., steps). To quantify this idea, we run an
+Interestingly, for both IMUPoser and TotalCapture datasets, we       ablation study of our translation estimation technique using both
+observe only a slight decrease in error when increasing the number   IMU data and the corresponding full-body pose inferred from it
+of devices from one to two (6.1%) and no significant improvement     versus using only IMU data. Figure 9 summarizes our results. Our
+(4.0%) when increasing from two devices to three. Analysing the      IMU-only, direct regression has an error of 21.4 cm across both
+error across different body regions for the single device scenario
+
+
+
+
+Figure 8: (A) Comparison of cumulative translation error for
+different instrumented joints on the IMUPoser and Total-
+Capture dataset. (B) Evaluation of cumulative distance errors        Figure 9: Benefits of using high-order digitization (i.e., IMU
+with respect to time.                                                inferred poses) for estimating global translation.
+MobilePoser: Real-Time Full-Body Pose Estimation and 3D Human Translation from IMUs in Mobile Consumer Devices   UIST ’24, October 13–16, 2024, Pittsburgh, PA, USA
+
+
+
+
+Figure 10: Example indoor navigation application where Mo-
+bilePoser digitizes multiple users within an office space.
+
+
+datasets, while our integrated (IMU + IMU inferred pose) approach
+decreases error by 29.4% to 15.1 cm.
+   Building on the multi-stage architecture, we further evaluate the                Figure 11: In this table tennis game users can move around
+impact of two additional components: jerk loss and physics refine-                  the table freely and use their wrist-instrumented hand to
+ment. These elements were designed to enhance motion smoothness                     control their racket.
+and physical plausibility. For the IMUPoser dataset, the jerk loss
+reduces jitter by 23.9% and translation error by 3.33%, but increases
+mean pose error by 0.05%. Further, the physics-aware refinement                     an Apple iPhone 15 Pro. As shown in Figure 10, multiple users
+reduces jitter by 29.7% and translation error by 0.4%, but increases                walk through the virtual office space, with their interactions and
+the mean pose error by 0.7%. The negligible increase in mean pose                   movements seamlessly digitized and represented in real-time. Here,
+error is expected, as it may occasionally over-smooth the motion.                   one user has a phone in their pocket and a watch on their wrist,
+This phenomenon is also seen in the PIP [48]. We believe that sig-                  while the other two only have a phone in their pocket. By lever-
+nificant improvements in jitter and translation far outweigh the                    aging the IMUs in these consumer devices, MobilePoser enables
+minimal increase in pose error, resulting in a more realistic motion.               accurate indoor navigation and localization without the need for
+                                                                                    additional infrastructure or specialized hardware. This opens up
+5.3.4 Comparison with prior work. To the best of our knowledge,                     exciting possibilities for applications such as indoor way finding,
+no other works have explored both full-body pose and translation                    context-aware virtual assistants, and immersive virtual tours.
+from such a sparse set of commodity IMUs. IMUPoser [28], which
+also targets consumer devices, does not estimate global translation.                6.2     Mobile Gaming Experiences
+On the TotalCapture dataset, TransPose (6 IMUs) has a transla-                      To showcase this potential, we developed a virtual table tennis game
+tion error of 12.8 cm while that of MobilePoser is 19.9 cm when a                   (Figure 11) that allows users to play remotely with others, similar
+single IMU device is placed in the pocket. Unsurprisingly, a com-                   to how Nintendo games are played in front of a TV. Each player has
+mercial grade, 6 IMU-based system has higher accuracy due to their                  a phone in their pocket and a watch on the dominant (left) hand,
+waist and knee mounted sensors, which capture larger ranges of                      which is controlling the racket. Players can freely move within their
+locomotion compared to devices carried in the pocket.                               local space to control their avatars, adding a new level of physical
+                                                                                    interaction to the gaming experience. MobilePoser’s ability to track
+6     EXAMPLE USES                                                                  full-body movements using everyday devices eliminates the need
+MobilePoser enables full-body pose estimation with global motion                    for specialized controllers, making immersive gaming experiences
+tracking using devices that users already own, opening up a wide                    more accessible to a wider audience.
+range of novel applications. This section showcases three proof-of-
+concept applications in indoor navigation, gaming, and healthcare                   6.3     Fitness and Wellness
+to illustrate MobilePoser’s unique capabilities and potential impact.               MobilePoser has the potential to revolutionize fitness tracking and
+                                                                                    rehabilitation by providing accurate, real-time feedback on a user’s
+6.1    Indoor Localization and Navigation                                           movements and poses without the need for external sensors or
+To demonstrate MobilePoser’s potential in this domain, we scan                      camera setups. This enables users to monitor their exercise form,
+an office space using the PolyCam [34] LiDAR scanner app with                       track progress, and receive personalized guidance using the devices
+UIST ’24, October 13–16, 2024, Pittsburgh, PA, USA                                                                                                   Xu, et al.
+
+
+                                                                          settings (as seen in the accompanying video), we acknowledge the
+                                                                          need for future datasets captured in-the-wild.
+                                                                              Another limitation of MobilePoser, much like other prior works
+                                                                          [14, 28, 48, 49], is the need for a calibration step. Currently, users
+                                                                          first stand in a T-pose, which aligns the IMU data with the training
+                                                                          data based on the SMPL kinematic model. While this calibration
+                                                                          process is acceptable for some use cases, such as gaming, it may be
+                                                                          less desirable for applications that demand seamless interactions,
+                                                                          like indoor navigation. Future work could investigate more natural
+                                                                          and unobtrusive calibration procedures, such as detecting common
+                                                                          poses like standing with arms by the side using UWB, similar to
+                                                                          SmartPoser [11].
+                                                                              In conclusion, while MobilePoser presents a significant step
+                                                                          forward in enabling full-body pose and translation estimation using
+                                                                          everyday devices, there remain several avenues for future research
+                                                                          to extend the capabilities of this approach.
+
+Figure 12: MobilePoser’s full-body pose and locomotion can                9   CONCLUSION
+be used to automatically detect and count exercise repeti-
+                                                                          In this paper, we present MobilePoser, a real-time, on-device sys-
+tions, better estimate calories and monitor form.
+                                                                          tem for estimating full-body pose and translation using IMUs in
+                                                                          consumer mobile devices (phones, watches, earbuds). By leveraging
+they already own. In this example (Figure 12), a user performs a          a multi-stage approach that combines data-driven learning and
+workout routine while MobilePoser captures the session using the          physics-based optimization, MobilePoser achieves state-of-the-art
+IMU data from the smartphone in the user’s pocket. This not only          accuracy while remaining lightweight and efficient. Our extensive
+allows the user to review their performance and track progress over       evaluation on public datasets demonstrates clear improvements
+time but also enables remote monitoring by fitness instructors or         over prior work, both in terms of full-body pose estimation accu-
+physical therapists. Moreover, MobilePoser’s ability to track full-       racy and enabling novel global translation estimation. Furthermore,
+body movements facilitates interactive rehabilitation regimens [4]        we showcase the potential of MobilePoser through a series of proof-
+and other passive health sensing applications such as gait analysis       of-concept applications in gaming, fitness, and indoor navigation,
+[30] or hyperactivity detection [6], among others.                        highlighting its ability to enable new and immersive experiences
+                                                                          using the devices people already own.
+7    OPEN SOURCE
+To enable other researchers and practitioners to build upon our           ACKNOWLEDGMENTS
+work, we release our pre-trained models, data pre-processing scripts,     We thank Jianru Ding from the University of Chicago and Zeya
+and model training code as open-source software at: https://github.       Chen from the Institute of Design, Illinois Institute of Technol-
+com/SPICExLAB/MobilePoser. By making our work fully repro-                ogy for helping film the video. Vasco Xu’s and Henry Hoffmann’s
+ducible and extensible, we hope to accelerate research and develop-       work on this project is supported by NSF (CCF-1823032 and CNS-
+ment in the field of mobile motion capture using everyday devices.        1956180).
+
+8    LIMITATIONS AND FUTURE WORK                                          REFERENCES
+While MobilePoser demonstrates promising results in estimating            [1] [n. d.]. PlayStation VR. https://www.playstation.com/en-us/explore/playstation-
+                                                                              vr/.
+full-body pose and translation using minimal instrumentation, there       [2] 2023. HTC Vive. https://www.vive.com.
+are several limitations and opportunities for future work. First, as a    [3] Karan Ahuja. 2024. Practical and Rich User Digitization. arXiv:2403.00153 [cs.HC]
+                                                                              https://arxiv.org/abs/2403.00153
+purely inertial-based technique, MobilePoser’s translation estima-        [4] Karan Ahuja, Sven Mayer, Mayank Goel, and Chris Harrison. 2021. Pose-on-
+tion is still susceptible to drift, particularly when devices deviate         the-go: Approximating user pose with smartphone sensor fusion and inverse
+from their calibrated positions. This can occur when users wear               kinematics. In Proceedings of the 2021 CHI Conference on Human Factors in Com-
+                                                                              puting Systems. 1–12.
+loose clothing, causing the phone in the pocket to move around and        [5] Karan Ahuja, Vivian Shen, Cathy Mengying Fang, Nathan Riopelle, Andy Kong,
+resulting in orientation changes. To address this issue, future work          and Chris Harrison. 2022. Controllerpose: inside-out body capture with VR
+could explore re-calibration techniques based on stationary poses             controller cameras. In Proceedings of the 2022 CHI Conference on Human Factors
+                                                                              in Computing Systems. 1–13.
+or leverage additional sensory information, such as GPS, UWB or           [6] Riku Arakawa, Karan Ahuja, Kristie Mak, Gwendolyn Thompson, Sam Shaaban,
+visual odometry, to correct for drift.                                        Oliver Lindhiem, and Mayank Goel. 2023. LemurDx: Using Unconstrained Pas-
+                                                                              sive Sensing for an Objective Measurement of Hyperactivity in Children with
+   Second, akin to prior wor, our evaluation has limitations of being         no Parent Input. Proceedings of the ACM on Interactive, Mobile, Wearable and
+tested on lab collected datasets. All the test datasets (DIP, TotalCap-       Ubiquitous Technologies 7, 2 (2023), 1–23.
+ture, IMUPoser) were collected in lab settings due to the need for an     [7] Riku Arakawa, Bing Zhou, Gurunandan Krishnan, Mayank Goel, and Shree K
+                                                                              Nayar. 2023. MI-Poser: Human Body Pose Tracking Using Magnetic and Inertial
+accurate external ground truth motion capture system. Although                Sensor Fusion with Metal Interference Mitigation. Proceedings of the ACM on
+we empirically demonstrate that MobilePoser works in real-world               Interactive, Mobile, Wearable and Ubiquitous Technologies 7, 3 (2023), 1–24.
+MobilePoser: Real-Time Full-Body Pose Estimation and 3D Human Translation from IMUs in Mobile Consumer Devices                UIST ’24, October 13–16, 2024, Pittsburgh, PA, USA
+
+
+ [8] Rayan Armani, Changlin Qian, Jiaxi Jiang, and Christian Holz. 2024. Ultra Inertial     [31] Northern Digital Inc. 2020. trakSTAR. https://www.ndigital.com/msci/products/
+     Poser: Scalable Motion Capture and Tracking from Sparse Inertial Sensors and                drivebay-trakstar.
+     Ultra-Wideband Ranging. In ACM SIGGRAPH 2024 Conference Papers. 1–11.                  [32] Mathias Parger, Joerg H Mueller, Dieter Schmalstieg, and Markus Steinberger.
+ [9] Federica Bogo, Angjoo Kanazawa, Christoph Lassner, Peter Gehler, Javier Romero,             2018. Human upper-body inverse kinematics for increased embodiment in
+     and Michael J Black. 2016. Keep it SMPL: Automatic estimation of 3D human pose              consumer-grade virtual reality. In Proceedings of the 24th ACM symposium on
+     and shape from a single image. In Computer Vision–ECCV 2016: 14th European                  virtual reality software and technology. 1–10.
+     Conference, Amsterdam, The Netherlands, October 11-14, 2016, Proceedings, Part V       [33] Polhemus. 2020. Polhemus Motion Capture System. https://polhemus.com/.
+     14. Springer, 561–578.                                                                 [34] PolyCam. [n. d.]. PolyCam. https://poly.cam/.
+[10] Nathan Devrio and Chris Harrison. 2022. DiscoBand: Multiview Depth-Sensing             [35] Jose Luis Ponton, Haoran Yun, Andreas Aristidou, Carlos Andujar, and Nuria
+     Smartwatch Strap for Hand, Body and Environment Tracking. In Proceedings                    Pelechano. 2023. SparsePoser: Real-time Full-body Motion Reconstruction from
+     of the 35th Annual ACM Symposium on User Interface Software and Technology.                 Sparse Data. ACM Transactions on Graphics 43, 1 (2023), 1–14.
+     1–13.                                                                                  [36] Jathushan Rajasegaran, Georgios Pavlakos, Angjoo Kanazawa, and Jitendra Malik.
+[11] Nathan DeVrio, Vimal Mollyn, and Chris Harrison. 2023. SmartPoser: Arm Pose                 2021. Tracking people with 3D representations. arXiv preprint arXiv:2111.07868
+     Estimation with a Smartphone and Smartwatch Using UWB and IMU Data. In                      (2021).
+     Proceedings of the 36th Annual ACM Symposium on User Interface Software and            [37] Nirupam Roy, He Wang, and Romit Roy Choudhury. 2014. I am a smartphone
+     Technology. 1–11.                                                                           and i can tell my user’s walking direction. In Proceedings of the 12th annual
+[12] Roy Featherstone. 2014. Rigid body dynamics algorithms. Springer.                           international conference on Mobile systems, applications, and services. 329–342.
+[13] Shubham Goel, Georgios Pavlakos, Jathushan Rajasegaran, Angjoo Kanazawa,               [38] Takaaki Shiratori, Hyun Soo Park, Leonid Sigal, Yaser Sheikh, and Jessica K
+     and Jitendra Malik. 2023. Humans in 4d: Reconstructing and tracking humans                  Hodgins. 2011. Motion capture from body-mounted cameras. In ACM SIGGRAPH
+     with transformers. In Proceedings of the IEEE/CVF International Conference on               2011 papers. 1–10.
+     Computer Vision. 14783–14794.                                                          [39] Ivan E Sutherland. 1968. A head-mounted three dimensional display. In Proceed-
+[14] Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J Black, Otmar Hilliges,                ings of the December 9-11, 1968, fall joint computer conference, part I. 757–764.
+     and Gerard Pons-Moll. 2018. Deep inertial poser: Learning to reconstruct human         [40] Matthew Trumble, Andrew Gilbert, Charles Malleson, Adrian Hilton, and John
+     pose from sparse inertial measurements in real time. ACM Transactions on                    Collomosse. 2017. Total capture: 3d human pose estimation fusing video and
+     Graphics (TOG) 37, 6 (2018), 1–15.                                                          inertial sensors. In Proceedings of 28th British Machine Vision Conference. 1–13.
+[15] Fan Jiang, Xubo Yang, and Lele Feng. 2016. Real-time full-body motion recon-           [41] Vicon Motion Systems Ltd. [n. d.]. Vicon. https://www.vicon.com.
+     struction and recognition for off-the-shelf VR devices. In Proceedings of the 15th     [42] Daniel Vlasic, Rolf Adelsberger, Giovanni Vannucci, John Barnwell, Markus Gross,
+     ACM SIGGRAPH Conference on Virtual-Reality Continuum and Its Applications in                Wojciech Matusik, and Jovan Popović. 2007. Practical motion capture in everyday
+     Industry-Volume 1. 309–318.                                                                 surroundings. ACM transactions on graphics (TOG) 26, 3 (2007), 35–es.
+[16] Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa Laich, Patrick Snape,   [43] Timo Von Marcard, Bodo Rosenhahn, Michael J Black, and Gerard Pons-Moll.
+     and Christian Holz. 2022. Avatarposer: Articulated full-body pose tracking from             2017. Sparse inertial poser: Automatic 3d human pose estimation from sparse
+     sparse motion sensing. In European Conference on Computer Vision. Springer,                 imus. In Computer graphics forum, Vol. 36. Wiley Online Library, 349–360.
+     443–460.                                                                               [44] Erwin Wu, Ye Yuan, Hui-Shyong Yeo, Aaron Quigley, Hideki Koike, and Kris M
+[17] Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W Winkler,                 Kitani. 2020. Back-hand-pose: 3d hand pose estimation for a wrist-worn cam-
+     and C Karen Liu. 2022. Transformer Inertial Poser: Real-time human motion                   era via dorsum deformation network. In Proceedings of the 33rd Annual ACM
+     reconstruction from sparse IMUs with simultaneous terrain generation. In SIG-               Symposium on User Interface Software and Technology. 1147–1160.
+     GRAPH Asia 2022 Conference Papers. 1–9.                                                [45] Xsens Technologies B.V. [n. d.]. Xsens IMU Systems. https://www.xsens.com.
+[18] Haojian Jin, Zhijian Yang, Swarun Kumar, and Jason I Hong. 2018. Towards                    Accessed: 2024-03-07.
+     wearable everyday body-frame tracking using passive RFIDs. Proceedings of the          [46] Hang Yan, Qi Shan, and Yasutaka Furukawa. 2018. RIDI: Robust IMU double
+     ACM on Interactive, Mobile, Wearable and Ubiquitous Technologies 1, 4 (2018),               integration. In Proceedings of the European conference on computer vision (ECCV).
+     1–23.                                                                                       621–636.
+[19] Daehwa Kim and Chris Harrison. 2022. Etherpose: Continuous hand pose tracking          [47] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav Golyanik, Shaohua Pan,
+     with wrist-worn antenna impedance characteristic sensing. In Proceedings of the             Christian Theobalt, and Feng Xu. 2023. EgoLocate: Real-time Motion Capture,
+     35th Annual ACM Symposium on User Interface Software and Technology. 1–12.                  Localization, and Mapping with Sparse Body-mounted Sensors. arXiv preprint
+[20] David Kim, Otmar Hilliges, Shahram Izadi, Alex D Butler, Jiawen Chen, Iason                 arXiv:2305.01599 (2023).
+     Oikonomidis, and Patrick Olivier. 2012. Digits: freehand 3D interactions any-          [48] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada, Vladislav Golyanik,
+     where using a wrist-worn gloveless sensor. In Proceedings of the 25th annual ACM            Christian Theobalt, and Feng Xu. 2022. Physical inertial poser (pip): Physics-
+     symposium on User interface software and technology. 167–176.                               aware real-time human motion tracking from sparse inertial sensors. In Pro-
+[21] Diederik P Kingma and Jimmy Ba. 2014. Adam: A method for stochastic opti-                   ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition.
+     mization. arXiv preprint arXiv:1412.6980 (2014).                                            13167–13178.
+[22] Alexander Kyu, Hongyu Mao, Junyi Zhu, Mayank Goel, and Karan Ahuja. 2024.              [49] Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2021. Transpose: Real-time 3d human
+     EITPose: Wearable and Practical Electrical Impedance Tomography for Continu-                translation and pose estimation with six inertial sensors. ACM Transactions on
+     ous Hand Pose Estimation. In Proceedings of the CHI Conference on Human Factors             Graphics (TOG) 40, 4 (2021), 1–13.
+     in Computing Systems. 1–10.                                                            [50] Yang Zhang, Chouchang Yang, Scott E Hudson, Chris Harrison, and Alanson
+[23] Jiye Lee and Hanbyul Joo. 2024. Mocap Everyone Everywhere: Lightweight                      Sample. 2018. Wall++ room-scale interactive and context-aware sensing. In
+     Motion Capture With Smartwatches and a Head-Mounted Camera. arXiv preprint                  Proceedings of the 2018 chi conference on human factors in computing systems.
+     arXiv:2401.00847 (2024).                                                                    1–15.
+[24] Yilin Liu, Shijia Zhang, and Mahanth Gowda. 2021. NeuroPose: 3D hand pose              [51] Mingmin Zhao, Tianhong Li, Mohammad Abu Alsheikh, Yonglong Tian, Hang
+     tracking using EMG wearables. In Proceedings of the Web Conference 2021. 1471–              Zhao, Antonio Torralba, and Dina Katabi. 2018. Through-wall human pose
+     1482.                                                                                       estimation using radio signals. In Proceedings of the IEEE conference on computer
+[25] Matthew Loper, Naureen Mahmood, Javier Romero, Gerard Pons-Moll, and                        vision and pattern recognition. 7356–7365.
+     Michael J. Black. 2015. SMPL: A Skinned Multi-Person Linear Model. ACM                 [52] Li’an Zhuo, Jian Cao, Qi Wang, Bang Zhang, and Liefeng Bo. 2023. Towards
+     Trans. Graphics (Proc. SIGGRAPH Asia) 34, 6 (Oct. 2015), 248:1–248:16.                      Stable Human Pose Estimation via Cross-View Fusion and Foot Stabilization. In
+[26] Naureen Mahmood, Nima Ghorbani, Nikolaus F Troje, Gerard Pons-Moll, and                     Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition.
+     Michael J Black. 2019. AMASS: Archive of motion capture as surface shapes. In               650–659.
+     Proceedings of the IEEE/CVF international conference on computer vision. 5442–
+     5451.
+[27] Microsoft Corporation. [n. d.]. Microsoft Kinect.
+[28] Vimal Mollyn, Riku Arakawa, Mayank Goel, Chris Harrison, and Karan Ahuja.
+     2023. IMUPoser: Full-Body Pose Estimation using IMUs in Phones, Watches,
+     and Earbuds. In Proceedings of the 2023 CHI Conference on Human Factors in
+     Computing Systems. 1–12.
+[29] NaturalPoint, Inc. [n. d.]. OptiTrack. https://www.optitrack.com.
+[30] Shu Nishiguchi, Minoru Yamada, Koutatsu Nagai, Shuhei Mori, Yuu Kajiwara,
+     Takuya Sonoda, Kazuya Yoshimura, Hiroyuki Yoshitomi, Hiromu Ito, Kazuya
+     Okamoto, et al. 2012. Reliability and validity of gait analysis by android-based
+     smartphone. Telemedicine and e-Health 18, 4 (2012), 292–296.
+

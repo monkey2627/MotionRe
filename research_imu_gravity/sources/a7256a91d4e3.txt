@@ -1,0 +1,3256 @@
+URL: https://arxiv.org/html/2102.02675v2
+
+Observability of the relative motion from inertial data in kinematic chains
+Report GitHub Issue
+×
+Title:
+Content selection saved. Describe the issue below:
+Description:
+Submit without GitHub
+Submit in GitHub
+arXiv is now an independent nonprofit!
+Learn more
+×
+Back to arXiv
+License: arXiv.org perpetual non-exclusive license
+arXiv:2102.02675v2 [eess.SY] 06 Jun 2022
+Manon Kok
+⋆
+, Karsten Eckhoff
+⋆⋆
+, Ive Weygers
+†
+and Thomas Seel
+⋆⋆
+⋆
+Delft Center for Systems and Control, Delft University of Technology, the Netherlands.
+E-mail: m.kok-1@tudelft.nl
+⋆⋆
+Control Systems Group, Technische Universität Berlin, Germany.
+Emails: {karsten.eckhoff@campus.tu-berlin.de, thomas.seel@tu-berlin.de}
+†
+Department of Rehabilitation Sciences, KU Leuven Campus Bruges, Belgium.
+E-mail: ive.weygers@kuleuven.be
+∙
+\bullet
+Please cite this version:
+Manon Kok, Karsten Eckhoff, Ive Weygers and Thomas Seel, “Observability of the relative motion from inertial data in kinematic chains”, Control Engineering Practice, Volume 125, 105206, August 2022.
+DOI: https://doi.org/10.1016/j.conengprac.2022.105206
+Real-time motion tracking of kinematic chains is a key prerequisite in the control of, e.g., robotic actuators and autonomous vehicles and also has numerous biomechanical applications. In recent years, it has been shown that, by placing inertial sensors on segments that are connected by rotational joints, the motion of that kinematic chain can be tracked accurately. These methods specifically avoid using magnetometer measurements, which are known to be unreliable since the magnetic field at the different sensor locations is typically different. They rely on the assumption that the motion of the kinematic chain is sufficiently rich to assure observability of the relative pose. However, a formal investigation of this crucial requirement has not yet been presented, and no specific conditions for observability have so far been given. In this work, we present an observability analysis and show that the relative pose of the body segments is indeed observable under a very mild condition on the motion. We support our results by simulation studies, in which we employ a state estimator that neither uses magnetometer measurements nor additional sensors and does not impose assumptions on the accelerometer to measure only the direction of gravity, nor on the range of motion or degrees of freedom of the joints. We investigate the effect of the amount of excitation and of stationary periods in the data on the accuracy of the estimates. We then use experimental data from two mechanical joints as well as from a human gait experiment to validate the observability criterion in practice and to show that small excitation levels are sufficient for obtaining accurate estimates even in the presence of time periods during which the motion is not observable.
+Keywords:
+Observability, inertial sensors, motion estimation, kinematic chains.
+1
+Introduction
+In recent years, inertial measurement units (IMUs) have been used for motion tracking and control in an increasing number of mechatronic and biomechanical applications ranging from autonomous cars, miniature aerial vehicles and offshore vessels
+[
+1
+,
+2
+,
+3
+,
+4
+]
+to human motion capture and feedback-controlled biomedical devices
+[
+5
+,
+6
+]
+. These sensors typically contain three-dimensional gyroscopes, accelerometers and magnetometers. Accelerometers and gyroscopes, measuring the specific force and the angular velocity, respectively, are also called inertial sensors.
+Our interest lies in estimation of the motion of kinematic chains consisting of segments that are connected by rotational joints, where each of the segments is equipped with an IMU. These could for example be human body segments, multilink aerial vehicles or robotic actuators, as illustrated in Figure
+1
+. One obvious but restrictive way to do this is to estimate the orientation of each IMU individually. A major limitation of this approach is that it relies on the assumptions that the magnetometer approximately measures a constant local magnetic field and that the accelerometer approximately measures the gravity
+[
+7
+]
+. Both assumptions are often violated in practice due to the presence of ferromagnetic material or electronic devices
+[
+8
+,
+9
+]
+or due to fast motion
+[
+10
+]
+. In practice, this leads to unpredictably large estimation errors and to instability and failure of control systems that rely on these estimates. One way to overcome these limitations is to use additional sensors, see e.g.
+[
+1
+,
+11
+]
+. On the other hand, in recent years, magnetometer-free approaches have been developed for accurate and reliable estimation of the complete relative pose of all segments of a kinematic chain from only inertial measurements. Our interest lies in the latter approach.
+Figure 1:
+Illustration of the main research question. Magnetometer-free inertial motion tracking of kinematic chains is desirable in many applications, including linked aerial vehicles, robotics, and human motion tracking. However, there are to date no sufficient conditions for observability of the performed motion, which puts accuracy and stability at risk.
+Previous work has shown that the relative pose of the body segments can be determined entirely from inertial measurements – without the assumption that the accelerometer only measures the gravity – by taking the connection between the segments and the corresponding kinematic constraints into account
+[
+12
+,
+13
+,
+14
+]
+, however only under the assumption that the motion is “sufficiently rich”. Different types of state estimators have been used, including extended Kalman filters and optimisation-based methods. These state estimators have experimentally been shown to result in accurate estimation results with joint angle estimation errors in the range of a few degrees for biomechanical systems
+[
+14
+]
+. The argument that the performed motions must be sufficiently rich to render the relative orientation observable is found throughout the mentioned literature, and it is often claimed that this is a mild assumption. However, precise statements on necessary or sufficient conditions have to date only been found for the special case of a double-hinge joint system
+[
+15
+]
+. From a practical point of view, this represents a severe limitation of magnetometer-free inertial motion tracking, since the methods must be used without knowing whether the results are accurate for the specific motion or not.
+In the present work we derive, for the first time, sufficient conditions for observability of the relative pose of the kinematic chain. This lays the foundation for crucial performance guarantees in a large range of applications. It can also be used to instruct users to perform certain movements to guarantee this performance. Since we consider arbitrary rotational joints, i.e. without restrictions on the range of motion, the derived sufficient conditions do not only hold in 3D joints but straightforwardly also in joints with only one or two rotation axes.
+The question under which conditions the relative motion states of a kinematic chain can be determined from magnetometer-free IMU readings and a kinematic constraint leads to observability analysis of a nonlinear dynamic system. It is known from systems and control theory that this is a non-trivial problem and that no general closed-form condition for observability of nonlinear systems exists. However, some theoretical results exist
+[
+16
+,
+17
+,
+18
+]
+, and we leverage them to derive a practically useful condition for accurate results in magnetometer-free inertial motion analysis. More specifically, we identify for which types of motion the relative motion states of the kinematic chain are not observable. We then show that even if observable motions are interrupted by short and / or infrequent periods of non-observable motions, it is possible for a state estimator to provide accurate estimation results by exploiting the kinematic constraint. While long non-observable periods inevitably lead to increasing errors in real-time estimation, the proposed criterion can be used to detect such periods and to provide crucial information about whether the estimates are reliable as well as what type of motions should be performed to increase the estimation accuracy. The contributions of the present work are five-fold:
+1.
+We show the mathematical equivalence of the two dynamic models that are most commonly used to take kinematic constraints due to the connection between body segments into account. Moreover, we propose two reduced model representations which are also mathematically equivalent but have state vectors of a smaller size.
+2.
+We present an observability analysis that is valid for all four state space models and derive a (mild) condition under which the relative orientation can be uniquely determined from the system outputs.
+3.
+We analyse the estimation accuracy for both a filtering and a smoothing approach
+[
+14
+]
+as a function of the type of motion and illustrate precisely in which way a motion must be sufficiently exciting to assure convergence using Monte Carlo simulations. This includes showing that a strong excitation of the “wrong” kind can be useless, while a small excitation of the “right” kind results in small estimation errors.
+4.
+We introduce a metric that quantifies the “amount of observability” – in terms of the linear independence of two vectors – at a specific time instant and show that this metric can indeed be used to detect periods of unobservability or poor observability and can hence be used to identify periods during which the estimation results should be taken with caution.
+5.
+We practically validate the derived conditions for two experiments. In the first, we estimate the motion of two mechanical joint systems with different degrees of freedom based on measurements from two attached IMUs. In the second, we estimate the motion of a human leg using measurements from two IMUs, placed on the thigh and the shank.
+2
+Related work
+2.1
+Magnetometer-free inertial motion tracking of kinematic chains
+In previous work, magnetometer-free approaches have been proposed that determine the
+relative
+orientation between segments by taking the connection between the segments and the corresponding kinematic constraints into account. The practical relevance of such methods is high, since they enable accurate motion tracking in arbitrary magnetic environments and thus in a wide field of applications. In the following, we briefly summarise existing magnetometer-free approaches for relative-motion tracking of kinematic chains, and we answer two questions: Which magnetometer-free methods have been proposed for inertial motion capture, and what is known about the conditions under which these methods are known to work or fail? To estimate the motion of a kinematic chain, the most common approach is to, as we also do in this work, use a full IMU setup, which means that an IMU is placed on each segment of the kinematic chain. Methods with sparse sensor setups have been proposed but require additional assumptions on the kinematic structure and its motion
+[
+19
+,
+20
+,
+15
+]
+and are outside the scope of this work.
+For joints with only one degree of freedom, i.e. hinge joints or revolute joints, several methods have been proposed that exploit constraints of the relative orientation between the adjacent segments
+[
+21
+,
+22
+]
+. However, the kinematic constraints become singular when the hinge joint axis is vertical, and the relative heading cannot be tracked if the systems remains at the singularity. Moreover, to apply such methods, the direction of the joint axis must be known in the sensor frames of both adjacent segments, which requires suitable sensor-to-segment calibration routines
+[
+23
+,
+24
+]
+. For joints with two degrees of freedom, e.g. saddle joints or the human elbow, magnetometer-free methods have been proposed that determine the relative heading by exploiting kinematic constraints of the angular rates
+[
+25
+]
+and the orientations
+[
+26
+]
+. As in the hinge joint case, the relative heading cannot be tracked if one of the joint axes remains vertical, and the methods require identification of both joint axes’ coordinates in the corresponding sensor frame
+[
+27
+]
+. Finally, for joints with up to three degrees of freedom, range-of-motion constraints can be exploited on a moving-window to track the relative heading
+[
+28
+]
+. This approach requires knowledge of the range of motion and persistent excitation in the sense of sufficient coverage of that range.
+The aforementioned methods have in common that they apply only to joints with limited degrees of freedom or range of motion. Besides such rotational constraints, it has also been shown that one can exploit the mere fact that the segment ends that are connected by the joint cannot move apart. This information is independent of the joint’s degrees of freedom and range of motion, and it can be formalised in two different ways. In
+[
+12
+,
+29
+,
+13
+]
+, it is formulated in terms of the joint centre position, while it is written in terms of the joint centre acceleration in
+[
+14
+,
+30
+,
+31
+,
+32
+]
+. The information can for instance be included as a constraint in an optimisation-based approach or as a measurement model in a filtering approach, e.g. an extended Kalman filter. For both the formulations in terms of the joint centre position and in terms of the joint centre acceleration, it was demonstrated that exploitation of the constraint enables determining the relative orientation between the segments at least if the performed motion provides “sufficient excitation.” However, as elaborated above, there is no analysis or investigation on what this means and which motions render the relative motion states observable. In this work, we focus on deriving sufficient conditions for observability of the relative orientations for these arbitrary joints, i.e. without making assumptions on their degrees of freedom or range of motion.
+2.2
+Observability analysis for inertial motion tracking
+For any system for which one aims to build an observer, it is relevant to study the observability of the system because this gives information about whether it is indeed possible to design a stable observer for the system
+[
+16
+]
+. For linear systems, observability can be studied by determining the rank of the well-known observability matrix
+[
+33
+]
+. The concept of uniform complete observability is typically used to prove convergence of a Kalman filter
+[
+34
+]
+. Estimating motion using IMUs is, however, an inherently nonlinear problem
+[
+7
+]
+.
+Nonlinear observability analysis is commonly done using Lie derivatives
+[
+16
+]
+. This has for instance been done for vision-aided inertial navigation system
+[
+35
+]
+and for vehicle motion estimation
+[
+36
+]
+. For observability analysis for orientation estimation, e.g. of kinematic chains, methods have been developed to compute these Lie derivatives on Lie groups, e.g.,
+𝕊
+​
+𝕆
+​
+(
+3
+)
+\mathbb{SO}(3)
+[
+37
+]
+. Alternatively, the nonlinear system can be rewritten as a linear time-varying system. This has been done for e.g. inertial navigation filters
+[
+38
+]
+and for robotics applications
+[
+39
+]
+. In
+[
+38
+]
+it has been shown that differential observability results in uniform complete observability for linear time-variant systems and can therefore be used to prove convergence of a Kalman filter.
+For nonlinear as well as for linear time-varying systems, it is known that the observability of a system may depend on the input
+[
+16
+]
+. In the case of inertial motion tracking, observability depends on the motion of the system. In this work, we study observability for the case of magnetometer-free inertial motion tracking of a kinematic chain. We show that for this specific case, there exists an elegant way to analyse the observability of the system since it can be considered to be a special case of Wahba’s problem
+[
+40
+]
+. For this, we neither derive Lie derivatives nor require the system to be a linear time-varying system, but instead directly study whether the relative orientation can uniquely be inferred from measurements and their derivatives, which has close connections to studying differential observability
+[
+17
+,
+41
+]
+. This allows us to systematically analyse for which motions (inputs) it is indeed possible to infer the states uniquely. We then study systematically for real-life data whether the system is indeed observable at a specific time instance.
+3
+Modelling
+Figure 2:
+Two adjacent segments
+i
+i
+and
+j
+j
+of a kinematic chain connected by a spherical joint.
+We consider a kinematic chain with at least two rigid segments that are connected by a rotational joint, as graphically illustrated in Figure
+2
+. Our interest lies in estimating the relative pose of these connected segments, using sensors placed on each segment. In other words, our focus is on determining the relative position, velocity and orientation from the accelerometer measurements
+y
+a
+,
+i
+,
+t
+y_{\text{a},i,t}
+and the gyroscope measurements
+y
+ω
+,
+i
+,
+t
+y_{\omega,i,t}
+. Here, the subindex
+i
+i
+explicitly indicates that these are the measurements from sensor
+S
+i
+\text{S}_{i}
+, where
+i
+=
+1
+,
+…
+,
+N
+S
+i=1,\ldots,N_{S}
+. We denote the position and velocity of sensor
+i
+i
+as
+p
+i
+n
+p^{\text{n}}_{i}
+and
+v
+i
+n
+v^{\text{n}}_{i}
+, respectively, where the superscript
+n
+n
+is used to indicate that these vectors are expressed in the navigation frame
+n
+n
+, which is a fixed, static coordinate frame. The origin of this frame and the direction of its axes are irrelevant in our problem formulation since we are only interested in the relative position and orientation of the sensors. The orientation of each sensor is described in terms of a rotation matrix
+R
+ns
+i
+R^{\text{ns}_{i}}
+, which denotes the orientation from the sensor frame
+s
+i
+s_{i}
+to the static coordinate frame
+n
+n
+. The origin of the frame
+s
+i
+s_{i}
+lies at the centre of the accelerometer triad of sensor
+i
+i
+and its axes are aligned with the inertial sensor axes. We assume that the location and the orientation of the sensors on the body segments are known. These can for instance be obtained from pre-calibration algorithms in
+[
+23
+,
+42
+]
+. Hence, estimating the relative position and orientation of the sensors becomes equivalent to estimating the relative position and orientation of the body segments.
+We assume standard measurement models for the accelerometer and gyroscope measurements
+y
+a
+,
+i
+,
+t
+\displaystyle y_{\text{a},i,t}
+=
+f
+i
+,
+t
+s
+i
++
+b
+a
+,
+i
++
+e
+a
+,
+i
+,
+t
+=
+R
+t
+s
+i
+​
+n
+​
+(
+a
+i
+,
+t
+n
+−
+g
+n
+)
++
+b
+a
+,
+i
++
+e
+a
+,
+i
+,
+t
+,
+\displaystyle=f_{i,t}^{\text{s}_{i}}+b_{\text{a},i}+e_{\text{a},i,t}=R^{\text{s}_{i}\text{n}}_{t}\left(a_{i,t}^{\text{n}}-g^{\text{n}}\right)+b_{\text{a},i}+e_{\text{a},i,t},
+(1a)
+y
+ω
+,
+i
+,
+t
+\displaystyle y_{\omega,i,t}
+=
+ω
+i
+,
+t
+s
+i
++
+b
+ω
+,
+i
++
+e
+ω
+,
+i
+,
+t
+,
+\displaystyle=\omega_{i,t}^{\text{s}_{i}}+b_{\omega,i}+e_{\omega,i,t},
+(1b)
+where
+f
+i
+,
+t
+s
+i
+f_{i,t}^{\text{s}_{i}}
+and
+ω
+i
+,
+t
+s
+i
+\omega_{i,t}^{\text{s}_{i}}
+, respectively, denote the specific force and the angular velocity at time
+t
+t
+of sensor
+i
+i
+expressed in sensor frame
+s
+i
+s_{i}
+,
+a
+i
+,
+t
+n
+a_{i,t}^{\text{n}}
+denotes the acceleration of sensor
+i
+i
+expressed in the navigation frame
+n
+n
+and
+g
+n
+g^{\text{n}}
+denotes the Earth’s gravity. Furthermore,
+b
+a
+,
+i
+b_{\text{a},i}
+and
+b
+ω
+,
+i
+b_{\omega,i}
+denote the accelerometer and gyroscope sensor biases, respectively. These are often assumed to be constant for the duration of the data set. Finally,
+e
+a
+,
+i
+,
+t
+e_{\text{a},i,t}
+and
+e
+ω
+,
+i
+,
+t
+e_{\omega,i,t}
+denote the accelerometer and gyroscope measurement noise, respectively, which are assumed to be white and Gaussian.
+In the remainder of this section, we will present four different continuous-time state space models that can be used to determine the relative pose of the segments. All four state space models use the inertial sensor measurements as an input to the dynamics. Hence, we express the continuous-time dynamics of the position, velocity and orientation in terms of the continuous-time specific force and angular velocity. We consider the information about the connection of the body segments as a pseudo-measurement model. The two state space models presented in Section
+3.1
+and Section
+3.2
+are widely used in literature. We present two novel state space models in Section
+3.3
+. In Section
+3.4
+we will show that the four models are mathematically equivalent.
+3.1
+Modelling each segment’s position, velocity and orientation
+In the model used in
+[
+12
+,
+29
+]
+, the relative pose is estimated by parametrising the system in terms of the absolute position
+p
+i
+n
+p_{i}^{\text{n}}
+, velocity
+v
+i
+n
+v_{i}^{\text{n}}
+and orientation
+R
+i
+ns
+i
+R_{i}^{\text{ns}_{i}}
+. Assuming that the orientation is parametrised as a three-dimensional vector
+[
+7
+]
+, the state vector is of size
+9
+​
+N
+S
+9N_{S}
+. Note that this is clearly an overparametrisation since the inertial sensors do not provide any information about the absolute position, velocity and heading of the body. It is, however, a very flexible model since it can straightforwardly include additional information such as GPS measurements. The dynamics is modelled as
+p
+˙
+i
+n
+\displaystyle\dot{p}_{i}^{\text{n}}
+=
+v
+i
+n
+,
+\displaystyle=v_{i}^{\text{n}},
+(2a)
+v
+˙
+i
+n
+\displaystyle\dot{v}_{i}^{\text{n}}
+=
+a
+i
+n
+=
+R
+ns
+i
+​
+f
+i
+s
+i
++
+g
+n
+,
+\displaystyle=a_{i}^{\text{n}}=R^{\text{ns}_{i}}f_{i}^{\text{s}_{i}}+g^{\text{n}},
+(2b)
+R
+˙
+ns
+i
+\displaystyle\dot{R}^{\text{ns}_{i}}
+=
+R
+ns
+i
+[
+ω
+i
+s
+i
+×
+]
+,
+\displaystyle=R^{\text{ns}_{i}}\left[\omega_{i}^{\text{s}_{i}}\times\right],
+(2c)
+for
+i
+=
+1
+,
+…
+,
+N
+S
+i=1,\ldots,N_{S}
+, where
+[
+⋅
+×
+]
+[\cdot\,\times]
+denotes the matrix cross product. Note that the specific force
+f
+i
+f_{i}
+and the angular velocity
+ω
+i
+\omega_{i}
+are measured by the inertial sensors as in (
+1
+) and are used as an input to the dynamic model, as is common in inertial sensor fusion
+[
+7
+]
+. The connection between the body segments is modelled as
+0
+=
+p
+i
+n
++
+R
+ns
+i
+​
+r
+i
+​
+j
+s
+i
+−
+p
+j
+n
+−
+R
+ns
+j
+​
+r
+j
+​
+i
+s
+j
+.
+0=p_{i}^{\text{n}}+R^{\text{ns}_{i}}r_{ij}^{\text{s}_{i}}-p_{j}^{\text{n}}-R^{\text{ns}_{j}}r_{ji}^{\text{s}_{j}}.
+(3)
+Here,
+r
+i
+​
+j
+s
+i
+r_{ij}^{\text{s}_{i}}
+is the distance from sensor
+S
+i
+S_{i}
+to the joint centre connecting the segments
+i
+i
+and
+j
+j
+, expressed in the sensor frame
+s
+i
+s_{i}
+. Note the reversed subindices for
+r
+j
+​
+i
+s
+j
+r_{ji}^{\text{s}_{j}}
+to denote the distance from sensor
+S
+j
+S_{j}
+to the joint centre connecting the segments
+i
+i
+and
+j
+j
+. Hence, (
+3
+) models the equivalence between the location of the joint centre expressed in the coordinates of sensors
+i
+i
+and
+j
+j
+and holds for any type of rotational joint. Assuming that
+r
+i
+​
+j
+s
+i
+r_{{ij}}^{\text{s}_{i}}
+and
+r
+j
+​
+i
+s
+j
+r_{ji}^{\text{s}_{j}}
+are known, the model can both be used as a constraint
+[
+12
+]
+in an optimisation problem or as a measurement model
+[
+29
+]
+in e.g. an extended Kalman filter implementation.
+3.2
+Modelling each segment’s orientation
+In the model used in
+[
+14
+,
+30
+,
+31
+]
+, the relative pose is modelled only in terms of the orientation. Hence, assuming again that the orientation is parametrised as a three-dimensional vector
+[
+7
+]
+, the state vector is of size
+3
+​
+N
+S
+3N_{S}
+. If the body is assumed to be rigid and the location of the sensors is known, it is possible to compute the full relative pose from the relative orientations. The dynamics is modelled by (
+2c
+) for
+i
+=
+1
+,
+…
+,
+N
+S
+i=1,\ldots,N_{S}
+. The connection between the body segments can again be considered to be a constraint or a measurement function and is modelled as
+0
+=
+R
+n
+s
+i
+(
+f
+i
+s
+i
++
+(
+[
+ω
+i
+s
+i
+×
+]
+2
++
+[
+ω
+˙
+i
+s
+i
+×
+]
+)
+r
+i
+​
+j
+s
+i
+)
+−
+\displaystyle 0=R^{\text{n}\text{s}_{i}}\left(f_{i}^{\text{s}_{i}}+\left([\omega_{i}^{\text{s}_{i}}\times]^{2}+[\dot{\omega}_{i}^{\text{s}_{i}}\times]\right)r_{{ij}}^{\text{s}_{i}}\right)-
+R
+n
+s
+j
+(
+f
+j
+s
+j
++
+(
+[
+ω
+j
+s
+j
+×
+]
+2
++
+[
+ω
+˙
+j
+s
+j
+×
+]
+)
+r
+j
+​
+i
+s
+j
+)
+,
+\displaystyle\qquad\qquad R^{\text{n}\text{s}_{j}}\left(f_{j}^{\text{s}_{j}}+\left([\omega_{j}^{\text{s}_{j}}\times]^{2}+[\dot{\omega}_{j}^{\text{s}_{j}}\times]\right)r_{{ji}}^{\text{s}_{j}}\right),
+(4)
+where
+ω
+˙
+\dot{\omega}
+denotes the angular acceleration. This models the equivalence between the specific force or equivalently the acceleration of the joint centre expressed in the coordinates of body segments
+i
+i
+and
+j
+j
+and hence, as the model (
+3
+), holds for any type of rotational joint. In the remainder of this paper, we will also make use of the shorthand notation
+f
+c
+i
+​
+j
+,
+i
+s
+i
+f^{\text{s}_{i}}_{\text{c}_{ij},i}
+to denote the acceleration at the joint centre
+c
+i
+​
+j
+c_{ij}
+, measured by sensor
+i
+i
+, expressed in sensor frame
+s
+i
+s_{i}
+, defined as
+f
+c
+i
+​
+j
+,
+i
+s
+i
+=
+f
+i
+s
+i
++
+(
+[
+ω
+i
+s
+i
+×
+]
+2
++
+[
+ω
+˙
+i
+s
+i
+×
+]
+)
+r
+i
+​
+j
+s
+i
+.
+f^{\text{s}_{i}}_{\text{c}_{ij},i}=f_{i}^{\text{s}_{i}}+\left([\omega_{i}^{\text{s}_{i}}\times]^{2}+[\dot{\omega}_{i}^{\text{s}_{i}}\times]\right)r_{{ij}}^{\text{s}_{i}}.
+(5)
+Using that notation, (
+4
+) can equivalently be written as
+0
+=
+R
+n
+s
+i
+​
+f
+c
+i
+​
+j
+,
+i
+s
+i
+−
+R
+n
+s
+j
+​
+f
+c
+i
+​
+j
+,
+j
+s
+j
+.
+0=R^{\text{n}\text{s}_{i}}f^{\text{s}_{i}}_{\text{c}_{ij},i}-R^{\text{n}\text{s}_{j}}f^{\text{s}_{j}}_{\text{c}_{ij},j}.
+(6)
+3.3
+Modelling the relative pose
+The models from Sections
+3.1
+and
+3.2
+are clearly overparametrisations of the problem. Although this is not widely used in literature, it is also possible to use a minimal representation. The benefit of overparametrisation is the flexibility of adding more information to the system. The benefit of parametrising the system with less states is that it is computationally more efficient. We define the relative position, velocity and orientation as
+p
+r
+,
+i
+​
+j
+s
+i
+\displaystyle p_{\text{r},ij}^{\text{s}_{i}}
+=
+R
+s
+i
+​
+n
+​
+(
+p
+i
+n
+−
+p
+j
+n
+)
+,
+\displaystyle=R^{\text{s}_{i}\text{n}}\left(p_{i}^{\text{n}}-p_{j}^{\text{n}}\right),
+(7a)
+v
+r
+,
+i
+​
+j
+s
+i
+\displaystyle v_{\text{r},ij}^{\text{s}_{i}}
+=
+R
+s
+i
+​
+n
+​
+(
+v
+i
+n
+−
+v
+j
+n
+)
+,
+\displaystyle=R^{\text{s}_{i}\text{n}}\left(v_{i}^{\text{n}}-v_{j}^{\text{n}}\right),
+(7b)
+R
+s
+i
+​
+s
+j
+\displaystyle R^{\text{s}_{i}\text{s}_{j}}
+=
+R
+s
+i
+​
+n
+​
+R
+n
+s
+j
+,
+\displaystyle=R^{\text{s}_{i}\text{n}}R^{\text{n}\text{s}_{j}},
+(7c)
+where
+p
+r
+,
+i
+​
+j
+s
+i
+p_{\text{r},ij}^{\text{s}_{i}}
+and
+v
+r
+,
+i
+​
+j
+s
+i
+v_{\text{r},ij}^{\text{s}_{i}}
+are the relative position and velocity, respectively, of segment
+i
+i
+with respect to segment
+j
+j
+, expressed in segment
+i
+i
+. It is now possible to write the dynamics of these relative states as
+p
+˙
+r
+,
+i
+​
+j
+s
+i
+\displaystyle\dot{p}_{\text{r},ij}^{\text{s}_{i}}
+=
+−
+[
+ω
+i
+s
+i
+×
+]
+p
+r
+,
+i
+​
+j
+s
+i
++
+v
+r
+,
+i
+​
+j
+s
+i
+,
+\displaystyle=-\left[\omega_{i}^{\text{s}_{i}}\times\right]p_{\text{r},ij}^{\text{s}_{i}}+v_{\text{r},ij}^{\text{s}_{i}},
+(8a)
+v
+˙
+r
+,
+i
+​
+j
+s
+i
+\displaystyle\dot{v}_{\text{r},ij}^{\text{s}_{i}}
+=
+−
+[
+ω
+i
+s
+i
+×
+]
+v
+r
+,
+i
+​
+j
+s
+i
++
+f
+i
+s
+i
+−
+R
+s
+i
+​
+s
+j
+f
+j
+s
+j
+,
+\displaystyle=-\left[\omega_{i}^{\text{s}_{i}}\times\right]v_{\text{r},ij}^{\text{s}_{i}}+f_{i}^{\text{s}_{i}}-R^{\text{s}_{i}\text{s}_{j}}f_{j}^{\text{s}_{j}},
+(8b)
+R
+˙
+s
+i
+​
+s
+j
+\displaystyle\dot{R}^{\text{s}_{i}\text{s}_{j}}
+=
+−
+[
+ω
+i
+s
+i
+×
+]
+R
+s
+i
+​
+s
+j
++
+R
+s
+i
+​
+s
+j
+[
+ω
+j
+s
+j
+×
+]
+.
+\displaystyle=-\left[\omega_{i}^{\text{s}_{i}}\times\right]R^{\text{s}_{i}\text{s}_{j}}+R^{\text{s}_{i}\text{s}_{j}}\left[\omega_{j}^{\text{s}_{j}}\times\right].
+(8c)
+where we made use of (
+1a
+) and (
+2
+).
+The model (
+3
+) can be expressed in these states as
+0
+=
+p
+r
+,
+i
+​
+j
+s
+i
++
+r
+i
+​
+j
+s
+i
+−
+R
+s
+i
+​
+s
+j
+​
+r
+j
+​
+i
+s
+j
+.
+0=p_{\text{r},ij}^{\text{s}_{i}}+r_{{ij}}^{\text{s}_{i}}-R^{\text{s}_{i}\text{s}_{j}}r_{{ji}}^{\text{s}_{j}}.
+(9)
+When estimating the relative pose, the size of the state vector reduces from
+9
+​
+N
+S
+9N_{S}
+in Section
+3.1
+to
+9
+​
+(
+N
+S
+−
+1
+)
+9(N_{S}-1)
+. It is also possible to only estimate the relative orientation using (
+8c
+) and straightforwardly expressing the model (
+4
+) in terms of the relative orientation
+R
+s
+i
+​
+s
+j
+R^{\text{s}_{i}\text{s}_{j}}
+. This reduces the size of the state vector to
+3
+​
+(
+N
+S
+−
+1
+)
+3(N_{S}-1)
+.
+3.4
+Mathematical equivalence of the four models
+Making use of the dynamic models (
+2
+), the first and second derivatives of the model (
+3
+) can be written as
+d
+d
+​
+t
+​
+(
+p
+i
+n
++
+R
+ns
+i
+​
+r
+i
+​
+j
+s
+i
+−
+p
+j
+n
+−
+R
+ns
+j
+​
+r
+j
+​
+i
+s
+j
+)
+=
+\displaystyle\frac{\mathrm{d}}{\mathrm{d}{t}}\left(p_{i}^{\text{n}}+R^{\text{ns}_{i}}r_{ij}^{\text{s}_{i}}-p_{j}^{\text{n}}-R^{\text{ns}_{j}}r_{ji}^{\text{s}_{j}}\right)=
+v
+i
+n
++
+R
+ns
+i
+[
+ω
+i
+×
+]
+r
+i
+​
+j
+s
+i
+−
+v
+j
+n
+−
+R
+ns
+j
+[
+ω
+j
+×
+]
+r
+j
+​
+i
+s
+j
+,
+\displaystyle\qquad v_{i}^{\text{n}}+R^{\text{ns}_{i}}\left[\omega_{i}\times\right]r_{ij}^{\text{s}_{i}}-v_{j}^{\text{n}}-R^{\text{ns}_{j}}\left[\omega_{j}\times\right]r_{ji}^{\text{s}_{j}},
+(10a)
+d
+2
+d
+​
+t
+2
+​
+(
+p
+i
+n
++
+R
+ns
+i
+​
+r
+i
+​
+j
+s
+i
+−
+p
+j
+n
+−
+R
+ns
+j
+​
+r
+j
+​
+i
+s
+j
+)
+=
+\displaystyle\frac{\mathrm{d}^{2}}{\mathrm{d}t^{2}}\left(p_{i}^{\text{n}}+R^{\text{ns}_{i}}r_{ij}^{\text{s}_{i}}-p_{j}^{\text{n}}-R^{\text{ns}_{j}}r_{ji}^{\text{s}_{j}}\right)=
+a
+i
+n
++
+R
+ns
+i
+[
+ω
+i
+×
+]
+2
+r
+i
+​
+j
+s
+i
++
+R
+ns
+i
+[
+ω
+˙
+i
+×
+]
+r
+i
+​
+j
+s
+i
+−
+\displaystyle\qquad a_{i}^{\text{n}}+R^{\text{ns}_{i}}\left[\omega_{i}\times\right]^{2}r_{ij}^{\text{s}_{i}}+R^{\text{ns}_{i}}\left[\dot{\omega}_{i}\times\right]r_{ij}^{\text{s}_{i}}-
+a
+j
+n
+−
+R
+ns
+j
+[
+ω
+j
+×
+]
+2
+r
+j
+​
+i
+s
+j
+−
+R
+ns
+j
+[
+ω
+˙
+j
+×
+]
+r
+j
+​
+i
+s
+j
+.
+\displaystyle\qquad\qquad a_{j}^{\text{n}}-R^{\text{ns}_{j}}\left[\omega_{j}\times\right]^{2}r_{ji}^{\text{s}_{j}}-R^{\text{ns}_{j}}\left[\dot{\omega}_{j}\times\right]r_{ji}^{\text{s}_{j}}.
+(10b)
+It can therefore be concluded that the double derivative of the model for the joint position (
+3
+) is equal to the model for the joint acceleration (
+4
+). In other words, these models are mathematically equivalent in the sense that an observability analysis of one of these models will straightforwardly hold for the other. Note that in practice this does not imply that the models are equivalent in every aspect. They can, for instance, behave differently in the presence of noise and, contrary to the reduced model from Section
+3.2
+, the extended model from Section
+3.1
+straightforwardly opens up for including additional information such as absolute position measurements.
+4
+Observability analysis
+In this section we will study the observability of the relative pose of the body segments using the models presented in Section
+3
+. Without loss of generality we focus on a two-segment system and will use the model from Section
+3.2
+. Hence, we address the question under which motions it is possible to uniquely determine the relative orientation of the two body segments using perfect (bias- and noise-free) inertial measurements and the models (
+2c
+) and (
+4
+).
+Let us write the model from Section
+3
+as a general nonlinear state space model
+x
+˙
+=
+f
+⁡
+(
+x
+,
+u
+)
+,
+y
+=
+h
+⁡
+(
+x
+,
+u
+)
+,
+\dot{x}=f(x,u),\qquad y=h(x,u),
+(11)
+where
+x
+∈
+ℳ
+=
+𝕊
+​
+𝕆
+3
+×
+𝕊
+​
+𝕆
+3
+x\in\mathcal{M}=\mathbb{SO}^{3}\times\mathbb{SO}^{3}
+with
+x
+=
+(
+x
+i
+𝖳
+x
+j
+𝖳
+)
+𝖳
+x=\begin{pmatrix}x_{i}^{\mathsf{T}}&x_{j}^{\mathsf{T}}\end{pmatrix}^{\mathsf{T}}
+and
+x
+i
+,
+x
+j
+x_{i},x_{j}
+denote the time-varying state vector representing the orientation of the two body segments. The (pseudo-)measurement vector
+y
+∈
+ℝ
+3
+y\in\mathbb{R}^{3}
+is represented by (
+4
+) and models the connection between the body segments in terms of the acceleration of the joint centre. The dynamics of both segments is modelled by (
+2c
+). Furthermore,
+u
+∈
+ℝ
+18
+u\in\mathbb{R}^{18}
+denotes the specific force, the angular velocity and the angular acceleration of each of the sensors. Note that under the assumption of bias- and noise-free measurements, the specific force and the angular velocity are directly measured by the inertial sensors. The angular acceleration can be obtained from the gyroscope measurements by numerical differentiation.
+The purpose of observability analysis is to answer the question whether the states of the model (
+11
+) can uniquely be determined using knowledge about the measurements
+y
+y
+and the inputs
+u
+u
+[
+16
+]
+. Assuming that the functions
+f
+f
+and
+h
+h
+in (
+11
+) are smooth functions of their arguments and that the input
+u
+u
+is smooth, we will study the observability of our system by considering
+N
+≥
+0
+N\geq 0
+time derivatives of
+y
+y
+denoted by
+y
+(
+N
+)
+y^{(N)}
+. For some known input
+u
+u
+, we define the mapping
+Φ
+u
+,
+N
+:
+ℳ
+→
+ℝ
+3
+​
+(
+N
++
+1
+)
+\Phi_{u,N}:\,\mathcal{M}\to\mathbb{R}^{3(N+1)}
+by
+Φ
+u
+,
+N
+​
+(
+x
+⁡
+(
+t
+)
+)
+=
+[
+y
+⁡
+(
+t
+)
+y
+˙
+​
+(
+t
+)
+y
+(
+N
+)
+​
+(
+t
+)
+]
+.
+\Phi_{u,N}\left(x(t)\right)=\begin{bmatrix}y(t)\\
+\dot{y}(t)\\
+\vdots\\
+y^{(N)}(t)\end{bmatrix}.
+(12)
+A system is differentially observable if, for any input
+u
+u
+, there exists an
+N
+≥
+0
+N\geq 0
+such that the mapping
+Φ
+u
+,
+N
+​
+(
+x
+​
+(
+t
+)
+)
+\Phi_{u,N}\left(x(t)\right)
+is injective, i.e. there are no two points in the state space that yield the same vector of output derivatives
+[
+17
+,
+41
+]
+.
+Before analysing the observability of our model (
+11
+) in detail, let us start with noticing two important properties of our model. Firstly, the observability of (
+11
+) depends on the performed motion, i.e. on the inputs to the system. This can most clearly be seen by writing down the model constraint (
+4
+) and its
+N
+N
+’th derivative as
+y
+⁡
+(
+t
+)
+\displaystyle y(t)
+=
+0
+=
+R
+n
+s
+i
+​
+f
+c
+i
+​
+j
+,
+i
+s
+i
+−
+R
+n
+s
+j
+​
+f
+c
+i
+​
+j
+,
+j
+s
+j
+,
+\displaystyle=0=R^{\text{n}\text{s}_{i}}f^{\text{s}_{i}}_{\text{c}_{ij},i}-R^{\text{n}\text{s}_{j}}f^{\text{s}_{j}}_{\text{c}_{ij},j},
+(13a)
+y
+(
+N
+)
+​
+(
+t
+)
+\displaystyle y^{(N)}(t)
+=
+0
+=
+d
+N
+d
+​
+t
+N
+​
+R
+n
+s
+i
+​
+f
+c
+i
+​
+j
+,
+i
+s
+i
+−
+d
+N
+d
+​
+t
+N
+​
+R
+n
+s
+j
+​
+f
+c
+i
+​
+j
+,
+j
+s
+j
+,
+\displaystyle=0=\frac{\mathrm{d}^{N}}{\mathrm{d}t^{N}}R^{\text{n}\text{s}_{i}}f^{\text{s}_{i}}_{\text{c}_{ij},i}-\frac{\mathrm{d}^{N}}{\mathrm{d}t^{N}}R^{\text{n}\text{s}_{j}}f^{\text{s}_{j}}_{\text{c}_{ij},j},
+(13b)
+where we make use of the shorthand notation from (
+5
+) and (
+6
+). In the case of no movement, for instance, the time derivatives are zero and the mapping
+Φ
+u
+,
+N
+\Phi_{u,N}
+is obviously not injective, hence the system is not observable. Because the observability depends on the inputs, we will study the observability at time
+t
+t
+.
+A second important property of the system (
+11
+) is that (
+4
+) depends on both the orientation of the first and that of the second segment. The system, however, does not include any information about the absolute orientation of the sensors. It is therefore clearly not observable. Our interest, however, lies in determining the
+relative
+orientation of the sensors. Hence, we focus only on observability of the relative orientation. In other words, we study the observability of the system (
+11
+) under the condition that one of the orientations is known or arbitrarily set to a certain value. Inspired by the concept differential observability
+[
+17
+,
+41
+]
+, we now introduce the following definition:
+Definition 1
+.
+The relative orientation
+R
+s
+i
+​
+s
+j
+​
+(
+t
+)
+R^{\text{s}_{i}\text{s}_{j}}(t)
+is observable at time
+t
+t
+if, under the assumption that the orientation
+R
+n
+s
+i
+​
+(
+t
+)
+R^{\text{n}\text{s}_{i}}(t)
+of one of the segments is known, the orientation
+R
+n
+s
+j
+​
+(
+t
+)
+R^{\text{n}\text{s}_{j}}(t)
+of the other segment, and thus the entire state
+x
+⁡
+(
+t
+)
+∈
+ℳ
+x(t)\in\mathcal{M}
+of the system (
+11
+), can be uniquely determined from the current input
+u
+⁡
+(
+t
+)
+u(t)
+, the current output
+y
+⁡
+(
+t
+)
+y(t)
+, and their time derivatives.
+Note that Definition
+1
+implies that it is possible to instantaneously and uniquely determine the relative orientation from the inertial measurements, the modelled connection between the body segments, and their derivatives.
+Inputs for which it is not possible to uniquely determine a state
+x
+x
+from the measurements are called singular inputs
+[
+16
+]
+. We can now analyse for which inputs the relative orientation of the system (
+11
+) is observable at time
+t
+t
+according to Definition
+1
+, i.e. which inputs are non-singular. Note that in
+[
+38
+]
+, it has been shown that differential observability is a sufficient condition for the convergence of an observer for linear time-varying systems. However, one input being non-singular is not sufficient to reconstruct the state
+x
+x
+in the state space model (
+11
+). A necessary condition for this is that the input is regularly persistent in the sense that there exists a
+T
+>
+0
+T>0
+such that, for any given time
+t
+t
+, the mapping
+Φ
+u
+,
+N
+​
+(
+x
+​
+(
+t
+)
+)
+\Phi_{u,N}\left(x(t)\right)
+is injective for at least one moment within the interval
+[
+t
+,
+t
++
+T
+]
+[t,t+T]
+[
+17
+]
+. For the given system (
+11
+), it can therefore be concluded that a necessary condition for a stable (nonlinear) observer design is that the relative orientation is observable in a regularly persistent manner.
+We specifically focus our analysis of which inputs are non-singular only on the first order derivative in (
+13b
+) since we consider the practical relevance of extending the analysis to higher orders close to zero. This brings us to the main result of our observability analysis:
+Theorem 1
+.
+The relative orientation
+R
+s
+i
+​
+s
+j
+R^{\text{s}_{i}\text{s}_{j}}
+of the system (
+11
+) is observable according to Definition
+1
+for any time instant for which the specific force
+a
+c
+i
+​
+j
+n
+−
+g
+n
+a^{\text{n}}_{\text{c}_{ij}}-g^{\text{n}}
+of the joint centre is linearly independent of
+a
+˙
+c
+i
+​
+j
+n
+\dot{a}^{\text{n}}_{\text{c}_{ij}}
+.
+Proof.
+The system of equations (
+13
+) with
+N
+=
+1
+N=1
+can be rewritten as
+f
+c
+i
+​
+j
+,
+i
+n
+=
+R
+n
+s
+j
+f
+c
+i
+​
+j
+,
+j
+s
+j
+,
+a
+˙
+c
+i
+​
+j
+,
+i
+n
+=
+R
+n
+s
+j
+(
+[
+ω
+j
+s
+j
+×
+]
+f
+c
+i
+​
+j
+,
+j
+s
+j
++
+f
+˙
+c
+i
+​
+j
+,
+j
+s
+j
+)
+,
+f^{\text{n}}_{\text{c}_{ij},i}=R^{\text{n}\text{s}_{j}}f^{\text{s}_{j}}_{\text{c}_{ij},j},\qquad\dot{a}^{\text{n}}_{\text{c}_{ij},i}=R^{\text{n}\text{s}_{j}}\left([\omega_{j}^{\text{s}_{j}}\times]f_{c_{ij},j}^{s_{j}}+\dot{f}_{c_{ij},j}^{s_{j}}\right),
+(14)
+where we made use of the definition of the specific force from (
+1a
+), the time derivative of the rotation matrix according to (
+2c
+), the fact that the gravity vector in navigation frame is constant, and assume that the orientation
+R
+n
+s
+i
+R^{\text{n}\text{s}_{i}}
+is known, following Definition
+1
+. In (
+14
+) we can now recognise Wahba’s problem
+[
+40
+]
+, also known as the orthogonal Procrustes problem. Based on this, it follows that the orientation
+R
+n
+s
+j
+R^{\text{n}\text{s}_{j}}
+can uniquely be determined from (
+14
+) if and only if
+f
+c
+i
+​
+j
+,
+i
+n
+f^{\text{n}}_{\text{c}_{ij},i}
+and
+a
+˙
+c
+i
+​
+j
+,
+i
+n
+\dot{a}^{\text{n}}_{\text{c}_{ij},i}
+are linearly independent.
+∎
+Remark 1
+.
+In theory, it is possible that the relative orientation is not observable at time
+t
+t
+according to Theorem
+1
+but that the mapping
+Φ
+u
+,
+N
+\Phi_{u,N}
+becomes injective when including higher-order derivatives of the model constraint. This consideration leads to a series of Wahba’s problems that need to be checked and to the conclusion that the system is observable if any of these Wahba’s problems can be solved.
+In Sections
+5
+and
+6
+we will present the estimation accuracy of two state estimators for different types of motion for which the relative orientation is (un)observable according to Theorem
+1
+. We will show that accurate orientation estimates can be obtained in case the motion is observable according to Definition
+1
+for almost all time instants and that relatively little motion is required for observability. In case the system is not observable at any time instant according to Definition
+1
+, integration of the inertial measurements in (
+2
+) results in a drift of the relative pose of the body segments. However, as soon as the user performs non-singular input motions, the system becomes observable and the drift can be removed.
+Figure 3:
+Relative angular velocity
+ω
+rel
+\omega_{\text{rel}}
+(left column) and acceleration of the joint centre (middle column) for the observable motion (top) and the unobservable motion (bottom) described in Section
+5.1
+with the
+x
+x
+-,
+y
+y
+- and
+z
+z
+-directions depicted in blue, green and red, respectively. Right column: Mean angular error
+θ
+\theta
+and the one-standard-deviation intervals for the filtering algorithm (blue), the smoothing algorithm (green) and the integration of the gyroscope signal (red) for the observable motion (top) and the unobservable motion (bottom) described in Section
+5.1
+.
+5
+Simulation study
+We illustrate the observability results from Section
+4
+using Monte Carlo simulations in which we simulate different types of motion. Without loss of generality we again focus on two connected segments and use the model from Section
+3.2
+. To estimate the orientation of the two sensors, we use the methods presented in
+[
+14
+]
+. That work presents both a filtering and a smoothing algorithm for the models (
+2c
+) and (
+4
+) and was extensively validated on experimental data. The filtering algorithm is an extended Kalman filter, while the smoothing algorithm uses a Gauss-Newton optimisation. For more details we refer the interested reader to
+[
+14
+]
+and
+[
+7
+]
+.
+We simulate inertial measurements at
+100
+100
+Hz with noise and bias properties that have a similar order of magnitude as found in standard inertial sensors. The accelerometer noise is simulated to be zero-mean, white and Gaussian with a standard deviation of
+0.05
+​
+m
+s
+2
+0.05\frac{\mathrm{m}}{\mathrm{s}^{2}}
+. The gyroscope noise is simulated to be zero-mean, white and Gaussian with a standard deviation of
+1
+​
+∘
+s
+1\frac{{}^{\circ}}{\text{s}}
+. Furthermore, for each Monte Carlo simulation, we draw constant accelerometer and gyroscope biases from the uniform distributions
+𝒰
+⁡
+(
+−
+0.05
+​
+m
+s
+2
+,
+0.05
+​
+m
+s
+2
+)
+\mathcal{U}\left(-0.05\frac{\mathrm{m}}{\mathrm{s}^{2}},\,0.05\tfrac{\mathrm{m}}{\mathrm{s}^{2}}\right)
+and
+𝒰
+⁡
+(
+−
+0.2
+​
+∘
+s
+,
+0.2
+​
+∘
+s
+)
+\mathcal{U}\left(-0.2\frac{{}^{\circ}}{\mathrm{s}},\,0.2\frac{{}^{\circ}}{\mathrm{s}}\right)
+, respectively. Likewise, the distances from the sensors
+i
+i
+and
+j
+j
+to the joint are set to constant values drawn from uniform distributions, i.e.
+r
+i
+​
+j
+s
+i
+=
+[
+𝒰
+⁡
+(
+0.01
+​
+m
+,
+0.5
+​
+m
+)
+0
+0
+]
+𝖳
+r_{ij}^{\text{s}_{i}}=\begin{bmatrix}\mathcal{U}(0.01\mathrm{m},0.5\mathrm{m})&0&0\end{bmatrix}^{\mathsf{T}}
+,
+r
+j
+​
+i
+s
+j
+=
+−
+[
+𝒰
+⁡
+(
+0.01
+​
+m
+,
+0.5
+​
+m
+)
+0
+0
+]
+𝖳
+r_{ji}^{\text{s}_{j}}=-\begin{bmatrix}\mathcal{U}(0.01\mathrm{m},0.5\mathrm{m})&0&0\end{bmatrix}^{\mathsf{T}}
+. We quantify the estimation error in terms of the smallest angle
+θ
+\theta
+by which the estimated relative orientation
+R
+^
+s
+i
+​
+s
+j
+\hat{R}^{\text{s}_{i}\text{s}_{j}}
+must be rotated to become identical to the true relative orientation
+R
+s
+i
+​
+s
+j
+R^{\text{s}_{i}\text{s}_{j}}
+[
+43
+]
+. We initialise each simulation such that the initial relative orientation error is
+10
+∘
+10^{\circ}
+.
+In Section
+5.1
+we first exemplify the results from Theorem
+1
+for both an observable and for an unobservable type of motion. Secondly, in Section
+5.2
+we study the effect on the accuracy of the relative orientation for different amounts of excitation. Finally, we illustrate observable and unobservable motions in a specific application scenario. The results are also illustrated in the supplementary video available on
+https://tinyurl.com/y4b2esjm
+.
+5.1
+Observable and unobservable motions
+In this section we will illustrate the results from Theorem
+1
+by simulating specific motions that are (not) observable according to the theorem and studying the estimated relative orientation using the algorithm from
+[
+14
+]
+.
+First, we consider a motion that provides very little excitation of the joint system but is nevertheless non-singular in the aforementioned sense. Precisely, we assume that the specific force of the joint centre
+a
+c
+i
+​
+j
+n
+−
+g
+n
+a^{\text{n}}_{\text{c}_{ij}}-g^{\text{n}}
+has a non-zero horizontal component and that there is a non-zero change in joint centre acceleration
+a
+˙
+c
+i
+​
+j
+n
+\dot{a}^{\text{n}}_{\text{c}_{ij}}
+which is not exactly in the direction of the vector
+a
+c
+i
+​
+j
+n
+−
+g
+n
+a^{\text{n}}_{\text{c}_{ij}}-g^{\text{n}}
+. We simulate a specific case of this motion where the joint centre moves with non-constant acceleration for
+45
+45
+seconds along an axis that is perpendicular to the gravity direction and the two segments do not rotate around the joint centre. This motion is illustrated in terms of the relative angular velocity
+ω
+rel
+\omega_{\text{rel}}
+and the acceleration of the joint centre
+a
+c
+i
+​
+j
+n
+a^{\text{n}}_{\text{c}_{ij}}
+in Figure
+3
+. Note that, based on some non-specific demand for “sufficient excitation”, one may intuitively suspect that this movement is unobservable since there is no relative motion between the two segments. However, for almost all time instants the change of acceleration is non-zero in a direction orthogonal to the acceleration due to gravity, i.e. the vectors
+a
+c
+i
+​
+j
+n
+−
+g
+n
+a^{\text{n}}_{\text{c}_{ij}}-g^{\text{n}}
+and
+a
+˙
+c
+i
+​
+j
+n
+\dot{a}^{\text{n}}_{\text{c}_{ij}}
+are non-parallel to each other. Hence, according to Theorem
+1
+, the relative orientation is observable according to Definition
+1
+for almost all time instants. The mean and standard deviation of the relative orientation estimates for the 100 Monte Carlo simulations are depicted in Figure
+3
+. As can be seen, the error in the relative orientation converges quickly and remains small for both the filtering and the smoothing algorithm. More specifically, after the first five seconds that are needed for the initial convergence, the mean errors of the filtering and smoothing algorithms are
+1.31
+∘
+1.31^{\circ}
+and
+0.66
+∘
+0.66^{\circ}
+, respectively. The maximum errors are
+4.36
+∘
+4.36^{\circ}
+and
+4.09
+∘
+4.09^{\circ}
+, respectively. For completeness, we also include the error from integration of the gyroscope only, which can be seen to grow over time up to a maximum of
+26.94
+∘
+26.94^{\circ}
+.
+Next, we consider motions that provide a lot of excitation but are nevertheless singular in the aforementioned sense. Specifically, we simulate data where for all time instants the joint centre acceleration changes only in the direction of the acceleration due to gravity, i.e. the vectors
+a
+c
+i
+​
+j
+n
+−
+g
+n
+a^{\text{n}}_{\text{c}_{ij}}-g^{\text{n}}
+and
+a
+˙
+c
+i
+​
+j
+n
+\dot{a}^{\text{n}}_{\text{c}_{ij}}
+are parallel to each other. Hence, according to Theorem
+1
+, the relative orientation is not observable according to Definition
+1
+. We simulate a specific case of this motion where the joint centre moves for
+150
+150
+seconds along the direction of the gravity vector with non-constant acceleration and the two segments rotate arbitrarily around the joint centre. This motion is again illustrated in Figure
+3
+. As can be seen, the excitation in the relative angular velocity as well as in the acceleration of the joint centre is significantly higher than in the previous example that we studied. Nevertheless, due to the unobservability of the motion, the estimation error in the relative orientation increases over time for both the filtering and the smoothing algorithm up to a maximum of
+61.06
+∘
+61.06^{\circ}
+and
+45.40
+∘
+45.40^{\circ}
+, respectively, compared to a maximum error of
+73.74
+∘
+73.74^{\circ}
+for pure integration of the gyroscope signal.
+5.2
+Amount of excitation
+Figure 4:
+Acceleration of the joint centre (left column), metric
+o
+t
+o_{t}
+as defined in (
+15
+) (middle column) and mean angular error
+θ
+\theta
+with one-standard-deviation intervals for the motion with varying amounts of excitation (top) and the temporarily stationary motion (bottom) described in Section
+5.2
+. Left column: the
+x
+x
+-,
+y
+y
+- and
+z
+z
+-directions are depicted in blue, green and red, respectively. Right column: The results for the filtering algorithm are depicted in blue, the results for the smoothing algorithm in green and the integration of the gyroscope signal in red.
+We now study the effect of the amount of excitation on the quality of the estimates. To this end, we simulate the same motion as the observable motion in Section
+5.1
+but vary the level of excitation. Hence, the relative movement of the sensors looks similar to that in the top row of Figure
+3
+, but with the joint centre acceleration varying in excitation level as shown in Figure
+4
+. The angular error in the estimates of the filtering algorithm can be seen to increase up to a mean error of
+3.02
+∘
+3.02^{\circ}
+and a maximum error of
+10.06
+∘
+10.06^{\circ}
+during the time of low excitation. The angular errors in the estimates of the smoothing algorithm can be seen to barely be affected by this period of low excitation. To further visualise the amount of excitation and its effect on the observability of the relative pose, we compute for each time instant
+t
+t
+a metric
+o
+t
+o_{t}
+that equals the norm of the cross product of
+a
+c
+i
+​
+j
+,
+t
+n
+−
+g
+n
+a^{\text{n}}_{\text{c}_{ij},t}-g^{\text{n}}
+and
+a
+˙
+c
+i
+​
+j
+,
+t
+n
+\dot{a}^{\text{n}}_{\text{c}_{ij},t}
+, averaged over the last 100 samples as
+o
+t
+=
+1
+100
+​
+∑
+τ
+=
+0
+99
+‖
+(
+a
+c
+i
+​
+j
+,
+t
+−
+τ
+n
+−
+g
+n
+)
+×
+a
+˙
+c
+i
+​
+j
+,
+t
+−
+τ
+n
+‖
+2
+,
+o_{t}=\tfrac{1}{100}\sum_{\tau=0}^{99}\|(a^{\text{n}}_{\text{c}_{ij},t-\tau}-g^{\text{n}})\times\dot{a}^{\text{n}}_{\text{c}_{ij},t-\tau}\|_{2},
+(15)
+where
+a
+˙
+c
+i
+​
+j
+,
+t
+n
+\dot{a}^{\text{n}}_{\text{c}_{ij},t}
+is computed from the noise-free simulated inertial sensor data. Note that according to Theorem
+1
+, the vectors
+a
+c
+i
+​
+j
+,
+t
+n
+−
+g
+n
+a^{\text{n}}_{\text{c}_{ij},t}-g^{\text{n}}
+and
+a
+˙
+c
+i
+​
+j
+,
+t
+n
+\dot{a}^{\text{n}}_{\text{c}_{ij},t}
+need to be linearly independent for the relative orientation to be observable at time instant
+t
+t
+.
+We also study the effect on the estimation accuracy of extended periods during which the metric
+o
+t
+o_{t}
+is zero. To this end, we simulate
+110
+110
+seconds of data for which the joint centre arbitrarily changes its position in the reference frame with a non-constant acceleration for the first
+30
+30
+seconds and the last
+20
+20
+seconds of the simulation. During
+60
+60
+seconds in the middle of the data set, the segments are both assumed to be at rest. During these times, the relative orientation is not observable according to Definition
+1
+. This motion is illustrated in Figure
+4
+. The error in the relative orientation estimated by the filtering algorithm can be seen to grow during the
+60
+60
+seconds of stationarity to a mean error of
+5.47
+∘
+5.47^{\circ}
+and a maximum error of
+28.33
+∘
+28.33^{\circ}
+. In the smoothing algorithm, all measurements are used to compute the estimates. Hence, this algorithm is able to keep the errors low with a mean error of
+1.44
+∘
+1.44^{\circ}
+and a maximum error of
+10.74
+∘
+10.74^{\circ}
+. This example illustrates that the filter is able to recover after temporary unobservability while estimation errors from the smoother are barely affected. Hence, for applications where longer time periods of unobservability can be expected, the use of a smoother or the use of a detector for these unobservable motions can be beneficial.
+5.3
+Application to multilink aerial vehicles
+We now illustrate the role of observable and unobservable motions in the specific application of kinematically connected aerial vehicles, see
+[
+44
+]
+for a literature example of such a multilink robotic system. In our case, two drones perform flight manoeuvres while being rigidly connected by a ball-and-socket joint, which admits relative rotation, as illustrated in Figure
+5
+and the supplementary video.
+1
+1
+1
+https://tinyurl.com/y4b2esjm
+We simulate the measurement noises and biases from the same distributions as in the rest of this section, assume that the distances from the joint centres are
+r
+i
+​
+j
+s
+i
+=
+[
+0.5
+0
+0
+]
+𝖳
+r_{ij}^{\text{s}_{i}}=\begin{bmatrix}0.5&0&0\end{bmatrix}^{\mathsf{T}}
+,
+r
+j
+​
+i
+s
+j
+=
+[
+−
+0.5
+0
+0
+]
+𝖳
+r_{ji}^{\text{s}_{j}}=\begin{bmatrix}-0.5&0&0\end{bmatrix}^{\mathsf{T}}
+, and estimate the relative sensor orientations using the filtering and the smoothing method presented in
+[
+14
+]
+.
+The quadcopters first take off by moving up vertically. During this motion, their relative orientation is unobservable, even when they move with respect to each other, rotate or vary their accelerations. Hence, the metric
+o
+t
+o_{t}
+is zero, and the initial error of the filtering implementation does not converge. However, as soon as the joint centre starts moving horizontally, the relative orientation becomes observable, even in the absence of relative motion. We subsequently simulate a minute of data during which the quadcopters hover stationary. Hence,
+o
+t
+o_{t}
+is zero and the estimation errors increase again, even for the smoothing implementation. Afterwards, when the quadcopters perform a sequence of observable motions, including horizontal displacements without any (relative) rotation, the estimation errors can be seen to converge again. Finally, during the vertical landing, the relative orientation is again unobservable. This simulation example illustrates that, in practice, long periods of unobservability or a lack of observability at the beginning of the data set can result in unreliable (real-time) estimates. However, observability can be assured by performing the motions that fulfil the proposed condition almost always. For instance, taking off or landing while simultaneously moving horizontally would yield the desired observability in the given application scenario.
+Figure 5:
+Left: Illustration of the simulated multilink aerial vehicle. The linked quadcopters first take off vertically and then move horizontally. Subsequently, the quadcopters remain stationary for 60 seconds, then move to different locations and finally land. Right: Metric
+o
+t
+o_{t}
+and mean angular error
+θ
+\theta
+with one-standard-deviation intervals. The results for the filtering algorithm are depicted in blue, the results for the smoothing algorithm in green.
+6
+Experiments
+Figure 6:
+Left: Experimental setup with 2D and 3D mechanical joints with inertial sensors attached to each segment. Right: Metric
+o
+t
+o_{t}
+and the angular error
+θ
+\theta
+for (top) a motion of the 3D joint where the system is first lying stationary on a table and subsequently moving around freely and for (bottom) a motion of the 2D joint where the system is held stationary but rotated twice into a different orientation, after which the system is moved around freely. The angular errors for four different initialisations are shown in blue for the filtering algorithm are depicted and in green for the smoothing algorithm.
+6.1
+Mechanical joints
+We experimentally validate our results with the 3D-printed mechanical joints shown in Figure
+6
+. Accelerometer and gyroscope measurements are collected using two attached IMUs (MTw Awinda, Xsens) sampled at 50 Hz. As a ground truth, marker trajectories from optical markers were simultaneously captured at 120 Hz. For different motions of the two joint types, we estimated the relative sensor orientations using the filtering and the smoothing method presented in
+[
+14
+]
+. Estimated and reference relative orientations were aligned using Theorem 4.2 from
+[
+13
+]
+. The measurement noise covariances of the filtering and smoothing algorithms were chosen based on the standard deviation of the accelerometer measurements and assuming that the accelerometer measurement noise is the dominant source of error in (
+4
+).
+Firstly, we study the estimates for the 3D joint where, for the first 9.6 seconds, the system is lying stationary on a table, after which it is moved around freely, see also the supplementary video.
+2
+2
+2
+https://tinyurl.com/y4b2esjm
+Hence, according to Theorem
+1
+, the motion is initially unobservable, and the estimates from the filtering method from
+[
+14
+]
+for four different initialisations indeed do not converge until the start of the observable motion, as shown in Figure
+6
+. The metric
+o
+t
+o_{t}
+from (
+15
+) indeed shows that the motion is not observable for the first 9.6 seconds. The estimates of the smoothing algorithm can be seen to remain small for the entire data set for each of the four initialisations. To compute
+o
+t
+o_{t}
+, the time derivatives of the specific force
+a
+˙
+c
+i
+​
+j
+,
+t
+n
+\dot{a}^{\text{n}}_{\text{c}_{ij},t}
+were approximated numerically based on inertial measurements of one of the two sensors and using a five-point stencil.
+Secondly, we consider motion estimation for the 2D joint system, which is held mostly stationary for almost 14 seconds, but two different short rotations are performed at two distinct time instants within these 14 seconds. As can be seen in Figure
+6
+, the motion becomes observable only during these brief periods of rotation, during which the metric
+o
+t
+o_{t}
+increases and the estimation error of the filtering method decreases. However, the period with observable motion is too brief for the estimation errors to decrease completely. After 14 seconds, the system is moved around freely and the estimation error can be seen to decrease further. Again, the estimates of the smoothing algorithm can be seen to remain small for the entire data set for each of the four initialisations.
+6.2
+Biomechanical application
+Finally, we validate our results in a biomechanical application, where a subject consecutively walks for 198 s in a comfortable self-selected pace and direction, sits down for 47 s and walks again for 185 s.
+Figure 7:
+Experimental set-up with inertial sensors (and surrounding optical cluster markers) attached lateral and mid-distance on the thigh and shank segments. The subject executed a walk activity of 198 s, followed by a sitting activity of 47 s and another walk activity of 185 s.
+During the experiment, accelerometer and gyroscope measurements from thigh- and shank-worn IMUs (MTw Awinda, Xsens) and marker trajectories from optical cluster markers (VICON, Vero, Vicon Motion Systems Ltd) were simultaneously captured (100Hz sampling rate) via a hardware time synchronisation. A picture of the experimental setup can be found in Figure
+7
+.
+The study has been approved by the institutional research committee of KU Leuven (Clinical trial center UZ Leuven, Nr. S58936). All tests were done in accordance with the 1964 Helsinki declaration and its later amendments.
+Relative sensor orientations were again estimated in a filtering and smoothing implementation following
+[
+14
+]
+. Estimated and reference relative orientations were aligned using Theorem 4.2 from
+[
+13
+]
+. The resulting angular distance errors for both filtering and smoothing implementations can be found in Figure
+8
+. We also show the metric
+o
+t
+o_{t}
+as defined in (
+15
+), computed similarly as in Section
+6.1
+. The metric clearly shows that the relative orientation is not observable when the subject is sitting still.
+With respect to the knee joint, the results show that a walking movement at a self-selected comfortable pace yields sufficient excitation of the joint centre to make the relative orientation observable according to Definition
+1
+. The mean angular distance that the filter and smoother achieve are
+5.60
+∘
+5.60^{\circ}
+and
+3.83
+∘
+3.83^{\circ}
+, respectively, for the part of the data where the person was walking. During the stationary part, the error for the smoothing implementation remained small with a maximum angular distance of
+4.56
+∘
+4.56^{\circ}
+. The error of the filtering implementation grew to
+19.59
+∘
+19.59^{\circ}
+after 47 seconds, but quickly recovered at walking onset after the temporarily unobservable static time period. These observations confirm the theoretical results and are in line with the simulation results from Section
+5.2
+.
+Figure 8:
+Top: Angular error
+θ
+\theta
+of the filtering algorithm (blue) and the smoothing algorithm (green) for the experimental data described in Section
+6
+. Bottom: The metric
+o
+t
+o_{t}
+, visualising the amount of excitation and its effect on the observability of the relative pose.
+7
+Conclusion
+In this work we have derived conditions on the observability of the relative pose of a kinematic chain, estimated using inertial sensors placed on adjacent segments. Any restrictive assumptions on the local magnetic field, the dynamics of the motions, or additional sensors were avoided to account for a large range of potential application scenarios. We have shown that the relative orientation is observable from purely inertial measurements whenever the specific force of the joint centre and its derivative are linearly independent. Simulations and experimental results confirmed the theoretical finding that excitation alone does not suffice to assure convergence but that accurate estimates are obtained in motions that fulfil the derived criterion. These results overcome the need to blindly hope for sufficient excitation in magnetometer-free inertial motion tracking, and they exemplify the value of systems and control theory for the design of safe and reliable sensor systems. They are expected to have an impact on a range of control applications that rely on nonrestrictive motion tracking of kinematic systems. In such applications, the derived observability condition can be used to provide crucial performance guarantees as well as to instruct users to perform motions that ensure observability. Future work could include exploiting these results in feedback-controlled systems as well as a more extensive study on the accuracy of the pose estimates as a function of the sensor noise levels and the cross product of the specific force of the joint centre and its derivative to provide bounds on the error of the estimated pose.
+Acknowledgments
+The conducted human experiments were funded by the European Regional Development Fund – We-lab for HTM [grant number 1047]. The inertial, optical and video data of the 3D-printed mechanical joint motions has been recorded and preprocessed by Dustin Lehmann. We sincerely thank him for allowing us to use this data.
+References
+[1]
+V. Rodrigo Marco, J. Kalkkuhl, J. Raisch, W. J. Scholte, H. Nijmeijer, and
+T. Seel.
+Multi-modal sensor fusion for highly accurate vehicle motion state
+estimation.
+Control Engineering Practice
+, 100:104409, 2020.
+ISSN 0967-0661.
+[2]
+F. Hoffmann, N. Goddemeier, and T. Bertram.
+Attitude estimation and control of a quadrocopter.
+In
+Proceedings of the International Conference on Intelligent
+Robots and Systems (IROS)
+, pages 1072–1077, Taipei, Taiwan, October 2010.
+[3]
+G. Wan, X. Yang, R. Cai, H. Li, Y. Zhou, H. Wang, and S. Song.
+Robust and precise vehicle localization based on multi-sensor fusion
+in diverse city scenes.
+In
+Proceedings of the International Conference on Robotics and
+Automation (ICRA)
+, pages 4670–4677, Brisbane, Australia, May 2018.
+[4]
+T. H. Bryne, R. H. Rogne, T. I. Fossen, and T. A. Johansen.
+A virtual vertical reference concept for aided inertial navigation at
+the sea surface.
+Control Engineering Practice
+, 70:1–14, 2018.
+[5]
+S. Zihajehzadeh, P. K. Yoon, B. Kang, and E. J. Park.
+UWB-aided inertial motion capture for lower body 3-D dynamic
+activity and trajectory tracking.
+IEEE Transactions on Instrumentation and Measurement
+,
+64(12):3577–3587, 2015.
+[6]
+T. Seel, D. Graurock, and T. Schauer.
+Realtime assessment of foot orientation by accelerometers and
+gyroscopes.
+Current Directions in Biomedical Engineering
+, 1(1):466–469, 2015.
+ISSN 2364-5504.
+[7]
+M. Kok, J. D. Hol, and T. B. Schön.
+Using inertial sensors for position and orientation estimation.
+Foundations and Trends on Signal Processing
+, 11(1–2):1–153, 2017.
+[8]
+W. H. K. de Vries, H. E. J. Veeger, C. T. M. Baten, and F. C. T. van der
+Helm.
+Magnetic distortion in motion labs, implications for validating
+inertial magnetic sensors.
+Gait & Posture
+, 29(4):535–541, June
+2009.
+ISSN 0966-6362.
+[9]
+Y. Shu, C. Bo, G. Shen, C. Zhao, L. Li, and F. Zhao.
+Magicol: Indoor localization using pervasive magnetic field and
+opportunistic WiFi sensing.
+IEEE Journal on Selected Areas in Communications
+, 33(7):1443–1457, July 2015.
+ISSN 0733-8716.
+[10]
+M. Benallegue, A. Benallegue, and Y. Chitour.
+Tilt estimator for 3D non-rigid pendulum based on a tri-axial
+accelerometer and gyrometer.
+In
+Proceedings of the 17th IEEE-RAS International Conference on
+Humanoid Robotics
+, pages 830–835, 2017.
+[11]
+M. Vigne, A. El Khoury, M. Masselin, F. Di Meglio, and N. Petit.
+Estimation of multiple flexibilities of an articulated system using
+inertial measurements.
+In
+Proceedings of the IEEE Conference on Decision and Control
+(CDC)
+, pages 6779–6785, 2018.
+[12]
+M. Kok, J. D. Hol, and T. B. Schön.
+An optimization-based approach to human body motion capture using
+inertial sensors.
+In
+Proceedings of the 19th World Congress of the International
+Federation of Automatic Control (IFAC)
+, pages 79–85, Cape Town, South
+Africa, August 2014.
+[13]
+J. D. Hol.
+Sensor fusion and calibration of inertial sensors, vision,
+ultra-wideband and GPS
+.
+Dissertation no. 1368, Linköping University, Linköping,
+Sweden, June 2011.
+[14]
+I. Weygers, M. Kok, H. de Vroey, T. Verbeerst, M. Versteyhe, H. Hallez, and
+K. Claeys.
+Drift-free inertial sensor-based joint kinematics for long-term
+arbitrary movements.
+IEEE Sensors Journal
+, 20(14):7969–7979,
+2020.
+[15]
+K. Eckhoff, M. Kok, S. Lucia, and T. Seel.
+Sparse magnetometer-free inertial motion tracking–a condition for
+observability in double hinge joint systems.
+In
+Proceedings of the 21st World Congress of the International
+Federation of Automatic Control (IFAC)
+, pages 1–8, Berlin, Germany, 2020.
+[16]
+G. Besançon.
+An overview on observer tools for nonlinear systems.
+In G. Besançon, editor,
+Nonlinear observers and
+applications
+, pages 1–33. Springer, 2007.
+[17]
+G. Besancon.
+A link between output time derivatives and persistent excitation for
+nonlinear observers.
+In
+Proceedings of the 10th IFAC Symposium on Nonlinear Control
+Systems (NOLCOS)
+, pages 493–498, Monterey, California, USA, August 2016.
+[18]
+R. Hermann and A. Krener.
+Nonlinear controllability and observability.
+IEEE Transactions on Automatic Control
+, 22(5):728–740, 1977.
+[19]
+Y. Huang, M. Kaufmann, E. Aksan, M. Black, O. Hilliges, and G. Pons-Moll.
+Deep inertial poser: Learning to reconstruct human pose from sparse
+inertial measurements in real time.
+ACM Transactions on Graphics
+, 37:1–15, 12 2018.
+[20]
+T. von Marcard, B. Rosenhahn, M. J. Black, and G. Pons-Moll.
+Sparse inertial poser: Automatic 3D human pose estimation from
+sparse IMUs.
+Computer Graphics Forum
+, 36:349–360, 2017.
+[21]
+G. Cooper, I. Sheret, L. McMillian, K. Siliverdis, N. Sha, D. Hodgins,
+L. Kenney, and D. Howard.
+Inertial sensor-based knee flexion/extension angle estimation.
+Journal of Biomechanics
+, 42(16):2678–2685, December 2009.
+ISSN 0021-9290.
+[22]
+D. Laidig, T. Schauer, and T. Seel.
+Exploiting kinematic constraints to compensate magnetic disturbances
+when calculating joint angles of approximate hinge joints from orientation
+estimates of inertial sensors.
+In
+Proceedings of the International Conference on
+Rehabilitation Robotics (ICORR)
+, pages 971–976, London, UK, July 2017.
+[23]
+T. Seel, T. Schauer, and J. Raisch.
+Joint axis and position estimation from inertial measurement data by
+exploiting kinematic constraints.
+In
+Proceedings of the IEEE International Conference on Control
+Applications
+, pages 45–49, Dubrovnik, Croatia, October 2012.
+[24]
+F. Olsson, M. Kok, T. Seel, and K. Halvorsen.
+Robust plug-and-play joint axis estimation using inertial sensors.
+MDPI Sensors
+, 20(12):3534, 2020.
+[25]
+D. Laidig, D. Lehmann, M. A. Bégin, and T. Seel.
+Magnetometer-free realtime inertial motion tracking by exploitation
+of kinematic constraints in 2-DOF joints.
+In
+Proceedings of the 41st IEEE International Engineering in
+Medicine and Biology Conference (EMBC)
+, Berlin, Germany, July 2019.
+[26]
+H. J. Luinge, P. H. Veltink, and C. T. M. Baten.
+Ambulatory measurement of arm orientation.
+Journal of Biomechanics
+, 40(1):78–85,
+January 2007.
+ISSN 0021-9290, 1873-2380.
+[27]
+D. Laidig, P. Mueller, and T. Seel.
+Automatic anatomical calibration for IMU-based elbow angle
+measurement in disturbed magnetic fields.
+Current Directions in Biomedical Engineering
+, 3(2):167–170, 2017.
+ISSN 2364-5504.
+[28]
+D. Lehmann, D. Laidig, R. Deimel, and T. Seel.
+Magnetometer-free inertial motion tracking of arbitrary joints with
+range-of-motion constraints.
+In
+Proceedings of the 21st World Congress of the International
+Federation of Automatic Control (IFAC)
+, pages 1–8, Berlin, Germany, July
+2020.
+[29]
+M. Miezal, B. Taetz, and G. Bleser.
+On inertial body tracking in the presence of model calibration
+errors.
+MDPI Sensors
+, 16(7):1132, 2016.
+[30]
+J. K. Lee and T. H. Jeon.
+Magnetic condition-independent 3D joint angle estimation using
+inertial sensors and kinematic constraints.
+MDPI Sensors
+, 19(24):5522, 2019.
+[31]
+B. Fasel, J. Spörri, J. Chardonnens, J. Kröll, E. Müller, and
+K. Aminian.
+Joint inertial sensor orientation drift reduction for highly dynamic
+movements.
+IEEE Journal of Biomedical and Health Informatics
+, 22(1):77–86, 2018.
+[32]
+E. Dorschky, M. Nitschke, A.-K. Seifer, A. J. van den Bogert, and B. M.
+Eskofier.
+Estimation of gait kinematics and kinetics from inertial sensor data
+using optimal control of musculoskeletal models.
+Journal of Biomechanics
+, 95:109278, 2019.
+[33]
+W. J. Rugh.
+Linear system theory
+.
+Prentice-Hall, Inc., 1996.
+[34]
+P. Batista, N. Petit, C. Silvestre, and P. Oliveira.
+Relaxed conditions for uniform complete observability and
+controllability of LTV systems with bounded realizations.
+IFAC-PapersOnLine
+, 50(1):3598–3605, 2017.
+[35]
+G. Panahandeh, C. X. Guo, M. Jansson, and S. I. Roumeliotis.
+Observability analysis of a vision-aided inertial navigation system
+using planar features on the ground.
+In
+Proceedings of the International Conference on Intelligent
+Robots and Systems (IROS)
+, pages 4187–4194, Tokyo, Japan, November 2013.
+[36]
+V. Rodrigo Marco, J. Kalkkuhl, and T. Seel.
+Nonlinear observer with observability-based parameter adaptation for
+vehicle motion estimation.
+IFAC-PapersOnLine
+, 51(15):60–65, 2018.
+[37]
+V. Joukov, J. Ćesić, K. Westermann, I. Marković, I. Petrović,
+and D. Kulić.
+Estimation and observability analysis of human motion on Lie
+groups.
+IEEE transactions on cybernetics
+, 50(3):1321–1332, 2019.
+[38]
+P.-J. Bristeau, N. Petit, and L. Praly.
+Design of a navigation filter by analysis of local observability.
+In
+Proceedings of the 49th IEEE Conference on Decision and
+Control (CDC)
+, pages 1298–1305, 2010.
+[39]
+P. Morin, A. Eudes, and G. Scandaroli.
+Uniform observability of linear time-varying systems and application
+to robotics problems.
+In
+International Conference on Geometric Science of
+Information
+, pages 336–344, 2017.
+[40]
+G. Wahba.
+Problem 65-1: A least squares estimate of satellite attitude.
+SIAM review
+, 7(3):409–409, 1965.
+[41]
+J.-P. Gauthier and I. Kupka.
+Deterministic observation theory and applications
+.
+Cambridge university press, 2001.
+[42]
+F. Olsson and K. Halvorsen.
+Experimental evaluation of joint position estimation using inertial
+sensors.
+In
+Proceedings of the 20th International Conference on
+Information Fusion
+, pages 1–8, Xi’an, China, July 2017.
+[43]
+R. Hartley, J. Trumpf, Y. Dai, and H. Li.
+Rotation averaging.
+International Journal of Computer Vision
+, 103(3):267–305, 2013.
+[44]
+M. Zhao, T. Anzai, F. Shi, X. Chen, K. Okada, and M. Inaba.
+Design, modeling, and control of an aerial robot dragon: A
+dual-rotor-embedded multilink robot with the ability of
+multi-degree-of-freedom aerial transformation.
+IEEE Robotics and Automation Letters
+, 3(2):1176–1183, 2018.
+Experimental support, please
+view the build logs
+for errors. Generated by
+L
+A
+T
+E
+xml
+.
+Instructions for reporting errors
+We are continuing to improve HTML versions of papers, and your feedback helps enhance accessibility and mobile
+      support. To report errors in the HTML that will help us improve conversion and rendering, choose any of the
+      methods listed below:
+Click the "Report Issue"
+(
+)
+button, located in the page header.
+Tip:
+You can select the relevant text first, to include it in your report.
+Our team has already identified
+the following issues
+. We appreciate your time reviewing and reporting rendering errors we
+      may not have found yet. Your efforts will help us improve the HTML versions for all readers, because disability
+      should not be a barrier to accessing research. Thank you for your continued support in championing open access for
+      all.
+Have a free development cycle? Help support accessibility at arXiv! Our collaborators at LaTeXML maintain a
+list of packages that need conversion
+, and welcome
+developer contributions
+.
+We gratefully acknowledge support from
+        our
+major funders
+,
+member institutions
+,
+,
+        and all contributors.
+Major funding support from

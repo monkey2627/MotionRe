@@ -1,0 +1,38 @@
+URL: https://openaccess.thecvf.com/content/CVPR2026/html/Lin_IMU-HOI_A_Symbiotic_Framework_for_Coherent_Human-Object_Interaction_and_Motion_CVPR_2026_paper.html
+
+CVPR 2026 Open Access Repository
+CVPR 2026
+open access
+These CVPR 2026 papers are the Open Access versions, provided by the
+Computer Vision Foundation.
+Except for the watermark, they are identical to the accepted versions;
+the final published version of the proceedings is available on IEEE Xplore.
+This material is presented to ensure timely dissemination of scholarly and technical work.
+Copyright and all rights therein are retained by authors or by other copyright holders.
+All persons copying this information are expected to adhere to the terms and constraints invoked 
+by each author's copyright.
+Powered by:
+Sponsored by:
+IMU-HOI: A Symbiotic Framework for Coherent Human-Object Interaction and Motion Capture via Contact-Conscious Inertial Fusion
+Lizhou Lin, Songpengcheng Xia, Zengyuan Lai, Lan Sun, Jiarui Yang, Ling Pei
+; Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR), 2026, pp. 42901-42910
+Abstract
+Capturing full-body human motion with object interactions is crucial for AR/VR and robotics applications, yet it remains challenging for conventional vision-based methods due to occlusions and constrained capture volumes. Inertial measurement units (IMUs) offer a compelling alternative without line-of-sight requirements, but existing IMU-based motion capture assumes an isolated human and ignores object contacts and dynamics. To bridge this gap, we present IMU-HOI, a novel framework that jointly recovers full-body human pose and 6-DoF object trajectory from sparse IMUs on the body and object, explicitly modeling human-object Interaction.Our approach first infers probabilistic hand-object contacts directly from IMU streams and uses them as a high-level signal to route between kinematic and inertial reasoning. These contact cues drive a three-stage fusion pipeline that refines human pose and root translation, and fuses hand-based forward kinematics with object-IMU integration for object motion, yielding coherent, drift-resilient trajectories for both human and object. Experiments on challenging human-object interaction scenarios demonstrate substantial accuracy gains over prior inertial motion capture methods. Moreover, IMU-HOI can be plugged into existing sparse-IMU mocap backbones with minimal changes, effectively extending the scope of purely inertial motion capture from isolated humans to full human-object interaction and joint motion estimation.
+Related Material
+[
+pdf
+]
+[
+supp
+]
+[
+bibtex
+]
+@InProceedings{Lin_2026_CVPR,
+    author    = {Lin, Lizhou and Xia, Songpengcheng and Lai, Zengyuan and Sun, Lan and Yang, Jiarui and Pei, Ling},
+    title     = {IMU-HOI: A Symbiotic Framework for Coherent Human-Object Interaction and Motion Capture via Contact-Conscious Inertial Fusion},
+    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+    month     = {June},
+    year      = {2026},
+    pages     = {42901-42910}
+}

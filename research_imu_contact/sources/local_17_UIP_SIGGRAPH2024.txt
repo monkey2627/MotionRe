@@ -1,0 +1,735 @@
+                                         Ultra Inertial Poser: Scalable Motion Capture and Tracking from
+                                               Sparse Inertial Sensors and Ultra-Wideband Ranging
+                                                                                Rayan Armani, Changlin Qian, Jiaxi Jiang, and Christian Holz
+                                                                                            Department of Computer Science, ETH Zürich, Switzerland
+                                                                                            6 wearable trackers                                                                              estimated SMPL parameters
+                                                                                                                                                                                                 full body pose + translation
+                                                                                                                                                      embedded tracker
+                                                                                                                 s3                      IMU
+                                                                                                                                                      * inertial motion cues
+                                                                                                                                         UWB            (from 6-DoF IMU)
+                                                                                                                                                      * inter-sensor distances
+                                                                                                                                                        (from UWB ranging)
+                                                                                                                      s0        s2
+arXiv:2404.19541v1 [cs.CV] 30 Apr 2024
+
+
+
+
+                                                                                                       s1                                             tracker inside case + strap
+                                                                                                                                                      velcro for Optitrack markers
+                                                                                                            s4             s5
+
+                                                                                                                                                      Airtag
+                                                                                                                                                      (for size reference)
+
+
+
+                                         Figure 1: Our method Ultra Inertial Poser estimates 3D full body poses and global translation (i.e., SMPL parameters) from the
+                                         inertial measurements on a sparse set of wearable sensors, augmented and stabilized by the estimated inter-sensor distances
+                                         based on UWB ranging. Our lightweight standalone sensors stream raw IMU signals, from which we estimate each tracker’s 3D
+                                         state and fuse it with acceleration and inter-sensor distances in a graph-based machine learning model for pose estimation.
+                                         ABSTRACT
+                                         While camera-based capture systems remain the gold standard for                                            UIP code, UIP-DB dataset, and hardware design:
+                                         recording human motion, learning-based tracking systems based                                         https://github.com/eth-siplab/UltraInertialPoser
+                                         on sparse wearable sensors are gaining popularity. Most commonly,
+                                         they use inertial sensors, whose propensity for drift and jitter have
+                                         so far limited tracking accuracy. In this paper, we propose Ultra                                 CCS CONCEPTS
+                                         Inertial Poser, a novel 3D full body pose estimation method that                                  • Computing methodologies → Motion capture; • Hardware
+                                         constrains drift and jitter in inertial tracking via inter-sensor dis-                            → Sensor devices and platforms.
+                                         tances. We estimate these distances across sparse sensor setups
+                                         using a lightweight embedded tracker that augments inexpensive                                    KEYWORDS
+                                         off-the-shelf 6D inertial measurement units with ultra-wideband                                   Human pose estimation; sparse tracking; IMU; UWB.
+                                         radio-based ranging—dynamically and without the need for station-
+                                         ary reference anchors. Our method then fuses these inter-sensor                                   ACM Reference Format:
+                                         distances with the 3D states estimated from each sensor. Our graph-                               Rayan Armani, Changlin Qian, Jiaxi Jiang, and Christian Holz. 2024. Ultra
+                                         based machine learning model processes the 3D states and dis-                                     Inertial Poser: Scalable Motion Capture and Tracking from Sparse Inertial
+                                                                                                                                           Sensors and Ultra-Wideband Ranging. In Special Interest Group on Computer
+                                         tances to estimate a person’s 3D full body pose and translation. To
+                                                                                                                                           Graphics and Interactive Techniques Conference Conference Papers ’24 (SIG-
+                                         train our model, we synthesize inertial measurements and distance
+                                                                                                                                           GRAPH Conference Papers ’24), July 27-August 1, 2024, Denver, CO, USA. ACM,
+                                         estimates from the motion capture database AMASS. For evalua-                                     New York, NY, USA, 11 pages. https://doi.org/10.1145/3641519.3657465
+                                         tion, we contribute a novel motion dataset of 10 participants who
+                                         performed 25 motion types, captured by 6 wearable IMU+UWB
+                                         trackers and an optical motion capture system, totaling 200 minutes                               1    INTRODUCTION
+                                         of synchronized sensor data (UIP-DB). Our extensive experiments                                   Accurate and unrestricted motion tracking is fundamental across
+                                         show state-of-the-art performance for our method over PIP and                                     many domains and applications, such as animation, games, Aug-
+                                         TIP, reducing position error from 13.62 to 10.65 cm (22% better) and                              mented and Virtual Reality as well as fitness training and reha-
+                                         lowering jitter from 1.56 to 0.055 km/s3 (a reduction of 97%).                                    bilitation. High-quality motion capture systems rely on cameras,
+                                                                                                                                           involving a tethered, comprehensive, and stationary setup [Opti-
+                                         Permission to make digital or hard copies of all or part of this work for personal or
+                                         classroom use is granted without fee provided that copies are not made or distributed             track 2023; Vicon 2023]. Compensating for the worn capture suits
+                                         for profit or commercial advantage and that copies bear this notice and the full citation         or markers these systems typically require, researchers have in-
+                                         on the first page. Copyrights for components of this work owned by others than the                stead explored markerless motion capture from images [Chen and
+                                         author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or
+                                         republish, to post on servers or to redistribute to lists, requires prior specific permission     Ramanan 2017; Kanazawa et al. 2018] and videos [Habermann et al.
+                                         and/or a fee. Request permissions from permissions@acm.org.                                       2019; Kocabas et al. 2020] from one [Habermann et al. 2020; Hu
+                                         SIGGRAPH Conference Papers ’24, July 27-August 1, 2024, Denver, CO, USA                           et al. 2021; Li et al. 2020b] or more cameras [De Aguiar et al. 2008].
+                                         © 2024 Copyright held by the owner/author(s). Publication rights licensed to ACM.
+                                         ACM ISBN 979-8-4007-0525-0/24/07. . . $15.00                                                         Beyond stationary setups, tracking systems built around wear-
+                                         https://doi.org/10.1145/3641519.3657465                                                           able sensors have leveraged miniaturized cameras in head-mounted
+SIGGRAPH Conference Papers ’24, July 27-August 1, 2024, Denver, CO, USA                                                                Armani et al.
+
+
+devices [Rhodin et al. 2016; Tome et al. 2019] or body-worn sen-             (4) UIP-DB, a novel motion dataset of 25 types of motion activities
+sors [Li et al. 2020a; Shiratori et al. 2011; Yi et al. 2023; Zhang et al.       from 10 participants, including everyday movements as well as
+2020]. Such motion capture is mobile and requires less instrumenta-              challenging motions for IMU-only tracking (e.g., slow transi-
+tion for tracking, though at the cost of substantial motion artifacts            tions). UIP-DB contains synchronized 6-DoF IMU signals, UWB
+and self-occlusion in sensor observations [Wang et al. 2021].                    measurements and distances, as well as SMPL references based
+   Substituting wearable cameras with even smaller motion sen-                   on a 20-camera Optitrack setup, totaling 200 minutes of data.
+sors, dominantly inertial measurement units (IMU), has enabled               Taken together, Ultra Inertial Poser is a scalable approach for inex-
+less expensive setups but requires more comprehensive full-body              pensive full-body motion tracking using sparse wearable sensors.
+sensor coverage, usually attached to motion capture suits to achieve         Our tracking approach is wireless and affords motion capture in
+comparable quality (e.g., 17–19 sensors for Xsens [Xsens 2024] or            the wild outside controlled indoor environments (Figure 11).
+Noitom [Noitom 2024]). The multitude of IMUs is needed to com-
+pensate for the diminished motion cues, which commercial products
+stabilize with kinematic models to fuse cross-sensor observations.           2     RELATED WORK
+   To lessen the need for comprehensive sensor coverage, recent              Ultra Inertial Poser is related to human body pose estimation using
+methods have proposed estimating full-body poses from only a                 wearable sensors and positioning based on ultra-wideband ranging.
+sparse set of inertial sensors with learning-based techniques [Huang
+et al. 2018; Yi et al. 2022, 2021]. It is worth noting that the quality of
+their estimates thereby rely on the well-calibrated absolute 3D state        2.1    Motion Capture from Inertial Sensors
+provided by the IMU sensors, which has dominantly been from                  Inertial Measurement Units (IMUs) are popular for tracking motion
+Xsens’ proprietary units. Even so, without access to direct position         due to their compact size, low power consumption, and affordability.
+observations and due to the nature of inertial sensing, current              They combine accelerometers and gyroscopes to track changes in
+pose estimates suffer from overall drift and joint jitter as well as         acceleration and angular velocity, often supplemented by magne-
+degrading accuracy when body motions are performed slowly.                   tometers to measure surrounding magnetic fields. However, IMUs
+   In this paper, we propose Ultra Inertial Poser, a learning-based          cannot directly observe positions, and position estimates suffer
+method for 3D full body pose estimation that fuses raw IMU read-             from drift. Commercial systems address this by integrating data
+ings with inter-sensor distances for stable predictions. Our method          from 17–19 IMUs with biomechanical models (XSens [Xsens 2024]).
+estimates these distances from ultra-wideband (UWB) ranging,                    Pose estimation from sparse sets of IMUs has become viable
+which we add to a small, inexpensive, and untethered embedded                using the large available motion capture (mocap) datasets to train
+sensor node (Figure 1). Our graph-based neural model fuses these             learning-based models [Guzov et al. 2021; Huang et al. 2018; Mah-
+distances with our 3D state estimations from the raw IMU signals to          mood et al. 2019; Mollyn et al. 2023; Streli et al. 2023; Trumble
+recover the SMPL parameters of body pose and global translation.             et al. 2017]. Early systems used offline optimization to fit the SMPL
+   For training, we use AMASS [Mahmood et al. 2019] to synthesize            body model to data from six IMUs (e.g., SIP [Von Marcard et al.
+IMU signals and distances and augment them with our empirically              2017]). Deep Inertial Poser’s (DIP) bidirectional recurrent neural
+validated and collision-aware noise model. For evaluation, we in-            network maps IMU readings to local joint motions [Huang et al.
+troduce a novel motion capture dataset in which participants per-            2018], which other methods further improved [Nagaraj et al. 2020].
+formed a long list of activities. Our method surpasses the current           More recent methods also use 6 IMUs and optimize both pose and
+SOTA methods PIP [Yi et al. 2022] and TIP [Jiang et al. 2022b] in            translation estimation via ground contact points [Jiang et al. 2022b;
+position accuracy (22% lower error) and jitter (97% reduction).              Yi et al. 2021] and physical constraints [Yi et al. 2022]. With the
+                                                                             advance of VR/AR applications, several methods further sparsified
+We make the following contributions in this paper:                           input requirements to just the upper body to estimate full-body
+(1) Ultra Inertial Poser, a novel method to incorporate distance con-        pose from head and hand poses [Ahuja et al. 2021; Du et al. 2023;
+    straints into a pose estimation framework for inertial measure-          Jiang et al. 2023, 2022a; Yang et al. 2021; Zheng et al. 2023].
+    ments. Our graph-based neural network affords effective train-              To combat the persistent challenges in estimating accurate joint
+    ing using existing large motion capture datasets (e.g., AMASS),          angles and positions, researchers have revisited external [Pan et al.
+    complemented by synthetic and noise-augmented distances.                 2023; Von Marcard et al. 2018] or body-worn [Yi et al. 2023] cameras
+(2) An embedded sensing platform with inexpensive off-the-shelf              for visual-inertial tracking. Alternatively, EM-Pose [Kaufmann et al.
+    components for UWB-based ranging and IMU-based motion                    2021] measures the relative 3D offsets and orientations between
+    detection similar to those inside UWB-based item trackers. Our           joints using 6–12 custom electromagnetic (EM) field-based sensors.
+    UWB communication protocol and distance estimation requires                 Given the difficulties of reproducing custom EM sensing tech-
+    no stationary nodes and dynamically compensates for moments              nology with commodity components, our work instead builds on
+    of occlusion between nodes as ranging crosses the human body.            previous approaches that estimate mere distances between wear-
+    Compared to electromagnetic sensing, UWB ranging is lower                able trackers (e.g., using ultrasonic sensors [Liu et al. 2011; Vlasic
+    power, less susceptible to interference, and can scale simply.           et al. 2007]). Our method obtains such pairwise distances from ultra
+(3) Ultra Inertial Poser’s pipeline is first to operate on the raw sig-      wideband-based ranging and integrates them as constraints into
+    nals from IMU sensors (i.e., just acceleration, angular velocity),       a learning-based sparse inertial sensing pipeline. The small size,
+    and UWB radios—without requiring proprietary components to               inexpensive nature, and low power consumption of UWB radios
+    obtain global 3D orientation as input (e.g., Xsens in prior work).       can thus complement IMUs as part of wearable and mobile devices.
+Ultra Inertial Poser: Motion Tracking from Sparse IMU and Ultra-Wideband Ranging         SIGGRAPH Conference Papers ’24, July 27-August 1, 2024, Denver, CO, USA
+
+
+
+
+                                                                                                                      kinematics decoder
+
+
+
+                                                                                                                                           dynamics optimizer
+                                                                      -
+
+
+
+
+Figure 2: Overview of our method. The person is wearing 6 sensor nodes, each featuring an IMU and a UWB radio. Our method
+processes the raw data from each sensor to estimate sequences of global orientations, global accelerations, and inter-sensor
+distances. These serve as input into our learning-based pose estimation to predict leaf-joint angles as well as the global root
+orientation and translation as SMPL parameters.
+
+
+2.2     Ultra-Wideband Ranging                                                     3 METHOD
+Ultra-wideband (UWB) signals are characterized by their extensive                  3.1 Problem Statement
+bandwidth (larger than 500 MHz) and very short duration wave-
+                                                                                   Our goal is to estimate full-body pose from the sequential (raw)
+forms, typically in the order of a nanosecond [Sahinoglu et al. 2008].
+                                                                                   IMU observations and inter-sensor UWB ranging cues from a sparse
+This characteristic allows for accurate determination of the time
+                                                                                   set of 𝑆 wearable sensors. In line with prior work, we examine this
+of departure and arrival of signals, making UWB systems ideal
+                                                                                   problem with 6 body-worn sensors on the pelvis, knees, wrists,
+for ranging applications through a variety protocols, including
+                                                                                   and head. Given 𝑆 sensor nodes with a 6-DoF IMU and a single
+Two-Way Ranging (TWR)[IEEE 2007], Time Difference of Arrival
+                                                                                   UWB radio, we first aim to estimate each node’s 3D orientation
+(TDoA)[Tiemann and Wietfeld 2017; Ubisense 2023], and Angle of
+                                                                                   𝑅𝑡 ∈ R𝑆 ×3 , global accelerations 𝐴𝑡 ∈ R𝑆 ×3 , as well as inter-sensor
+Arrival (AoA) [Ledergerber et al. 2019]. Additionally, UWB radios
+                                                                                   distances between all nodes 𝐷𝑡 ∈ R𝑆 ×𝑆 . We then aim to predict the
+are compact and have low power consumption, making them suit-
+                                                                                   joint angle Θ𝑖𝑡 as well as the global translation 𝑇𝑡 in SMPL human
+able for a range of applications such as asset tracking both indoors
+                                                                                   model parameters [Loper et al. 2015]. The pelvis sensor is the root
+and outdoors [Arun et al. 2022; Zhao et al. 2021], robotics localiza-
+                                                                                   of our body model, whereas the other sensors are leaf nodes.
+tion [Cao et al. 2020; Lee et al. 2022; Ochoa-de Eribe-Landaberea
+                                                                                      Figure 2 shows an overview of our pipeline as detailed below.
+et al. 2022; Zheng et al. 2022] and collaboration [Corrales et al.
+2008; Hepp et al. 2016; Queralta et al. 2022], and augmented real-
+ity [Molina Martel et al. 2018].                                                   3.2    Wearable Sensing Pipeline
+   A major challenge for accurate UWB ranging is the distortion due                3.2.1 Sensing Hardware. Our method is designed to estimate poses
+to obstacles in the line of sight between ranging devices. Prior meth-             from commodity sensors, i.e., those commonly found in commercial
+ods have addressed these by analyzing the raw channel impulse                      devices. As such, we developed 6 wireless prototypes with a 6DoF
+response on UWB radios [Angarano et al. 2021; Barral et al. 2019;                  IMU (LSM6DS) and a UWB radio (DWM1000) each, integrated
+Tran et al. 2022], which is resource intensive and makes real-time                 into a 35×35 mm package (Figure 1 and Figure 10). An onboard
+operation on embedded platforms challenging. A more common                         microcontroller (NRF52840) runs custom firmware to sample the
+approach is sensor fusion (e.g., particle or Extended Kalman Filters,              IMU and implement a UWB ranging protocol, streaming the results
+EKF) to incorporate data from other sensors such as IMUs [Feng                     over BLE to a host computer. The host handles synchronization
+et al. 2020; Hol et al. 2009; Mueller et al. 2015; Ochoa-de Eribe-                 across the 6 devices and runs the rest of the sensing pipeline.
+Landaberea et al. 2022], and cameras [Queralta et al. 2022; Xu et al.
+2022]. We also build on an EKF-based UWB+IMU filter.                               3.2.2 Obtaining Orientation and Acceleration Measurements. We
+   Previous work has focused on UWB positioning via trilatera-                     sample each IMU at 100 Hz to obtain sensor-frame acceleration a𝑖
+tion with fixed anchors in the environment or using at least four                  and angular velocity 𝜔𝑖 signals from sensor 𝑖 in 𝑆. We implement a
+rigidly coupled antennas on a node. In contrast, our method solely                 VQF filter [Laidig and Seel 2023] to estimate gravity-compensated
+measures inter-sensor distances, thus requiring only a single UWB                  acceleration â𝑖 in the world frame and the absolute orientation
+antenna and eliminating the need for stationary instrumentation.                   quaternion q̂𝑖 . At every time step, the estimates from each sensor
+                                                                                   are concatenated to form the orientation and global acceleration
+                                                                                   sequences 𝑅𝑡 and 𝐴𝑡 respectively. We perform a simple IMU cali-
+                                                                                   bration by estimating the gyroscope and accelerometer offsets as
+                                                                                   the wearer holds an initial T-pose.
+SIGGRAPH Conference Papers ’24, July 27-August 1, 2024, Denver, CO, USA                                                                               Armani et al.
+
+
+3.2.3 UWB Ranging. The 6 devices implement a broadcast two-                           defined in Eq. 4, and linearized as Eq. 5.
+way ranging protocol to obtain the UWB distances 𝑑𝑖,𝑗 between                                                      
+                                                                                                                  𝑑     ∥𝒙𝑖 𝑗 ∥ 2
+                                                                                                                                  
+each sensor pair (𝑖, 𝑗). In a ranging round, illustrated in Figure 8, Re-                               h𝑡 (x) =     =                                         (4)
+                                                                                                                  𝑣     ∥𝒗𝑖 𝑗 ∥ 2
+sponder devices reply in turn to a request from an Initiator with the                                                      𝒙𝑖 𝑗         
+timestamps required to resolve time-of-flight 𝜏𝑖 𝑗 between devices.                                              𝜕ℎ(x)              03
+                                                                                                         𝐻 (x) =        =    𝑥
+                                                                                                                                    𝒗𝑖 𝑗                       (5)
+                                                                                                                   𝜕x       03       𝑣 2×6
+                  1
+            𝜏𝑖 𝑗 = (𝑡𝑖𝑅𝑒𝑐𝑒𝑖𝑣𝑒𝑑 − 𝑡𝑖𝑆𝑒𝑛𝑡 + 𝑡 𝑗𝑅𝑒𝑐𝑒𝑖𝑣𝑒𝑑 − 𝑡 𝑗𝑆𝑒𝑛𝑡 )               (1)   The measurement covariance matrix is simply the diagonal matrix
+                  2
+                                                                                      of the distance and speed variances observed from raw distance
+   Initiator and Responder roles are assigned at startup. In a network                measurements against ground-truth. It is different for each sensor
+of 6 devices, this protocol allows us to measure all 15 pairwise                      pair, as some are LOS while others are not, but constant across
+distances at a rate of 25 Hz.                                                         subjects. Without direct observations, the relative position estimate
+   Individual UWB radios require an initial calibration to correct                    𝒙𝑖 𝑗 is still prone to drift, however, its norm 𝒅ˆ𝑖 𝑗 = ∥𝒙𝑖 𝑗 ∥ 2 provides a
+for hardware-specific variables, notably antenna delay which sig-                     distance estimate more robust to NLOS distortions.
+nificantly affects ranging accuracy [Decawave 2017]. We calibrate
+all nodes at once, using a RANSAC regression to find an affine                        3.3    Pose Estimation with Distance Constraints
+mapping of the raw ranges to the ground truth captured with a                         3.3.1 Model. The first module of our estimation pipeline is a sen-
+marker-based motion capture system. This calibration process is                       sor position estimator. It consists of two branches to capture the
+conducted once and applied consistently regardless of sensor place-                   temporal and spatial information from input signals. In the first,
+ment or subject. The calibration mapping is however sensitive to                      we deploy an LSTM network [Hochreiter and Schmidhuber 1997]
+temperature. with a variation of 2.15 mm/°C [Decawave 2018].                          cells to estimate sensor positions relative to the root from acceler-
+   The parameters determined through this process remain valid                        ation and orientation estimates 𝐴𝑡 and 𝑅𝑡 . This module leverages
+given similar operating temperatures [Decawave 2014].                                 temporal information from the sequence of inputs, and we denote
+3.2.4 Estimating Filtered Inter-Sensor Distance Measurements. The                     its output as P𝑡 ∈ R𝑆 ×3 .
+raw UWB ranges exhibit increased noise when the body obstructs                            In parallel, we introduce a second branch to estimate relative sen-
+the direct line of sight between sensor pairs. To mitigate this, we                   sor positions from pairwise distances using a Distance Attention
+fuse UWB ranges with the acceleration and orientation estimates                       Graph Convolutional Network (DA-GCN). As illustrated in Fig-
+for each sensor pair with an Extended Kalman Filter.                                  ure 3, we represent our system of wearable devices with a graph
+    Our filter tracks the state space comprised of relative position,                 G = {V, E}, with vertices V ∈ 𝑆 and edges E. Each node 𝑖 holds
+relative velocity, and relative orientation between a sensor pair                     the orientation estimate R𝑡𝑖 , while edges represent inter-sensor dis-
+                                                 ⊤                                   tance estimates D𝑡 . Previous GCN implementations [Zhao et al.
+(𝑖, 𝑗), which we express as x = 𝒙𝑖 𝑗 𝒗𝑖 𝑗 𝒒𝑖 𝑗 . We initialize the
+                                  
+                                                                                      2019] exploit a pre-defined affinity matrix with binary values to
+state assuming a starting position in T-pose. In the prediction step,
+                                                                                      represent connectivity between joints of a skeleton model. We take
+our filter relies on dead-reckoning using the estimated acceleration
+                                                             ⊤                       it further by encoding inter-sensor distances on edge features, to
+and orientation as control inputs u = 𝒂ˆ𝑖 𝒂ˆ 𝑗 𝒒ˆ 𝑖 𝒒ˆ 𝑗 . The
+                                           
+                                                                                      capture additional correlation between nodes, to which we apply
+predicted state x̂𝑡 at discrete time step 𝑡 becomes
+                                                                                      a modulated graph convolutional network [Zou and Tang 2021].
+                                                              2                       More specifically, we first normalize inter-sensor distance by the
+                             𝒙𝑖 𝑗𝑡 −1 + Δ𝑇 𝒗𝑖 𝑗𝑡 −1 + Δ𝑇2 ( 𝒂ˆ 𝑗𝑡 − 𝒂ˆ𝑖𝑡 ) 
+                                                                           
+      x̂𝑡 = 𝑓 (x𝑡 −1, u𝑡 ) =          𝒗𝑖 𝑗𝑡 −1 + Δ𝑇 ( 𝒂ˆ 𝑗𝑡 − 𝒂ˆ𝑖𝑡 )           (2)
+                                                                           
+                                                                            
+                             
+                                                   −1
+                                                 𝒒ˆ 𝒊𝒕 𝒒ˆ 𝒋 𝒕
+                                                                            
+                                                                            
+                                                                           
+where Δ𝑇 is the difference between consecutive time steps.
+    The noise in the prediction step is mainly introduced by the
+control input and therefore not simply additive. The VQF filter
+lacks explicit orientation covariance outputs. Instead, we treat we
+𝒂ˆ and 𝒒ˆ inputs as independent, and define the prediction step noise
+covariance 𝑸𝑡 as:
+                                                      𝜕𝑓 (x𝑡 −1, u𝑡 )
+            𝑸𝑡 = 𝑾𝑡 Σ𝑢 𝑾𝑡𝑇                    𝑾𝑡 =                              (3)
+                                                           𝜕u
+where 𝚺𝑢 is the diagonal matrix of each of the input sensors’ vari-                   Figure 3: Architecture details for the Distance Attention
+ance, which we determine from ground-truth. We introduce UWB                          Graph Convolutional Network (DA-GCN). Given node ori-
+ranges at the correction step. Before fusion, we remove raw UWB                       entation 𝑅𝑡 and edge distance 𝐷𝑡 , DA-GCN estimates sensor
+outliers outside a range of acceptable inter-sensor distances, to                     positions conforming to the distance measurements. The
+ignore measurements that are incompatible with human motion                           model consists of a distance attention branch with learnable
+constraints. This range for each sensor pair is defined apriori assum-                matrices 𝐴𝑙 and 𝐵𝑙 to represent the correlation between nodes
+ing body heights of [1.5, 2 m] and constant across subjects. These                    and a weight-modulation branch 𝑀𝑙 to learn disentangled
+ranges and their first derivative, form the measurement model h(x)                    transformation for different nodes.
+Ultra Inertial Poser: Motion Tracking from Sparse IMU and Ultra-Wideband Ranging         SIGGRAPH Conference Papers ’24, July 27-August 1, 2024, Denver, CO, USA
+
+
+distance between the head and pelvis to rule out differences in hu-                3.3.3 Data Synthesis. Because training our pose estimation pipeline
+man shape. Building on the success of channel attention in image                   requires a large-scale dataset with IMU+UWB measurements and
+processing [Jiang et al. 2021; Woo et al. 2018], we then compute the               SMPL references, we first appropriate AMASS as an existing motion
+correlation matrix as in Equation 6, where elements in matrix 𝐴𝑙                   capture dataset [Mahmood et al. 2019] to synthesize sensor data.
+and 𝐵𝑙 are learnable.                                                                 Similarly to previous research [Yi et al. 2021], we synthesize
+                                                                                   global acceleration and orientation data by placing virtual sensors
+                                𝑪𝑙 = 𝑨𝒍 ⊙ 𝑫 ⊕ 𝑩 𝒍                           (6)
+                                                                                   on SMPL mesh vertices. We deduce the rotation matrix from SMPL
+The correlation matrix is then applied as a weight to aggregate                    joint rotations and derive world-frame acceleration vectors using
+modulated node features, which can be denoted as:                                  finite differences in vertex positions,
+
+                          𝑯𝑙+1 = (𝑴𝑙 ⊙ (𝑾𝑙 𝑯𝑙 ))𝑪 𝒕                         (7)                                   𝑛p𝑖𝑡 +𝑛 − 2p𝑖𝑡 + p𝑖𝑡 −𝑛
+                                                                                                          a𝑖𝑡 =                                            (10)
+                                                                                                                         (𝑛∆𝑡) 2
+, where 𝐻𝑙 represents the node feature at layer 𝑙 and 𝑀 represents
+the modulation for weight 𝑊𝑙 to learn disentangled transformation                  where 𝑝𝑡𝑖 is the position of vertices 𝑖 at time step 𝑡. To synthesize
+for node feature. By leveraging orientation and distance constraints,              UWB data, we first compute the Euclidian distance from the virtual
+our DA-GCN outputs spatial sensor position estimation P𝑠 ∈ R𝑆 ×3 .                 sensors’ positions and then apply a time-varying noise model that
+   Similarly to TransPose [Yi et al. 2021], we use linear interpolation            reflects observations on real data. We conducted NLOS noise mod-
+to fuse the two relative sensor position estimates. We compute a                   eling experiments, in which we varied distances and obstacle sizes
+weighted sum of P𝑡 and P𝑠 based on the magnitude of acceleration                   between sensors. We observed a noise standard deviation similar
+estimates in 𝐴𝑡 . This is driven by the fact that in scenarios with little         to LOS for obstacle-to-distance ratio smaller than 0.2, and larger
+movement IMUs have a low signal-to-noise ratio, and distinguishing                 for ratios above 0.2. As such, we model noise as dynamic Gaussian
+between poses solely from inertial data becomes challenging.                       noise with standard deviation 𝜎 (𝑡)𝑖 𝑗 given by:
+   Therefore, the fusion algorithm can be formulated as:                                                           (
+                                                                                                                    𝜎0 𝑐 (𝑡)𝑖 𝑗 < 0.2
+                                                                                                        𝜎 (𝑡)𝑖 𝑗 =                                  (11)
+                     
+                      P𝑖                        ∥ â𝑖 ∥ ≤ a                                                        𝜎1 𝑐 (𝑡)𝑖 𝑗 ≥ 0.2
+                      ∥𝑠â𝑖 ∥ −a
+                     
+                     
+                                   a− ∥ â ∥
+                                                                            (8)
+               𝑖
+                     
+             P     =      a−a
+                              P𝑖𝑡 + a−a𝑖 P𝑖𝑠     a < ∥ â𝑖 ∥ < a                   where 𝑐 (𝑡)𝑖 𝑗 is the proportion of occlusion on the line between
+                                                                                   devices 𝑖 and 𝑗. To compute this occlusion, we leverage the im-
+                     
+                     
+                      P𝑖𝑡
+                                                ∥ â𝑖 ∥ ≥ a
+                                                                                   plicit human body model COAP [Mihajlovic et al. 2022] and query
+                     
+We set the thresholds a and a to 8.0 and 2.0 m/s2 , respectively, which            sampled points along the line segment at a constant resolution
+we determined via grid search to minimize position error.                          between devices. The values of 𝜎0 and 𝜎1 are determined em-
+   This fusion approach accommodates different update rates be-                    pirically, by running our sensing pipeline with two devices first
+tween the inertial (100 Hz) and distance (25 Hz) measurements,                     in LOS (𝜎0 = 0.051 m) then in NLOS with a person as obstacle
+eliminating the need for resampling or interpolation.                              (𝜎1 = 0.083 m).
+   The rest of the pipeline processes the combined position esti-
+mates, acceleration, orientation, and distance measurements. These                 3.3.4 Training Details. We adopt the Adam solver [Kingma and Ba
+inputs are passed to a kinematics decoder, which estimates local                   2015] with batch size 256 to optimize the parameters of model. We
+orientation, local velocity, and foot contact, followed by a dynamics              train each module separately with the learning rate at 1 × 10 −3 and
+optimizer, based on previous work [Yi et al. 2022]. The pipeline                   decays by a factor of 0.33 every 20 epochs. We train our model with
+outputs SMPL pose parameters Θ𝑡 global translation 𝑇𝑡 .                            PyTorch on one NVIDIA GeForce GTX 3090 GPU. It takes about 4
+                                                                                   hours in total to train our model.
+3.3.2 Loss Functions. To supervise our sensor position estimator,
+we design a loss function that incorporates distance constraints.                  4   DATASET
+From the estimated sensor positions P𝑠 or P𝑡 , which we denote as b P,
+                                                                                   To evaluate our method and to spur further work, we collected
+we compute inter-sensor distances 𝑑 (b  P) ∈ R𝑆 ×𝑆 and the L1 recon-
+                                                                                   a motion capture dataset of a large variety of movement types,
+                   P) − D∥ 1 . We also pose additional constraints on
+struction loss ∥𝑑 (b                                                               capturing the raw IMU+UWB measurements of our tracker nodes
+its direction by computing the cosine similarity between estimated                 alongside those from an optical tracking system. We recorded more
+sensor positions and nearest joint positions. We can then formulate                than 25 different movements from 10 participants (6 male, 4 female),
+the full distance-aware loss as:                                                   with heights between 155 cm and 187 cm.
+                                 P ·e
+                                    P                                                 Our recording study comprised two sessions. The first focused
+                                                                            (9)
+                                 b
+                       L𝑑 =                   P) − D∥ 1
+                                       + 𝜆∥𝑑 (b                                    on everyday movements that participants performed standing up,
+                                ∥b  P∥
+                                 P∥∥e
+                                                                                   such as walking, jumping, squats, etc. The second session involves
+where e P is the approximate sensor position from nearest joints. We               interactions with a chair and movements in various seated positions.
+select 𝜆 as 0.01 and leverage this distance aware loss as the objective            For each participant, we recorded two takes of each session and a
+function for sensor position estimation.                                           final freestyle session, where they acted as desired for 4–6 min.
+   For other modules, we apply L2 loss for the rotation estimator,                    As shown in Figure 10, participants wore a suit with 57 reflective
+binary cross entropy loss for the contact estimator, and accumulated               markers and 6 of our wearable devices on the back of the head,
+loss [Yi et al. 2021] for the velocity estimator.                                  lower back, wrists, and knees. The wearable sensors continuously
+SIGGRAPH Conference Papers ’24, July 27-August 1, 2024, Denver, CO, USA                                                                                 Armani et al.
+
+
+Table 1: Comparison with state-of-the-art methods on existing datasets augmented with simulated, ideal inter-sensor distances
+               original TIP/PIP training set (TotalCapture ground truth included)                               AMASS without TotalCapture
+
+Dataset               DanceDB                  DIP-IMU               TotalCapture                  DanceDB                   DIP-IMU            TotalCapture
+
+Method       SIP Err Pos Err Jitter SIP Err Pos Err Jitter SIP Err Pos Err Jitter SIP Err Pos Err Jitter SIP Err Pos Err Jitter SIP Err Pos Err Jitter
+
+TIP          18.705     8.500   1.438 17.068     5.822   0.882 11.361      5.145     0.751 18.740     8.501   2.252 17.011     5.710   1.162 13.588   5.967   1.015
+PIP          20.007     8.877   2.234 15.020     6.020   0.240 12.930      7.025     0.204 20.007     8.997   2.334 15.977     6.209   0.260 15.930   7.046   0.292
+with synthesized perfect distances:
+TIP-D      16.243 7.624 2.220 15.910 5.442 0.863 10.762 5.142 0.722 16.225 7.648 2.221 15.914 5.259 1.128 12.183 5.507 1.004
+PIP-D      16.205 8.042 2.124 13.762 5.336 0.281 11.408 5.560 0.201 16.815 8.063 2.166 13.788 5.355 0.297 13.161 6.317 0.273
+UIP (ours) 15.280 7.450 0.430 13.200 5.050 0.240 10.707 5.108 0.206 15.321 7.612 0.430 13.210 5.053 0.248 11.321 5.490 0.257
+
+Table 2: Comparisons on UIP-DB with acceleration, orientation                                         Table 3: Results of our ablation studies.
+and inter-sensor distances from real off-the-shelf sensors.
+UIP-DB                   overall           ∥a∥ ≤ 1.0 m/s2        ∥a∥ > 1.0 m/s2                 Method                          SIP Err     Pos Err     Jitter
+Method           SIP Err Pos Err Jitter SIP Err Pos Err Jitter SIP Err Pos Err Jitter           UIP (ours)                      24.115       10.648     0.055
+                                                                                                w/o inter-sensor distances      31.008       13.749     1.556
+TIP              33.01 14.82 1.86 36.90 16.55 1.79 28.83                  12.95 1.95
+                                                                                                w/o IMU                         27.005       14.086     0.098
+PIP              30.47 13.62 1.57 36.18 15.87 1.33 23.18                  10.80 1.82
+                                                                                                w/o DA-GCN                      27.529       12.136     0.092
+with distances estimated from UWB recordings:                                                   w/o UWB noise                   27.006       12.440     2.125
+TIP-D            30.34 13.96 1.84 33.11 15.52 1.79 27.17                  12.19    1.88         w/ Gaussian UWB noise           26.068       12.159     2.005
+PIP-D            30.33 13.27 1.39 35.47 15.25 1.29 24.13                  10.80    1.51         w/o Distance-guided loss        25.830       11.777     1.966
+UIP (ours)       24.12 10.65 0.05 24.72 11.84 0.051 22.64                 10.02    0.06
+UIP finetuned 23.85 10.55 0.08 24.51 11.18 0.078 22.43                     9.79    0.08
+
+collected raw 3D accelerometer, 3D gyroscope, and 3D magnetome-                           those in existing datasets [Huang et al. 2018; Trumble et al. 2017]
+ter readings at 100 Hz as well as raw UWB ranges at 25 Hz. We                             that rely on proprietary drift-free estimators in high-end sensors.
+extended the recordings with the filtered estimates of global accel-                         Figure 4 shows the distribution of the RMSE of the pairwise
+eration, orientation, and inter-sensor distances, estimated using                         distances estimated by our filtering pipeline. The average error is
+our processing pipeline as described above.                                               largest for wrist–wrist and head–knees sensor pairs, as the body
+   We obtained ground truth for the poses of wearable sensors and                         frequently occludes the line of sight between sensors.
+body joints from a 20-camera Optitrack system across a capture area
+of 4 × 5 m. To extract SMPL references and global translation, we
+labeled the point cloud from the marker suit with SOMA [Ghorbani
+and Black 2021], and then used MoSh++ [Mahmood et al. 2019].                              5.2    Pose Estimation Evaluation
+Since each of our trackers rigidly mounted a reflective marker, our                       5.2.1 Evaluation protocol. We compare our approach against state-
+dataset also includes their reference positions and orientations.                         of-the-art IMU-based pose estimation methods: PIP [Yi et al. 2022]
+   Each recording session started and ended with a T-pose to cali-                        and TIP [Jiang et al. 2022b]. For fair comparison, we also augment
+brate IMU readings and initialize the inter-sensor distances EKF. A                       both TIP and PIP by concatenating pairwise distances to their orig-
+jump then synchronized all sensors with the extracted SMPL poses.                         inal inputs and retrain them using publicly available resources.
+                                                                                             Our first experiment shows the benefits of adding pairwise dis-
+5     EXPERIMENTS                                                                         tances, evaluating all methods on existing datasets. We form a test
+                                                                                          set from DIP-IMU [Huang et al. 2018], TotalCapture [Trumble et al.
+We analyze our pipeline’s accuracy, visually and quantitatively
+                                                                                          2017], and DanceDB—held out from the AMASS training set. The
+compare it to existing baselines, and discuss ablation studies.
+                                                                                          acceleration and orientation measurements in TotalCapture and
+                                                                                          DIP-IMU were captured from XSens suits, while DanceDB has syn-
+5.1     Sensing Pipeline Evaluation                                                       thetic values. We add ideal synthetic inter-sensor distances to our
+From the ground-truth sensor orientations and positions recorded                          test set to study their contribution independent of noise.
+in our dataset, we derive reference inter-sensor distances and ac-                           We first train all methods on AMASS, as originally done in TIP
+celerations. We use these values to evaluate our sensing pipeline                         and PIP, with synthetic acceleration, orientation, and inter-sensor
+and quantify the error it introduces at the input of pose estimation.                     distances with our time-varying noise model. However, because
+   Our orientation estimate drifts at a rate of 3.21°/min, 0.42°/min                      this training set includes synthesized sensor readings from Total-
+and 0.31°/min for roll, pitch, and yaw angles respectively, in line                       Capture’s ground truth, we additionally run these experiments with
+with results obtained from similar commodity IMUs in previous                             models trained on AMASS without TotalCapture.
+work [Laidig and Seel 2023]. As this estimate is also used to trans-                         A second experiment evaluates performance on our collected
+form sensor-frame acceleration into the global frame and filter                           dataset UIP-DB, examining results both overall and for a mean
+UWB ranges, our dataset provides less accurate model inputs than                          acceleration split: slow movements (mean acceleration below 1
+Ultra Inertial Poser: Motion Tracking from Sparse IMU and Ultra-Wideband Ranging         SIGGRAPH Conference Papers ’24, July 27-August 1, 2024, Denver, CO, USA
+
+
+       4
+           raw UWB ranges                                        mean RMSE[m]
+                                                                 outlier
+       3
+
+
+       2
+
+
+       1
+
+
+       0
+           ﬁltered distance estimates
+
+
+
+
+              root    root     root   head     head    wrist   knee   wrists
+              head   wrists   knees   wrists   knees   wrist   knee   knees
+                                                                                        TIP           PIP        UIP (Ours)           GT
+
+     Figure 4: Inter-sensor distance RMSE in our dataset.                          Figure 5: Qualitative comparison of pose estimates from the
+                                                                                   recordings in our dataset. Figure 6 shows more examples.
+
+m/s2) and fast movements (mean acceleration above 1 m/s2). All
+inputs are from actual measurements processed by our pipeline.
+                                                                                   poses and interactions with objects (Figure 5). Figure 7 plots the SIP
+5.2.2 Metrics. We evaluate model performance on three metrics.                     error over a long sequence while a participant alternated between
+SIP Error measures the mean orientation error of the upper arms                    standing and sitting. Our method consistently tracks these state
+and legs in the global space in degrees. Joint position error measures             changes, whereas TIP and PIP incorrectly revert to a standing pose.
+the mean joint distance between the reconstructed and ground-
+truth joints with both root position and orientation aligned in cm.                5.2.4 Ablations. We perform ablation studies on our dataset to
+Jitter is the mean jerk (time derivative of acceleration) of all body              understand the impact of each of the components we propose in
+joints in the global space in 𝑘𝑚/𝑠 3 , reflecting motion smoothness.               our method, with results summarized in Table 3. We first assess the
+                                                                                   individual contribution of each of the inertial and distance inputs to
+5.2.3 Results. Table 1 lists the evaluation results on DanceDB,
+                                                                                   the pose estimation pipeline, by excluding them in turn. We observe
+TotalCapture, and DIP-IMU datasets with perfect synthetic inter-
+                                                                                   that distance constraints play a more important role in reducing SIP
+sensor distances. Table 2 has the results on our captured dataset.
+                                                                                   angle error and jitter, while inertial inputs have a more significant
+    Methods with distance constraints perform consistently better
+                                                                                   impact on the joint position error metric.
+than inertial-only pipelines, with the most significant improve-
+                                                                                      Next, we determine the effectiveness of our DA-GCN module.
+ments in the SIP angle error. Within distance-augmented methods,
+                                                                                   Our ablation discards DA-GCN and directly concatenates inter-
+our approach shows a moderate advantage when evaluated on ex-
+                                                                                   sensor distances to the inertial data as input to the LSTM. This
+isting datasets. However, its performance is markedly better on real
+                                                                                   variant only considers temporal information and ignores the spatial
+data from our dataset, with 20% lower SIP and position errors, and
+                                                                                   correlation between nodes, leading to higher SIP and position errors.
+an 80% reduction in jitter compared to distance-augmented PIP.
+                                                                                   Investigating the effect of our collision-aware UWB noise model
+    This disparity is due to two main factors. First, our evaluation
+                                                                                   for training, we first train with ideal synthesized distances, then
+uses inexpensive off-the-shelf sensors, such that the acceleration,
+                                                                                   with simple additive Gaussian noise (𝜎 = 0.12). SIP error and jitter
+orientation, and inter-sensor distance estimates from our dataset
+                                                                                   metrics are impacted most by this ablation, showing the importance
+exhibit more noise and drift than synthetic datasets or those from
+                                                                                   of a representative noise model in training our method.
+high-end sensors. This also partially explains the larger error ob-
+                                                                                      Our final ablation study discards the pairwise distance recon-
+tained by TIP and PIP on our dataset. In contrast, our fusion pipeline
+                                                                                   struction term from our loss function and substitutes cosine simi-
+and proposed loss function actively enforces distance constraints
+                                                                                   larity with an L2 loss. This affects jitter most, indicating that the
+while adaptively introducing constraints from inertial data, show-
+                                                                                   loss primarily contributes to stabilizing our predictions.
+ing better results in all presented datasets. Figure 9 compares how
+varying levels of noise in the distance estimate influence SIP error.
+    Second, our dataset contains many sequences that are difficult                 6   LIMITATIONS AND FUTURE WORK
+to disambiguate from inertial data, such as motions with low speed.                By incorporating pairwise distances with inertial measurements,
+Table 2 shows that TIP and PIP—based solely on IMUs—perform                        our system adds a requirement for sensing input that is UWB. Our
+significantly worse for small accelerations, whereas performance                   results indicate that adding UWB to future motion sensors is worth-
+improves for quick motions. Our method effectively captures sitting                while, though at the cost of requiring calibration across operating
+SIGGRAPH Conference Papers ’24, July 27-August 1, 2024, Denver, CO, USA                                                                                              Armani et al.
+
+
+temperatures. UWB is becoming increasingly available as part of                            Edilson De Aguiar, Carsten Stoll, Christian Theobalt, Naveed Ahmed, Hans-Peter
+location trackers (e.g., Airtags, Tile Ultra, Samsung SmartTag+).                              Seidel, and Sebastian Thrun. 2008. Performance capture from sparse multi-view
+                                                                                               video. In ACM SIGGRAPH 2008 papers. 1–10.
+   Similar to other learning-based methods, our graph-based pipeline                       Decawave. 2014. APS011 Application Note, Sources of error in DW1000 based two-way
+has limits predicting out-of-distribution poses. Our evaluation as-                            ranging (TWR) schemes.
+                                                                                           Decawave. 2017. How To Use , Configure and Program the DW1000 UWB.
+sumed a flat terrain and covered simple interaction with objects in                        Decawave. 2018. APS014 Application Note, Antenna delay calibration of DW1000
+the environment. A more robust method will require a dataset that                              based products and systems.
+captures a wider variety of motions and interactions.                                      Yuming Du, Robin Kips, Albert Pumarola, Sebastian Starke, Ali Thabet, and Artsiom
+                                                                                               Sanakoyeu. 2023. Avatars Grow Legs: Generating Smooth Human Motion from
+   Our method marginally improves global translation estimates,                                Sparse Tracking Inputs with Diffusion Model. In CVPR.
+with a 0.318 m and 0.422 m error for ground-truth root movements                           Daquan Feng, Chunqi Wang, Chunlong He, Yuan Zhuang, and Xiang-Gen Xia. 2020.
+of 2 m and 5 m, respectively. This is close to PIP’s 0.333 m and                               Kalman-Filter-Based Integration of IMU and UWB for High-Accuracy Indoor Po-
+                                                                                               sitioning and Navigation. IEEE Internet of Things Journal 7, 4 (2020), 3133–3146.
+0.440 m error. While distances constrain cross-joint motion, global                            https://doi.org/10.1109/JIOT.2020.2965115
+translation benefits from better pose prediction. Distance constraint-                     Nima Ghorbani and Michael J. Black. 2021. SOMA: Solving Optical Marker-Based
+                                                                                               MoCap Automatically. In Proc. International Conference on Computer Vision (ICCV).
+based translation estimation could be interesting in future work.                              11117–11126.
+   Finally, our state and distance estimates from real data are error-                     Vladimir Guzov, Aymen Mir, Torsten Sattler, and Gerard Pons-Moll. 2021. Human
+prone, whereas our evaluation on synthetic datasets with drift-free                            poseitioning system (hps): 3d human pose estimation and self-localization in large
+                                                                                               scenes from body-mounted sensors. In Proceedings of the IEEE/CVF Conference on
+orientations and perfect distances shows our method’s potential.                               Computer Vision and Pattern Recognition. 4318–4329.
+                                                                                           Marc Habermann, Weipeng Xu, Michael Zollhoefer, Gerard Pons-Moll, and Christian
+7     CONCLUSION                                                                               Theobalt. 2019. Livecap: Real-time human performance capture from monocular
+                                                                                               video. ACM Transactions On Graphics (TOG) 38, 2 (2019), 1–17.
+We have proposed a novel method for sparse, wearable sensor-                               Marc Habermann, Weipeng Xu, Michael Zollhofer, Gerard Pons-Moll, and Christian
+based full-body pose tracking that is independent of visual input. It                          Theobalt. 2020. Deepcap: Monocular human performance capture using weak
+                                                                                               supervision. In Proceedings of the IEEE/CVF Conference on Computer Vision and
+leverages a novel source of tracking input: inter-sensor distances                             Pattern Recognition. 5052–5063.
+estimated from UWB-based ranging, which we use to stabilize the                            Benjamin Hepp, Tobias Nägeli, and Otmar Hilliges. 2016. Omni-directional person
+                                                                                               tracking on a flying robot using occlusion-robust ultra-wideband signals. In 2016
+raw signals from IMUs. We have demonstrated that based on six                                  IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS). 189–194.
+tracking nodes, our method affords training on existing motion                                 https://doi.org/10.1109/IROS.2016.7759054
+capture datasets with simulated distances to robustly estimate full-                       Sepp Hochreiter and Jürgen Schmidhuber. 1997. Long short-term memory. Neural
+                                                                                               computation 9, 8 (1997), 1735–1780.
+body poses. Our tracking nodes integrate off-the-shelf components                          Jeroen D. Hol, Fred Dijkstra, Henk Luinge, and Thomas B. Schon. 2009. Tightly coupled
+found in emerging UWB location trackers, and our pose estimation                               UWB/IMU pose estimation. In 2009 IEEE International Conference on Ultra-Wideband.
+operates without the need for 3D state estimation from proprietary                             688–692. https://doi.org/10.1109/ICUWB.2009.5288724
+                                                                                           Wenbo Hu, Changgong Zhang, Fangneng Zhan, Lei Zhang, and Tien-Tsin Wong.
+sensors or tracking systems, making Ultra Inertial Poser a scalable                            2021. Conditional directed graph convolution for 3d human pose estimation. In
+approach for sparse human motion tracking in the wild.                                         Proceedings of the 29th ACM International Conference on Multimedia. 602–611.
+                                                                                           Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J Black, Otmar Hilliges, and
+                                                                                               Gerard Pons-Moll. 2018. Deep inertial poser: Learning to reconstruct human pose
+ACKNOWLEDGMENTS                                                                                from sparse inertial measurements in real time. ACM Transactions on Graphics
+                                                                                              (TOG) 37, 6 (2018), 1–15.
+We sincerely thank Xintong Liu and Max Moebus for their support                            IEEE. 2007. IEEE Standard for Information technology– Local and metropolitan area
+and Paul Streli for feedback. We also thank all the participants of                            networks– Specific requirements– Part 15.4: Wireless Medium Access Control
+our data capture for their time.                                                               (MAC) and Physical Layer (PHY) Specifications for Low-Rate Wireless Personal
+                                                                                              Area Networks (WPANs): Amendment 1: Add Alternate PHYs. IEEE Std 802.15.4a-
+                                                                                               2007 (Amendment to IEEE Std 802.15.4-2006) (2007), 1–210. https://doi.org/10.1109/
+REFERENCES                                                                                     IEEESTD.2007.4299496
+Karan Ahuja, Eyal Ofek, Mar Gonzalez-Franco, Christian Holz, and Andrew D Wilson.          Jiaxi Jiang, Paul Streli, Manuel Meier, Andreas Fender, and Christian Holz. 2023. Ego-
+    2021. CoolMoves: User Motion Accentuation in Virtual Reality. Proceedings of the           Poser: Robust Real-Time Ego-Body Pose Estimation in Large Scenes. arXiv preprint
+    ACM on Interactive, Mobile, Wearable and Ubiquitous Technologies 5, 2 (2021), 1–23.        arXiv:2308.06493 (2023).
+Simone Angarano, Vittorio Mazzia, Francesco Salvetti, Giovanni Fantin, and Marcello        Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa Laich, Patrick Snape,
+    Chiaberge. 2021. Robust ultra-wideband range error mitigation with deep learning           and Christian Holz. 2022a. Avatarposer: Articulated full-body pose tracking from
+    at the edge. Engineering Applications of Artificial Intelligence 102 (2021), 104278.       sparse motion sensing. In Computer Vision–ECCV 2022: 17th European Conference,
+    https://doi.org/10.1016/j.engappai.2021.104278                                             Tel Aviv, Israel, October 23–27, 2022, Proceedings, Part V. Springer, 443–460.
+Aditya Arun, Tyler Chang, Yizheng Yu, Roshan Ayyalasomayajula, and Dinesh Bhara-           Jiaxi Jiang, Kai Zhang, and Radu Timofte. 2021. Towards flexible blind JPEG artifacts
+    dia. 2022. Real-Time Low-Latency Tracking for UWB Tags. In Proceedings of the              removal. In Proceedings of the IEEE/CVF International Conference on Computer Vision.
+    20th Annual International Conference on Mobile Systems, Applications and Services          4997–5006.
+    (Portland, Oregon) (MobiSys ’22). Association for Computing Machinery, New York,       Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W. Winkler,
+    NY, USA, 611–612. https://doi.org/10.1145/3498361.3538658                                  and C. Karen Liu. 2022b. Transformer Inertial Poser: Real-time Human Mo-
+Valentín Barral, Carlos J. Escudero, José A. García-Naya, and Roberto Maneiro-Catoira.         tion Reconstruction from Sparse IMUs with Simultaneous Terrain Generation.
+    2019. NLOS Identification and Mitigation Using Low-Cost UWB Devices. Sensors               In SIGGRAPH Asia 2022 Conference Papers (Daegu, Republic of Korea) (SA ’22).
+    19, 16 (2019). https://doi.org/10.3390/s19163464                                          Association for Computing Machinery, New York, NY, USA, Article 3, 9 pages.
+Yanjun Cao, Chenhao Yang, Rui Li, Alois Knoll, and Giovanni Beltrame. 2020. Accurate           https://doi.org/10.1145/3550469.3555428
+    position tracking with a single UWB anchor. In 2020 IEEE International Conference      Angjoo Kanazawa, Michael J Black, David W Jacobs, and Jitendra Malik. 2018. End-to-
+    on Robotics and Automation (ICRA). 2344–2350. https://doi.org/10.1109/ICRA40945.           end recovery of human shape and pose. In Proceedings of the IEEE conference on
+    2020.9197345                                                                               computer vision and pattern recognition. 7122–7131.
+Ching-Hang Chen and Deva Ramanan. 2017. 3d human pose estimation= 2d pose                  Manuel Kaufmann, Yi Zhao, Chengcheng Tang, Lingling Tao, Christopher Twigg,
+    estimation+ matching. In Proceedings of the IEEE conference on computer vision and         Jie Song, Robert Wang, and Otmar Hilliges. 2021. EM-POSE: 3D Human Pose
+    pattern recognition. 7035–7043.                                                            Estimation From Sparse Electromagnetic Trackers. In Proceedings of the IEEE/CVF
+J. A. Corrales, F. A. Candelas, and F. Torres. 2008. Hybrid tracking of human operators        International Conference on Computer Vision. 11510–11520.
+    using IMU/UWB data fusion by a Kalman filter. In 2008 3rd ACM/IEEE International       Diederik P Kingma and Jimmy Ba. 2015. Adam: A Method for Stochastic Optimization.
+    Conference on Human-Robot Interaction (HRI). 193–200. https://doi.org/10.1145/             In International Conference on Learning Representations.
+    1349822.1349848                                                                        Muhammed Kocabas, Nikos Athanasiou, and Michael J Black. 2020. Vibe: Video
+                                                                                               inference for human body pose and shape estimation. In Proceedings of the IEEE/CVF
+                                                                                               conference on computer vision and pattern recognition. 5253–5263.
+Ultra Inertial Poser: Motion Tracking from Sparse IMU and Ultra-Wideband Ranging                  SIGGRAPH Conference Papers ’24, July 27-August 1, 2024, Denver, CO, USA
+
+
+Daniel Laidig and Thomas Seel. 2023. VQF: Highly accurate IMU orientation estimation      Janis Tiemann and Christian Wietfeld. 2017. Scalable and precise multi-UAV indoor
+   with bias estimation and magnetic disturbance rejection. Information Fusion 91             navigation using TDOA-based UWB localization. In 2017 International Conference
+   (March 2023), 187–204. https://doi.org/10.1016/j.inffus.2022.10.014                        on Indoor Positioning and Indoor Navigation (IPIN). 1–7. https://doi.org/10.1109/
+Anton Ledergerber, Michael Hamer, and Raffaello D’Andrea. 2019. Angle of Arrival              IPIN.2017.8115937
+   Estimation based on Channel Impulse Response Measurements. In 2019 IEEE/RSJ            D. Tome, P. Peluse, L. Agapito, and H. Badino. 2019. xR-EgoPose: Egocentric 3D
+   International Conference on Intelligent Robots and Systems (IROS). 6686–6692. https:       Human Pose From an HMD Camera. In 2019 IEEE/CVF International Conference on
+   //doi.org/10.1109/IROS40897.2019.8967562                                                   Computer Vision (ICCV). IEEE Computer Society, Los Alamitos, CA, USA, 7727–7737.
+Sangmin Lee, Seungho Yoo, Joon Yeop Lee, Seongjoon Park, and Hwangnam Kim. 2022.              https://doi.org/10.1109/ICCV.2019.00782
+   Drone Positioning System Using UWB Sensing and Out-of-Band Control. IEEE               Vu Tran, Zhuangzhuang Dai, Niki Trigoni, and Andrew Markham. 2022. DeepCIR:
+   Sensors Journal 22, 6 (2022), 5329–5343. https://doi.org/10.1109/JSEN.2021.3127233         Insights into CIR-based Data-driven UWB Error Mitigation. In 2022 IEEE/RSJ
+Shuang Li, Jiaxi Jiang, Philipp Ruppel, Hongzhuo Liang, Xiaojian Ma, Norman Hendrich,         International Conference on Intelligent Robots and Systems (IROS). 13300–13307.
+   Fuchun Sun, and Jianwei Zhang. 2020a. A mobile robot hand-arm teleoperation                https://doi.org/10.1109/IROS47612.2022.9981931
+   system by vision and IMU. In 2020 IEEE/RSJ International Conference on Intelligent     Matthew Trumble, Andrew Gilbert, Charles Malleson, Adrian Hilton, and John Collo-
+   Robots and Systems (IROS). IEEE, 10900–10906.                                              mosse. 2017. Total capture: 3d human pose estimation fusing video and inertial
+Shichao Li, Lei Ke, Kevin Pratama, Yu-Wing Tai, Chi-Keung Tang, and Kwang-Ting                sensors. In Proceedings of 28th British Machine Vision Conference. 1–13.
+   Cheng. 2020b. Cascaded deep monocular 3d human pose estimation with evolu-             Ubisense. 2023. https://ubisense.com/. https://ubisense.com/
+   tionary training data. In Proceedings of the IEEE/CVF conference on computer vision    Vicon. 2023. https://wwww.vicon.com/. https://www.vicon.com/
+   and pattern recognition. 6173–6183.                                                    Daniel Vlasic, Rolf Adelsberger, Giovanni Vannucci, John Barnwell, Markus Gross,
+Huajun Liu, Xiaolin Wei, Jinxiang Chai, Inwoo Ha, and Taehyun Rhee. 2011. Realtime           Wojciech Matusik, and Jovan Popović. 2007. Practical motion capture in everyday
+   human motion control with a small number of inertial sensors. In Symposium on              surroundings. ACM transactions on graphics (TOG) 26, 3 (2007), 35–es.
+   interactive 3D graphics and games. 133–140.                                            Timo Von Marcard, Roberto Henschel, Michael J Black, Bodo Rosenhahn, and Gerard
+Matthew Loper, Naureen Mahmood, Javier Romero, Gerard Pons-Moll, and Michael J                Pons-Moll. 2018. Recovering accurate 3d human pose in the wild using imus and
+   Black. 2015. SMPL: A skinned multi-person linear model. ACM transactions on                a moving camera. In Proceedings of the European conference on computer vision
+   graphics (TOG) 34, 6 (2015), 1–16.                                                        (ECCV). 601–617.
+Naureen Mahmood, Nima Ghorbani, Nikolaus F. Troje, Gerard Pons-Moll, and Michael J.       Timo Von Marcard, Bodo Rosenhahn, Michael J Black, and Gerard Pons-Moll. 2017.
+   Black. 2019. AMASS: Archive of Motion Capture as Surface Shapes. In International          Sparse inertial poser: Automatic 3d human pose estimation from sparse imus. In
+   Conference on Computer Vision. 5442–5451.                                                  Computer graphics forum, Vol. 36. Wiley Online Library, 349–360.
+Marko Mihajlovic, Shunsuke Saito, Aayush Bansal, Michael Zollhoefer, and Siyu Tang.       Jian Wang, Lingjie Liu, Weipeng Xu, Kripasindhu Sarkar, and Christian Theobalt. 2021.
+   2022. COAP: Compositional articulated occupancy of people. In Proceedings of the           Estimating egocentric 3d human pose in global space. In Proceedings of the IEEE/CVF
+   IEEE/CVF Conference on Computer Vision and Pattern Recognition. 13201–13210.               International Conference on Computer Vision. 11500–11509.
+Francisco Molina Martel, Juri Sidorenko, Christoph Bodensteiner, and Michael Arens.       Sanghyun Woo, Jongchan Park, Joon-Young Lee, and In So Kweon. 2018. Cbam:
+   2018. Augmented reality and UWB technology fusion: Localization of objects with            Convolutional block attention module. In Proceedings of the European conference on
+   head mounted displays. In Proceedings of the 31st International Technical Meeting of       computer vision (ECCV). 3–19.
+   the Satellite Division of The Institute of Navigation (ION GNSS+ 2018). 685–692.       Xsens. 2024. https://www.xsens.com. https://www.xsens.com/
+Vimal Mollyn, Riku Arakawa, Mayank Goel, Chris Harrison, and Karan Ahuja. 2023.           Hao Xu, Yichen Zhang, Boyu Zhou, Luqi Wang, Xinjie Yao, Guotao Meng, and Shaojie
+   IMUPoser: Full-Body Pose Estimation Using IMUs in Phones, Watches, and Earbuds.            Shen. 2022. Omni-Swarm: A Decentralized Omnidirectional Visual–Inertial–UWB
+   In Proceedings of the 2023 CHI Conference on Human Factors in Computing Systems            State Estimation System for Aerial Swarms. IEEE Transactions on Robotics 38, 6
+   (Hamburg, Germany) (CHI ’23). Association for Computing Machinery, New York,              (2022), 3374–3394. https://doi.org/10.1109/TRO.2022.3182503
+   NY, USA, Article 529, 12 pages. https://doi.org/10.1145/3544548.3581392                Dongseok Yang, Doyeon Kim, and Sung-Hee Lee. 2021. LoBSTr: Real-time Lower-body
+Mark W. Mueller, Michael Hamer, and Raffaello D’Andrea. 2015. Fusing ultra-wideband           Pose Prediction from Sparse Upper-body Tracking Signals. In Computer Graphics
+   range measurements with accelerometers and rate gyroscopes for quadrocopter                Forum, Vol. 40. Wiley Online Library, 265–275.
+   state estimation. , 1730-1736 pages. https://doi.org/10.1109/ICRA.2015.7139421         Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav Golyanik, Shaohua Pan, Christian
+Deepak Nagaraj, Erik Schake, Patrick Leiner, and Dirk Werth. 2020. An RNN-ensemble           Theobalt, and Feng Xu. 2023. EgoLocate: Real-time Motion Capture, Localization,
+   approach for real time human pose estimation from sparse IMUs. In Proceedings of           and Mapping with Sparse Body-mounted Sensors. ACM Transactions on Graphics
+   the 3rd International Conference on Applications of Intelligent Systems. 1–6.             (TOG) 42, 4, Article 76 (2023), 17 pages.
+Noitom. 2024. https://www.noitom.com/. https://www.noitom.com/                            Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada, Vladislav Golyanik, Christian
+Aitor Ochoa-de Eribe-Landaberea, Leticia Zamora-Cadenas, Oier Peñagaricano-Muñoa,            Theobalt, and Feng Xu. 2022. Physical Inertial Poser (PIP): Physics-aware Real-
+   and Igone Velez. 2022. UWB and IMU-Based UAV’s Assistance System for                       time Human Motion Tracking from Sparse Inertial Sensors. In Proceedings of the
+   Autonomous Landing on a Platform. Sensors 22, 6 (Mar 2022), 2347. https:                   IEEE/CVF Conference on Computer Vision and Pattern Recognition. 13167–13178.
+   //doi.org/10.3390/s22062347                                                            Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2021. TransPose: real-time 3D human translation
+Optitrack. 2023. https://wwww.optitrack.com/. https://www.optitrack.com/                      and pose estimation with six inertial sensors. ACM Transactions on Graphics (TOG)
+Shaohua Pan, Qi Ma, Xinyu Yi, Weifeng Hu, Xiong Wang, Xingkang Zhou, Jijunnan Li,             40, 4 (2021), 1–13.
+   and Feng Xu. 2023. Fusing Monocular Images and Sparse IMU Signals for Real-Time        Zhe Zhang, Chunyu Wang, Wenhu Qin, and Wenjun Zeng. 2020. Fusing wearable
+   Human Motion Capture. In SIGGRAPH Asia 2023 Conference Papers (, Sydney, NSW,              imus with multi-view images for human pose estimation: A geometric approach. In
+   Australia,) (SA ’23). Association for Computing Machinery, New York, NY, USA,              Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition.
+   Article 116, 11 pages. https://doi.org/10.1145/3610548.3618145                             2200–2209.
+Jorge Peña Queralta, Li Qingqing, Fabrizio Schiano, and Tomi Westerlund. 2022. VIO-       Long Zhao, Xi Peng, Yu Tian, Mubbasir Kapadia, and Dimitris N Metaxas. 2019. Se-
+   UWB-Based Collaborative Localization and Dense Scene Reconstruction within                 mantic graph convolutional networks for 3d human pose regression. In Proceedings
+   Heterogeneous Multi-Robot Systems. arXiv:2011.00830 [cs.RO]                                of the IEEE/CVF conference on computer vision and pattern recognition. 3425–3435.
+Helge Rhodin, Christian Richardt, Dan Casas, Eldar Insafutdinov, Mohammad Shafiei,        Minghui Zhao, Tyler Chang, Aditya Arun, Roshan Ayyalasomayajula, Chi Zhang,
+   Hans-Peter Seidel, Bernt Schiele, and Christian Theobalt. 2016. EgoCap: Egocentric         and Dinesh Bharadia. 2021. ULoc: Low-Power, Scalable and Cm-Accurate UWB-
+   Marker-Less Motion Capture with Two Fisheye Cameras. ACM Trans. Graph. 35, 6,             Tag Localization and Tracking for Indoor Applications. Proc. ACM Interact. Mob.
+   Article 162 (nov 2016), 11 pages. https://doi.org/10.1145/2980179.2980235                  Wearable Ubiquitous Technol. 5, 3, Article 140 (sep 2021), 31 pages. https://doi.org/
+Zafer Sahinoglu, Sinan Gezici, and Ismail Güvenc. 2008. Ultra-wideband Positioning Sys-       10.1145/3478124
+   tems: Theoretical Limits, Ranging Algorithms, and Protocols. Cambridge University      Shuaikang Zheng, Zhitian Li, Yuanli Yin, Yunfei Liu, Haifeng Zhang, Pengcheng Zheng,
+   Press. https://doi.org/10.1017/CBO9780511541056                                            and Xudong Zou. 2022. Multi-robot relative positioning and orientation system
+Takaaki Shiratori, Hyun Soo Park, Leonid Sigal, Yaser Sheikh, and Jessica K. Hodgins.         based on UWB range and graph optimization. Measurement 195 (2022), 111068.
+   2011. Motion Capture from Body-Mounted Cameras. ACM Trans. Graph. 30, 4,                   https://doi.org/10.1016/j.measurement.2022.111068
+   Article 31 (jul 2011), 10 pages. https://doi.org/10.1145/2010324.1964926               Xiaozheng Zheng, Zhuo Su, Chao Wen, Zhou Xue, and Xiaojie Jin. 2023. Realistic
+Paul Streli, Rayan Armani, Yi Fei Cheng, and Christian Holz. 2023. HOOV: Hand                 Full-Body Tracking from Sparse Observations via Joint-Level Modeling. arXiv
+   Out-Of-View Tracking for Proprioceptive Interaction using Inertial Sensing. In             preprint arXiv:2308.08855 (2023).
+   Proceedings of the 2023 CHI Conference on Human Factors in Computing Systems.          Zhiming Zou and Wei Tang. 2021. Modulated graph convolutional network for 3D
+   1–16.                                                                                      human pose estimation. In Proceedings of the IEEE/CVF international conference on
+                                                                                              computer vision. 11477–11487.
+SIGGRAPH Conference Papers ’24, July 27-August 1, 2024, Denver, CO, USA                                      Armani et al.
+
+
+
+
+                        TIP                         PIP                   UIP (Ours)    GT
+
+
+                                Figure 6: Qualitative comparisons among different methods on our test set.
+Ultra Inertial Poser: Motion Tracking from Sparse IMU and Ultra-Wideband Ranging                              SIGGRAPH Conference Papers ’24, July 27-August 1, 2024, Denver, CO, USA
+
+
+
+
+                                    Figure 7: Visualization of SIP Error over time on a test sequence from UIP-DB.
+
+
+                                                                                                          26
+                            Initiator           Responder            Responder
+                              ID 0                 ID 1                 ID 2                              25
+                                                                                            SIP Error (deg)
+
+
+
+
+                         t0 Sent                     t1 Received 0                                        24
+Initiator Request                                                         t2 Received 0
+
+                    t0 Received 1                                                                         23
+Responder 1 Reply                                    t1 Sent              t2 Received 1
+                                                                                                          22
+                    t0 Received 2
+Responder 2 Reply                                    t1 Received 2        t2 Sent
+                                                                                                               0.000   0.025   0.050   0.075   0.100   0.125   0.150   0.175
+                                                                                                                                        Noise Level
+
+Figure 8: Ranging transaction with three devices. Timestamps                              Figure 9: SIP error of UIP on our dataset at different levels of
+to resolve time-of-flight are included in the UWB message                                 synthetic Gaussian noise on inter-sensor distances.
+payload and thus broadcast to all network participants.
+
+     casing with Optitrack
+  markers for ground truth
+
+
+
+
+                                    UWB Radio
+
+                                    6 DoF IMU
+
+
+         35 x 35 mm
+   a     sensor node                                           b
+
+
+
+Figure 10: (a) Our embedded sensor nodes and (b) a person                                 Figure 11: Example of motion tracking using our method of a
+wearing six of them inside a 20-camera Optitrack motion                                   person exercising outdoors, where no tracking infrastructure
+capture setup for reference poses.                                                        is needed for reference or anchoring.
+

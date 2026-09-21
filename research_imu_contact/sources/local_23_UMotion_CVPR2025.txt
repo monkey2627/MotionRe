@@ -1,0 +1,802 @@
+                                                       UMotion: Uncertainty-driven Human Motion Estimation from
+                                                                   Inertial and Ultra-wideband Units
+
+                                                                 Huakun Liu       Hiroki Ota      Xin Wei    Yutaro Hirao
+                                                         Monica Perusquı́a-Hernández      Hideaki Uchiyama      Kiyoshi Kiyokawa
+                                                                      Nara Institute of Science and Technology, Japan
+                                                       {liu.huakun.li0, ota.hiroki.oc6, wei.xin.wy0, yutaro.hirao}@is.naist.jp
+arXiv:2505.09393v1 [cs.GR] 14 May 2025
+
+
+
+
+                                                                      {m.perusquia, hideaki.uchiyama, kiyo}@is.naist.jp
+
+
+
+                                                                 Abstract
+
+                                            Sparse wearable inertial measurement units (IMUs)
+                                         have gained popularity for estimating 3D human motion.
+                                         However, challenges such as pose ambiguity, data drift,
+                                         and limited adaptability to diverse bodies persist. To ad-
+                                         dress these issues, we propose UMotion, an uncertainty-
+                                         driven, online fusing-all state estimation framework for 3D                        Inter-sensor distances   Uncertainty
+                                         human shape and pose estimation, supported by six inte-
+                                         grated, body-worn ultra-wideband (UWB) distance sensors         Figure 1. UMotion integrates IMU-UWB data inputs and pose out-
+                                         with IMUs. UWB sensors measure inter-node distances to          puts uniformly under uncertainty, constrained by individual body
+                                         infer spatial relationships, aiding in resolving pose ambi-     structure. The online state estimation framework iteratively re-
+                                         guities and body shape variations when combined with an-        fines sensor data confidence and stabilizes pose estimation, reduc-
+                                         thropometric data. Unfortunately, IMUs are prone to drift,      ing ambiguities and improving robustness.
+                                         and UWB sensors are affected by body occlusions. Con-
+                                         sequently, we develop a tightly coupled Unscented Kalman
+                                         Filter (UKF) framework that fuses uncertainties from sen-       performance, ergonomics, and emerging areas in human-
+                                         sor data and estimated human motion based on individ-           computer interaction [3, 8, 14, 32].
+                                         ual body shape. The UKF iteratively refines IMU and                 One of the widely chosen wearable sensors for 3D hu-
+                                         UWB measurements by aligning them with uncertain hu-            man motion estimation is IMU. Commercial systems, such
+                                         man motion constraints in real-time, producing optimal es-      as Xsens [28], utilize 17 or more IMUs for comprehen-
+                                         timates for each. Experiments on both synthetic and real-       sive pose coverage. While highly accurate, these densely
+                                         world datasets demonstrate the effectiveness of UMotion in      placed IMUs are inconvenient and intrusive. Recent studies
+                                         stabilizing sensor data and the improvement over state of       have reduced the required number of IMUs to just six—
+                                         the art in pose accuracy. Code is available at: https:          placed on the forearms, lower legs, pelvis, and head—
+                                         //github.com/kk9six/umotion.                                    while still achieving promising performance through data-
+                                                                                                         driven methods [1, 7, 10, 32, 33, 35, 36, 38, 40]. With
+                                                                                                         fewer IMUs, pose estimation becomes under-constrained
+                                         1. Introduction                                                 and prone to ambiguity. Recent work has attempted to
+                                                                                                         disambiguate poses by incorporating temporal consistency,
+                                         Estimating 3D human motion from wearable sensors has            physics-based constraints, or additional, easy-to-integrate
+                                         become increasingly popular due to their portability, acces-    sensors [1, 10, 36]. However, these methods still face sig-
+                                         sibility, and versatility. Wearable sensors, such as inertial   nificant challenges, including noisy sensor data, body shape
+                                         measurement units (IMUs), enable continuous monitoring          variations, and ambiguities arising from under-constrained
+                                         of body motion measurements across unrestricted spaces.         setups with sparse sensors.
+                                         These advances shift motion capture from controlled labo-           In this work, we propose UMotion, an uncertainty-driven
+                                         ratory environments to everyday settings [13, 20, 33, 42].      human motion estimation framework that combines online
+                                         This transition benefits fields such as healthcare, sports      state estimation with an integrated system of six inertial and
+ultra-wideband (UWB) distance sensors. Prior work often         limitations in existing IMU synthesis by incorporating non-
+infers poses from sensor data without considering the re-       inertial effects and fictitious forces, enhancing estimation
+verse influence. UMotion uniformly treats input and out-        robustness through a physics-informed neural network and
+put under uncertainty and body-specific constraints, blend-     realistic IMU synthesis.
+ing data to optimize estimates (see Fig. 1). Our approach           In contrast to methods focusing solely on pose estima-
+maintains inter-sensor distances as a core system state, cap-   tion, our approach treats human shape and pose as equally
+turing spatial relationships between sensor nodes. These        important. By integrating shape information, we establish
+distances, combined with basic anthropometric measure-          a tight connection between sensor data and estimated mo-
+ments (height and weight) and IMU data, serve as inputs         tions, forming a positive feedback loop that enhances the
+for our learning-based shape and pose estimators. Since         entire process. Additionally, most previous studies fail to
+sensors are inherently noisy, we propose a tightly cou-         fully utilize IMU accelerations due to high noise and drift
+pled online state estimation system that associates IMU and     issues. Within our framework, accelerations serve as con-
+UWB sensor measurements and pose estimates using an             trol inputs for state estimation, undergoing continuous cor-
+Unscented Kalman Filter (UKF) and an uncertainty prop-          rection and acting as a crucial component in tracking spatial
+agation method, iteratively correcting errors and stabilizing   relationships among sensors.
+pose estimation in real-time. Our main contributions are:
+• An ensemble learning-based human shape estimation
+                                                                Pose Estimation from Hybrid Sensors In addition to
+  approach using distance constraints and anthropometric
+                                                                IMUs, various wearable and hybrid sensor systems have
+  measurements from six integrated IMU-UWB sensors.
+                                                                been explored to overcome inherent IMU limitations such
+• A learning-based method for human pose estimation from
+                                                                as restricted positional awareness [9, 12, 13, 15, 16, 22–
+  inertial and distance constraints, incorporating mesh dis-
+                                                                24, 26, 37]. The closest works to ours are SmartPoser [4]
+  tribution estimation.
+                                                                and Ultra Inertial Poser (UIP) [1], both of which integrate
+• A filtering-based state estimation system that couples sen-
+                                                                UWB and IMU sensors for pose estimation. UWB sensors
+  sor measurements, pose estimates, and body variations in
+                                                                complement IMUs with additional distance information be-
+  real-time to improve sensor stability and pose accuracy.
+                                                                tween sensors while preserving the portability and flexibil-
+                                                                ity of tracking devices. SmartPoser [4] focuses on wear-
+2. Related Work                                                 able arm pose estimation, combining UWB measurements
+Pose Estimation from Sparse Inertial Sensors In con-            with IMU data using an off-the-shelf smartwatch and smart-
+trast to the predominant use of vision-based methods, wear-     phone. UIP [1] integrates six UWB sensors with IMUs
+able sensors, specifically IMUs, offer greater freedom and      for full-body pose estimation. Inter-sensor distances, esti-
+flexibility. Von Marcard et al. [33] present SIP that makes     mated using an EKF that fuses IMU and UWB data, help
+inertial pose estimation practical by using only six IMUs at-   reduce global translation drift and minimize position jitter
+tached to the body, combined with an offline iterative SMPL     compared to inertial-only tracking. However, body occlu-
+body model [17] pose optimization. Huang et al. [7] pro-        sion frequently affects certain node pairs, e.g., head-knee,
+pose a real-time pose estimation method, DIP, which uses        causing the EKF to fail in estimating distances due to rapid
+a bidirectional recurrent neural network (biRNN) [29] to        IMU drift and unreliable UWB measurements, resulting in
+learn the mapping from a sequence of six IMU measure-           unstable distance data. Our approach addresses this limi-
+ments to SMPL body poses. To obtain sufficient training         tation by using output pose uncertainties and body-specific
+data, they synthesize IMU measurements from the AMASS           constraints as observations to refine input sensor measure-
+dataset [18], further advancing the development of learning-    ments, improving the stability of both IMU and UWB data.
+based methods for sparse sensor motion capture.
+   Following previous studies, TransPose [35] refines pose      3. Method
+estimation by decomposing the end-to-end framework into
+a multi-stage process with intermediate joint position esti-    3.1. Preliminaries
+mation. To disambiguate the poses, PIP [36] proposes a          SMPL body model We use the SMPL model [17] to rep-
+physics-based motion optimization, while TIP [10] incor-        resent human motion. SMPL decomposes the human body
+porates a conditional Transformer model for plausible ter-      into pose parameters, θ ∈ R23×3+3 , which define relative
+rain generation. Training data is crucial for learning-based    rotations of 23 joints and the global root joint orientation in
+methods. Unlike prior studies relying on synthetic IMU          axis-angle form, and shape parameters, β ∈ R10 , captur-
+data, DynalIP [40] adapts real IMU data from diverse hu-        ing body shape variations across individuals. The model is
+man skeleton formats to the target SMPL model and shows         defined by a linear blend-skinning (LBS) function:
+superior performance when training with real sensor data.
+Similarly focusing on the data, PNP [38] recently addresses       \label {eq:smpl} M(\bbeta , \pose ) = W\left (\mathbf {\bar {T}} + B_s(\bbeta ) + B_p(\pose ), J(\bbeta ), \pose , \mathcal {W}\right ),  (1)
+where Bs (β) and Bp (θ) are shape and pose blend shapes                                         tionally, we do not estimate global translation, as inferring it
+that deform the template mesh T̄ in the zero pose. The mesh                                     from only body-worn IMU and UWB sensors without exter-
+is then reposed according to specified poses θ, combining                                       nal references would lead to unbounded error accumulation.
+with joint positions J(β) and blend-skinning weights W.                                         The state estimator integrates accelerations, UWB measure-
+Inertial Measurement Unit (IMU) A nine-axis MEMS                                                ments, and the estimated poses with uncertainties to track
+IMU comprises an accelerometer, gyroscope, and magne-                                           the sensor relative positions, velocities, and acceleration bi-
+tometer, measuring accelerations in the sensor local frame                                      ases of each node at each time step. These refined estimates
+F S , angular velocities in F S , and magnetic field strengths                                  are then used to refine the inputs to the pose estimator.
+relative to the Earth’s magnetic field, respectively. A com-                                        The estimation framework is driven by inherent uncer-
+monly used error model for measured accelerations of one                                        tainties present in the system. Specifically, noisy IMU data
+IMU, a ∈ R3 , is given by [27]:                                                                 combined with tracked inter-sensor distances serve as the
+                                                                                                primary inputs for pose estimation. The generated poses,
+                    \label {eq:imu_model} \a = \a _{\text {true}} + \b _{a} + \n _{a},    (2)   along with their associated uncertainties that reflect sensor
+where atrue is the true acceleration, ba is the bias, modeled                                   noise, are further constrained by the human model, which
+as a random walk process with noise η following a zero-                                         in turn refines sensor measurements and distance estimates.
+mean Gaussian distribution with standard deviation Σb , and                                     This feedback loop propagates uncertainties through the
+na is high-frequency white noise. In our work, after a frame                                    system, continuously updating the belief in system states
+calibration process, accelerations are represented as aM in                                     based on the reliability of each data source—IMU, UWB,
+the SMPL body-centric frame F M , and orientations are rep-                                     and pose estimator with body constraints, ultimately pro-
+resented as RM B , indicating the rotation from bone frame                                      ducing robust and accurate estimation.
+F B to F M . For simplicity, we denote a as aM and R as
+RM B in the following sections. Details on the calibration                                      3.3. Shape and Pose Estimator
+process are available in supplementary materials.                                               3.3.1. Shape Estimator
+Ultra-wideband (UWB) UWB uses the time-of-flight
+technique to measure distances between two devices, with                                        Spatial inter-distances provide data that approximates the
+one acting as the transmitter and the other as the receiver.                                    rough skeletal structure of an individual. Previous studies,
+Unlike other RF techniques, such as WiFi and Bluetooth,                                         such as Virtual Caliper [25] and SHAPY [2], have demon-
+UWB operates over a wide frequency range and transmits                                          strated a linear relationship between body shape and body
+short pulses, achieving centimeter-level distance measure-                                      measurements. Building on these findings, we adopt an en-
+ments with minimal interference [21]. Consequently, it is                                       semble learning-based shape estimator that uses experimen-
+widely used in high-precision indoor localization systems                                       tally selected anthropometric measurements, defined as:
+with multiple fixed anchors and movable tags [39]. In our
+                                                                                                                       \hat \shape = SE(H, W, \boldsymbol {D}).    (3)
+work, all six integrated UWB sensors are movable and alter-
+nately function as both transmitters and receivers, capturing
+inter-distances between each sensor pair.                                                       Basic body measurements, height H ∈ R1 and weight
+                                                                                                W ∈ R1 , are easily accessible and provide foundational in-
+3.2. Framework Design                                                                           formation about human body proportions. Experimentally
+As shown in Fig. 2, our method uses six IMU-UWB sen-                                            selected inter-distances between sensors, D ∈ R7 , capture
+sors and consists of three main modules: a shape estimator,                                     relative limb lengths and body structural details that height
+a pose estimator, and a state estimator. The shape estimator                                    and weight alone cannot provide.
+takes anthropometric measurements and inter-distances in a                                         As shown in Fig. 3, we place virtual sensors on the body
+T-pose as input, outputting shape parameters β̂ of the SMPL                                     mesh and conduct line-of-sight (LOS) simulation experi-
+model. The pose estimator uses filtered frame-aligned, root-                                    ments with real-world tests to identify and select 7 repeat-
+normalized IMU measurements and inter-distances as input                                        able distances out of 15 possible options. While the se-
+to estimate pose parameters, θ̂, and corresponding uncer-                                       lection may vary based on device characteristics, the cho-
+tainties, Σ̂. Given our sensor placement, we do not observe                                     sen distances offer a reliable foundation for adaptation. For
+the movement of the hands and feet. Therefore, similar to                                       model training, we use AutoGluon [5], an AutoML frame-
+previous studies, we estimate poses for only 16 joints, in-                                     work that automatically trains and ensembles 11 basic ma-
+cluding the root joint, while excluding the hand and foot                                       chine learning models, which is more stable than a single
+joints. For simplicity, we denote this reduced set of pose                                      linear regression method in our validation. The estimated
+parameters as θ ∈ R16×3 , while θ 24 refers to the full set of                                  shape parameters β̂ are then used to reconstruct realistic
+pose parameters for 24 joints. Notations with a hat symbol,                                     human bodies and to propagate estimated poses to spatial
+e.g., θ̂, indicate the corresponding estimated values. Addi-                                    constraints in the state estimator.
+                                                                    Measurement Update                                          p̄ , R3
+                                                                                     h(x)                                       v̄ x y, R4
+
+
+
+
+                                                                                               Shape Estimator
+                                                                                                                                                                                                                                                                           Shape β ̂
+                                                                                                 SE (H, W, D)
+              …
+                                                                                                                                                                               Poses θ ̂ 24 Joint positions J0̂
+                                                                                                                                                                                                     0
+                                         Orientations R
+                                                                                                             Orientations R
+                                                                                                                                                                                  Pose Estimator                                                                            Pose θ ̂
+                                                                                                            Filtered accel. a ̂
+                                         Accelerations a                                                                                                                               PE (R, a,̂ d ̂ )
+                                                                     State Estimator                      Filtered distances d ̂                                                                                                                                      Uncertainty
+                                                                          (UKF)                                                                                                                                                                                                      Σ̂
+
+                                                                    Relative positions p
+                                                                x = Relative velocities v
+                                          Distances d                 Accel. biases b                Relative positions p̂
+
+                                                                                                                                                                     ∼ 𝒩(θ,̂ Σ)̂                                                       Unscented Transform
+
+           Six IMUs and UWB sensors                                                   Measurement Update
+
+
+Figure 2. Overview of UMotion, consisting of three main modules: the shape estimator, pose estimator, and state estimator. The shape
+estimator takes anthropometric measurements and inter-distances in a T-pose as input, outputting shape parameters that reconstruct a
+realistic body and impose12strong constraints on the system. The pose estimator receives filtered IMU data and inter-distances from the
+                           p
+                           …
+state estimator to predict poses, whichState
+                                         are fed back to refine state estimates. The entire system integrates IMU, UWB, and estimated poses
+                           p 56
+within the context of individual    Estimator
+                                  body  structure to continuously update and improve motion estimation.
+                                                           (UKF)
+                                        v 12
+                               x =      …
+                                        v 56
+                        Right wrist ̂ Head
+                                        b1                Right wrist ̂ Left wrist                                  the pose estimator is defined as:
+                                        …
+                                        b6                                                                                                                                                     \hat {\pose }_{6D}, \hat {\cov } = PE(\hat {\a }, \boldsymbol {R}, \hat {\boldsymbol {d}}).                                                                                 (4)
+               Head ̂ Root
+
+                                                                                Right wrist ̂ Root
+                                                                                                                    To handle ambiguity in the initial frame, we adopt a
+                                                                                                                    learning-based initialization strategy inspired by PIP [36].
+                                                                                                                    A fully-connected convolutional neural network regresses
+              Right knee ̂ Root
+                                                                                                                    the initial hidden state of the RNN based on the initial global
+                                                                                                                              24
+                                                                 Right wrist ̂ Right knee                           poses, θ̂ 0 , and joint positions, Ĵ 0 ∈ R72 . This approach
+                                                                                                                    provides the pose estimator with a well-informed initializa-
+                     Right knee ̂ left knee                                                                         tion, adapting to different bodies.
+                                                                                                                       We use two loss functions to train the pose estimator:
+                                                                      Virtual sensors
+                                                                                                                    Mean Squared Error (MSE) and Gaussian Negative Log
+                                                                      Intersections
+                                                                                                                    Likelihood (GNLL) loss. MSE is defined as:
+Figure 3. Visualization of selected inter-sensor distances used in
+                                                                 input_indices = [0, 3, 4, 6, 7, 8, 9, 11, 13, 14]
+the shape estimator. We place virtual sensors on the body mesh at                            \loss _\text {MSE}(\pose _{6D}, \hat {\pose }_{6D}) = \frac {1}{n}\sum ^n_{i=1}\norm {\pose _{6D} - \hat {\pose }_{6D}}^2_2,  (5)
+sensor mounting points and conduct line-of-sight simulation ex-
+periments. The plots display the temporal changes in UWB mea-
+                                                                   [0, 6, 7, 8, 9, 13, 14]
+surements between various sensor pairs over time.                                where θ 6D denotes the ground truth poses and n is the total
+                                                                                                                    number of frames. The GNLL, LGNLL (θ 6D , θ̂ 6D , Σ̂) =
+
+3.3.2. Pose Estimator
+                                                                                                                          \frac {1}{2}\left (\log \left (\max \left (\hat {\cov }^2, \boldsymbol {\varepsilon }_{\min }\right )\right ) + \frac {(\hat {\pose }_{6D} - \pose _{6D})^2}{\max \left (\hat {\cov }^2, \boldsymbol {\varepsilon }_{\min }\right )}\right ), 
+Our pose estimator is based on unidirectional multi-layer                                                                                                                                                                                                                                                                                                                  (6)
+long short-term memory (LSTM) [6] recurrent neural net-
+work (RNN). The unidirectional LSTM preserves only past
+information, achieving real-time estimation without requir-                                                         where εmin , set to 10−6 in our implementation, is used for
+ing future data. Given six IMU-UWB sensors, we use fil-                                                             numerical stability. First, LMSE helps the model converge
+tered accelerations, â ∈ R18 , and orientations in 9D rota-                                                        quickly during early training. Next, LGNLL is applied to
+tion matrix form, R ∈ R54 , along with 15 inter-distances                                                           optimize for pose and uncertainty estimation.
+d̂ ∈ R15 , as inputs. The estimator then outputs the poses
+θ̂ 6D ∈ R96 for the target joints, represented in a 6D ro-
+                                                                                                                    3.4. State Estimator
+tation matrix form [41]. Additionally, in the final layer, the                                                      We use UKF [34] for state estimation to refine the pose es-
+network outputs the logarithm of the estimation uncertainty,                                                        timator inputs, integrating UWB measurements and pose
+Σ̂ ∈ R96 , capturing prediction confidence. Consequently,                                                           estimator outputs with a statistically derived IMU model.
+The UWB measurements provide direct inter-distance data,                                                                                                                                                                                                                                                                                                                                                                                                                3.4.3. Measurement Update
+while they are affected by body occlusion issues. Mean-                                                                                                                                                                                                                                                                                                                                                                                                                 The state is updated within measurement spaces using ob-
+while, pose estimator outputs offer constraints and inform                                                                                                                                                                                                                                                                                                                                                                                                              served data z. To accomplish this, we define a measurement
+distance measurements; however, they suffer from occa-                                                                                                                                                                                                                                                                                                                                                                                                                  model h(x) that maps the current state x to measurement
+sional inaccuracies due to challenging poses or sensor noise.                                                                                                                                                                                                                                                                                                                                                                                                           spaces as:
+The UKF combines these sources, balancing the strengths
+and limitations of each to make the optimal estimates.                                                                                                                                                                                                                                                                                                                                                                                                                                 h(\boldsymbol {x}) = \begin {bmatrix} \norm {\p ^{xy}}_2 & \norm {\v ^{xy}}_2 & \p ^{xy} & \v ^{xy} \end {bmatrix}^\mathsf {T}.                                                                                                             (13)
+3.4.1. State Definition                                                                                                                                                                                                                                                                                                                                                                                                                                                 The UWB sensor measures the distance, dxy , between node
+We define the state vector x ∈ R15×3+15×3+6×3 as:                                                                                                                                                                                                                                                                                                                                                                                                                       x and y, which corresponds to the distance derived from
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                        relative positions in state, ∥pxy ∥2 . Additionally, from con-
+   \boldsymbol {x} = \begin {bmatrix} \p ^{12} & \dots & \p ^{56} & \v ^{12}& \dots & \v ^{56} & \b ^1 & \dots & \b ^6 \end {bmatrix}^\mathsf {T},                                                                                                                                                                                                                                                                                                                      secutive distance measurements, we derive the relative ve-
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   xy
+                                                                                                                                              (7)                                                                                                                                                                                                                                                                                                                       locity norm as (dxy       xy
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          k − dk−1 )/∆t, corresponding to ∥v∥2 .
+where pxy represents the relative position between nodes x                                                                                                                                                                                                                                                                                                                                                                                                              The covariance matrix for distance measurements at time
+and y, with x, y ∈ {1, 2, 3, 4, 5, 6} and x < y. The term                                                                                                                                                                                                                                                                                                                                                                                                               step k, denoted as R1,k , is dynamically set based on line-
+v xy denotes the relative velocity between nodes x and y,                                                                                                                                                                                                                                                                                                                                                                                                               of-sight conditions for each node pair, informed by θ̂ k and
+while b1 through b6 represent residual acceleration errors                                                                                                                                                                                                                                                                                                                                                                                                              UWB sensor characteristics. The covariance matrix for rel-
+after transformation from F S to F M . These biases primar-                                                                                                                                                                                                                                                                                                                                                                                                             ative velocity measurements, R2,k , is computed as:
+ily result from orientation errors and raw accelerometer bi-
+ases ba . All quantities are expressed in the SMPL body-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  \mathbf {R}_{2,k} = \frac {(\mathbf {R}_{1, k} + \mathbf {R}_{1, k-1})}{\Dt ^2}.                                                                                                         (14)
+centric coordinate frame F M . For initialization, we set pxy
+based on a static T-pose defined by the shape parameters β                                                                                                                                                                                                                                                                                                                                                                                                                  The pose estimator outputs the joint rotations, θ̂, along
+and the SMPL model (1). The relative velocities \boldsymbol {v}^{xy} and                                                                                                                                                                                                                                                                                                                                                                                                with their corresponding standard deviations, Σ̂. We em-
+biases are initialized to zero.                                                                                                                                                                                                                                                                                                                                                                                                                                         ploy the unscented transform [11] to transform the pose
+3.4.2. State Propagation                                                                                                                                                                                                                                                                                                                                                                                                                                                distribution to the relative position distribution. Given
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                        Θ ∈ R96 ∼ N (θ̂, Σ̂), we use Van der Merwe’s scaled
+The control input u consists of the accelerations a of six                                                                                                                                                                                                                                                                                                                                                                                                              sigma point algorithm [31] to generate n sigma points,
+nodes, defined as:                                                                                                                                                                                                                                                                                                                                                                                                                                                      X ∈ Rn×96 , along with weights W m ∈ Rn for the mean
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                        and W c ∈ Rn for the covariance. Each sigma point in X
+                                                                                                                                                    \boldsymbol {u} = \begin {bmatrix}\a ^{1} & \dots & \a ^{6} \end {bmatrix}^\mathsf {T}, \boldsymbol {u} \in \mathbb {R}^{18}.                                                                                                                                                                                 (8)   is transformed through the SMPL model (1), yielding a set
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                        of sensor-relative positions denoted as:
+During the prediction step, the current state x is propagated
+using the control input u. The propagation model is de-                                                                                                                                                                                                                                                                                                                                                                                                                                             \mathcal {Y} = \{\p ^{xy}_i \in \R ^{n\times 15 \times 3} \mid i = 1, 2, \dots , n \}.                                                                                                                                         (15)
+rived from the strapdown inertial kinematic model with an
+acceleration error model (2), defined as follows:                                                                                                                                                                                                                                                                                                                                                                                                                       We then calculate the mean and covariance of the trans-
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                        formed relative positions, capturing the distribution of rela-
+     \v _{k}^{xy} &= \v _{k-1}^{xy} + (\a _{k-1}^{y} - \a _{k-1}^{x})\Dt - (\b _{k-1}^{y} - \b _{k-1}^{x})\Dt , \label {eq:v_xy}\\ \p _{k}^{xy} &= \p _{k-1}^{xy} + \v _{k-1}^{xy}\Dt + \frac {1}{2}(\a _{k-1}^{y} - \a _{k-1}^{x}) \Dt ^2 \nonumber \\ &\qquad +\frac {1}{2}(\b _{k-1}^{x} - \b _{k-1}^{y})\Dt ^2, \label {eq:p_xy}\\ \b ^x_{k} &= \b ^x_{k-1} + \boldsymbol {\eta }^x, \boldsymbol {\eta }^x\sim \mathcal {N}(0, \cov _b^2) \label {eq:b_x},          tive positions based on pose uncertainty:
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        \hat {\p }^{xy} &= \sum _{i=1}^{n} \boldsymbol {W}^m_i\mathcal {Y}_i, \\ \hat {\cov }_{\hat \p }^2 &= \sum _{i=1}^{n} \boldsymbol {W}^c_i(\mathcal {Y}_i - \hat {\p }^{xy})(\mathcal {Y}_i-\hat {\p }^{xy})^\mathsf {T}.
+
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   (17)
+
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                 (11)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                        The transformed relative positions, p̂xy , along with the
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     2
+where k − 1 and k denote consecutive time steps, and                                                                                                                                                                                                                                                                                                                                                                                                                    measurement covariance matrix R3 = Σ̂p̂ , are used to
+∆t represents the interval between them. Together, equa-                                                                                                                                                                                                                                                                                                                                                                                                                update pxy in the state x. Similarly, we compute the rel-
+tions (9), (10), and (11) form a state propagation model with                                                                                                                                                                                                                                                                                                                                                                                                           ative velocity between consecutive time steps as (p̂xyk −
+added white noise, represented as:                                                                                                                                                                                                                                                                                                                                                                                                                                      p̂xy
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                          k−1 )/∆t, with its covariance matrix  defined as R 4,k =
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                        (R3,k + R3,k−1 )/∆t2 , to update v xy . The complete mea-
+                                                                                                                                                                                                      \bar {\boldsymbol {x}}_{k} = f(\boldsymbol {x}_{k-1}, \boldsymbol {u}_{k}) + \mathbf {Q},                                                                                                                                                                  (12)   surement vector z used for updating the state is given by:
+
+where Q is the process noise covariance matrix, derived
+from the characteristics of the IMUs used in the system.                                                                                                                                                                                                                                                                                                                                                                                                                      \boldsymbol {z} = \begin {bmatrix} {d}^{xy} & \frac {({d}^{xy}_{k} - {d}^{xy}_{k-1})}{\Dt } & \hat {\boldsymbol {p}}^{xy} & \frac {(\hat {\p }^{xy}_k - \hat {\p }^{xy}_{k-1})}{\Dt } \end {bmatrix}^\mathsf {T}.                                    (18)
+4. Experiments                                                  TIP [10], PIP [36], and PNP [38], and (2) distance aug-
+                                                                mented methods, including TIP-D, PIP-D, and UIP [1].
+4.1. Datasets                                                   TIP-D and PIP-D are modified versions of TIP and PIP
+We use the AMASS [18], TotalCapture [30], DIP-IMU [7],          with distance-augmented input data, and we use their re-
+and UIP [1] datasets for training and evaluation. We syn-       sults as reported by UIP. We follow the evaluation protocol
+thesize inertial and distance data from the AMASS dataset,      in UIP by adding ideal synthetic inter-sensor distances with-
+following the process in previous studies [1, 7, 35]. We se-    out noise to TotalCapture and DIP-IMU to assess the impact
+lect specific vertices on the body mesh to represent sensor     of distance measurements independent of noise. For eval-
+mounting positions. Accelerations are computed as finite        uations on the UIP dataset, which includes both IMU and
+differences of these vertex positions over time, while ori-     UWB data, we perform RANSAC regression to calibrate
+entations are obtained as the global orientations of the cor-   UWB measurements, as described in UIP [1], and then use
+responding joints. Distance measurements are synthesized        calibrated measurements as input for the state estimator. We
+by calculating Euclidean distances between selected sensor      do not apply outlier filtering and use default state estima-
+positions, adjusted for individual body shape. Training the     tor parameters due to the absence of ground-truth data and
+shape estimator requires anthropometric measurements and        limited information on sensor-specific characteristics in the
+inter-distances with corresponding shape parameters from        hardware setup.
+a large number of individuals, which is challenging to col-     Metrics We use the following metrics for quantitative
+lect. Therefore, we synthesize these measurements—height        evaluation: 1) SIP Error (in degrees): the mean global an-
+H, weight W , and inter-distances D—from the 3D body            gular error of the upper arms and upper legs, focusing on
+mesh in a T-pose, using 479 unique body shapes (273 male        joints not observed by the body-worn sensors; 2) Angular
+and 206 female) available in the AMASS dataset. We esti-        Error (in degrees): the mean global angular error across all
+mate H and W following the methods in SHAPY [2], and            body joints; 3) Positional Error (in centimeters): the mean
+we sample D from the synthesized distances.                     global joint position error across all joints; and 4) Mesh Er-
+   The training data for the pose estimator comprises syn-      ror (in centimeters): the mean vertex position error between
+thesized data from the AMASS dataset and the training set       the reconstructed mesh and the ground-truth mesh given the
+of DIP-IMU. Unlike previous studies [10, 35, 36], we ex-        mean body shape.
+clude the TotalCapture within AMASS from the training           Comparison with IMU-only Methods Table 1 presents
+data to prevent overlap, ensuring that synthesized distances    a comparison of our method against IMU-only methods on
+used in testing are unseen during training. The test data in-   the TotalCapture and DIP-IMU datasets. On the TotalCap-
+cludes TotalCapture, the test split of DIP-IMU, and UIP.        ture dataset, our approach consistently outperforms previ-
+                                                                ous methods across all metrics, improving over the SOTA
+4.2. Method Implementation
+                                                                PNP by 32.4% in angular error and 9.4% in mesh error. A
+Our shape estimator was implemented using the official          similar trend is also observed in the results on DIP-IMU
+multi-label predictor in AutoGluon 1.1 with a medium-           dataset. This demonstrates that inter-sensor distances serve
+quality preset. Our pose estimator was implemented based        as strong constraints for refining estimated poses.
+on PyTorch 2.3. The training process used an Adam op-           Comparison with Distance-augmented Methods Table 2
+timizer with a learning rate of 0.0001. The pose estima-        presents a fair comparison of our method with distance-
+tor model was trained for 350 epochs with a batch size of       augmented methods, as all approaches use the same input
+512 on a single NVIDIA GeForce RTX 3090 GPU, com-               data. Additionally, all methods are trained on the AMASS
+pleting in approximately 35 minutes. For initial 20 epochs,     dataset with the TotalCapture subset excluded, whereas the
+we adopted LM SE to optimize the model, then switched           IMU-only methods in Table 1 include TotalCapture in their
+to LGN LL for the remaining epochs. For the UKF, we ex-         training data. Our method outperforms UIP, achieving a
+perimentally set parameters αU KF = 0.2, βU KF = 1.0,           reduction in positional error of 21.5% on the TotalCap-
+and κU KF = −105 to control the distribution and weight-        ture dataset and 35.0% on the DIP-IMU dataset. On the
+ing of sample points. In the unscented transform applied        UIP dataset, where sensor data quality is low and motions
+to pose estimates, we used αN N = 0.09, βN N = 1.0, and         are more ambiguous than in the other two test datasets,
+κN N = −93. We applied a factor of 10 to R3 to com-             our method achieves the lowest positional error, while UIP
+pensate for overconfident predictions. The method achieves      achieves the lowest SIP error. We achieve comparable re-
+60 Hz without online LOS inference and 30 Hz with it.           sults despite using less-filtered distance measurements, a
+                                                                simpler architecture, and non-optimal default parameters
+4.3. Quantitative Evaluation                                    for the state estimator. This demonstrates the robustness
+We evaluate our method against two categories of methods:       of our approach in handling real-world sensor noise and the
+(1) IMU-only methods, including DIP [7], TransPose [35],        effectiveness of our online state estimation framework.
+                           SIP Error   Ang Error      Pos Error   Mesh Error       SIP Error     Ang Error       Pos Error    Mesh Error
+          Method
+                             (deg)       (deg)          (cm)        (cm)             (deg)         (deg)           (cm)         (cm)
+                                            TotalCapture                                                   DIP-IMU
+           DIP [7]          18.62        17.22          9.42         11.22           17.35         15.36            7.59          9.05
+       TransPose [35]       16.58        12.89          6.55          7.42           17.06          8.86            6.03          7.17
+          TIP [10]          13.22        12.30          5.81          6.80           16.90         9.07             5.63          6.62
+          PIP [36]          12.93        12.04          5.61          6.51           15.33          8.78            5.12          6.02
+          PNP [38]          10.89        10.45          4.74          5.45           13.71         8.75             4.97          5.77
+         UMotion            10.76         7.06          4.46          4.94           14.19         6.35             3.38          3.93
+
+                    Table 1. Comparison with state of the art IMU-only methods on TotalCapture [30] and DIP-IMU [7].
+
+                                       SIP Error   Pos Error      SIP Error     Pos Error      SIP Error    Pos Error
+                           Method
+                                         (deg)       (cm)           (deg)         (cm)           (deg)        (cm)
+                                           TotalCapture                DIP-IMU                            UIP
+                           PIP [36]     15.93          7.05        15.98           6.21         30.47           13.62
+                           TIP-D        12.18          5.51        15.91           5.26         30.34           13.96
+                           PIP-D        13.16          6.31        13.79           5.36         30.33           13.27
+                           UIP [1]      11.32          5.49        13.21           5.05         24.12           10.65
+                          UMotion       10.76          4.46        14.19           3.38         25.69           10.33
+
+           Table 2. Comparison with distance-augmented methods on TotapCapture [30], DIP-IMU [7], and UIP [1] datasets.
+
+
+           Metric          Mean shape     Predicted     GT                                      SIP Error       Pos Error    SIP Error   Pos Error
+                                                                                Method
+                                                                                                  (deg)           (cm)         (deg)       (cm)
+      Pos Error (cm)           5.15         4.34        4.31
+      Mesh Error (cm)          5.63         4.81        4.78                                        TotalCapture                  DIP-IMU
+       H Error (cm)            5.75         0.39          -
+                                                                                 J → θ̂           9.00            4.36        14.21        3.29
+       W Error (kg)            9.45         0.34          -
+                                                                               S → J → θ̂         12.15           5.70        17.35        4.45
+       D Error (cm)            3.63         2.33        2.30
+                                                                                P G → θ̂          9.25            3.85        13.63        2.85
+       C Error (cm)            3.78         1.26          -
+                                                                              S → P G → θ̂        11.13           4.96        15.91        3.91
+                                                                                P R → θ̂          9.89            4.42        13.77        3.22
+Table 3. Comparison of reconstructed body mesh errors on Total-               S → P R → θ̂        11.57           5.44        15.74        4.17
+Capture [30] using mean shape versus predicted shape parameters.
+                                                                              Ours: S → θ̂        10.76           4.46        14.21        3.38
+
+                                                                                 Table 4. Ablation study on pose estimator architecture.
+4.4. Module Evaluations
+Shape Estimator Table 3 compares reconstructed body
+mesh on the TotalCapture dataset using the mean and pre-                   sensor relative positions, P R , from sensor measurements
+dicted shape, both with the same estimated poses. With the                 S = (â, R, d̂). These intermediate estimates are then com-
+predicted shape, positional and mesh errors are nearly as                  bined with S to compute the final poses θ̂. This layered
+low as those obtained using the ground truth shape parame-                 structure follows the framework commonly used in previ-
+ters. Height and weight estimates are accurate, with errors                ous methods [1, 35]. As shown in Table 4, while regressing
+within 1 cm and 1 kg, respectively. However, the mean error                θ̂ from ideal J , P G , or P R improves accuracy, introduc-
+in circumferences C of the chest, waist, hips, wrists, knees,              ing an intermediate layer, that is, S → {J , P G , P R }, in-
+and head remains large, as relevant measurements cannot                    creases errors. This error propagates through the network,
+be inferred solely from inter-sensor distances. Despite this               ultimately degrading pose estimation performance. This
+limitation, the predicted shape still reconstructs a more re-              suggests that integrating IMU data with distance constraints
+alistic body than the mean shape model.                                    may support a simpler architecture, reducing complexity
+Pose Estimator We conduct an ablation study by ex-                         while still maintaining accuracy.
+panding our pose estimator with intermediate layers to esti-               State Estimator The state estimator is designed to: 1)
+mate all joint positions, J , sensor global positions, P G , and           mitigate errors in inter-sensor distances, 2) filter and stabi-
+  Figure 4. Cumulative distribution of distance error (left) and acceleration error reduction over time (right) for various fusion settings.
+
+
+
+
+   Figure 5. Joint positional error for different fusion settings.
+
+
+lize accelerations, and 3) improve the accuracy of estimated
+poses. To examine it we conduct an ablation study by vary-                         TransPose    PIP        UIP    UMotion    Reference
+ing fusion measurements on the TotalCapture [30] with syn-
+thesized LOS-related noisy distances. Fig. 4 (left) shows                 Figure 6. Qualitative comparison of pose estimates from the test
+cumulative distributions of absolute distance error for dif-              data collected using our developed prototype.
+ferent fusion settings. The raw distances show an average
+error of 9.20 cm with a standard deviation of 8.94 cm. By
+fusing IMU, UWB, and pose data, this error is reduced to                  and enhanced pose stability compared to UIP.
+2.42 cm with a standard deviation of 2.39 cm, demonstrat-
+ing the effectiveness of data fusion for mitigating distance
+errors. Fig. 4 (right) shows the reduction in acceleration er-
+                                                                          5. Conclusion and Limitations
+rors. The state estimator converges within a few seconds                  In this work, we present UMotion, an uncertainty-driven
+and adapts gradually, aligning with IMU characteristics.                  framework for 3D human shape and pose estimation that
+Fig. 5 presents joint positional errors over time for differ-             integrates six IMU and UWB sensors within a state estima-
+ent fusion setups. Without filtering, positional error fluctu-            tion system. UMotion incorporates uncertainties from IMU,
+ates with distance measurement quality. Fusing IMU with                   UWB, and pose estimates under individual body constraints
+either UWB or pose data alone offers limited improvement                  to iteratively enhance confidence in both sensor measure-
+because distance and pose outliers remain. The combined                   ments and pose accuracy. Our experiments on synthetic and
+fusion of IMU, UWB, and pose data achieves the lowest po-                 real-world datasets demonstrate that UMotion outperforms
+sitional error, validating that our state estimator refines pose          existing SOTA methods in pose accuracy, and effectively
+accuracy by utilizing all available measurements.                         stabilizes sensor measurements and pose estimation.
+                                                                              However, our shape estimator requires adaptation to spe-
+4.5. Qualitative Evaluation
+                                                                          cific sensor configurations and conditions, and, with limited
+We developed a prototype (see supplementary material                      training data, it may struggle with unique body variations.
+for details) that integrates BNO086 IMU and DW3000                        The state estimator also requires careful parameter tuning to
+UWB sensors to demonstrate our proposed method. Fig. 6                    reflect sensor characteristics accurately. Additionally, our
+presents visualizations comparing pose estimates for chal-                pose estimator simplifies constraints, which may limit its
+lenging motions, illustrating the improvements of our                     performance. As future work, adding a physics-aware mod-
+method in disambiguating poses over IMU-only methods                      ule could potentially enhance our method’s robustness.
+6. Acknowledgement                                                         Proceedings of 1995 American Control Conference-ACC’95,
+                                                                           pages 1628–1632. IEEE, 1995. 5
+This work was supported by the Japan Science and Tech-                [12] Manuel Kaufmann, Yi Zhao, Chengcheng Tang, Lingling
+nology Agency under the Broadening Opportunities for                       Tao, Christopher Twigg, Jie Song, Robert Wang, and Otmar
+Outstanding Young Researchers and Doctoral Students in                     Hilliges. Em-pose: 3d human pose estimation from sparse
+Strategic Areas (BOOST) JPMJBS2423.                                        electromagnetic trackers. In Proceedings of the IEEE/CVF
+                                                                           international conference on computer vision, pages 11510–
+References                                                                 11520, 2021. 2
+                                                                      [13] Jiye Lee and Hanbyul Joo. Mocap everyone everywhere:
+ [1] Rayan Armani, Changlin Qian, Jiaxi Jiang, and Christian               Lightweight motion capture with smartwatches and a head-
+     Holz. Ultra inertial poser: Scalable motion capture and track-        mounted camera. In Proceedings of the IEEE/CVF Con-
+     ing from sparse inertial sensors and ultra-wideband ranging.          ference on Computer Vision and Pattern Recognition, pages
+     In ACM SIGGRAPH 2024 Conference Papers, pages 1–11,                   1091–1100, 2024. 1, 2
+     2024. 1, 2, 6, 7
+                                                                      [14] Sunmin Lee, Sebastian Starke, Yuting Ye, Jungdam Won,
+ [2] Vasileios Choutas, Lea Müller, Chun-Hao P Huang, Siyu
+                                                                           and Alexander Winkler. Questenvsim: Environment-aware
+     Tang, Dimitrios Tzionas, and Michael J Black. Accurate 3d
+                                                                           simulated motion tracking from sparse sensors. In ACM SIG-
+     body shape regression using metric and semantic attributes.
+                                                                           GRAPH 2023 Conference Proceedings, pages 1–9, 2023. 1
+     In Proceedings of the IEEE/CVF Conference on Computer
+     Vision and Pattern Recognition, pages 2718–2728, 2022. 3,        [15] Han Liang, Yannan He, Chengfeng Zhao, Mutian Li, Jingya
+     6                                                                     Wang, Jingyi Yu, and Lan Xu. Hybridcap: Inertia-aid
+                                                                           monocular capture of challenging human motions. In Pro-
+ [3] Peng Dai, Yang Zhang, Tao Liu, Zhen Fan, Tianyuan Du,
+                                                                           ceedings of the AAAI Conference on Artificial Intelligence,
+     Zhuo Su, Xiaozheng Zheng, and Zeming Li. Hmd-poser:
+                                                                           pages 1539–1548, 2023. 2
+     On-device real-time human motion tracking from scalable
+     sparse observations. In Proceedings of the IEEE/CVF Con-         [16] Huajun Liu, Xiaolin Wei, Jinxiang Chai, Inwoo Ha, and Tae-
+     ference on Computer Vision and Pattern Recognition, pages             hyun Rhee. Realtime human motion control with a small
+     874–884, 2024. 1                                                      number of inertial sensors. In Symposium on interactive 3D
+                                                                           graphics and games, pages 133–140, 2011. 2
+ [4] Nathan DeVrio, Vimal Mollyn, and Chris Harrison. Smart-
+     poser: Arm pose estimation with a smartphone and smart-          [17] Matthew Loper, Naureen Mahmood, Javier Romero, Gerard
+     watch using uwb and imu data. In Proceedings of the 36th              Pons-Moll, and Michael J Black. Smpl: A skinned multi-
+     Annual ACM Symposium on User Interface Software and                   person linear model. In Seminal Graphics Papers: Pushing
+     Technology, pages 1–11, 2023. 2                                       the Boundaries, Volume 2, pages 851–866. 2023. 2
+ [5] Nick Erickson, Jonas Mueller, Alexander Shirkov, Hang            [18] Naureen Mahmood, Nima Ghorbani, Nikolaus F Troje, Ger-
+     Zhang, Pedro Larroy, Mu Li, and Alexander Smola.                      ard Pons-Moll, and Michael J Black. Amass: Archive
+     Autogluon-tabular: Robust and accurate automl for struc-              of motion capture as surface shapes. In Proceedings of
+     tured data. arXiv preprint arXiv:2003.06505, 2020. 3                  the IEEE/CVF international conference on computer vision,
+ [6] S Hochreiter. Long short-term memory. Neural Computation              pages 5442–5451, 2019. 2, 6
+     MIT-Press, 1997. 4                                               [19] Michael McLaughlin and Billy Verso. Asymmetric double-
+ [7] Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J                 sided two-way ranging in an ultrawideband communication
+     Black, Otmar Hilliges, and Gerard Pons-Moll. Deep iner-               system, 2019. US Patent 10,488,509. 2
+     tial poser: Learning to reconstruct human pose from sparse       [20] Vimal Mollyn, Riku Arakawa, Mayank Goel, Chris Harri-
+     inertial measurements in real time. ACM Transactions on               son, and Karan Ahuja. Imuposer: Full-body pose estimation
+     Graphics (TOG), 37(6):1–15, 2018. 1, 2, 6, 7                          using imus in phones, watches, and earbuds. In Proceedings
+ [8] Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa        of the 2023 CHI Conference on Human Factors in Comput-
+     Laich, Patrick Snape, and Christian Holz. Avatarposer: Ar-            ing Systems, pages 1–12, 2023. 1
+     ticulated full-body pose tracking from sparse motion sens-       [21] Ian Oppermann, Matti Hämäläinen, and Jari Iinatti. UWB:
+     ing. In European conference on computer vision, pages 443–            theory and applications. John Wiley & Sons, 2004. 3
+     460. Springer, 2022. 1                                           [22] Shaohua Pan, Qi Ma, Xinyu Yi, Weifeng Hu, Xiong Wang,
+ [9] Jiaxi Jiang, Paul Streli, Manuel Meier, and Christian Holz.           Xingkang Zhou, Jijunnan Li, and Feng Xu. Fusing monoc-
+     Egoposer: Robust real-time ego-body pose estimation in                ular images and sparse imu signals for real-time human mo-
+     large scenes. arXiv preprint arXiv:2308.06493, 2023. 2                tion capture. In SIGGRAPH Asia 2023 Conference Papers,
+[10] Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won,                pages 1–11, 2023. 2
+     Alexander W Winkler, and C Karen Liu. Transformer inertial       [23] Gerard Pons-Moll, Andreas Baak, Thomas Helten,
+     poser: Real-time human motion reconstruction from sparse              Meinard Müller, Hans-Peter Seidel, and Bodo Rosen-
+     imus with simultaneous terrain generation. In SIGGRAPH                hahn. Multisensor-fusion for 3d full-body human motion
+     Asia 2022 Conference Papers, pages 1–9, 2022. 1, 2, 6, 7              capture. In 2010 IEEE Computer Society Conference on
+[11] Simon J Julier, Jeffrey K Uhlmann, and Hugh F Durrant-                Computer Vision and Pattern Recognition, pages 663–670.
+     Whyte. A new approach for filtering nonlinear systems. In             IEEE, 2010.
+[24] Jose Luis Ponton, Haoran Yun, Andreas Aristidou, Carlos              Egolocate: Real-time motion capture, localization, and map-
+     Andujar, and Nuria Pelechano. Sparseposer: Real-time full-           ping with sparse body-mounted sensors. ACM Transactions
+     body motion reconstruction from sparse data. ACM Trans-              on Graphics (TOG), 42(4):1–17, 2023. 2
+     actions on Graphics, 43(1):1–14, 2023. 2                        [38] Xinyu Yi, Yuxiao Zhou, and Feng Xu. Physical non-inertial
+[25] Sergi Pujades, Betty Mohler, Anne Thaler, Joachim Tesch,             poser (pnp): Modeling non-inertial effects in sparse-inertial
+     Naureen Mahmood, Nikolas Hesse, Heinrich H Bülthoff,                human motion capture. In ACM SIGGRAPH 2024 Confer-
+     and Michael J Black. The virtual caliper: rapid creation             ence Papers, pages 1–11, 2024. 1, 2, 6, 7
+     of metrically accurate avatars from 3d measurements. IEEE       [39] Faheem Zafari, Athanasios Gkelias, and Kin K Leung.
+     transactions on visualization and computer graphics, 25(5):          A survey of indoor localization systems and technologies.
+     1887–1897, 2019. 3                                                   IEEE Communications Surveys & Tutorials, 21(3):2568–
+[26] Yiming Ren, Chengfeng Zhao, Yannan He, Peishan Cong,                 2599, 2019. 3
+     Han Liang, Jingyi Yu, Lan Xu, and Yuexin Ma. Lidar-aid          [40] Yu Zhang, Songpengcheng Xia, Lei Chu, Jiarui Yang, Qi
+     inertial poser: Large-scale human motion capture by sparse           Wu, and Ling Pei. Dynamic inertial poser (dynaip): Part-
+     inertial and lidar sensors. IEEE Transactions on Visualiza-          based motion dynamics learning for enhanced human pose
+     tion and Computer Graphics, 29(5):2337–2347, 2023. 2                 estimation with sparse inertial sensors. In Proceedings of
+[27] Xu Ru, Nian Gu, Hang Shang, and Heng Zhang. Mems iner-               the IEEE/CVF Conference on Computer Vision and Pattern
+     tial sensor calibration technology: Current status and future        Recognition, pages 1889–1899, 2024. 1, 2
+     trends. Micromachines, 13(6):879, 2022. 3                       [41] Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and Hao
+[28] Martin Schepers, Matteo Giuberti, Giovanni Bellusci, et al.          Li. On the continuity of rotation representations in neural
+     Xsens mvn: Consistent tracking of human motion using in-             networks. In Proceedings of the IEEE/CVF conference on
+     ertial sensing. Xsens Technol, 1(8):1–8, 2018. 1                     computer vision and pattern recognition, pages 5745–5753,
+[29] Mike Schuster and Kuldip K Paliwal. Bidirectional recurrent          2019. 4
+     neural networks. IEEE transactions on Signal Processing, 45     [42] Chengxu Zuo, Yiming Wang, Lishuang Zhan, Shihui Guo,
+     (11):2673–2681, 1997. 2                                              Xinyu Yi, Feng Xu, and Yipeng Qin. Loose inertial poser:
+[30] Matthew Trumble, Andrew Gilbert, Charles Malleson,                   Motion capture with imu-attached loose-wear jacket. In Pro-
+     Adrian Hilton, and John P Collomosse. Total capture: 3d              ceedings of the IEEE/CVF Conference on Computer Vision
+     human pose estimation fusing video and inertial sensors. In          and Pattern Recognition, pages 2209–2219, 2024. 1
+     BMVC, pages 1–13. London, UK, 2017. 6, 7, 8, 2, 3
+[31] Rudolph Van Der Merwe. Sigma-point Kalman filters for
+     probabilistic inference in dynamic state-space models. Ore-
+     gon Health & Science University, 2004. 5
+[32] Tom Van Wouwe, Seunghwan Lee, Antoine Falisse, Scott
+     Delp, and C Karen Liu. Diffusion inertial poser: Human mo-
+     tion reconstruction from arbitrary sparse imu configurations.
+     arXiv preprint arXiv:2308.16682, 2023. 1
+[33] Timo Von Marcard, Bodo Rosenhahn, Michael J Black, and
+     Gerard Pons-Moll. Sparse inertial poser: Automatic 3d hu-
+     man pose estimation from sparse imus. In Computer graph-
+     ics forum, pages 349–360. Wiley Online Library, 2017. 1,
+     2
+[34] Eric A Wan and Rudolph Van Der Merwe. The unscented
+     kalman filter for nonlinear estimation. In Proceedings of the
+     IEEE 2000 adaptive systems for signal processing, commu-
+     nications, and control symposium (Cat. No. 00EX373), pages
+     153–158. Ieee, 2000. 4
+[35] Xinyu Yi, Yuxiao Zhou, and Feng Xu. Transpose: Real-time
+     3d human translation and pose estimation with six inertial
+     sensors. ACM Transactions On Graphics (TOG), 40(4):1–
+     13, 2021. 1, 2, 6, 7
+[36] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada,
+     Vladislav Golyanik, Christian Theobalt, and Feng Xu. Phys-
+     ical inertial poser (pip): Physics-aware real-time human mo-
+     tion tracking from sparse inertial sensors. In Proceedings
+     of the IEEE/CVF conference on computer vision and pattern
+     recognition, pages 13167–13178, 2022. 1, 2, 4, 6, 7
+[37] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav
+     Golyanik, Shaohua Pan, Christian Theobalt, and Feng Xu.
+                  UMotion: Uncertainty-driven Human Motion Estimation from
+                             Inertial and Ultra-wideband Units
+                                                          Supplementary Material
+
+     Joints                                    Bone frame F B                     • Fixed world frame F W : For the BNO086, the fixed world
+                                               y-axis                               frame corresponds to the first sensor frame upon power-
+     Sensor positions
+                                              z-axis                                up. Each sensor thus has its own F W , totaling six frames.
+                                                                x-axis            • SMPL Body-centric frame F M : A single frame per per-
+                                           y-axis (up)                              son, defined as Left-Up-Forward in this work. Motions
+                                 z-axis                                             are described relative to this fixed frame, which is initial-
+                               (forward)      x-axis (left)                         ized in the T-pose at the start of the motion sequence.
+                           Body-centric frame F M                                 • Respective bone coordinate frame F B : Each bone with
+                                                                                    a mounted IMU has its own coordinate frame, giving six
+                                                                                    frames in total.
+             y-axis                                               y-axis          In total, the system consists of 19 coordinate frames:
+                                                                                  one body-centric frame, F M , and six groups of three
+                      x-axis
+                                                                         x-axis   frames each, comprising F S,i , F W,i , and F B,i , where i ∈
+    z-axis                                             z-axis
+                                                                                  {1, 2, . . . , 6}.
+ Fixed world frame F W                                 Sensor local F S
+
+                                                                                  Problem Statement The IMU measures linear accelera-
+              Figure 7. Overview of coordinate frames.                            tion aS in the sensor local frame F S and orientation RW S ,
+                                                                                  which represents the rotation matrix that transforms vectors
+                                                                                  from the sensor frame F S to the fixed world frame F W .
+A. IMU-UWB Prototype                                                              When applied to a acceleration in F S , aW = RW S aS de-
+We developed a prototype integrating the off-the-shelf                            scribes the acceleration’s representation in F W . The inputs
+CEVA BNO086 9-axis IMU and Qorvo DW3000 UWB                                       to the network are bone orientations relative to the body-
+sensors on a customized board. An ESP32 microcontroller                           centric frame, RM B , and linear accelerations in the body-
+handles on-board data preprocessing and wireless trans-                           centric frame, aM . RM B describes the rotation of each
+mission. The BNO086 operates at 100 Hz, using an on-                              bone around the axes of the body-centric frame. These
+board sensor fusion algorithm to output linear acceleration                       orientations also represent the global poses of the adjacent
+(gravity-removed) in the sensor’s local coordinate frame F S                      joints. To align the IMU readings with the model input, we
+and orientation relative to the initial frame. The DW3000                         need to transform the sensor-local accelerations aS into the
+sensors measure 15 inter-sensor distances at an average rate                      body-centric frame aM , and the sensor-to-world orientation
+of 80 Hz, with a customized asymmetric double-sided two-                          RW S into the bone-to-body orientation RM B . These trans-
+way ranging protocol. A time synchronization step is ap-                          formations are expressed as:
+plied, followed by downsampling to align all measurements
+                                                                                                    \boldsymbol {R}^{MB} &= \boldsymbol {R}^{MW}\boldsymbol {R}^{WS}\boldsymbol {R}^{SB}, \\ \a ^M &= \boldsymbol {R}^{MS}\boldsymbol {a}^S \nonumber \\ &= \boldsymbol {R}^{MW}\boldsymbol {R}^{WS}\a ^S.
+to 60 Hz.
+
+B. From IMU Readings to Input Measure-                                                                                                                                                                                                                                                                       (20)
+   ments
+                                                                                  The calibration process aims to determine RM W and RSB
+We follow the calibration procedures described in DIP [7]                         to enable these transformations.
+and TransPose [35], adapting them to suit the specific char-
+acteristics of the sensors used in our system.
+                                                                                  Calculation of RM W As shown in Fig. 7, the body-
+                                                                                  centric frame F M is established as the Left-Up-Forward
+Frame Definition IMU reading coordinate frame trans-                              orientation of the initial T-pose at the start of the motion.
+formation is essential for aligning IMU data with the model                       The fixed world frame of the BNO086 is defined as the first
+input requirements. As shown in Fig. 7, the system operates                       sensor frame after power-up. To ensure consistency, we
+with four types of coordinate frames:                                             position all IMUs in the same initial orientation, aligning
+                                                                                                                          S,1             S,6
+• Sensor local coordinate frame F S : Each sensor has its                         their initial sensor frames such that Finit = · · · = Finit =
+                                                                                    W,1         W,2             W,6
+  own local frame, resulting in six frames in total.                              F      = F        = ··· = F       . To simplify computation,
+        Initiator
+                                                                                                                                                                                                                                                       Node 2                                                                                                                               Node 3
+         Node 1
+             ① POLL
+
+                  12                                                                                                                                                                          12
+                                                                                                                                                                                             Treply
+                 Tround 1                                                                                                                                                                           1                                                                                                            ② POLL
+                                                                                                                                                                                                                                                                                                                                                                                                    13
+                                                                                                                                                                                                                                                           ACK                                                                     23                                                              Treply
+   13
+                                                                                                                                                                                                                                                                                                                                 T round 1                                               23
+                                                                                                                                                                                                                                                                                                                                                                                       T reply
+                                                                                                                                                                                                                                                                                                                                                                                                          1
+  Tround 1               12
+                        Treply
+                                                                                                                                                                                                                                                                                                                                                                                               1   ③
+                               2                                                                                                                                                                                                                                                                                                                                                             ACK
+   13                                                                                                                                                                            12
+  Treply                                                                                                                                                                        Tround 2                                                                                                                                          23                                                                13
+                                                                                                                                                                                                                                                                                                                                                                                                   Tround
+         2                                                                                                                                                                                                                                                                                                                      T reply 2                                                                 2
+             ④ RANGE
+                                                                                                                                                                                                                                                                                                                                                                                        23
+                                                                                                                                                                                                                                                                                                                                                                                                                Figure 9. Stacked density plot showing the proportion relative to
+                                                                                                                                                                                                                                                                                                                                                                                      T round 2                 the total distribution of LOS availability for inter-sensor distances
+                                                                                                                                                                                                                                                                                                               ⑤
+                                                                                                                                                                                                                                                                                                               RANGE                                                                                            across different sensor pairs.
+
+Figure 8. Ranging transaction with three devices. Timestamps to
+resolve time-of-fight are included in the UWB message payload                                                                                                                                                                                                                                                                                                                                                   3 transmissions) to just 11. A sequence of timestamps is
+and thus broadcast to all network participants.                                                                                                                                                                                                                                                                                                                                                                 recorded during this process to measure the time-of-flight
+                                                                                                                                                                                                                                                                                                                                                                                                                (ToF), T , between sensor pairs. T is determined using the
+                                                                                                                                                                                                                                                                                                                                                                                                                formula:
+                           S
+we align the axes of the Finit and F W with the correspond-
+               M
+ing axes of F or use a known transformation. For ex-                                                                                                                                                                                                                                                                                                                                                                       T = \frac {T_{\text {round 1}} \times T_{\text {round 2}} - T_{\text {reply 1}} \times T_{\text {reply 2}}}{T_{\text {round 1}} + T_{\text {round 2}} +T_{\text {reply 1}} +T_{\text {reply 2}}}.    (24)
+ample, we position the IMU with its x-axis pointing left,
+y-axis pointing up, and z-axis pointing forward in the real                                                                                                                                                                                                                                                                                                                                                     The corresponding distance, d, between the sensor pairs is
+world. This alignment defines RM W . In cases where F W                                                                                                                                                                                                                                                                                                                                                         then calculated as:
+is aligned with F M , RM W = I.                                                                                                                                                                                                                                                                                                                                                                                                           d = cT,                    (25)
+                                                                                                                                                                                                                                                                                                                                                                                                                where c represents the speed of light in vacuum.
+Calculation of RSB Next, we mount IMUs onto the cor-
+responding body part in arbitrary orientations. The subject                                                                                                                                                                                                                                                                                                                                                     D. Line of Sight Simulation
+is then instructed to remain still in a T-pose for several sec-
+onds. In this pose, the orientation of bone frame relative to                                                                                                                                                                                                                                                                                                                                                   One challenge in using body-worn UWB sensors for track-
+the SMPL body-centric frame is zero, meaning RM         B
+                                                     T-pose = I.                                                                                                                                                                                                                                                                                                                                                ing inter-sensor distances is body occlusion, which de-
+Thus, given the measured average orientation of the IMU in                                                                                                                                                                                                                                                                                                                                                      grades measurement accuracy [1]. To address this, we sim-
+           WS                                                                                                                                                                                                                                                                                                                                                                                                   ulate line-of-sight (LOS) conditions to learn the distribu-
+T-pose, R̄T-pose , we have
+                                                                                                                                                                                                                                                                                                                                                                                                                tion of the occlusion on TotalCapture dataset [30]. The
+                 \boldsymbol {R}^{MB}_{\text {T-pose}} &= \boldsymbol {R}^{MW}\bar {\boldsymbol {R}}^{WS}_{\text {T-pose}}\boldsymbol {R}^{SB},\\ \boldsymbol {R}^{SB} &= \text {inv}(\boldsymbol {R}^{MW}\bar {\boldsymbol {R}}^{WS}_{\text {T-pose}})\boldsymbol {R}^{MB}_{\text {T-pose}}, \\ \boldsymbol {R}^{SB} &= \text {inv}(\bar {\boldsymbol {R}}^{WS}_{\text {T-pose}}).                             simulation utilizes the SMPL body model [17] to calcu-
+                                                                                                                                                                                                                                                                                                                                                                                                                late LOS and non-line-of-sight (NLOS) conditions based
+                                                                                                                                                                                                                                                                                                                                                                                                                on different poses. The visibility of each sensor pair is de-
+                                                                                                                                                                                                                                                                                                                                                                                                         (23)   termined by tracing straight-line paths between them and
+                                                                                                                                                                                                                                                                                                                                                                                                                checking for intersections with the body mesh. We em-
+C. Ranging Protocol                                                                                                                                                                                                                                                                                                                                                                                             ploy the Möller–Trumbore intersection algorithm to iden-
+                                                                                                                                                                                                                                                                                                                                                                                                                tify these intersections. The LOS proportion is then cal-
+We implemented an efficient distance matrix ranging                                                                                                                                                                                                                                                                                                                                                             culated as the total length of unobstructed (LOS) segments
+method based on asymmetric double-sided two-way rang-                                                                                                                                                                                                                                                                                                                                                           divided by the entire distance.
+ing (ADS-TWR) protocol [19]. Compared to the standard                                                                                                                                                                                                                                                                                                                                                               Fig. 9 shows a stacked density plot of LOS proportions
+two-way ranging protocol, ADS-TWR minimizes the im-                                                                                                                                                                                                                                                                                                                                                             across 15 sensor pairs, representing the relative contribu-
+pact of clock drift and synchronization errors. Fig. 8 illus-                                                                                                                                                                                                                                                                                                                                                   tion of each sensor pair to the total distribution of LOS pro-
+trates an example with three sensors. One sensor is desig-                                                                                                                                                                                                                                                                                                                                                      portions. For a given LOS proportion, the stacked regions
+nated as the initiator and transmits a POLL signal. Subse-                                                                                                                                                                                                                                                                                                                                                      indicate how frequently different sensor pairs contribute to
+quently, other sensors sequentially act as transmitters, send-                                                                                                                                                                                                                                                                                                                                                  that proportion. It reveals that pairs such as “lower leg -
+ing POLL signals to the remaining sensors after receiving                                                                                                                                                                                                                                                                                                                                                       pelvis” and “lower leg - head” exhibit consistently low LOS
+POLL signals from all preceding sensors in order. These                                                                                                                                                                                                                                                                                                                                                         availability due to frequent occlusion caused by body move-
+POLL signals simultaneously serve as ACK signals for the                                                                                                                                                                                                                                                                                                                                                        ment and overlapping limbs. Accordingly, the correspond-
+previous sensors, streamlining communication. This effi-                                                                                                                                                                                                                                                                                                                                                        ing distance measurements are unreliable and could not be
+cient broadcasting strategy reduces the number of transmit-                                                                                                                                                                                                                                                                                                                                                     effectively used for pose estimation or measurement filter-
+ted signals from 45 (calculated as 15 pairs, each requiring                                                                                                                                                                                                                                                                                                                                                     ing. This analysis highlights the varying reliability of UWB
+                                                                                                                                                                                                                                                                                                                                                                               Figure 11. Histogram of axis-wise relative position differences,
+                                                                                                                                                                                                                                                                                                                                                                               illustrating the alignment between predicted uncertainty and true
+                                                                                                                                                                                                                                                                                                                                                                               errors.
+
+
+Figure 10. Example of the distance error model based on the LOS                                                                                                                                                                                                                                                                                                                F. Implementation Details
+proportions for the sensors used in our system.
+                                                                                                                                                                                                                                                                                                                                                                               We train the pose estimator using synthesized data from the
+                                                                                                                                                                                                                                                                                                                                                                               AMASS dataset without integrating the state estimator. We
+measurements across sensor pairs, offering guidelines for                                                                                                                                                                                                                                                                                                                      apply noise only to the synthesized distances, while syn-
+weighting measurement uncertainties in our state estima-                                                                                                                                                                                                                                                                                                                       thesized IMU data remains noise-free. In the state estima-
+tion framework.                                                                                                                                                                                                                                                                                                                                                                tor, the process noise covariance Q is determined using Al-
+Distance Error Model In this work, we simplify the stan-                                                                                                                                                                                                                                                                                                                       lan variance analysis with a noise propagation model. The
+dard deviation of distance measurements, σd , as a function                                                                                                                                                                                                                                                                                                                    observation noise covariance R1 follows our distance er-
+of the LOS proportion, l, as follows:                                                                                                                                                                                                                                                                                                                                          ror model, while R3 is derived from predicted poses via
+                                                                                                                                                                                                                                                                                                                                                                               the unscented transformation. To mitigate overconfidence
+                                                                                                                                                                                                                                                                                                                                                                               in high-error scenarios, we scale R3 by a factor of 10 for
+    \sigma _d = \begin {cases} \sigma _{\text {min}}, & \text {if } l \geq \tau _{\text {upper}}, \\ \sigma _{\text {kinematics}}, & \text {if } l < \tau _{\text {lower}}, \\ (\sigma _{\text {max}} - \sigma _{\text {min}})\frac {(\tau _{\text {upper}} - l)}{\tau _{\text {upper}} - \tau _{\text {lower}}} + \sigma _{\text {min}}, & \text {otherwise}, \end {cases}    improved stability.
+
+                                                                                                                                                                                                                                                                                                                                                                               G. Ablation on Shape Estimator
+                                                           (26)
+where τupper and τlower are LOS proportion thresholds, and                                                                                                                                                                                                                                                                                                                     To evaluate the impact of different anthropometric data on
+σmin and σmax represent the minimum and maximum noise                                                                                                                                                                                                                                                                                                                          shape estimation, we conduct an ablation study using the
+parameters for the distance standard deviation. When the                                                                                                                                                                                                                                                                                                                       TotalCapture dataset. Table 5 presents the mean absolute
+LOS proportion falls below τlower , the distance measure-                                                                                                                                                                                                                                                                                                                      error of the reconstructed T-pose mesh under different sub-
+ment is replaced with one derived from kinematics, with an                                                                                                                                                                                                                                                                                                                     sets of anthropometric inputs. Since circumferences are not
+associated standard deviation of σkinematics . Fig. 10 provides                                                                                                                                                                                                                                                                                                                directly observed, their errors remain the highest across all
+an example of this model based on our selected sensors.                                                                                                                                                                                                                                                                                                                        conditions. Using only height (H) or weight (W) results
+The parameters may vary depending on the specific sensors                                                                                                                                                                                                                                                                                                                      in relatively large distance and mesh errors, demonstrating
+used.                                                                                                                                                                                                                                                                                                                                                                          that these individual measurements alone do not sufficiently
+
+E. Discussions on Predicted Uncertainty
+                                                                                                                                                                                                                                                                                                                                                                                                           Mean absolute error
+To assess the correctness of the predicted uncertainty, we                                                                                                                                                                                                                                                                                                                               Mesh (mm)      H (mm) W (kg) D (mm)              C (mm)
+analyze the transformed axis-wise relative position error                                                                                                                                                                                                                                                                                                                         H         12.10          1.11      3.77       10.62       21.08
+distributions. We calculate distance errors given predicted                                                                                                                                                                                                                                                                                                                      W          23.45         58.70      0.28       31.69       16.11
+poses and compare them with the distance uncertainty into                                                                                                                                                                                                                                                                                                                         D          6.14          2.67      4.47         0.9       22.62
+which the predicted pose uncertainty is converted. Fig. 11                                                                                                                                                                                                                                                                                                                      HW          10.40          1.2       0.19       11.30       13.34
+shows the proportion of frame counts within different con-                                                                                                                                                                                                                                                                                                                       HD          6.30          1.83      4.10        1.34       21.08
+fidence intervals. The results indicate that the predicted un-                                                                                                                                                                                                                                                                                                                  WD           4.31         3.37       1.03        1.14       13.26
+certainty aligns well with actual errors for smaller devia-                                                                                                                                                                                                                                                                                                                     HWD          4.72          3.89      0.35        2.09       12.76
+tions, with 85% of predictions falling within 3σ. However,
+for larger errors, the predicted uncertainty tends to be un-                                                                                                                                                                                                                                                                                                                   Table 5. Comparison of reconstructed T-pose mesh errors on To-
+derestimated.                                                                                                                                                                                                                                                                                                                                                                  talCapture [30] using different sources of anthropometric data.
+Figure 12. Cumulative distribution of distance error (left), predicted relative position standard deviation (middle), and joint positional error
+(right) for various fusion settings.
+
+
+constrain body shape. Combining height and weight (HW)
+improves shape estimation, leading to slight reductions in
+mesh errors. Incorporating inter-sensor distances (D) pro-
+vides better constraints on body proportions, further reduc-
+ing mesh and distance errors.
+
+H. Ablation on State Estimator
+We compare absolute distance error, predicted uncertainty,
+and joint positional error across various configurations on
+TotalCapture and UIP datasets to evaluate the impact of
+different fusion strategies. Fig. 12 (left) illustrates the cu-
+mulative distribution of absolute distance errors. Incorpo-
+rating IMU and UWB fusion reduces distance errors, and
+the addition of pose information further improves accuracy.
+This demonstrates that integrating multiple sensing modal-
+ities enhances distance estimation by leveraging comple-
+mentary information. Fig. 12 (middle) shows the axis-wise
+relative position standard deviations, evaluating the effect
+of different information on the predicted uncertainty. The
+results indicate that the full fusion model, i.e., IMU, UWB,
+and poses, improves the consistency of uncertainty estima-
+tion, resulting in the most confident predictions. Fig. 12
+(right) evaluates the cumulative distribution of joint posi-
+tional errors. Compared to the unfiltered case, fusing IMU
+and UWB data reduces error, while incorporating pose con-
+straints further improves tracking performance. These re-
+sults demonstrate that jointly fusing IMU, UWB, and pose
+constraints improves distance accuracy, refines uncertainty
+estimation, and reduces joint positional errors.
+

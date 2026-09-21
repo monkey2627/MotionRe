@@ -1,0 +1,1484 @@
+URL: https://vqf.readthedocs.io/en/latest/ref_cpp.html
+
+VQF Class — VQF  documentation
+VQF Class
+View page source
+VQF Class
+
+typedef
+double
+vqf_real_t
+
+Typedef for the floating-point data type used for most operations.
+By default, all floating-point calculations are performed using
+double
+. Set the
+VQF_SINGLE_PRECISION
+define to change this type to
+float
+. Note that the Butterworth filter implementation will always use double precision as using floats can cause numeric issues.
+class
+VQF
+
+A Versatile Quaternion-based Filter for IMU Orientation Estimation.
+This class implements the orientation estimation filter described in the following publication:
+D. Laidig and T. Seel. “VQF: Highly Accurate IMU Orientation Estimation with Bias Estimation and Magnetic
+Disturbance Rejection.” Information Fusion 2023, 91, 187–204.
+doi:10.1016/j.inffus.2022.10.014
+.
+[Accepted manuscript available at
+arXiv:2203.17024
+.]
+The filter can perform simultaneous 6D (magnetometer-free) and 9D (gyr+acc+mag) sensor fusion and can also be used
+without magnetometer data. It performs rest detection, gyroscope bias estimation during rest and motion, and magnetic
+disturbance detection and rejection. Different sampling rates for gyroscopes, accelerometers, and magnetometers are
+supported as well. While in most cases, the defaults will be reasonable, the algorithm can be influenced via a
+number of tuning parameters.
+To use this C++ implementation,
+create a instance of the class and provide the sampling time and, optionally, parameters
+for every sample, call one of the update functions to feed the algorithm with IMU data
+access the estimation results with
+getQuat6D()
+,
+getQuat9D()
+and
+the other getter methods.
+If the full data is available in (row-major) data buffers, you can use
+updateBatch()
+.
+This class is the main C++ implementation of the algorithm. Depending on use case and programming language of choice,
+the following alternatives might be useful:
+Full Version
+Basic Version
+Offline Version
+C++
+VQF (this class)
+BasicVQF
+offlineVQF()
+Python/C++ (fast)
+vqf.VQF
+vqf.BasicVQF
+vqf.offlineVQF()
+Pure Python (slow)
+vqf.PyVQF
+–
+–
+Pure Matlab (slow)
+VQF.m
+–
+–
+Public Functions
+VQF
+(
+vqf_real_t
+gyrTs
+,
+vqf_real_t
+accTs
+=
+-
+1.0
+,
+vqf_real_t
+magTs
+=
+-
+1.0
+)
+
+Initializes the object with default parameters.
+In the most common case (using the default parameters and all data being sampled with the same frequency, create the class like this:
+VQF
+vqf
+(
+0.01
+);
+// 0.01 s sampling time, i.e. 100 Hz
+Parameters
+:
+gyrTs
+– sampling time of the gyroscope measurements in seconds
+accTs
+– sampling time of the accelerometer measurements in seconds (the value of
+gyrTs
+is used if set to -1)
+magTs
+– sampling time of the magnetometer measurements in seconds (the value of
+gyrTs
+is used if set to -1)
+VQF
+(
+const
+VQFParams
+&
+params
+,
+vqf_real_t
+gyrTs
+,
+vqf_real_t
+accTs
+=
+-
+1.0
+,
+vqf_real_t
+magTs
+=
+-
+1.0
+)
+
+Initializes the object with custom parameters.
+Example code to create an object with magnetic disturbance rejection disabled:
+VQFParams
+params
+;
+params
+.
+magDistRejectionEnabled
+=
+false
+;
+VQF
+vqf
+(
+0.01
+);
+// 0.01 s sampling time, i.e. 100 Hz
+Parameters
+:
+params
+–
+VQFParams
+struct containing the desired parameters
+gyrTs
+– sampling time of the gyroscope measurements in seconds
+accTs
+– sampling time of the accelerometer measurements in seconds (the value of
+gyrTs
+is used if set to -1)
+magTs
+– sampling time of the magnetometer measurements in seconds (the value of
+gyrTs
+is used if set to -1)
+void
+updateGyr
+(
+const
+vqf_real_t
+gyr
+[
+3
+]
+)
+
+Performs gyroscope update step.
+It is only necessary to call this function directly if gyroscope, accelerometers and magnetometers have different sampling rates. Otherwise, simply use
+update()
+.
+Parameters
+:
+gyr
+– gyroscope measurement in rad/s
+void
+updateAcc
+(
+const
+vqf_real_t
+acc
+[
+3
+]
+)
+
+Performs accelerometer update step.
+It is only necessary to call this function directly if gyroscope, accelerometers and magnetometers have different sampling rates. Otherwise, simply use
+update()
+.
+Should be called after
+updateGyr
+and before
+updateMag
+.
+Parameters
+:
+acc
+– accelerometer measurement in m/s²
+void
+updateMag
+(
+const
+vqf_real_t
+mag
+[
+3
+]
+)
+
+Performs magnetometer update step.
+It is only necessary to call this function directly if gyroscope, accelerometers and magnetometers have different sampling rates. Otherwise, simply use
+update()
+.
+Should be called after
+updateAcc
+.
+Parameters
+:
+mag
+– magnetometer measurement in arbitrary units
+void
+update
+(
+const
+vqf_real_t
+gyr
+[
+3
+]
+,
+const
+vqf_real_t
+acc
+[
+3
+]
+)
+
+Performs filter update step for one sample (magnetometer-free).
+Parameters
+:
+gyr
+– gyroscope measurement in rad/s
+acc
+– accelerometer measurement in m/s²
+void
+update
+(
+const
+vqf_real_t
+gyr
+[
+3
+]
+,
+const
+vqf_real_t
+acc
+[
+3
+]
+,
+const
+vqf_real_t
+mag
+[
+3
+]
+)
+
+Performs filter update step for one sample (with magnetometer measurement).
+Parameters
+:
+gyr
+– gyroscope measurement in rad/s
+acc
+– accelerometer measurement in m/s²
+mag
+– magnetometer measurement in arbitrary units
+void
+updateBatch
+(
+const
+vqf_real_t
+gyr
+[
+]
+,
+const
+vqf_real_t
+acc
+[
+]
+,
+const
+vqf_real_t
+mag
+[
+]
+,
+size_t
+N
+,
+vqf_real_t
+out6D
+[
+]
+,
+vqf_real_t
+out9D
+[
+]
+,
+vqf_real_t
+outDelta
+[
+]
+,
+vqf_real_t
+outBias
+[
+]
+,
+vqf_real_t
+outBiasSigma
+[
+]
+,
+bool
+outRest
+[
+]
+,
+bool
+outMagDist
+[
+]
+)
+
+Performs batch update for multiple samples at once.
+In order to use this function, the input data must be available in an array in row-major order. A null pointer can be passed for mag in order to skip the magnetometer update. All data must have the same sampling rate.
+The output pointer arguments must be null pointers or point to sufficiently large data buffers.
+Example usage:
+int
+N
+=
+1000
+;
+double
+gyr
+[
+N
+*
+3
+];
+// fill with gyroscope measurements in rad/s
+double
+acc
+[
+N
+*
+3
+];
+// fill will accelerometer measurements in m/s²
+double
+mag
+[
+N
+*
+3
+];
+// fill with magnetometer measurements (arbitrary units)
+double
+quat9D
+[
+N
+*
+4
+];
+// output buffer
+VQF
+vqf
+(
+0.01
+);
+// 0.01 s sampling time, i.e. 100 Hz
+vqf
+.
+updateBatch
+(
+gyr
+,
+acc
+,
+mag
+,
+N
+,
+nullptr
+,
+quat9D
+,
+nullptr
+,
+nullptr
+,
+nullptr
+,
+nullptr
+,
+nullptr
+);
+Parameters
+:
+gyr
+– gyroscope measurement in rad/s (N*3 elements, must not be null)
+acc
+– accelerometer measurement in m/s² (N*3 elements, must not be null)
+mag
+– magnetometer measurement in arbitrary units (N*3 elements, can be a null pointer)
+N
+– number of samples
+out6D
+– output buffer for the 6D quaternion (N*4 elements, can be a null pointer)
+out9D
+– output buffer for the 9D quaternion (N*4 elements, can be a null pointer)
+outDelta
+– output buffer for heading difference angle (N elements, can be a null pointer)
+outBias
+– output buffer for the gyroscope bias estimate (N*3 elements, can be a null pointer)
+outBiasSigma
+– output buffer for the bias estimation uncertainty (N elements, can be a null pointer)
+outRest
+– output buffer for the rest detection state (N elements, can be a null pointer)
+outMagDist
+– output buffer for the magnetic disturbance state (N elements, can be a null pointer)
+void
+getQuat3D
+(
+vqf_real_t
+out
+[
+4
+]
+)
+const
+
+Returns the angular velocity strapdown integration quaternion
+\(^{\mathcal{S}_i}_{\mathcal{I}_i}\mathbf{q}\)
+.
+Parameters
+:
+out
+– output array for the quaternion
+void
+getQuat6D
+(
+vqf_real_t
+out
+[
+4
+]
+)
+const
+
+Returns the 6D (magnetometer-free) orientation quaternion
+\(^{\mathcal{S}_i}_{\mathcal{E}_i}\mathbf{q}\)
+.
+Parameters
+:
+out
+– output array for the quaternion
+void
+getQuat9D
+(
+vqf_real_t
+out
+[
+4
+]
+)
+const
+
+Returns the 9D (with magnetometers) orientation quaternion
+\(^{\mathcal{S}_i}_{\mathcal{E}}\mathbf{q}\)
+.
+Parameters
+:
+out
+– output array for the quaternion
+vqf_real_t
+getDelta
+(
+)
+const
+
+Returns the heading difference
+\(\delta\)
+between
+\(\mathcal{E}_i\)
+and
+\(\mathcal{E}\)
+.
+\(^{\mathcal{E}_i}_{\mathcal{E}}\mathbf{q} = \begin{bmatrix}\cos\frac{\delta}{2} & 0 & 0 &
+\sin\frac{\delta}{2}\end{bmatrix}^T\)
+.
+Returns
+:
+delta angle in rad (
+VQFState::delta
+)
+vqf_real_t
+getBiasEstimate
+(
+vqf_real_t
+out
+[
+3
+]
+)
+const
+
+Returns the current gyroscope bias estimate and the uncertainty.
+The returned standard deviation sigma represents the estimation uncertainty in the worst direction and is based on an upper bound of the largest eigenvalue of the covariance matrix.
+Parameters
+:
+out
+– output array for the gyroscope bias estimate (rad/s)
+Returns
+:
+standard deviation sigma of the estimation uncertainty (rad/s)
+void
+setBiasEstimate
+(
+vqf_real_t
+bias
+[
+3
+]
+,
+vqf_real_t
+sigma
+=
+-
+1.0
+)
+
+Sets the current gyroscope bias estimate and the uncertainty.
+If a value for the uncertainty sigma is given, the covariance matrix is set to a corresponding scaled identity matrix.
+Parameters
+:
+bias
+– gyroscope bias estimate (rad/s)
+sigma
+– standard deviation of the estimation uncertainty (rad/s) - set to -1 (default) in order to not change the estimation covariance matrix
+bool
+getRestDetected
+(
+)
+const
+
+Returns true if rest was detected.
+bool
+getMagDistDetected
+(
+)
+const
+
+Returns true if a disturbed magnetic field was detected.
+void
+getRelativeRestDeviations
+(
+vqf_real_t
+out
+[
+2
+]
+)
+const
+
+Returns the relative deviations used in rest detection.
+Looking at those values can be useful to understand how rest detection is working and which thresholds are suitable. The output array is filled with the last values for gyroscope and accelerometer, relative to the threshold. In order for rest to be detected, both values must stay below 1.
+Parameters
+:
+out
+– output array of size 2 for the relative rest deviations
+vqf_real_t
+getMagRefNorm
+(
+)
+const
+
+Returns the norm of the currently accepted magnetic field reference.
+vqf_real_t
+getMagRefDip
+(
+)
+const
+
+Returns the dip angle of the currently accepted magnetic field reference.
+void
+setMagRef
+(
+vqf_real_t
+norm
+,
+vqf_real_t
+dip
+)
+
+Overwrites the current magnetic field reference.
+Parameters
+:
+norm
+– norm of the magnetic field reference
+dip
+– dip angle of the magnetic field reference
+void
+setTauAcc
+(
+vqf_real_t
+tauAcc
+)
+
+Sets the time constant for accelerometer low-pass filtering.
+For more details, see
+VQFParams.tauAcc
+.
+Parameters
+:
+tauAcc
+– time constant
+\(\tau_\mathrm{acc}\)
+in seconds
+void
+setTauMag
+(
+vqf_real_t
+tauMag
+)
+
+Sets the time constant for the magnetometer update.
+For more details, see
+VQFParams.tauMag
+.
+Parameters
+:
+tauMag
+– time constant
+\(\tau_\mathrm{mag}\)
+in seconds
+void
+setMotionBiasEstEnabled
+(
+bool
+enabled
+)
+
+Enables/disabled gyroscope bias estimation during motion.
+void
+setRestBiasEstEnabled
+(
+bool
+enabled
+)
+
+Enables/disables rest detection and bias estimation during rest.
+void
+setMagDistRejectionEnabled
+(
+bool
+enabled
+)
+
+Enables/disables magnetic disturbance detection and rejection.
+void
+setRestDetectionThresholds
+(
+vqf_real_t
+thGyr
+,
+vqf_real_t
+thAcc
+)
+
+Sets the current thresholds for rest detection.
+For details about the parameters, see
+VQFParams.restThGyr
+and
+VQFParams.restThAcc
+.
+const
+VQFParams
+&
+getParams
+(
+)
+const
+
+Returns the current parameters.
+const
+VQFCoefficients
+&
+getCoeffs
+(
+)
+const
+
+Returns the coefficients used by the algorithm.
+const
+VQFState
+&
+getState
+(
+)
+const
+
+Returns the current state.
+void
+setState
+(
+const
+VQFState
+&
+state
+)
+
+Overwrites the current state.
+This method allows to set a completely arbitrary filter state and is intended for debugging purposes. In combination with
+getState
+, individual elements of the state can be modified.
+Parameters
+:
+state
+– A
+VQFState
+struct containing the new state
+void
+resetState
+(
+)
+
+Resets the state to the default values at initialization.
+Resetting the state is equivalent to creating a new instance of this class.
+Public Static Functions
+static
+void
+quatMultiply
+(
+const
+vqf_real_t
+q1
+[
+4
+]
+,
+const
+vqf_real_t
+q2
+[
+4
+]
+,
+vqf_real_t
+out
+[
+4
+]
+)
+
+Performs quaternion multiplication (
+\(\mathbf{q}_\mathrm{out} = \mathbf{q}_1 \otimes \mathbf{q}_2\)
+).
+static
+void
+quatConj
+(
+const
+vqf_real_t
+q
+[
+4
+]
+,
+vqf_real_t
+out
+[
+4
+]
+)
+
+Calculates the quaternion conjugate (
+\(\mathbf{q}_\mathrm{out} = \mathbf{q}^*\)
+).
+static
+void
+quatSetToIdentity
+(
+vqf_real_t
+out
+[
+4
+]
+)
+
+Sets the output quaternion to the identity quaternion (
+\(\mathbf{q}_\mathrm{out} =
+\begin{bmatrix}1 & 0 & 0 & 0\end{bmatrix}\)
+).
+static
+void
+quatApplyDelta
+(
+vqf_real_t
+q
+[
+4
+]
+,
+vqf_real_t
+delta
+,
+vqf_real_t
+out
+[
+4
+]
+)
+
+Applies a heading rotation by the angle delta (in rad) to a quaternion.
+\(\mathbf{q}_\mathrm{out} = \begin{bmatrix}\cos\frac{\delta}{2} & 0 & 0 &
+\sin\frac{\delta}{2}\end{bmatrix} \otimes \mathbf{q}\)
+static
+void
+quatRotate
+(
+const
+vqf_real_t
+q
+[
+4
+]
+,
+const
+vqf_real_t
+v
+[
+3
+]
+,
+vqf_real_t
+out
+[
+3
+]
+)
+
+Rotates a vector with a given quaternion.
+\(\begin{bmatrix}0 & \mathbf{v}_\mathrm{out}\end{bmatrix} =
+\mathbf{q} \otimes \begin{bmatrix}0 & \mathbf{v}\end{bmatrix} \otimes \mathbf{q}^*\)
+static
+vqf_real_t
+norm
+(
+const
+vqf_real_t
+vec
+[
+]
+,
+size_t
+N
+)
+
+Calculates the Euclidean norm of a vector.
+Parameters
+:
+vec
+– pointer to an array of N elements
+N
+– number of elements
+static
+void
+normalize
+(
+vqf_real_t
+vec
+[
+]
+,
+size_t
+N
+)
+
+Normalizes a vector in-place.
+Parameters
+:
+vec
+– pointer to an array of N elements that will be normalized
+N
+– number of elements
+static
+void
+clip
+(
+vqf_real_t
+vec
+[
+]
+,
+size_t
+N
+,
+vqf_real_t
+min
+,
+vqf_real_t
+max
+)
+
+Clips a vector in-place.
+Parameters
+:
+vec
+– pointer to an array of N elements that will be clipped
+N
+– number of elements
+min
+– smallest allowed value
+max
+– largest allowed value
+static
+vqf_real_t
+gainFromTau
+(
+vqf_real_t
+tau
+,
+vqf_real_t
+Ts
+)
+
+Calculates the gain for a first-order low-pass filter from the 1/e time constant.
+\(k = 1 - \exp\left(-\frac{T_\mathrm{s}}{\tau}\right)\)
+The cutoff frequency of the resulting filter is
+\(f_\mathrm{c} = \frac{1}{2\pi\tau}\)
+.
+Parameters
+:
+tau
+– time constant
+\(\tau\)
+in seconds - use -1 to disable update (
+\(k=0\)
+) or 0 to obtain unfiltered values (
+\(k=1\)
+)
+Ts
+– sampling time
+\(T_\mathrm{s}\)
+in seconds
+Returns
+:
+filter gain
+k
+static
+void
+filterCoeffs
+(
+vqf_real_t
+tau
+,
+vqf_real_t
+Ts
+,
+double
+outB
+[
+3
+]
+,
+double
+outA
+[
+2
+]
+)
+
+Calculates coefficients for a second-order Butterworth low-pass filter.
+The filter is parametrized via the time constant of the dampened, non-oscillating part of step response and the resulting cutoff frequency is
+\(f_\mathrm{c} = \frac{\sqrt{2}}{2\pi\tau}\)
+.
+When
+\(\tau < \frac{T_\mathrm{s}}{2}\)
+(which corresponds to
+\(f_\mathrm{c}\)
+exceeding 90 % of the Nyquist frequency), a direct passthrough fallback is used to prevent instability.
+Parameters
+:
+tau
+– time constant
+\(\tau\)
+in seconds
+Ts
+– sampling time
+\(T_\mathrm{s}\)
+in seconds
+outB
+– output array for numerator coefficients
+outA
+– output array for denominator coefficients (without
+\(a_0=1\)
+)
+static
+void
+filterInitialState
+(
+vqf_real_t
+x0
+,
+const
+double
+b
+[
+3
+]
+,
+const
+double
+a
+[
+2
+]
+,
+double
+out
+[
+2
+]
+)
+
+Calculates the initial filter state for a given steady-state value.
+Parameters
+:
+x0
+– steady state value
+b
+– numerator coefficients
+a
+– denominator coefficients (without
+\(a_0=1\)
+)
+out
+– output array for filter state
+static
+void
+filterAdaptStateForCoeffChange
+(
+vqf_real_t
+last_y
+[
+]
+,
+size_t
+N
+,
+const
+double
+b_old
+[
+3
+]
+,
+const
+double
+a_old
+[
+2
+]
+,
+const
+double
+b_new
+[
+3
+]
+,
+const
+double
+a_new
+[
+2
+]
+,
+double
+state
+[
+]
+)
+
+Adjusts the filter state when changing coefficients.
+This function assumes that the filter is currently in a steady state, i.e. the last input values and the last output values are all equal. Based on this, the filter state is adjusted to new filter coefficients so that the output does not jump.
+Parameters
+:
+last_y
+– last filter output values (array of size N)
+N
+– number of values in vector-valued signal
+b_old
+– previous numerator coefficients
+a_old
+– previous denominator coefficients (without
+\(a_0=1\)
+)
+b_new
+– new numerator coefficients
+a_new
+– new denominator coefficients (without
+\(a_0=1\)
+)
+state
+– filter state (array of size N*2, will be modified)
+static
+vqf_real_t
+filterStep
+(
+vqf_real_t
+x
+,
+const
+double
+b
+[
+3
+]
+,
+const
+double
+a
+[
+2
+]
+,
+double
+state
+[
+2
+]
+)
+
+Performs a filter step for a scalar value.
+Parameters
+:
+x
+– input value
+b
+– numerator coefficients
+a
+– denominator coefficients (without
+\(a_0=1\)
+)
+state
+– filter state array (will be modified)
+Returns
+:
+filtered value
+static
+void
+filterVec
+(
+const
+vqf_real_t
+x
+[
+]
+,
+size_t
+N
+,
+vqf_real_t
+tau
+,
+vqf_real_t
+Ts
+,
+const
+double
+b
+[
+3
+]
+,
+const
+double
+a
+[
+2
+]
+,
+double
+state
+[
+]
+,
+vqf_real_t
+out
+[
+]
+)
+
+Performs filter step for vector-valued signal with averaging-based initialization.
+During the first
+\(\tau\)
+seconds, the filter output is the mean of the previous samples. At
+\(t=\tau\)
+, the initial conditions for the low-pass filter are calculated based on the current mean value and from then on, regular filtering with the rational transfer function described by the coefficients b and a is performed.
+Parameters
+:
+x
+– input values (array of size N)
+N
+– number of values in vector-valued signal
+tau
+– filter time constant
+\(\tau\)
+in seconds (used for initialization)
+Ts
+– sampling time
+\(T_\mathrm{s}\)
+in seconds (used for initialization)
+b
+– numerator coefficients
+a
+– denominator coefficients (without
+\(a_0=1\)
+)
+state
+– filter state (array of size N*2, will be modified)
+out
+– output array for filtered values (size N)
+static
+void
+matrix3SetToScaledIdentity
+(
+vqf_real_t
+scale
+,
+vqf_real_t
+out
+[
+9
+]
+)
+
+Sets a 3x3 matrix to a scaled version of the identity matrix.
+Parameters
+:
+scale
+– value of diagonal elements
+out
+– output array of size 9 (3x3 matrix stored in row-major order)
+static
+void
+matrix3Multiply
+(
+const
+vqf_real_t
+in1
+[
+9
+]
+,
+const
+vqf_real_t
+in2
+[
+9
+]
+,
+vqf_real_t
+out
+[
+9
+]
+)
+
+Performs 3x3 matrix multiplication (
+\(\mathbf{M}_\mathrm{out} = \mathbf{M}_1\mathbf{M}_2\)
+).
+Parameters
+:
+in1
+– input 3x3 matrix
+\(\mathbf{M}_1\)
+(stored in row-major order)
+in2
+– input 3x3 matrix
+\(\mathbf{M}_2\)
+(stored in row-major order)
+out
+– output 3x3 matrix
+\(\mathbf{M}_\mathrm{out}\)
+(stored in row-major order)
+static
+void
+matrix3MultiplyTpsFirst
+(
+const
+vqf_real_t
+in1
+[
+9
+]
+,
+const
+vqf_real_t
+in2
+[
+9
+]
+,
+vqf_real_t
+out
+[
+9
+]
+)
+
+Performs 3x3 matrix multiplication after transposing the first matrix (
+\(\mathbf{M}_\mathrm{out} = \mathbf{M}_1^T\mathbf{M}_2\)
+).
+Parameters
+:
+in1
+– input 3x3 matrix
+\(\mathbf{M}_1\)
+(stored in row-major order)
+in2
+– input 3x3 matrix
+\(\mathbf{M}_2\)
+(stored in row-major order)
+out
+– output 3x3 matrix
+\(\mathbf{M}_\mathrm{out}\)
+(stored in row-major order)
+static
+void
+matrix3MultiplyTpsSecond
+(
+const
+vqf_real_t
+in1
+[
+9
+]
+,
+const
+vqf_real_t
+in2
+[
+9
+]
+,
+vqf_real_t
+out
+[
+9
+]
+)
+
+Performs 3x3 matrix multiplication after transposing the second matrix (
+\(\mathbf{M}_\mathrm{out} = \mathbf{M}_1\mathbf{M}_2^T\)
+).
+Parameters
+:
+in1
+– input 3x3 matrix
+\(\mathbf{M}_1\)
+(stored in row-major order)
+in2
+– input 3x3 matrix
+\(\mathbf{M}_2\)
+(stored in row-major order)
+out
+– output 3x3 matrix
+\(\mathbf{M}_\mathrm{out}\)
+(stored in row-major order)
+static
+bool
+matrix3Inv
+(
+const
+vqf_real_t
+in
+[
+9
+]
+,
+vqf_real_t
+out
+[
+9
+]
+)
+
+Calculates the inverse of a 3x3 matrix (
+\(\mathbf{M}_\mathrm{out} = \mathbf{M}^{-1}\)
+).
+Parameters
+:
+in
+– input 3x3 matrix
+\(\mathbf{M}\)
+(stored in row-major order)
+out
+– output 3x3 matrix
+\(\mathbf{M}_\mathrm{out}\)
+(stored in row-major order)
+Protected Functions
+void
+setup
+(
+)
+
+Calculates coefficients based on parameters and sampling rates.
+Protected Attributes
+VQFParams
+params
+
+Contains the current parameters.
+See
+getParams
+. To set parameters, pass them to the constructor. Part of the parameters can be changed with
+setTauAcc
+,
+setTauMag
+,
+setMotionBiasEstEnabled
+,
+setRestBiasEstEnabled
+,
+setMagDistRejectionEnabled
+, and
+setRestDetectionThresholds
+.
+VQFState
+state
+
+Contains the current state.
+See
+getState
+,
+getState
+and
+resetState
+.
+VQFCoefficients
+coeffs
+
+Contains the current coefficients (calculated in
+setup
+).
+See
+getCoeffs
+.
+Previous
+Next
+© Copyright 2021, Daniel Laidig.
+Built with
+Sphinx
+using a
+theme
+provided by
+Read the Docs
+.

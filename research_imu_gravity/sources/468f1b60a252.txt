@@ -1,0 +1,1521 @@
+URL: https://arxiv.org/html/2209.08816v1
+
+LGC-Net: A Lightweight Gyroscope Calibration Network for Efficient Attitude Estimation
+Report GitHub Issue
+×
+Title:
+Content selection saved. Describe the issue below:
+Description:
+Submit without GitHub
+Submit in GitHub
+arXiv is now an independent nonprofit!
+Learn more
+×
+Back to arXiv
+License: arXiv.org perpetual non-exclusive license
+arXiv:2209.08816v1 [cs.RO] 19 Sep 2022
+LGC-Net: A Lightweight Gyroscope Calibration Network for Efficient Attitude Estimation
+Yaohua Liu
+Affiliation:
+School of Nano-Tech and Nano-Bionics, University of Science and Technology of China, 96 Jinzhai Road, Hefei City, Anhui Province, China, 230026.
+Affiliation:
+Peng Cheng Laboratory, No.2, Xingke 1st Street, Nanshan, Shenzhen, China, 518055,
+cuijq@pcl.ac.cn
+Affiliation:
+Institute of Nano-Tech and Nano-Bionics, Chinese Academy of Sciences, 398 Ruoshui Road, Suzhou Industrial Park, Suzhou City, Jiangsu Province, China, 215123.
+Wei Liang
+Affiliation:
+Institute of Nano-Tech and Nano-Bionics, Chinese Academy of Sciences, 398 Ruoshui Road, Suzhou Industrial Park, Suzhou City, Jiangsu Province, China, 215123.
+Jinqiang Cui
+†
+†
+thanks:
+*corresponding author.
+Affiliation:
+Peng Cheng Laboratory, No.2, Xingke 1st Street, Nanshan, Shenzhen, China, 518055,
+cuijq@pcl.ac.cn
+Abstract
+This paper presents a lightweight, efficient calibration neural network model for denoising low-cost microelectromechanical system (MEMS) gyroscope and estimating the attitude of a robot in real-time. The key idea is extracting local and global features from the time window of inertial measurement units (IMU) measurements to regress the output compensation components for the gyroscope dynamically. Following a carefully deduced mathematical calibration model, LGC-Net leverages the depthwise separable convolution to capture the sectional features and reduce the network model parameters. The Large kernel attention is designed to learn the long-range dependencies and feature representation better. The proposed algorithm is evaluated in the EuRoC and TUM-VI datasets and achieves state-of-the-art on the (unseen) test sequences with a more lightweight model structure. The estimated orientation with our LGC-Net is comparable with the top-ranked visual-inertial odometry systems, although it does not adopt vision sensors. We make our method open-source at:
+https://github.com/huazai665/LGC-Net
+I
+INTRODUCTION
+Low-cost inertial measurement units (IMUs) based on microelectromechanical system (MEMS) have been popularly used in robots navigation due to their small size and low power consumption. IMUs can provide the attitude and position information by integrating 3-axis gyroscope and acceleration measurements, i.e., angular velocity and linear acceleration, without external equipment or signals. However, the low-cost MEMS IMUs often suffer from complex, nonlinear, time-varying noise and random errors
+[
+1
+]
+,
+[
+2
+]
+. Therefore, a more efficient calibration algorithm will be crucial in a more robust and accurate attitude estimation.
+Discrete calibration and system-level calibration are two classical methods used in inertial navigation to correct IMU errors
+[
+3
+]
+. Most discrete calibration methods model the IMU measurement output as a linear polynomial equation for the systematic error, such as constant bias, scale factor, and axes misalignment error. The corresponding coefficient parameters are calculated relying heavily on high-precision external equipment, i.e., 3-axis turntable
+[
+4
+,
+5
+,
+6
+,
+7
+]
+. However, the high-accuracy turntables are usually expensive and heavy, and the discrete IMU output model ignores the high-order coupling term and time-varying characteristics. The system-level calibration can correct IMU error by reducing inertial navigation result error based on the Kalman filter. Although the system-level calibration method reduces the dependence on external equipment and is suitable for online calibration, it is hard to denoise the nonlinear and non-Gaussian random error.
+Fig. 1:
+Framework of the proposed IMU calibration
+Recently, with the development of deep learning technologies, learning-based methods have been introduced into the visual-inertial navigation field to improve navigation and positioning accuracy
+[
+8
+,
+9
+,
+10
+,
+11
+,
+12
+]
+. In addition, the use of deep learning technology to calibrate IMU error has begun to attract researchers’ attention and the existing research shows that the MEMS IMU calibration based on deep learning is efficient
+[
+13
+,
+3
+,
+14
+]
+. However, they do not consider sectional features and long-range dependencies simultaneously, and the models are not lightweight enough to be deployed to edge devices.
+To address these problems, we propose a lightweight and efficient deep calibration network for low-cost MEMS gyroscope and open-loop orientation estimation only using the calibrated gyroscope measurements in real-time. The contributions of the paper are summarized as follows:
+1.
+A lightweight calibration network called LGC-Net based on depthwise separable convolution and large kernel attention is proposed that takes raw MEMS IMU data as the input and estimates the calibration compensation components.
+2.
+The developed LGC-Net can achieve state-of-the-art attitude estimate performance only using calibrated gyroscope data with fewer model parameters than the existing learning-based methods.
+3.
+A series of experiments on the EuRoC and TUM-VI public datasets are performed to verify the performance of the proposed method. To promote further research, we make our algorithm open-source.
+II
+RELATED WORK
+MEMS IMU calibration can be defined as a process that compares instrument outputs with known reference information to determine coefficients that force the output to agree with the reference information across the desired range of output values. All systematic errors can be compensated when only the significant errors are considered, and some random errors can be estimated by the navigation algorithm and compensated online
+[
+15
+]
+. U. Qureshi et al.
+[
+16
+]
+proposed an in-field calibration of a MEMS IMU, which requires no external equipment and utilizes gravity signal as a stable reference.
+Aiming at the swaying base environment, Dai et al.
+[
+17
+]
+improved the filtering method for 3-axis rotational inertial navigation system by taking the velocity errors as the reference.
+With the consideration of external perturbations, Peng et al.
+[
+18
+]
+developed a low-cost, lightweight, and portable IMU calibration embedded platform and proposed an iterative weighted Levenberg-Marquardt algorithm to deal with perturbations. While the errors of scale factors, misalignment, and offsets constantly vary with time and environment, these calibration methods usually consider the parameters as constant values.
+In order to calibrate and reduce the random error, researchers have proposed many representative denoising techniques for MEMS IMUs. The denoising methods are mainly based on statistical principles, including autoregressive moving average method (ARMA)
+[
+19
+]
+, Allan variance
+[
+20
+]
+, Kalman filter
+[
+21
+]
+, and wavelet transformation
+[
+22
+]
+. The ARMA method is mainly used to analyze and study a group of random data arranged in sequence and establish mathematical models of various orders according to different error sequences. However, this method cannot identify random errors one by one, making it difficult to distinguish the error sources. To solve the above problem, Allan variance is proposed to identify various random errors and separate them into five parts: quantization noise, angle random walk, bias instability, rate random walk, and rate ramp. Kalman filter is an efficient linear quadratic estimator which can estimate gyroscope output angular velocity via a series of observed measurements with noise. However, since the actual MEMS IMU error is usually too complex to build an accurate mathematics model, the Kalman filter has poor performance for denoising random errors. Among the statistical methods, the wavelet transform method is a standard method for reducing the high-frequency part of the gyroscope error but it cannot remove the low-frequency errors.
+For the visual-inertial navigation system, Furgale et al.
+[
+6
+]
+presented a new calibration framework for jointly estimating the temporal offset and spatial displacement between camera and IMU and made it open-source, called Kalibr toolbox. Rehder et al.
+[
+1
+]
+further improved the Kalibr toolbox for spatially calibrating multiple IMUs following an inertial noise model. Jung et al.
+[
+23
+]
+proposed a self-calibrated visual-inertial odometer(VIO) to estimate IMU scale factor and misalignment using an extended Kalman filter-based pose estimator. As to the problem of the necessity of online IMU intrinsic calibration, Yang et al.
+[
+24
+]
+performed observability analysis for the visual-inertial navigation system and first identified six primitive degenerate motion profiles for IMU intrinsic calibration. However, these methods rely heavily on the IMU error model, resulting in poor correction accuracy in some challenges.
+In recent years, deep learning has been introduced into the inertial odometer, such as OriNet
+[
+10
+]
+, IONet
+[
+8
+]
+, TLIO
+[
+25
+]
+, A2DIO
+[
+26
+]
+, CTIN
+[
+11
+]
+, all of which achieve great positioning performance than traditional methods. However, the use of deep learning technology to calibrate IMU errors has just started, and the published research results are still rare. The key idea is that a deep neural network is trained to mine internal implicit relationships with a lot of raw IMU data. In
+[
+27
+]
+, a long short-term memory (LSTM) neural network is employed to filter the MEMS gyroscope outputs by treating the signals as time series, showing that the denoising scheme effectively improves MEMS IMU accuracy. To further explore the effect of LSTM in denoising the MEMS IMU, some hybrid deep recurrent neural networks, including LSTM and gated recurrent unit (GRU), are evaluated for MEMS IMU with static and dynamic conditions
+[
+28
+]
+. Chen et al.
+[
+29
+]
+first present a novel deep learning-based method to simultaneously remove systematic and random errors using a Convolutional Neural Network (CNN). In 2020, Brossard et al.
+[
+13
+]
+designed a CNN to estimate attitude with only a commercial IMU, and the test results outperformed the state-of-the-art on the unseen sequences of EuRoC and TUM-VI datasets. Recently, Huang et al.
+[
+3
+]
+adopted a temporal convolutional network to construct the MEMS IMU gyroscope output model and improve the attitude and position accuracy of the inertial navigation solution.
+III
+METHOD
+We focus on the low-cost MEMS IMU composed of a 3-axis accelerometer and a 3-axis gyroscope, which can provide the linear acceleration
+a
+^
+n
+{\hat{a}}_{n}
+and angular velocity
+ω
+^
+n
+{\hat{\omega}}_{n}
+information separately in the body frame. Our goal is to estimate the correction parameters of the IMU using deep neural network and directly calculate the attitude using noise-free angular velocity values.
+Fig. 2:
+The proposed LGC-Net structure
+III-A
+MEMS IMU Output and Attitude Update Models
+For a typical low-cost MEMS IMU, the inertial measurements can be expressed as follows,
+[
+a
+^
+n
+ω
+^
+n
+]
+=
+A
+⁡
+[
+a
+n
+ω
+n
+]
++
+[
+b
+n
+a
+b
+n
+ω
+]
++
+[
+η
+n
+a
+η
+n
+ω
+]
+\left[{\begin{array}[]{*{20}{c}}{{{\hat{a}}_{n}}}\\
+{{{\hat{\omega}}_{n}}}\end{array}}\right]=A\left[{\begin{array}[]{*{20}{c}}{{a_{n}}}\\
+{{\omega_{n}}}\end{array}}\right]+\left[{\begin{array}[]{*{20}{c}}{b_{n}^{a}}\\
+{b_{n}^{\omega}}\end{array}}\right]+\left[{\begin{array}[]{*{20}{c}}{\eta_{n}^{a}}\\
+{\eta_{n}^{\omega}}\end{array}}\right]
+(1)
+where
+a
+n
+a_{n}
+and
+ω
+n
+\omega_{n}
+are the actual values of the linear acceleration and angular velocity at timestamp
+n
+n
+;
+b
+n
+a
+{b_{n}^{a}}
+and
+η
+n
+a
+{\eta_{n}^{a}}
+are the bias and additive zero-mean Gaussian noises for accelerometer, and
+b
+n
+ω
+{b_{n}^{\omega}}
+and
+η
+n
+ω
+{\eta_{n}^{\omega}}
+are for gyroscope; The intrinsic calibration matrix
+A
+A
+can be further represented as
+[
+1
+]
+,
+A
+=
+[
+S
+a
+​
+M
+a
+C
+×
+0
+3
+×
+3
+S
+ω
+​
+M
+ω
+]
+≈
+I
+6
+{A=}\left[{\begin{array}[]{*{20}{c}}{{S_{a}}{M_{a}}}&{{C_{\times}}}\\
+{{0_{3\times 3}}}&{{S_{\omega}}{M_{\omega}}}\end{array}}\right]\approx{I_{6}}
+(2)
+where
+S
+a
+S_{a}
+and
+S
+ω
+{S_{\omega}}
+represent the scale factors,
+M
+a
+{{M_{a}}}
+and
+M
+ω
+{M_{\omega}}
+are axis misalignments, respectively. Both
+S
+S
+and
+M
+M
+are approximately equal to the identity matrix.
+C
+×
+{C_{\times}}
+is the coefficient matrix representing the effect of linear acceleration on gyroscope measurement, i.e., g-sensitivity
+[
+13
+]
+. Thus, the acceleration output data would be considered part of the neural network input to eliminate the g-sensitivity error.
+The attitude of a carrier can be calculated by integrating orientation increments from the gyroscope measurement as follows,
+R
+⁡
+(
+n
+)
+=
+R
+⁡
+(
+n
+−
+1
+)
+​
+exp
+⁡
+(
+θ
+n
+)
+R(n)=R(n-1)\exp({\theta_{n}})
+(3)
+where
+R
+⁡
+(
+n
+)
+R(n)
+is the rotation matrix of the carrier frame relative to the inertial frame at timestamp
+n
+n
+and
+θ
+n
+\theta_{n}
+is the orientation increments with the exponential map
+exp
+⁡
+(
+⋅
+)
+\exp(\cdot)
+in the
+S
+​
+O
+​
+(
+3
+)
+SO(3)
+, which can be inferred as,
+θ
+n
+=
+ω
+^
+n
+​
+d
+​
+t
+{\theta_{n}}={{\hat{\omega}}_{n}}dt
+(4)
+exp
+(
+θ
+n
+)
+=
+I
++
+sin
+⁡
+θ
+n
+θ
+n
+[
+θ
+n
+×
+]
++
+1
+−
+cos
+⁡
+θ
+n
+θ
+n
+2
+[
+θ
+n
+×
+]
+2
+\exp({\theta_{n}})=I+\frac{{\sin{\theta_{n}}}}{{{\theta_{n}}}}[{\theta_{n}}\times]+\frac{{1-\cos{\theta_{n}}}}{{\theta_{n}^{2}}}{[{\theta_{n}}\times]^{2}}
+(5)
+where
+[
+θ
+n
+×
+]
+[{\theta_{n}}\times]
+is the antisymmetric matrix of
+θ
+n
+\theta_{n}
+. Thus, the error present in
+R
+⁡
+(
+n
+−
+1
+)
+R(n-1)
+will be transferred to the
+R
+⁡
+(
+n
+)
+R(n)
+according to Eq.
+3
+.
+III-B
+LGC-Net for Gyroscope Measurement Calibration
+Through the analysis of the MEMS IMU output model, the gyroscope measurements after error calibration can be represented as,
+ω
+~
+n
+=
+A
+ω
+−
+1
+​
+(
+ω
+^
+n
+−
+b
+n
+ω
+−
+η
+n
+ω
+)
+=
+A
+ω
+−
+1
+​
+ω
+^
++
+δ
+{{\tilde{\omega}}_{n}}=A_{\omega}^{-1}(\hat{\omega}_{n}-b_{n}^{\omega}-\eta_{n}^{\omega})=A_{\omega}^{-1}\hat{\omega}+\delta
+(6)
+where
+ω
+~
+n
+{\tilde{\omega}}_{n}
+is the gyroscope data after error compensation,
+A
+ω
+A_{\omega}
+contains scale factor and axis misalignment errors for gyroscope, and we define
+δ
+=
+A
+ω
+−
+1
+​
+(
+b
+n
+ω
++
+η
+n
+ω
+)
+\delta=A_{\omega}^{-1}(b_{n}^{\omega}+\eta_{n}^{\omega})
+as the gyroscope correction which is a time-varying error due to the bias is random and time-varying.
+As shown in Eq.
+6
+,
+A
+ω
+A_{\omega}
+and
+δ
+\delta
+are essential for IMU calibration and attitude estimation. According to their error characteristics, we design the calibration model based on LGC-Net illustrated in Fig.
+1
+. Firstly, in order to accelerate the convergence speed of the network model, we conduct data normalization (DN) preprocessing on the IMU data to make it obey normal distribution. The normalized IMU sequences are then split into small windows with
+N
+N
+samples, which indicates our model can capture the inhere inertial information from
+N
+N
+data at one time. The scale factor and axis misalignment errors in
+A
+ω
+A_{\omega}
+are not easily affected by the external environment, thus
+A
+ω
+A_{\omega}
+can be regarded as a constant parameters initialized at identity matrix and optimized during training in our model. Since
+δ
+\delta
+is nonlinear time-varying affected by many factors, we design the LGC-Net to predict
+δ
+\delta
+using IMU data in a time window
+N
+N
+, and the network can be expressed as,
+δ
+t
+=
+f
+⁡
+(
+I
+​
+M
+​
+U
+t
+−
+N
+,
+…
+,
+I
+​
+M
+​
+U
+t
+)
+{\delta_{t}}=f(IM{U_{t-N}},...,IM{U_{t}})
+(7)
+where
+f
+⁡
+(
+⋅
+)
+f(\cdot)
+is the nonlinear function learned by LGC-Net, The learned
+f
+⁡
+(
+⋅
+)
+f(\cdot)
+can capture the temporal multi-scales features and regress the gyroscope corrections.
+Afterward, the noise-free measurement can be obtained by summing
+A
+ω
+−
+1
+​
+ω
+^
+A_{\omega}^{-1}\hat{\omega}
+and
+δ
+\delta
+, and the attitude can be estimated by open-loop integrating the calibrated gyroscope outputs. Furthermore, the parameters of the LGC-Net are also updated by calculating the loss function between ground truth and estimated attitudes. Thus, the well-trained network can correct the MEMS gyroscope measurements through repeated training and accomplish more accurate attitude estimation.
+III-C
+Network Structure
+Normalized IMU measurements can be sent to the LGC-Net for further processing. In order to make the network lightweight, we leverage depthwise separable convolution (DSC) inspired by mobilenet
+[
+30
+]
+and large kernel attention (LKA)
+[
+31
+]
+to infer a gyroscope correction based on a time window of
+N
+N
+. Considering mining the correlation of IMU data as much as possible and the size of GPU memory, we finally choose to set
+N
+N
+to 16000 after many tests. Specially, the LGC-Net is composed of four DSC layers, one LKA block, and one output layer. The detail of the LGC-Net and the well-chosen configuration of each layer is presented in Fig.
+2
+. We also set
+A
+ω
+A_{\omega}
+as a trainable parameter to keep tuning it. According to the mathematical model in Eq.
+6
+, the parameters of LGC-Net can be optimized by the carefully designed loss function.
+Fig. 3:
+The details of the depthwise separable convolution
+As shown in Fig.
+3
+, the DSC is mainly composed of depthwise convolution (DC), batch normalization (BN)
+[
+32
+]
+, GELU activation function
+[
+33
+]
+, pointwise convolution (PC) and dropout layer. The first step of the designed LGC-Net is to extract the spatial feature map of the MEMS IMU by the DC layer, where the number of feature map channels is the same as the number of input channels. Since DW does not effectively use the feature information of different channels in the same spatial location, we adopted the PC layer to combine the DW’s feature map in the depth direction to generate a new feature map. In order to reduce network overfitting and increase nonlinear mapping capability, we design a BN layer and a GELU activation function between DW and PC layers, and a dropout layer is added at the end. The specific DW and PW processes for one-dimensional data are illustrated in Fig.
+4
+. A standard convolution layer can be converted into a DW layer and a PW layer, where one convolution kernel of the DW is responsible for one channel, and one channel is only convoluted by one convolution kernel. The DW can reduce the network parameters but can not increase the number of feature map channels. Thus, the PW is designed as a standard convolution layer with kernel size 1 to increase the depth of the feature map without changing the size. Compared with standard convolution, the DSC can reduce the number of parameters by two-thirds.
+Fig. 4:
+Depth-wise and Point-wise convolution for one dimensional data
+The LKA is a new attention mechanism to enhance the neural network’s performance proposed in the visual attention network, which far outperforms the state-of-the-art CNN and visual transformer
+[
+34
+]
+in terms of image classification, object detection, and semantic segmentation. The LKA can combine the advantages of convolution and self-attention, including local structural information, long-range dependence, and adaptability thanks to the carefully designed structure. The detailed structure of the one-dimensional LKA is shown in Fig.
+5
+, which contains a depthwise convolution (DW-Conv), a depthwise dilation convolution (DW-D-Conv), and a 1x1 convolution (1x1 Conv). Since the gyroscope correction values should consider both the previous and instantaneous IMU outputs simultaneously, we embed the LKA behind the DSC4 layer in LGC-Net to capture long-range relationships with fewer computational loads and generate new attention maps according to attention weight. Significantly, the whole LKA can be summarized as,
+A
+​
+t
+​
+t
+=
+C
+​
+o
+​
+n
+​
+v
+1
+×
+1
+​
+(
+D
+​
+W
+−
+D
+−
+C
+​
+o
+​
+n
+​
+v
+​
+(
+D
+​
+W
+−
+C
+​
+o
+​
+n
+​
+v
+​
+(
+F
+)
+)
+)
+Att=Con{v_{1\times 1}}(DW-D-Conv(DW-Conv(F)))
+(8)
+O
+​
+u
+​
+t
+​
+p
+​
+u
+​
+t
+=
+A
+​
+t
+​
+t
+⊗
+F
+Output=Att\otimes F
+(9)
+where
+F
+F
+is the input features computed by four DSC layers, attention denotes the attention map, the value of which indicates the importance of each feature.
+⊗
+\otimes
+represents element-wise product. In the end, the
+1
+×
+1
+1\times 1
+convolution with one output channel is selected as the output layer to transform the feature dimension in the hidden layer into the output dimension.
+Fig. 5:
+The structure of large kernel attention
+III-D
+Loss Function
+Since the sampling frequency of the IMU is generally 200Hz, calculating directly the difference between the actual angular velocity from the ground truth system and estimated values is unsuitable for real robotic systems. Considering the above reasons, we adopt the incremental calculation method to construct the loss function and design it as the distance between the ground truth increments and integrated increments from the LGC-Net output. The integrated increments can be expressed as follow,
+δ
+​
+R
+n
+,
+n
++
+t
+=
+R
+n
+T
+​
+R
+n
++
+t
+\delta{R_{n,n+t}}=R_{n}^{T}{R_{n+t}}
+(10)
+In order to enhance the robustness for ground truth outliers, we leverage the log hyperbolic cosine (Log-cosh) loss for LGC-Net. Compared with L1 (mean square error) and L2 (mean absolute error) loss, log-cosh loss combines the advantages of the above two losses, decreasing the gradient around the minima. The loss function is defined as,
+L
+=
+∑
+n
+=
+1
+t
+L
+​
+o
+​
+g
+−
+cosh
+⁡
+(
+log
+⁡
+(
+δ
+​
+R
+n
+,
+n
++
+t
+​
+δ
+​
+R
+~
+n
+,
+n
++
+t
+T
+)
+)
+{L}=\sum\limits_{n=1}^{t}{Log-\cosh(\log(\delta{R_{n,n+t}}\delta\tilde{R}_{n,n+t}^{T}))}
+(11)
+where
+log
+⁡
+(
+⋅
+)
+\log(\cdot)
+is the
+S
+​
+O
+​
+(
+3
+)
+SO(3)
+logarithm map, and the designed loss approximately equals
+(
+log
+⁡
+(
+δ
+​
+R
+n
+,
+n
++
+t
+​
+δ
+​
+R
+~
+n
+,
+n
++
+t
+T
+)
+)
+2
+/
+2
+{(\log(\delta{R_{n,n+t}}\delta\tilde{R}_{n,n+t}^{T}))^{2}}/2
+for the small loss, and to
+|
+log
+⁡
+(
+δ
+​
+R
+n
+,
+n
++
+t
+​
+δ
+​
+R
+~
+n
+,
+n
++
+t
+T
+)
+|
+−
+log
+⁡
+(
+2
+)
+\left|{\log(\delta{R_{n,n+t}}\delta\tilde{R}_{n,n+t}^{T})}\right|-\log(2)
+for the large loss.
+TABLE I:
+Training and test sets of EuRoC dataset
+Train dataset
+Test dataset
+MH_01_easy
+MH_02_easy
+MH_03_medium
+MH_04_difficult
+MH_05_difficult
+V1_01_easy
+V1_02_medium
+V2_02_medium
+V2_01_easy
+V1_03_difficult
+V2_03_difficult
+TABLE II:
+Attitude estimation results of different methods on the EuRoC test sequences
+EuRoC test sequence
+VINS-Mono
+Open-VINS
+Raw IMU
+OriNet
+DIG
+Proposed method
+MH_02_easy
+1.34
+1.11
+146
+5.75
+1.39
+1.14
+MH_04_difficult
+1.44
+1.60
+130
+8.85
+1.40
+1.32
+V1_01_easy
+0.97
+0.80
+71.3
+6.36
+1.13
+2.81
+V2_02_medium
+4.72
+2.32
+119
+14.7
+2.70
+1.98
+V1_03_difficult
+2.58
+1.85
+117
+11.7
+3.85
+3.99
+Average
+2.21
+1.55
+125
+9.46
+2.10
+2.25
+IV
+Experiments
+In order to evaluate the performance of the proposed network model, two different public datasets are tested. Further, we have compared the experiment results with other attitude estimation methods.
+IV-A
+Dataset Descriptions and Training Details
+The experiment is performed on the EuRoC dataset
+[
+35
+]
+and the TUM-VI dataset
+[
+36
+]
+. The EuRoC dataset is a visual-inertial dataset collected from a micro aerial vehicle, which contained 11 flight trajectories of 2-3 minutes in machine hall and vicon room environments. An uncalibrated ADIS16448 IMU is installed in the micro aerial vehicle to sample the inertial data at 200 Hz. In the EuRoC dataset, the ground truth is provided by a laser tracker and Vicon motion capture system, which is accurately time-synchronized with the IMU. We split data into training, validation, and test sets to better tune the neural network parameters. The training and test sequences are summarized in Tab.
+I
+, where the first 50 s of the training set is used for training, and the remaining data are used for validation.
+Fig. 6:
+Attitude estimates on the test sequence machine-hall-02
+The TUM-VI dataset includes inertial and visual data collected from a hand-held device in different scenes. The IMU data is obtained from the cheap BMI160 IMU with a 200 Hz sampling frequency, and the ground truth is generated via the motion capture system. Similarly, we choose the first 50 s of the sequences from
+r
+​
+o
+​
+o
+​
+m
+​
+1
+room1
+,
+r
+​
+o
+​
+o
+​
+m
+​
+3
+room3
+, and
+r
+​
+o
+​
+o
+​
+m
+​
+5
+room5
+scenes as the training sets, the remaining parts as the validation sets, and the test sets are
+r
+​
+o
+​
+o
+​
+m
+​
+2
+room2
+,
+r
+​
+o
+​
+o
+​
+m
+​
+4
+room4
+, and
+r
+​
+o
+​
+o
+​
+m
+​
+6
+room6
+sequences.
+For the training of our LGC-Net, we use a Dell server computer equipped with an Nvidia GeForce GTX 2080Ti GPU with 11 GB memory.
+The framework of LGC-Net is implemented based on PyTorch. The Adam optimizer
+[
+37
+]
+with the initial learning rate of 0.0008 is used in the training process. The learning rate will be automatically adjusted when the loss changes very slowly. To reduce overfitting, we set the weight decay and dropout parameter are 0.1, respectively, and added a Gaussian noise in the raw IMU measurements to increase the diversity of data based on data augmentation technology during each training epoch. We train the proposed model for 4000 epochs with a short time, i.e., 185 s.
+IV-B
+Calibration Performance Evaluation on EuRoC Dataset
+To quantitatively evaluate the performance of the LGC-Net, a set of attitude estimation methods are compared. We choose the absolute orientation error (AOE) as the evaluation metric, indicating the similarity between the orientation estimates and the ground truth. Specially, it can be computed by openvins evaluation tool
+[
+38
+]
+and expressed as,
+A
+​
+O
+​
+E
+=
+1
+M
+​
+∑
+n
+=
+1
+M
+log
+⁡
+(
+R
+n
+T
+​
+R
+~
+n
+)
+AOE=\sqrt{\frac{1}{M}\sum\limits_{n=1}^{M}{\log(R_{n}^{T}{{\tilde{R}}_{n}})}}
+(12)
+where
+M
+M
+is the sequence length.
+TABLE III:
+Attitude estimation results of different methods on the TUM-VI test sequences
+TUM-VI test sequence
+VINS-Mono
+Open-VINS
+Raw IMU
+DIG
+Proposed method
+room 2
+0.60
+2.47
+118
+1.31
+1.60
+room 4
+0.76
+0.97
+74.1
+1.48
+1.81
+room 6
+0.58
+0.63
+94.0
+1.04
+1.08
+Average
+0.66
+1.33
+95.7
+1.28
+1.50
+The attitude can be calculated by using the corrected gyroscope data and compared with a series of methods, including the following,
+1.
+Raw IMU, attitude is estimated using uncalibrated IMU.
+2.
+OriNet
+[
+10
+]
+, an attitude estimation model based on recurrent neural networks.
+3.
+Denoising IMU Gyro (DIG)
+[
+13
+]
+, open-loop estimating attitude using the calibrated IMU
+4.
+VINS-Mono
+[
+39
+]
+, a visual-inertial odometer system with a monocular camera.
+5.
+Open-VINS
+[
+38
+]
+, a filter-based visual-inertial odometer system that achieves a great estimation performance.
+The results of attitude estimation with different methods on the test sequence Machine-hall-02 and all test errors are given in Fig.
+6
+and Tab.
+II
+. As illustrated in Fig.
+6
+, the attitude results from the uncalibrated raw IMU deviate from ground truth in less than 10 s, which cannot be used for robot positioning and navigation. Our proposed method is comparable to the DIG, and both methods can track ground truth well. Compared with the other five methods, our proposed method achieves the best performance on the MH-04-difficult and V2-02-medium test sequence, the AOEs of which are 1.32 deg and 1.98 deg at Tab.
+II
+separately. The average AOE of our method dropped by 76.2
+%
+\%
+when compared to OriNet. Although our algorithm only using an IMU, the results show that it can compete with VINS-Mono and Open-VINS, which verifies that the proposed model is more reliable and effective for gyroscope error calibration.
+IV-C
+Calibration Performance Evaluation on TUM-VI Dataset
+The attitude estimation is performed in the TUM-VI dataset to validate the proposed method further. Fig.
+7
+shows the calculated orientation angles of ground truth, raw IMU, DIG, and LGC-Net. Similar to the EuRoC dataset, the attitude angles from uncorrected IMU have the maximum error, and other method curves are close to the ground truth.
+Fig. 7:
+Attitude estimates on the test sequence Room-02
+As shown in Tab.
+III
+, the average AOE of raw IMU results is 95.6 deg. The VINS-Mono, based on IMU and camera sensors, has the best performance, the average AOE of which is 0.66 deg. The average AOE of our method is basically at the same level as that of Open-VINS and DIG, i.e., 1.5 deg. Since OriNet does not publish the code and test results on TUM-VI, we cannot compare and analyze them. However, our network model’s whole number of trainable parameters is 38146, and the network size is only 0.038 MB. In DIG and
+[
+3
+]
+, the network model parameters are 77052 and 175976, respectively. Compared with them, our model size is reduced by 52.5
+%
+\%
+and 94.6
+%
+\%
+. As for OriNet, it uses the recurrent neural network to learn calibration compensation components and needs more computational load consumption. What is more, our model has an extremely small number of parameters compared to visual-inertial learning methods, where IMU processing only requires more than 2600000 parameters
+[
+40
+]
+. In the inference phase, our trained network model takes about 1 ms to estimate one test sequence result and has the real-time ability.
+IV-D
+Ablation Study
+We evaluate the attitude estimation performance of removing the LKA from LGC-Net to demonstrate the effectiveness of the proposed LGC-Net design choice of the LKA. The AOE for the EuRoC and TUM-VI test set of all the ablation experiments are shown in Tab.
+IV
+. Applying LKA in LGC-Net has a lower error than without any attention mechanism after the DSC layers, the average AOEs of which are 1.97 deg and 5.73 deg, respectively. The ablation experiments show that all components in the LGC-Net are effective.
+TABLE IV:
+Comparing with LGC-Net and LGC-Net without LKA
+Test sequence
+LGC-Net
+LGC-Net without LKA
+MH_02_easy
+1.14
+3.87
+MH_04_difficult
+1.32
+4.52
+V1_01_easy
+2.81
+7.54
+V2_02_medium
+1.98
+4.83
+V1_03_difficult
+3.99
+11.63
+room 2
+1.60
+4.05
+room 4
+1.81
+5.16
+room 6
+1.08
+4.23
+average
+1.97
+5.73
+V
+Conclusion
+A lightweight gyroscope calibration network for efficient attitude estimation is proposed in this paper. The devised deep neural network achieves outstanding accurate attitude estimates with only a low-cost MEMS IMU, which outperforms state-of-the-art visual-inertial system and Orinet in some test sequences with fewer model parameters. We leverage depthwise separable convolution to extract spatial features from the normalized IMU measurements. The LKA is applied to learn long-range relationships further. Numerical experiments and variation studies results prove the effectiveness of the proposed model.
+ACKNOWLEDGMENT
+The authors are very grateful to Martin Brossard for the open-source code and the results of attitude estimation.
+References
+[1]
+J. Rehder, J. Nikolic, T. Schneider, T. Hinzmann, and R. Siegwart, “Extending
+kalibr: Calibrating the extrinsics of multiple imus and of individual axes,”
+in
+2016 IEEE International Conference on Robotics and Automation
+(ICRA)
+, pp. 4304–4311, IEEE, 2016.
+[2]
+J. Rohac, M. Sipos, and J. Simanek, “Calibration of low-cost triaxial inertial
+sensors,”
+IEEE Instrumentation & Measurement Magazine
+, vol. 18,
+no. 6, pp. 32–38, 2015.
+[3]
+F. Huang, Z. Wang, L. Xing, and C. Gao, “A mems imu gyroscope calibration
+method based on deep learning,”
+IEEE Transactions on Instrumentation
+and Measurement
+, vol. 71, pp. 1–9, 2022.
+[4]
+D. Tedaldi, A. Pretto, and E. Menegatti, “A robust and easy to implement
+method for imu calibration without external equipments,” in
+2014 IEEE
+International Conference on Robotics and Automation (ICRA)
+, pp. 3042–3049,
+IEEE, 2014.
+[5]
+F. Ghanipoor, M. Hashemi, and H. Salarieh, “Toward calibration of
+low-precision mems imu using a nonlinear model and tukf,”
+IEEE Sensors
+journal
+, vol. 20, no. 8, pp. 4131–4138, 2020.
+[6]
+P. Furgale, J. Rehder, and R. Siegwart, “Unified temporal and spatial
+calibration for multi-sensor systems,” in
+2013 IEEE/RSJ International
+Conference on Intelligent Robots and Systems
+, pp. 1280–1286, IEEE, 2013.
+[7]
+J. Lu, C. Lei, S. Liang, and Y. Yang, “An all-parameter system-level
+calibration for stellar-inertial navigation system on ground,”
+IEEE
+Transactions on Instrumentation and Measurement
+, vol. 66, no. 8,
+pp. 2065–2073, 2017.
+[8]
+C. Chen, X. Lu, A. Markham, and N. Trigoni, “Ionet: Learning to cure the curse
+of drift in inertial odometry,” in
+Proceedings of the AAAI Conference
+on Artificial Intelligence
+, vol. 32, 2018.
+[9]
+S. Herath, H. Yan, and Y. Furukawa, “Ronin: Robust neural inertial navigation
+in the wild: Benchmark, evaluations, & new methods,” in
+2020 IEEE
+International Conference on Robotics and Automation (ICRA)
+, pp. 3146–3152,
+IEEE, 2020.
+[10]
+M. A. Esfahani, H. Wang, K. Wu, and S. Yuan, “Orinet: Robust 3-d orientation
+estimation with a single particular imu,”
+IEEE Robotics and Automation
+Letters
+, vol. 5, no. 2, pp. 399–406, 2019.
+[11]
+B. Rao, E. Kazemi, Y. Ding, D. M. Shila, F. M. Tucker, and L. Wang, “Ctin:
+Robust contextual transformer network for inertial navigation,” in
+Proceedings of the AAAI Conference on Artificial Intelligence
+, vol. 36,
+pp. 5413–5421, 2022.
+[12]
+S. Herath, D. Caruso, C. Liu, Y. Chen, and Y. Furukawa, “Neural inertial
+localization,” in
+Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition
+, pp. 6604–6613, 2022.
+[13]
+M. Brossard, S. Bonnabel, and A. Barrau, “Denoising imu gyroscopes with deep
+learning for open-loop attitude estimation,”
+IEEE Robotics and
+Automation Letters
+, vol. 5, no. 3, pp. 4796–4803, 2020.
+[14]
+D. Engelsman and I. Klein, “Data-driven denoising of accelerometer signals,”
+arXiv preprint arXiv:2206.05937
+, 2022.
+[15]
+A. Noureldin, T. B. Karamat, and J. Georgy, “Fundamentals of inertial
+navigation, satellite-based positioning and their integration,” 2013.
+[16]
+U. Qureshi and F. Golnaraghi, “An algorithm for the in-field calibration of a
+mems imu,”
+IEEE Sensors Journal
+, vol. 17, no. 22, pp. 7479–7486,
+2017.
+[17]
+M. Dai and J. Lu, “A full-parameter self-calibration method based on inertial
+frame filtering for triaxis rins under swaying base,”
+IEEE Sensors
+Journal
+, vol. 19, no. 6, pp. 2170–2180, 2018.
+[18]
+C.-C. Peng, J.-J. Huang, and H.-Y. Lee, “Design of an embedded icosahedron
+mechatronics for robust iterative imu calibration,”
+IEEE/ASME
+Transactions on Mechatronics
+, 2021.
+[19]
+J. Song, Z. Shi, L. Wang, and H. Wang, “Improved virtual gyroscope technology
+based on the arma model,”
+Micromachines
+, vol. 9, no. 7, p. 348, 2018.
+[20]
+Q. Zhang, X. Wang, S. Wang, and C. Pei, “Application of improved fast dynamic
+allan variance for the characterization of mems gyroscope on uav,”
+Journal of Sensors
+, vol. 2018, 2018.
+[21]
+S. Zhang, S. Yu, C. Liu, X. Yuan, and S. Liu, “A dual-linear kalman filter for
+real-time orientation determination system using low-cost mems sensors,”
+Sensors
+, vol. 16, no. 2, p. 264, 2016.
+[22]
+J. Yuan, Y. Yuan, F. Liu, Y. Pang, and J. Lin, “An improved noise reduction
+algorithm based on wavelet transformation for mems gyroscope,”
+Frontiers of Optoelectronics
+, vol. 8, no. 4, pp. 413–418, 2015.
+[23]
+J. H. Jung, S. Heo, and C. G. Park, “Observability analysis of imu intrinsic
+parameters in stereo visual–inertial odometry,”
+IEEE Transactions on
+Instrumentation and Measurement
+, vol. 69, no. 10, pp. 7530–7541, 2020.
+[24]
+Y. Yang, P. Geneva, X. Zuo, and G. Huang, “Online imu intrinsic calibration:
+Is it necessary?,” in
+Robotics: Science and Systems
+, 2020.
+[25]
+W. Liu, D. Caruso, E. Ilg, J. Dong, A. I. Mourikis, K. Daniilidis, V. Kumar,
+and J. Engel, “Tlio: Tight learned inertial odometry,”
+IEEE Robotics
+and Automation Letters
+, vol. 5, no. 4, pp. 5653–5660, 2020.
+[26]
+Y. Wang, H. Cheng, and M. Q.-H. Meng, “A2dio: Attention-driven deep inertial
+odometry for pedestrian localization based on 6d imu,” in
+2022
+International Conference on Robotics and Automation (ICRA)
+, pp. 819–825,
+IEEE, 2022.
+[27]
+C. Jiang, S. Chen, Y. Chen, B. Zhang, Z. Feng, H. Zhou, and Y. Bo, “A mems imu
+de-noising method using long short term memory recurrent neural networks
+(lstm-rnn),”
+Sensors
+, vol. 18, no. 10, p. 3470, 2018.
+[28]
+S. Han, Z. Meng, X. Zhang, and Y. Yan, “Hybrid deep recurrent neural networks
+for noise reduction of mems-imu with static and dynamic conditions,”
+Micromachines
+, vol. 12, no. 2, p. 214, 2021.
+[29]
+H. Chen, P. Aggarwal, T. M. Taha, and V. P. Chodavarapu, “Improving inertial
+sensor by reducing errors using deep learning methodology,” in
+NAECON
+2018-IEEE National Aerospace and Electronics Conference
+, pp. 197–202, IEEE,
+2018.
+[30]
+A. G. Howard, M. Zhu, B. Chen, D. Kalenichenko, W. Wang, T. Weyand,
+M. Andreetto, and H. Adam, “Mobilenets: Efficient convolutional neural
+networks for mobile vision applications,”
+arXiv preprint
+arXiv:1704.04861
+, 2017.
+[31]
+M.-H. Guo, C.-Z. Lu, Z.-N. Liu, M.-M. Cheng, and S.-M. Hu, “Visual attention
+network,”
+arXiv preprint arXiv:2202.09741
+, 2022.
+[32]
+S. Ioffe and C. Szegedy, “Batch normalization: Accelerating deep network
+training by reducing internal covariate shift,” in
+International
+conference on machine learning
+, pp. 448–456, PMLR, 2015.
+[33]
+P. Ramachandran, B. Zoph, and Q. V. Le, “Searching for activation functions,”
+arXiv preprint arXiv:1710.05941
+, 2017.
+[34]
+A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai,
+T. Unterthiner, M. Dehghani, M. Minderer, G. Heigold, S. Gelly,
+et al.
+,
+“An image is worth 16x16 words: Transformers for image recognition at
+scale,”
+arXiv preprint arXiv:2010.11929
+, 2020.
+[35]
+M. Burri, J. Nikolic, P. Gohl, T. Schneider, J. Rehder, S. Omari, M. W.
+Achtelik, and R. Siegwart, “The euroc micro aerial vehicle datasets,”
+The International Journal of Robotics Research
+, vol. 35, no. 10,
+pp. 1157–1163, 2016.
+[36]
+D. Schubert, T. Goll, N. Demmel, V. Usenko, J. Stückler, and D. Cremers,
+“The tum vi benchmark for evaluating visual-inertial odometry,” in
+2018 IEEE/RSJ International Conference on Intelligent Robots and Systems
+(IROS)
+, pp. 1680–1687, IEEE, 2018.
+[37]
+D. P. Kingma and J. Ba, “Adam: A method for stochastic optimization,”
+arXiv preprint arXiv:1412.6980
+, 2014.
+[38]
+P. Geneva, K. Eckenhoff, W. Lee, Y. Yang, and G. Huang, “Openvins: A research
+platform for visual-inertial estimation,” in
+2020 IEEE International
+Conference on Robotics and Automation (ICRA)
+, pp. 4666–4672, IEEE, 2020.
+[39]
+T. Qin, P. Li, and S. Shen, “Vins-mono: A robust and versatile monocular
+visual-inertial state estimator,”
+IEEE Transactions on Robotics
+,
+vol. 34, no. 4, pp. 1004–1020, 2018.
+[40]
+Y. Almalioglu, M. Turan, M. R. U. Saputra, P. P. de Gusmão, A. Markham, and
+N. Trigoni, “Selfvio: Self-supervised deep monocular visual–inertial
+odometry and depth estimation,”
+Neural Networks
+, vol. 150,
+pp. 119–136, 2022.
+Experimental support, please
+view the build logs
+for errors. Generated by
+L
+A
+T
+E
+xml
+.
+Instructions for reporting errors
+We are continuing to improve HTML versions of papers, and your feedback helps enhance accessibility and mobile
+      support. To report errors in the HTML that will help us improve conversion and rendering, choose any of the
+      methods listed below:
+Click the "Report Issue"
+(
+)
+button, located in the page header.
+Tip:
+You can select the relevant text first, to include it in your report.
+Our team has already identified
+the following issues
+. We appreciate your time reviewing and reporting rendering errors we
+      may not have found yet. Your efforts will help us improve the HTML versions for all readers, because disability
+      should not be a barrier to accessing research. Thank you for your continued support in championing open access for
+      all.
+Have a free development cycle? Help support accessibility at arXiv! Our collaborators at LaTeXML maintain a
+list of packages that need conversion
+, and welcome
+developer contributions
+.
+We gratefully acknowledge support from
+        our
+major funders
+,
+member institutions
+,
+,
+        and all contributors.
+Major funding support from

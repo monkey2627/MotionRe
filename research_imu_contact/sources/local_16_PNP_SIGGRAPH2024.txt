@@ -1,0 +1,722 @@
+                                         Physical Non-inertial Poser (PNP): Modeling Non-inertial Effects in
+                                         Sparse-inertial Human Motion Capture
+                                         XINYU YI, School of Software and BNRist, Tsinghua University, China
+                                         YUXIAO ZHOU, ETH Zurich, Switzerland
+                                         FENG XU, School of Software and BNRist, Tsinghua University, China
+arXiv:2404.19619v1 [cs.GR] 30 Apr 2024
+
+
+
+
+                                         Fig. 1. Live comparisons between our method and the state-of-the-art techniques in both academia (PIP, left) and industry (mocopi from Sony, right) in motion
+                                         capture from six wearable Inertial Measurement Units (IMUs). Our approach outperforms previous works on ambiguous (left) and complex poses (right).
+
+                                         Existing inertial motion capture techniques use the human root coordinate                recording environments. While MoCap with dense IMUs has been
+                                         frame to estimate local poses and treat it as an inertial frame by default. We           industrialized [Noitom [n. d.]; Xsens [n. d.]], pioneering works with
+                                         argue that when the root has linear acceleration or rotation, the root frame             sparse IMUs have also achieved promising MoCap quality [Huang
+                                         should be considered non-inertial theoretically. In this paper, we model the             et al. 2018; Jiang et al. 2022b; von Marcard et al. 2017; Yi et al. 2022,
+                                         fictitious forces that are non-neglectable in a non-inertial frame by an auto-           2021]. By reducing the number of IMUs from 17 to only 6, the system
+                                         regressive estimator delicately designed following physics. With the fictitious
+                                                                                                                                  becomes available for end users, and user comfort during capture
+                                         forces, the force-related IMU measurement (accelerations) can be correctly
+                                         compensated in the non-inertial frame and thus Newton’s laws of motion are               is significantly enhanced. Since IMUs are already integrated into
+                                         satisfied. In this case, the relationship between the accelerations and body             common smart devices such as phones, watches, and earbuds, Mo-
+                                         motions is deterministic and learnable, and we train a neural network to                 Cap with sparse IMUs is a steady step towards everyday motion
+                                         model it for better motion capture. Furthermore, to train the neural network             understanding [Lee and Joo 2024; Mollyn et al. 2023].
+                                         with synthetic data, we develop an IMU synthesis by simulation strategy to                  However, we identify a physical flaw in the previous IMU-based
+                                         better model the noise model of IMU hardware and allow parameter tuning                  methods like [Huang et al. 2018; Jiang et al. 2022b; Yi et al. 2022,
+                                         to fit different hardware. This strategy not only establishes the network                2021], which leads to the failure of reconstructing some challeng-
+                                         training with synthetic data but also enables calibration error modeling                 ing motions. We illustrate this flaw as follows. For easy modeling
+                                         to handle bad motion capture calibration, increasing the robustness of the               and calculation, the task of MoCap is typically decoupled into two
+                                         system. Code is available at https://xinyu-yi.github.io/PNP/.
+                                                                                                                                  components: root-relative pose estimation and global movement
+                                         1    INTRODUCTION                                                                        integration. To estimate the local pose, previous methods first trans-
+                                                                                                                                  form the IMU measurements from the world frame to the human’s
+                                         Human motion capture is a long-standing research interest. The                           root frame according to the rotation matrix read from the root IMU.
+                                         evolution of MoCap (motion capture) technology keeps presenting                          Since the world frame is an inertial frame, such transformation is
+                                         new possibilities in various fields such as film, animation, gaming,                     physically correct only if the root frame is also inertial. However,
+                                         sports, and rehabilitation.                                                              during human movements, the root frame is usually non-inertial
+                                            For decades, MoCap with dense optical markers [Vicon [n. d.]] has                     as the root joint keeps experiencing acceleration and rotation. In
+                                         been the golden standard in terms of accuracy, but it suffers from ex-                   such cases, projecting IMU measurements from the inertial world
+                                         pensive system setup and the requirement of a dedicated studio due                       frame to the non-inertial root frame requires introducing fictitious
+                                         to its fragility to the surroundings. With the advancement of inertial                   forces, such as centrifugal force and Coriolis force [Landau and
+                                         sensing technology, MoCap with inertial measurement units (IMUs)                         Lifshitz 1976], to compensate for the raw acceleration measure-
+                                         commenced to emerge. Compared to optical solutions, IMU-based                            ments from the IMU sensors. In previous works, the neglect of these
+                                         systems are expense-friendly and immune to occlusion, visibility, or                     forces during the transformation results in "wrong" acceleration
+                                         lighting. These advantages render them suitable in unconstrained                         measurements that do not match the actual local movements from
+                                         Authors’ addresses: Xinyu Yi, School of Software and BNRist, Tsinghua University, Bei-   the perspective of the non-inertial root frame. As a result, previous
+                                         jing, China, yixy20@mails.tsinghua.edu.cn; Yuxiao Zhou, ETH Zurich, Zurich, Switzer-     models could not learn the correlation between acceleration and
+                                         land, yuxiao.zhou@outlook.com; Feng Xu, School of Software and BNRist, Tsinghua
+                                         University, Beijing, China, xufeng2003@gmail.com.
+2 •   Xinyu Yi, Yuxiao Zhou, and Feng Xu
+
+
+human movement well, and in fact discarded most acceleration in-                • Physical Non-inertial Poser (PNP), which enhances real-time
+formation, as reported in previous works [Huang et al. 2018; Yi et al.            human motion estimation from sparse inertial measurement
+2021]. While these works can still estimate many local poses only                 units (IMUs), especially for acceleration-dominated motions
+using the orientation measurements from the IMU, they face diffi-                 like raising hands or legs.
+culties in handling specific motions where the orientation readings             • Fictitious force modeling is accomplished through a neural
+remain almost unchanged and the dynamics can only be observed                     auto-regressive estimator that learns the physically correct
+from accelerations, e.g., raising hands or legs without rotating them.            fictitious forces arising from modeling the non-inertial human
+   In this paper, we explicitly model the fictitious forces induced               root’s coordinate frame.
+by the world-to-local transform to correct the IMU acceleration                 • IMU measurement synthesis by simulation which generates
+readings for local pose estimation. Note that the fictitious forces               more realistic IMU signals from motion capture data while
+are not real forces, but rather serve to mathematically describe the              considering sensor noise and calibration errors.
+motion of objects in non-inertial frames [Landau and Lifshitz 1976].
+Our method rigorously involves the calculation of fictitious forces
+                                                                            2 RELATED WORK
+within the non-inertial root coordinate system of the human body.
+Building upon this formulation, we designed a novel auto-regressive         2.1 Motion Capture from Body-worn Sensors
+neural estimator that additionally takes the variables associated           In this section we introduce previous MoCap works using body-
+with the fictitious forces from the mathematical formulation as             mounted sensors. These works can be categorized into two groups
+inputs to model the compensation forces effectively. Thanks to              by the sensor type: 6DoF trackers that provide global locations using
+supervised learning with the correct acceleration in the non-inertial       external stations, and IMUs without any positional information.
+root frame, the neural estimator successfully integrates the physical          6DoF trackers are commonly used in virtual reality systems, such
+and data-driven aspects, enabling it to capture the dynamics of             as head-mounted displays and hand-held controllers. By placing
+the fictitious forces. Subsequently, the force is utilized to modulate      base stations or infrared cameras in the captured volume, these
+the raw acceleration measurement from the IMUs. This innovative             trackers can provide positional information in addition to orienta-
+approach enables our model to learn and utilize acceleration for            tions. Numerous studies have explored human full-body tracking
+motion estimation, thereby achieving tracking capabilities beyond           using sparse 6DoF trackers, with configurations ranging from 6
+the scope of previous works.                                                trackers placed on the end-effects and the root [Ponton et al. 2023],
+   While modeling the fictitious forces should improve the capture          to 4 trackers on the upper body [Yang et al. 2021], and even just
+performance theoretically, it implicitly requires a large amount of         3 trackers for the hands and the head (typically a head-mounted
+paired real acceleration signals and ground truth poses for training,       device (HMD) plus two hand-held controllers) [Ahuja et al. 2021;
+which are difficult to obtain for the entire research community. At         Aliakbarian et al. 2022, 2023; Castillo et al. 2023; Dittadi et al. 2021;
+the moment, most previous methods first trained their models on             Du et al. 2023; Jiang et al. 2023, 2022a; Shin et al. 2023; Ye et al.
+large motion capture datasets with synthetic sensor measurements            2022; Zheng et al. 2023]. Some research incorporates physics-based
+and then fine-tuned the models on smaller real datasets [Huang              simulation to ensure the physical correctness of the captured mo-
+et al. 2018; Yi et al. 2022, 2021]. These works synthesize the sen-         tion [Lee et al. 2023; Winkler et al. 2022; Ye et al. 2022]. While these
+sor input by directly using the ground truth motion measurements,           techniques yield promising results, they are inherently limited by
+e.g., rotation matrix from the known human pose. This approach              the requirement of external devices for positioning. The calibration
+is suboptimal because modeling the real-world noise for rotations           of external devices is inconvenient, and the capture environment
+is extremely hard, and these noise patterns will differ with differ-        is constrained. As a result, these methods are not applicable for
+ent IMU manufacturers due to different firmware algorithms. As a            long-range captures in an open world, such as outdoor movements.
+result, the domain gap still deeply hurts their motion capture qual-           While the use of 6DoF trackers relies on external stations or cam-
+ity in the real world. To this end, we propose a new method that            eras, using IMUs allows free-range movements. IMUs can measure
+directly synthesizes the raw IMU signals (i.e., linear accelerations, an-   orientation and acceleration without requiring external devices, but
+gular velocities, and magnetic field measurements), and employ our          they do not provide localization. Due to the lack of position informa-
+sensor fusion algorithm to obtain the final motion measurements.            tion, thoroughly exploiting orientation and acceleration is vital for
+By leveraging the noise model at the hardware level [Mur-Artal              IMU-based MoCap methods. Current commercial solutions [Noitom
+and Tardós 2017; Qin et al. 2018], we can use an examined set of            [n. d.]; Xsens [n. d.]] integrate dense IMUs into a tight suit, which
+noise parameters to generate signals more similar to real use cases.        is uncomfortable, intrusive, and hinders the user’s movements. Re-
+This is particularly useful when the users already know the noise           cent works focus on MoCap with fewer IMUs. To address the pose
+parameters of their sensors. Finally, we model calibration errors           ambiguity due to the reduction of IMUs, some works [Liang et al.
+introduced in the T-pose calibration in inertial motion capture. Un-        2023; Pan et al. 2023; Pons-Moll et al. 2010; Yi et al. 2023] assist
+like previous approaches that assume perfect IMU calibration, we            the capture with additional external or egocentric hardware. In the
+incorporate these errors in our synthetic IMU measurements and              following, we only discuss pure IMU methods. SIP [von Marcard
+thus significantly reduce the error during real-world usage.                et al. 2017] first proposed reconstructing human pose from solely 6
+   In conclusion, our main contributions include:                           IMUs through offline optimization. DIP [Huang et al. 2018] further
+                                                                            extended the technique to real-time performance by using deep re-
+                                                                            current neural networks. While the work only provides local poses,
+                                                      Physical Non-inertial Poser (PNP): Modeling Non-inertial Effects in Sparse-inertial Human Motion Capture        • 3
+
+
+TransPose [Yi et al. 2021] estimates global translation by constrain-
+ing foot-ground contacts. The state-of-the-art works PIP [Yi et al.
+2022] and TIP [Jiang et al. 2022b] refine TransPose from two as-
+pects: PIP incorporates physics-based optimization to ensure the
+captured motion being physically plausible, while TIP adopts the
+transformer architecture [Vaswani et al. 2017] to improve tracking
+accuracy. While these works demonstrate promising results, their
+pose estimation components mostly rely on orientation signals, but
+cannot utilize acceleration readings correctly, as reported in DIP
+and TransPose. As a result, they fail to track acceleration-dependent             Fig. 2. Overview of our motion capture method. We first estimate the fic-
+motions like raising hands, which are not identifiable solely by the              titious force in the non-inertial root frame (grey, left). Then, we transform
+orientations from sparse IMUs. In this work, we introduce a new                   the IMU measurements from the world frame to the root frame to estimate
+physical model that utilizes acceleration in a physically correct way.            the local pose, while accounting for the fictitious force (green). Next, we
+                                                                                  estimate the human’s global motion from the pose and the IMUs (purple).
+                                                                                  Finally, we employ a physics-based optimizer to refine the human motion
+2.2   Virtual IMU Measurement Generation                                          (grey, right).
+While MoCap datasets are abundant, most of them only contain
+clean and smooth human motion without original raw IMU signals.
+                                                                                  coordinate frame, then explain how we synthesize realistic IMU data
+In previous works [Huang et al. 2018; Yi et al. 2022, 2021], the syn-
+                                                                                  (Sec. 3.2) to fuel our models. See Fig. 2 and 4 for an overview.
+thetic IMU measurements are calculated by placing virtual IMUs on
+corresponding body parts using the MoCap sequences. However,
+                                                                                  3.1    Framework Design
+even fine-tuned on small real datasets, these models still hurt from
+the domain gap between synthetic ideal IMUs and real-world noisy                  Estimating human motion from IMU measurements is challenging
+IMUs. The synthesis of virtual IMU measurements is crucial for                    due to the inherent coupling between local motions and global
+this task. In the pioneering work of [Huang et al. 2018], orientation             movements in sensor signals. To this end, our method disentangles
+measurements are synthesized from bone orientations, while accel-                 human local pose and global translation estimation into separate
+eration measurements are derived by applying finite differences to                tasks, as in previous works [Yi et al. 2022, 2021]. To estimate local
+the IMU positions. However, subsequent works [Jiang et al. 2022b;                 pose, we transform IMU measurements from the global frame to
+Yi et al. 2022, 2021] found that the acceleration measurements gen-               the root-relative frame according to the orientation readings from
+erated by finite differences exhibit a significant disparity between              the sensor on the root joint. While the global frame is inertial, the
+synthetic and real signals. To address this issue, [Yi et al. 2021] and           root frame is often non-inertial due to body movements. When
+[Yi et al. 2022] increased the step length in the finite difference               projecting IMU measurements, especially acceleration signals, from
+algorithm to smooth the values, while [Jiang et al. 2022b] suggested              an inertial frame to a non-inertial frame, fictitious forces need to be
+using an averaging filter with a sliding window for both synthetic                introduced as compensations. While prior works neglected them, in
+and real data to minimize the gap. However, they both inadvertently               Sec. 3.1.1 we explain how these fictitious forces are modeled in our
+discard the high-frequency details in accelerations, which directly               method. Then, in Sec. 3.1.2 we introduce how our method estimates
+relate to fast and sudden movements. On the other hand, the discrep-              local pose and global motion with the corrected acceleration.
+ancy between synthetic and real IMU measurements still persists as                3.1.1 Fictitious Force Modeling. In the non-inertial human’s root
+the sensor noises and calibration errors are not considered. Virtual              coordinate system, fictitious forces will affect the inertia measure-
+IMU measurement generation has also been explored in other tasks                  ments and must be accounted for when estimating the root-relative
+such as human action recognition from videos [Kwon et al. 2020;                   human pose (Fig. 3). Formally, we denote the acceleration and the
+Rey et al. 2019] or motion sequences [Takeda et al. 2018; Xiao et al.             angular velocity of the root joint as 𝒂𝑅𝑅 1 and 𝝎 𝑅𝑅 respectively. Any
+2021]. Inspired by the works of [Kwon et al. 2020; Young et al. 2011],            leaf joint 𝐿 with position 𝒑 𝑅𝐿 and velocity 𝒑¤ 𝑅𝐿 in the human’s root
+in this work, we directly synthesize the raw IMU signals to simulate              frame is subject to a fictitious force 𝒇 fic :
+the sensor noise in real world, and introduce a calibration error
+model to further improve the results.                                               𝒇 fic = −𝑚(𝒂𝑅𝑅 + [𝝎 𝑅𝑅 ] 2× 𝒑 𝑅𝐿 + 2[𝝎 𝑅𝑅 ] × 𝒑¤ 𝑅𝐿 + [ 𝝎¤ 𝑅𝑅 ] × 𝒑 𝑅𝐿 ), (1)
+                                                                                  where 𝑚 is the mass and [·] × is the skew-symmetric matrix for
+                                                                                  the vector cross product. The fictitious force consists of four terms,
+3     METHOD
+                                                                                  namely the linear inertial force, centrifugal force, Coriolis force,
+Our goal is to estimate real-time human motion from 6 Inertial
+                                                                                  1 Here the notation 𝑥
+Measurement Units (IMUs) placed on the leaf joints (forearms, lower                                     𝐴𝐵 denotes the quantity 𝑥 of the origin of the coordinate frame 𝐵
+                                                                                  expressed in the coordinate frame 𝐴. For instance, we use 𝒑𝐴𝐵 to represent the position
+legs, head) and the root joint (pelvis). The inputs to our system                 of the origin of the coordinate frame B expressed in frame A, and 𝒗𝐴𝐵 to represent the
+are IMU measurements including accelerations, angular velocities,                 velocity of the origin of the coordinate frame B expressed in frame A. However, when
+and orientations. The outputs of our system are the local pose and                the quantity refers to the rotation 𝑅 , 𝑹 𝐴𝐵 denotes the rotation of the coordinate frame
+                                                                                  B with respect to the frame A. We consistently apply this subscript rule throughout the
+global movements. In the following, we first introduce our novel                  paper. Here, 𝒂 𝑅𝑅 denotes the acceleration of the origin of the root frame (as 𝑅 stands
+system (Sec. 3.1) that incorporates fictitious forces in the non-inertial         for the root frame) expressed in the root frame.
+4   •   Xinyu Yi, Yuxiao Zhou, and Feng Xu
+
+
+
+
+                                                                                  Fig. 4. Overview of our IMU synthesis method. We first synthesize the
+                                                                                  6DoF trajectory (position and orientation) of each IMU from the low frame-
+                                                                                  rate (60FPS) motion capture data. Then, we calculate the raw high frame-
+                                                                                  rate (180FPS) IMU signals including the acceleration, angular velocity, and
+                                                                                  magnetic field measurement from the trajectory. After adding sensor noise to
+                                                                                  the raw signals, we perform IMU fusion to get the orientation measurement.
+                                                                                  Finally, we simulate a T-pose calibration process, where the calibration error
+                                                                                  is added to the sensor readings.
+
+
+Fig. 3. Illustration of the necessity of non-inertial effects modeling in human      We compute the fictitious acceleration using a network rather
+local pose estimation. Without fictitious accelerations, two different motions    than Eq. 1 is based on three considerations. First, we need the net-
+(left) own the same acceleration observations in the root frame (middle)          work to forecast the unknown leaf joint positions and velocities
+while the accelerations are correctly observed with the consideration of the      from the values of the previous frame. Second, the root joint’s angu-
+fictitious accelerations (right).                                                 lar velocity is prone to measurement noise, which can be mitigated
+                                                                                  by leveraging a network. Third, Eq. 1 individually computes the ficti-
+                                                                                  tious acceleration of each leaf joint, whereas a network can estimate
+                                                                                  all leaf joints altogether, incorporating human motion priors.
+and Euler force [Landau and Lifshitz 1976], corresponding to the
+terms in Eq. 1. Readers can refer to the supplemental paper for                   3.1.2 Local Pose and Global Motion Estimation. With the estimated
+the derivation. This equation indicates that when observed from                   fictitious acceleration 𝒂 fic , now we can correctly transform the input
+the root coordinate frame, the acceleration of a leaf joint does not              IMU measurements to the human’s root frame for local pose estima-
+equal the raw IMU measurements evaluated in the inertial world                    tion. Formally, the input is the concatenated vector of {𝑹 𝑅𝐿 , 𝒂𝑅𝐿 +
+frame. Instead, it undergoes an additional acceleration caused by                 𝒂 fic } containing leaf joint rotation matrices and accelerations in the
+the fictitious force 𝒇 fic . We refer to this additional acceleration as          non-inertial root frame. Following [Yi et al. 2022, 2021], we first
+fictitious acceleration.                                                          estimate leaf joint positions 𝒑 𝑅𝐿 , then all joint positions, and fi-
+   In the following, we explain how to compute the fictitious accel-              nally all joint rotations. This is achieved through 3 Long Short-Term
+eration for an arbitrary leaf joint. As shown in Eq. 1, the fictitious            Memory (LSTM) recurrent networks [Hochreiter and Schmidhuber
+acceleration depends on the root joint acceleration 𝒂𝑅𝑅 and angular               1997] with jump connections on the IMU input [Yi et al. 2022, 2021].
+velocity 𝝎 𝑅𝑅 , as well as leaf joint position 𝒑 𝑅𝐿 and velocity 𝒑¤ 𝑅𝐿 .          The intermediate estimation of the leaf joint position 𝒑 𝑅𝐿 , together
+While the root joint terms can be read from the corresponding IMU,                with its time derivative 𝒑¤ 𝑅𝐿 computed by finite difference, are fed
+the leaf joint terms are not directly measured by the sensors and                 back to the fictitious force estimator for the next frame’s use.
+have to be computed using the estimated body pose. Instead of cal-                    For global translation estimation, we follow [Yi et al. 2022] to
+culating the fictitious acceleration manually from Eq. 1, we employ               regress joint velocities and foot-ground contact probabilities. Note
+an autoregressive neural network to estimate the acceleration. The                that different from the local pose estimation, fictitious forces are
+input to the network comprises root joint dynamics and leaf joint                 not needed in the global motion estimation as we regress the global
+dynamics. Root joint dynamics are acceleration 𝒂𝑅𝑅 , angular veloc-               movement with respect to the static world frame, which is an inertial
+ity 𝝎 𝑅𝑅 , and angular acceleration 𝝎¤ 𝑅𝑅 . Leaf joint dynamics include           frame of reference. We finally perform a physics-based motion opti-
+position 𝒑 𝑅𝐿 , velocity 𝒑¤ 𝑅𝐿 , acceleration 𝒂𝑅𝐿 , and orientation 𝑹 𝑅𝐿 .        mization to ensure the physical correctness of the captured motion
+Note that the leaf joint positions and velocities are estimations from            as in [Yi et al. 2022].
+the previous frame, and the network implicitly learns to wrap these
+values to the current frame. All these values are concatenated into               3.2   Data Synthesis
+one vector as the network input, and the output is the fictitious ac-             Due to the lack of MoCap data containing real IMU measurements,
+celeration 𝒂 fic = 𝒇 fic /𝑚 for the corresponding leaf joint. In practice,        we synthesize raw IMU signals using MoCap sequences to facilitate
+we use one fused network for all 5 leaf joints, i.e., the inputs are the          network training. Previous works [Huang et al. 2018; Yi et al. 2022,
+dynamics of the root joint and all leaf joints, while the outputs are             2021] use trivial methods to generate synthetic data and the trained
+the fictitious accelerations for them. We implement the estimator                 models work well on real data after finetuning. However, this is
+as a fully connected neural network trained with L2 loss. For super-              not the case for this work as it relies on acceleration measurements
+vision, we synthesize the ground-truth fictitious acceleration from               more heavily to model fictitious forces, and the acceleration is more
+the motion capture data.                                                          difficult to synthesize due to its sensitivity to the data sampling rate
+                                                      Physical Non-inertial Poser (PNP): Modeling Non-inertial Effects in Sparse-inertial Human Motion Capture                • 5
+
+
+and the noise model. So in this work, we revisit the hardware and                    Virtual Accelerometer Simulation. Here we synthesize acceleration
+noise models to synthesize more realistic training data. Specifically,            𝒂. Since the accelerometer in the IMU sensor operates at a higher
+we first synthesize IMU’s 6DoF (position and orientation) trajec-                 frame rate than our motion capture data, we need to synthesize the
+tories from the low frame-rate motion capture data in the world                   accelerations at three times the frame rate (180fps) of the motion
+coordinate frame (Sec. 3.2.1). Then, we solve for the low-level IMU               capture data (60fps) to emulate the real sensor behavior. In this
+signals in a high frame rate according to the 6DoF trajectory, add                case, a finite difference method is not applicable as it does not keep
+noise to the solved signals, and fuse these signals to synthesize                 the global smoothness. We design a novel acceleration synthesis
+the IMU measurements. (Sec. 3.2.2). Finally, we model calibration                 algorithm based on energy optimization, formulated as:
+errors introduced during T-pose calibration for using the synthetic                                                                            2
+                                                                                                        𝑚−1     𝑛
+measurements in the training (Sec. 3.2.3). As examined in the exper-                                    ∑︁     ∑︁
+                                                                                    arg min 𝜆𝑝                       𝒗𝑖 𝑗 Δ𝑡 + 𝒑˜ 𝑖 − 𝒑˜ 𝑖+1
+iments, our carefully generated training data leads to substantial                      𝒂𝑖 𝑗 ,𝒗𝑖 𝑗
+                                                                                                         𝑖=1   𝑗=1
+improvements in the final results.
+                                                                                                                                               2
+   Notations. In the following, we consider each IMU individually,                                      𝑚−1     𝑛
+                                                                                                                                                                         prev 2
+                                                                                                        ∑︁     ∑︁                                         ∑︁
+and all IMUs follow the same procedure. We start by defining several                            +𝜆𝑣                  𝒂𝑖 𝑗 Δ𝑡 + 𝒗𝑖 − 𝒗𝑖+1           + 𝜆𝑎         𝒂𝑖 𝑗 − 𝒂𝑖 𝑗       ,
+coordinate frames. We denote the world coordinate frame of the                                          𝑖=1     𝑗=1                                       𝑖,𝑗
+motion capture data as 𝑊 ; in other words, all poses and translations                                        prev
+                                                                                      where          𝒗𝑖 𝑗 = 𝒗𝑖 𝑗 + 𝒂𝑖 𝑗 Δ𝑡 .
+from the datasets are expressed in the frame 𝑊 . We denote the IMU                                                                                       (6)
+sensor’s frame as 𝑆, which is a coordinate frame fixed to the IMU                 Here 𝑖 ∈ {1, 2, · · · , 𝑚 − 1} is the original frame label in an 𝑚-frame
+device. We denote the IMU’s world coordinate frame as 𝐼 , which                   sequence, 𝑗 ∈ {1, 2, 3} denotes the upsampled local timestamp be-
+is a coordinate frame specified by the sensor manufacturer and is                 tween two original frames, 𝒑˜ 𝑖 , 𝒗𝑖 𝑗 , and 𝒂𝑖 𝑗 are the global position,
+used to indicate the sensor’s global orientation; in other words, the             velocity, and acceleration of the IMU at frame 𝑖 or frame 𝑖 𝑗 (here
+output orientation of an IMU is just its orientation with respect to              we omit the reference frame subscripts in (𝒑˜ 𝑊 𝑆 )𝑖 , (𝒗𝑊 𝑆 )𝑖 𝑗 , and
+the frame 𝐼 , represented as 𝑹 𝐼𝑆 , following the subscript rule outlined         (𝒂𝑊 𝑆 )𝑖 𝑗 for conciseness), Δ𝑡 is the timestamp interval after upsam-
+in Sec. 3.1.1. Finally, we define the human bone frame as 𝐵, which                pling, 𝜆𝑝 , 𝜆𝑣 , and 𝜆𝑎 are coefficients for the energy terms, and ·prev
+is a frame that is fixed to a bone segment of the human body. This                retrieves the value of the previous timestamp. This energy optimiza-
+frame is useful as an IMU is always attached to a bone of the body.               tion aims to find the high frame-rate acceleration sequence that
+3.2.1 6DoF trajectory generation. Leveraging the SMPL [Loper et al.               best replicates the original low frame-rate IMU trajectory (first and
+2015] human model, we reconstruct human meshes with global                        second terms in Eq. 6) with minimal rate of change (last term in
+translation using the MoCap sequences [Mahmood et al. 2019]. For                  Eq. 6). This is inspired by the research of [Flash and Hogan 1985],
+each IMU, we select one vertex on the mesh of one bone as its                     which found that human motion is characterized by the minimal
+mounting position and compute its position and orientation as:                    rate of change of acceleration.
+
+                      𝒑𝑊 𝑆 = 𝒑𝑊 𝐵 + 𝑹𝑊 𝐵 𝒑 𝐵𝑆 ,                        (2)           Virtual Gyroscope Simulation. Here we synthesize angular veloc-
+                                                                                  ity 𝝎. Similar to the virtual accelerometer simulation, we synthesize
+                          𝑹𝑊 𝑆 = 𝑹𝑊 𝐵 𝑹 𝐵𝑆 .                           (3)        the gyroscope’s local angular velocities based on another energy
+This is an ideal case, while in real capture, the sensor will slightly            optimization defined as:
+move around the mounting point, including translation 𝛿𝒑 𝐵𝑆 and                                                                                                      2
+                                                                                                                𝑚−1
+                                                                                                                ∑︁             Ö𝑛
+rotation 𝛿 𝑹 𝐵𝑆 , which are modeled as individual random walking                                arg min𝜆𝑅
+                                                                                                                   © 𝑇
+                                                                                                              Log ­𝑹˜ 𝑖+1 𝑹˜ 𝑖     Exp(𝝎 𝑖 𝑗 Δ𝑡) ®
+                                                                                                                                                 ª
+noises. Considering these factors, our 6DoF trajectory of sensor                                    𝝎𝑖 𝑗
+                                                                                                          𝑖=1                  𝑗=1                                            (7)
+position and orientation {𝒑˜ 𝑊 𝑆 , 𝑹˜ 𝑊 𝑆 } becomes:
+                                                                                                                   «                             ¬
+                                                                                                                       prev 2
+                                                                                                          ∑︁
+                                                                                                      +𝜆𝜔     𝝎𝑖 𝑗 − 𝝎𝑖 𝑗       ,
+                 𝒑˜ 𝑊 𝑆 = 𝒑𝑊 𝐵 + 𝑹𝑊 𝐵 (𝒑 𝐵𝑆 + 𝛿𝒑 𝐵𝑆 ),                 (4)                                       𝑖,𝑗
+
+                       𝑹˜ 𝑊 𝑆 = 𝑹𝑊 𝐵 𝑹 𝐵𝑆 𝛿 𝑹 𝐵𝑆 .                     (5)        where 𝑹˜ 𝑖 and 𝝎 𝑖 𝑗 are the orientation and the local angular velocity
+                                                                                  of the IMU at frame 𝑖 and frame 𝑖 𝑗, Log : SO(3) → R3 maps the
+3.2.2 IMU Simulation. The orientation readings from IMUs are
+                                                                                  rotation from the Lie group to the vector space, while Exp : R3 →
+not directly measured by the hardware, but computed from other
+                                                                                  SO(3) maps the rotation from the vector space to the Lie group, and
+low-level signals using the algorithm from the manufacturer. While
+                                                                                  𝜆𝑅 and 𝜆𝜔 are two weight terms. This energy optimization aims to
+previous works [Huang et al. 2018; Jiang et al. 2022b; Yi et al. 2022,
+                                                                                  find the high frame-rate local angular velocity sequence that best
+2021] directly synthesize orientation measurements, we propose to
+                                                                                  replicates the low frame-rate IMU orientations (first term in Eq. 7)
+simulate the raw signals, including the accelerations, angular veloc-
+                                                                                  with minimal rate of change (last term in Eq. 7).
+ities, and magnetic field measurements, and employ the IMU fusion
+algorithm on our own. Tailored for the training of neural networks,                  Virtual Magnetometer Simulation. The real magnetometer typi-
+this simulation approach allows us to simulate and incorporate                    cally works at the same frame rate as our motion capture data, so
+real-world noises with mathematical foundations. In the following,                upsampling is not necessary. We assume the x-axis is the north di-
+we elaborate our method to generate the aforementioned low-level                  rection and transform it into the sensor frame to obtain the magnetic
+signals from the synthesized 6DoF trajectory {𝒑˜ 𝑊 𝑆 , 𝑹˜ 𝑊 𝑆 }.                  field measurement 𝒎𝑖 for each frame.
+6 •   Xinyu Yi, Yuxiao Zhou, and Feng Xu
+
+
+   IMU fusion. In this stage, we fuse the synthesized accelerome-
+ter, gyroscope, and magnetometer measurements to estimate the
+sensor’s orientations. Similar to [Qin et al. 2018], we consider the
+measurement noise as sensor bias and additive noise, modeled by
+random walks and Gaussian white noise, respectively. These noises
+are sampled and added to the raw sensor signals to get the noisy
+measurements denoted as 𝒂˜ 𝑖 𝑗 , 𝝎˜ 𝑖 𝑗 , 𝒎
+                                          ˜ 𝑖 . Then, we implement an ad-
+vanced sensor fusion algorithm utilizing the error-state Kalman
+Filter [Sola 2017], bolstered by the inclusion of Zero Velocity Update
+(ZUPT) [Skog et al. 2010] detection for state updates. Readers can
+refer to [Sola 2017] for the algorithm. After the sensor fusion, we
+obtain IMU orientation 𝑹 𝐼𝑆 in the IMU world frame defined by our
+algorithm, formulated as:
+                     (𝑹 𝐼𝑆 )𝑖 𝑗 = ESKF( 𝒂˜ 𝑖 𝑗 , 𝝎˜ 𝑖 𝑗 , 𝒎
+                                                          ˜ 𝑖 ).     (8)
+3.2.3 Calibration Error Modeling. To train the mocap network, we
+need to transform the simulated IMU orientation 𝑹 𝐼𝑆 (sensor orien-
+tation in the IMU world frame) to the actual bone orientation 𝑹𝑊 𝐵
+(bone orientation in the world frame), which is formulated as:
+                           𝑹𝑊 𝐵 = 𝑹𝑇𝐼𝑊 𝑹 𝐼𝑆 𝑹𝑇𝐵𝑆 .                   (9)
+For synthetic data, the two matrices are unknown: 𝑹 𝐵𝑆 indicating
+how each sensor is placed relative to the body, and 𝑹 𝐼𝑊 indicating
+how the IMU global frame is rotated with respect to the motion
+                                                                            Fig. 5. Qualitative comparisons with prior works. The examples are picked
+capture world frame (see Fig. 4). For real data, these two matrices
+                                                                            from the TotalCapture [Trumble et al. 2017] dataset.
+are typically determined through a T-pose calibration in practice,
+where the subject stands in a known T pose and the two matrices are
+estimated [Huang et al. 2018; Yi et al. 2021]. However, as the subject
+cannot perform a perfect T-pose, the calibration step contains errors.
+                                                                            and 𝑹 𝐵𝑆 with a mean of 0.01 and 0.1 radians, respectively. The IMU
+So in this work, during data synthesis, we model such calibration
+                                                                            noise parameters are set following [Campos et al. 2021]2 .
+errors by perturbing the two matrices 𝑹 𝐼𝑊 and 𝑹 𝐵𝑆 with random
+noise before applying Eq. 9.                                                   Hardware and Performance. Our method runs in real time at 60fps
+                                                                            on a laptop with Intel(R) Core(TM) i7-12700H CPU without GPU.
+4     EXPERIMENTS                                                           For live demo, we use PN Lab sensors from Noitom [Noitom [n. d.]].
+In this section, we present the implementation details (Sec. 4.1). We       Our framework is implemented in Pytorch [Pytorch [n. d.]] and
+then compare our method with state-of-the-art works in motion               the physics-based optimization is implemented using Rigid Body
+capture from sparse IMUs (Sec. 4.2) and evaluate the key contribu-          Dynamic Library (RBDL) [Felis 2017]. The IMU fusion algorithm
+tions of our method (Sec. 4.3). Finally, we discuss our limitations         is implemented in C++, and the optimization is solved with sparse
+(Sec. 4.4). Please also find more results in the supplemental video.        least square solvers [Paige and Saunders 1982].
+
+4.1    Implementation Details                                                  Datasets. The datasets comprise DIP-IMU [Huang et al. 2018],
+   Networks. Our method incorporates 6 neural networks, including           TotalCapture [Trumble et al. 2017], and AMASS [Mahmood et al.
+1 fully connected network for the fictitious force estimator, and           2019]. We follow previous works [Jiang et al. 2022b; Yi et al. 2022] to
+5 recurrent networks for local pose and global motion estimation            split the train and test sets. Notably, there are two different calibra-
+following [Yi et al. 2022]. The fictitious force estimator contains 4       tions for TotalCapture. The official calibration (denoted as Official
+layers with a hidden width of 512, activated by ReLU, and optimized         Calibration) provided in [Trumble et al. 2017] has a larger calibration
+by the Adam optimizer [Kingma and Ba 2014].                                 error of 12.1 degrees, while the calibration from [Huang et al. 2018]
+                                                                            (denoted as DIP Calibration) on the same data has a lower calibration
+   Data Synthesis. In 6DoF trajectory generation, we model the sen-         error of 8.6 degrees. As the two versions differ only in calibration,
+sor sliding error 𝛿𝒑 𝐵𝑆 as a random walk beginning with an error            we use them to examine the methods’ robustness against calibration.
+expectation of 10 −2 m and progressing at a speed of 10 −3 m/s. The
+rotation error 𝛿 𝑹 𝐵𝑆 is modeled as a random walk beginning with
+zero error and progressing at a speed of 10 −2 rad/s. These values
+are set based on experience. For the energy optimization in the IMU         2 The used parameters are compatible with most mocap IMUs. For specific requirements,
+simulation, we set 𝜆𝑝 = 1, 𝜆𝑣 = 0.5, 𝜆𝑎 = 1.3, 𝜆𝑅 = 1, and 𝜆𝜔 = 1.          one can determine the noise parameter of their IMUs using tools like Kalibr (https:
+In the calibration error modeling, we set the perturbation to 𝑹 𝐼 𝑀         //github.com/ethz-asl/kalibr) or refer to the manufacturer’s hardware specifications.
+                                                                Physical Non-inertial Poser (PNP): Modeling Non-inertial Effects in Sparse-inertial Human Motion Capture   • 7
+
+
+
+
+               (a) Qualitative evaluation on fictitious acceleration.                               (b) Qualitative evaluation on the proposed IMU synthesizing method.
+
+
+Fig. 6. Qualitative evaluation on the proposed (a) fictitious acceleration and (b) the IMU synthesizing method. (a) We plot the joint position error in a sequence
+from the TotalCapture dataset and compare the reconstructed motions at two selected time intervals. (b) We visualize the predicted motion for the same
+sequence under both small and large calibration errors (DIP-calibration vs. official calibration).
+
+
+Table 1. Quantitative comparison results with prior works. We adopt two
+versions of TotalCapture: the Official Calibration has a larger calibration
+error in the IMU input than the DIP Calibration version.
+
+
+      Method     SIP Error Ang Error Pos Error Mesh Error                   Jitter
+                     TotalCapture (Official Calibration)
+     DIP           18.73       17.57         9.47        11.33                 -
+  TransPose        18.12       14.91         7.10         8.09               1.95
+     TIP           15.62       14.45         6.76         7.79               1.74
+     PIP           14.52       13.85         6.22         7.21               0.21
+  PNP (Ours)       11.35       11.10         4.89        5.60                0.27
+                       TotalCapture (DIP Calibration)
+     DIP           18.62       17.22         9.42        11.22                 -
+  TransPose        16.58       12.89         6.55         7.42               1.87
+     TIP           13.22       12.30         5.81         6.80               1.69
+     PIP           12.93       12.04         5.61         6.51               0.20
+  PNP (Ours)       10.89       10.45         4.74        5.45                0.26
+                                  DIP-IMU
+     DIP           17.35       15.36         7.59         9.05                 -
+  TransPose        17.06        8.86         6.03         7.17               1.11           Fig. 7. Translation comparisons with prior works. We plot the global position
+     TIP           16.90        9.07         5.63         6.62               1.56           error accumulation curve with respect to the real traveled distance. A lower
+     PIP           15.33        8.78         5.12         6.02               0.17           curve indicates smaller drift.
+  PNP (Ours)       13.71        8.75         4.97        5.77                0.17
+
+                                                                                                • SIP Error (◦ ): the global rotation error of hips and shoulders.
+                                                                                                • Angular Error (◦ ): the global rotation error of all joints.
+4.2     Comparisons                                                                             • Positional Error (cm): the position error of all joints.
+We compare our method with the state-of-the-art works in mo-                                    • Mesh Error (cm): the vertex error of the posed SMPL meshes.
+tion capture from sparse IMUs, including DIP [Huang et al. 2018],                               • Jitter (103 m/s3 ): the average jerk of all joints w.r.t the world.
+TransPose [Yi et al. 2021], TIP [Jiang et al. 2022b], and PIP [Yi et al.                    The pose comparison results are presented in Tab. 1. Our method
+2022]. When evaluating local pose accuracy, we align the root joint                         consistently outperforms previous works in pose accuracy, achiev-
+position and orientation with the ground truth, and use the same                            ing a reduction of 19% in mesh error in the TotalCapture dataset and
+metrics as in [Yi et al. 2022, 2021], including:                                            4% in the DIP-IMU dataset. As all these methods are trained on the
+8 •   Xinyu Yi, Yuxiao Zhou, and Feng Xu
+
+
+Table 2. Evaluation on fictitious acceleration (FicAcc) and IMU synthesis
+(SynIMU) with 2 different calibrations: the official calibration (higher cali-
+bration error) and the DIP calibration (lower calibration error).
+
+
+       Method         SIP Error Ang Error Pos Error          Mesh Error   Jitter
+                       TotalCapture (official calibration)
+   w/o SynIMU           13.12       13.70          5.93         6.82      0.28
+    w/o FicAcc          11.43       11.16          4.93         5.68      0.27
+ w/o normalization      11.71       11.31          5.05         5.81      0.27
+  FicAcc by Eq. 1       11.67       11.26          5.11         5.81      0.27
+    PNP (Ours)          11.35      11.10           4.89         5.60      0.27
+                        TotalCapture (DIP calibration)
+   w/o SynIMU           11.28       11.38          4.89         5.64      0.27
+    w/o FicAcc          10.82       10.58          4.78         5.53      0.26
+ w/o normalization      11.31       10.70          4.95         5.72      0.26
+  FicAcc by Eq. 1       10.94       10.51          4.86         5.56      0.26
+    PNP (Ours)          10.89      10.45           4.74         5.45      0.26
+
+
+
+DIP-IMU dataset, our significant improvement on the TotalCapture
+dataset demonstrates that our method generalizes better, thanks
+to our carefully synthesized training data. While our method has
+a slightly larger jitter than PIP, this does not mean our system is
+shaky, but rather more sensitive to accelerations and captures the
+movements more accurately. As shown in Fig. 5 and the supplemen-
+tary video, our method faithfully reconstructs the large movements,
+while other methods are over-smooth. This improvement comes
+from our utilization of corrected acceleration in a non-inertial frame.
+   We compare the estimated translation with prior works in Fig. 7.                Fig. 8. Comparisons of synthetic acceleration measurements using different
+Our method shows the lowest global position drift compared to                      methods, including the method in DIP [Huang et al. 2018], PIP [Yi et al. 2022],
+prior works, as the algorithm for translation estimation heavily                   and the proposed method. The bottom figure shows the IMU accelerations
+depends on the estimated pose.                                                     of real sensors obtained from the dataset. The acceleration synthesis method
+                                                                                   in DIP results in excessive jitter, while PIP’s method tends to oversmooth
+4.3   Evaluations                                                                  the acceleration. In contrast, our synthetic acceleration most accurately
+                                                                                   reflects the behavior of the real sensor.
+In this section, we evaluate our key contributions: the fictitious force
+for acceleration correction and the novel IMU synthesis method. In
+the first ablation study (w/o SynIMU), we train our model using
+the synthetic data from [Yi et al. 2022], which does not consider
+the low-level IMU signals nor the calibration error. In the second                 in the figure. We further note that the variant using the vanilla IMU
+evaluation (w/o FicAcc), we exclude the fictitious force estimation,               synthesis method (w/o SynIMU) demonstrates a huge gap under
+meaning the leaf accelerations are naively projected to the root                   different calibrations in Tab. 2, while our method performs consis-
+frame and are subtracted by the root acceleration as similar to [Yi                tently well. The qualitative comparison is demonstrated in Fig. 6 (b).
+et al. 2022]. In the third evaluation (w/o normalization), the acceler-            Our full method is robust to calibration errors as we explicitly model
+ations are transformed to the root frame without subtracting the                   them when producing training data. Additionally, we directly com-
+root acceleration. In the fourth evaluation (FicAcc by Eq. 1), we re-              pare the generated acceleration by different IMU synthesis methods
+place the neural fictitious acceleration estimator with the analytical             in Fig. 8. Our synthesized acceleration closely resembles the real
+calculation using Eq. 1. These variants are tested on the TotalCap-                sensor measurement compared with previous methods.
+ture dataset using both the official calibration and DIP-calibration.
+As reported in Tab. 2, our full method is generally better. The nu-
+merical gap between ours and w/o FicAcc is less obvious. This is                   4.4   Limitations
+because modeling fictitious force is particularly beneficial for han-              Our IMU synthesis technique assumes a uniform and constant mag-
+dling ambiguous movements with large accelerations and minimal                     netic field. However, magnetic disturbances are common in real
+orientation changes, which only take a small portion of the dataset,               world, and our method is less robust to magnetic changes. This
+diluting the quantitative numbers. We demonstrate it through Fig. 6                work only focuses on pose estimation and assumes the captured
+(a), where we select a sequence from the test data. While most of the              subject is in an average shape, while in real world the pose and
+time the two methods have identical errors, the difference becomes                 shape are coupled in the IMU measurements. Finally, we only con-
+substantial for a few ambiguous motions where acceleration is nec-                 sider a flat ground and do not support walking up- or downstairs.
+essary for pose estimation, e.g., raising arms and legs as highlighted
+                                                                 Physical Non-inertial Poser (PNP): Modeling Non-inertial Effects in Sparse-inertial Human Motion Capture       • 9
+
+
+5    CONCLUSION                                                                                 motion sensing. In Computer Vision–ECCV 2022: 17th European Conference, Tel Aviv,
+                                                                                                Israel, October 23–27, 2022, Proceedings, Part V. Springer, 443–460.
+This work proposes a novel method for real-time motion capture                               Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W. Winkler, and
+from sparse IMUs. To the best of our knowledge, it is the first work                            C. Karen Liu. 2022b. Transformer Inertial Poser: Real-Time Human Motion Recon-
+                                                                                                struction from Sparse IMUs with Simultaneous Terrain Generation. In SIGGRAPH
+to model the non-inertial effects, whose impact on the accelera-                                Asia 2022 Conference Papers.
+tion measurements is non-negligible. By training an auto-regressive                          Diederik Kingma and Jimmy Ba. 2014. Adam: A Method for Stochastic Optimization.
+network to estimate the fictitious forces and modulate the IMU ac-                              International Conference on Learning Representations (12 2014).
+                                                                                             Hyeokhyen Kwon, Catherine Tong, Harish Haresamudram, Yan Gao, Gregory D Abowd,
+celerations, our method better exploits the acceleration information                            Nicholas D Lane, and Thomas Ploetz. 2020. Imutube: Automatic extraction of virtual
+to capture challenging poses. We further propose an IMU synthe-                                 on-body accelerometry from video for human activity recognition. Proceedings of
+sis method that fully considers the real IMU hardware noises and                                the ACM on Interactive, Mobile, Wearable and Ubiquitous Technologies 4, 3 (2020),
+                                                                                                1–29.
+calibration errors to generate more realistic data. By narrowing the                         Lev Davidovich Landau and Evgenii Mikhailovich Lifshitz. 1976. Mechanics. Vol. 1 (3rd
+gap between the synthetic and real, our model generalizes better.                               ed.). Course of Theoretical Physics. Butterworth–Heinemann. 126–130 pages.
+                                                                                             Jiye Lee and Hanbyul Joo. 2024. Mocap Everyone Everywhere: Lightweight Mo-
+                                                                                                tion Capture With Smartwatches and a Head-Mounted Camera. arXiv preprint
+ACKNOWLEDGMENTS                                                                                 arXiv:2401.00847 (2024).
+                                                                                             Sunmin Lee, Sebastian Starke, Yuting Ye, Jungdam Won, and Alexander Winkler. 2023.
+The authors would like to thank Notiom for the extensive support                                QuestEnvSim: Environment-Aware Simulated Motion Tracking from Sparse Sensors.
+on inertial sensors, and Liangdi Ma, Yunzhe Shao, Shaohua Pan for                               arXiv preprint arXiv:2306.05666 (2023).
+                                                                                             Han Liang, Yannan He, Chengfeng Zhao, Mutian Li, Jingya Wang, Jingyi Yu, and Lan
+the help on live demos. This work was supported by the National                                 Xu. 2023. Hybridcap: Inertia-aid monocular capture of challenging human motions.
+Key R&D Program of China (2023YFC3305600, 2018YFA0704000),                                      In Proceedings of the AAAI Conference on Artificial Intelligence, Vol. 37. 1539–1548.
+                                                                                             Matthew Loper, Naureen Mahmood, Javier Romero, Gerard Pons-Moll, and Michael J.
+the NSFC (No.62021002), and the Key Research and Development                                    Black. 2015. SMPL: A Skinned Multi-Person Linear Model. ACM Trans. Graphics
+Project of Tibet Autonomous Region (XZ202101ZY0019G). This                                      (Proc. SIGGRAPH Asia) 34 (oct 2015).
+work was also supported by THUIBCS, Tsinghua University, and                                 Naureen Mahmood, Nima Ghorbani, Nikolaus F. Troje, Gerard Pons-Moll, and Michael J.
+                                                                                                Black. 2019. AMASS: Archive of Motion Capture as Surface Shapes. In The IEEE
+BLBCI, Beijing Municipal Education Commission. Feng Xu is the                                   International Conference on Computer Vision (ICCV).
+corresponding author.                                                                        Vimal Mollyn, Riku Arakawa, Mayank Goel, Chris Harrison, and Karan Ahuja. 2023.
+                                                                                                IMUPoser: Full-Body Pose Estimation using IMUs in Phones, Watches, and Earbuds.
+                                                                                                In Proceedings of the 2023 CHI Conference on Human Factors in Computing Systems.
+REFERENCES                                                                                      1–12.
+                                                                                             Raul Mur-Artal and Juan D Tardós. 2017. Orb-slam2: An open-source slam system for
+Karan Ahuja, Eyal Ofek, Mar Gonzalez-Franco, Christian Holz, and Andrew D Wilson.               monocular, stereo, and rgb-d cameras. IEEE transactions on robotics 33, 5 (2017),
+    2021. Coolmoves: User motion accentuation in virtual reality. Proceedings of the            1255–1262.
+    ACM on Interactive, Mobile, Wearable and Ubiquitous Technologies 5, 2 (2021), 1–23.      Noitom. [n. d.]. Perception Neuron series. Website. https://www.noitom.com/.
+Sadegh Aliakbarian, Pashmina Cameron, Federica Bogo, Andrew Fitzgibbon, and                  Christopher C. Paige and Michael A. Saunders. 1982. LSQR: An Algorithm for Sparse
+    Thomas J Cashman. 2022. Flag: Flow-based 3d avatar generation from sparse                   Linear Equations and Sparse Least Squares. ACM Trans. Math. Softw. 8, 1 (mar 1982),
+    observations. In Proceedings of the IEEE/CVF Conference on Computer Vision and              43–71. https://doi.org/10.1145/355984.355989
+    Pattern Recognition. 13253–13262.                                                        Shaohua Pan, Qi Ma, Xinyu Yi, Weifeng Hu, Xiong Wang, Xingkang Zhou, Jijunnan Li,
+Sadegh Aliakbarian, Fatemeh Saleh, David Collier, Pashmina Cameron, and Darren                  and Feng Xu. 2023. Fusing Monocular Images and Sparse IMU Signals for Real-time
+    Cosker. 2023. HMD-NeMo: Online 3D Avatar Motion Generation From Sparse                      Human Motion Capture. In SIGGRAPH Asia 2023 Conference Papers. 1–11.
+    Observations. In Proceedings of the IEEE/CVF International Conference on Computer        Gerard Pons-Moll, Andreas Baak, Thomas Helten, Meinard Müller, Hans-Peter Seidel,
+    Vision (ICCV). 9622–9631.                                                                   and Bodo Rosenhahn. 2010. Multisensor-fusion for 3D full-body human motion
+Carlos Campos, Richard Elvira, Juan J. Gómez, José M. M. Montiel, and Juan D. Tardós.           capture. In 2010 IEEE Computer Society Conference on Computer Vision and Pattern
+    2021. ORB-SLAM3: An Accurate Open-Source Library for Visual, Visual-Inertial                Recognition.
+    and Multi-Map SLAM. IEEE Transactions on Robotics 37, 6 (2021), 1874–1890.               Jose Luis Ponton, Haoran Yun, Andreas Aristidou, Carlos Andujar, and Nuria Pelechano.
+Angela Castillo, Maria Escobar, Guillaume Jeanneret, Albert Pumarola, Pablo Arbeláez,           2023. SparsePoser: Real-time Full-body Motion Reconstruction from Sparse Data.
+    Ali Thabet, and Artsiom Sanakoyeu. 2023. BoDiffusion: Diffusing Sparse Obser-               ACM Transactions on Graphics 43, 1 (2023), 1–14.
+    vations for Full-Body Human Motion Synthesis. arXiv preprint arXiv:2304.11118            Pytorch. [n. d.]. Pytorch. Website. https://pytorch.org/.
+    (2023).                                                                                  Tong Qin, Peiliang Li, and Shaojie Shen. 2018. Vins-mono: A robust and versatile
+Andrea Dittadi, Sebastian Dziadzio, Darren Cosker, Ben Lundell, Thomas J Cashman,               monocular visual-inertial state estimator. IEEE Transactions on Robotics 34, 4 (2018),
+    and Jamie Shotton. 2021. Full-body motion from a single head-mounted device:                1004–1020.
+    Generating smpl poses from partial observations. In Proceedings of the IEEE/CVF          Vitor Fortes Rey, Peter Hevesi, Onorina Kovalenko, and Paul Lukowicz. 2019. Let there
+    International Conference on Computer Vision. 11687–11697.                                   be IMU data: generating training data for wearable, motion sensor based activity
+Yuming Du, Robin Kips, Albert Pumarola, Sebastian Starke, Ali Thabet, and Artsiom               recognition from monocular RGB videos. In Adjunct proceedings of the 2019 ACM
+    Sanakoyeu. 2023. Avatars grow legs: Generating smooth human motion from sparse              international joint conference on pervasive and ubiquitous computing and proceedings
+    tracking inputs with diffusion model. In Proceedings of the IEEE/CVF Conference on          of the 2019 ACM international symposium on wearable computers. 699–708.
+    Computer Vision and Pattern Recognition. 481–490.                                        Myungjin Shin, Dohae Lee, and In-Kwon Lee. 2023. Utilizing Task-Generic Mo-
+Martin Felis. 2017. RBDL: an efficient rigid-body dynamics library using recursive              tion Prior to Recover Full-Body Motion from Very Sparse Signals. arXiv preprint
+    algorithms. Autonomous Robots 41 (02 2017).                                                 arXiv:2308.15839 (2023).
+Tamar Flash and Neville Hogan. 1985. The Coordination of Arm Movements: An                   Isaac Skog, Peter Handel, John-Olof Nilsson, and Jouni Rantakokko. 2010. Zero-velocity
+    Experimentally Confirmed Mathematical Model. The Journal of neuroscience : the              detection—An algorithm evaluation. IEEE transactions on biomedical engineering 57,
+    official journal of the Society for Neuroscience 5 (08 1985).                               11 (2010), 2657–2666.
+Sepp Hochreiter and Jürgen Schmidhuber. 1997. Long Short-term Memory. Neural                 Joan Sola. 2017. Quaternion kinematics for the error-state Kalman filter. arXiv preprint
+    computation 9 (12 1997).                                                                    arXiv:1711.02508 (2017).
+Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J. Black, Otmar Hilliges, and            Shingo Takeda, Tsuyoshi Okita, Paula Lago, and Sozo Inoue. 2018. A multi-sensor setting
+    Gerard Pons-Moll. 2018. Deep Inertial Poser Learning to Reconstruct Human Pose              activity recognition simulation tool. In Proceedings of the 2018 ACM International
+    from SparseInertial Measurements in Real Time. ACM Transactions on Graphics,                Joint Conference and 2018 International Symposium on Pervasive and Ubiquitous
+   (Proc. SIGGRAPH Asia) 37 (nov 2018).                                                         Computing and Wearable Computers. 1444–1448.
+Jiaxi Jiang, Paul Streli, Manuel Meier, Andreas Fender, and Christian Holz. 2023. Ego-       Matthew Trumble, Andrew Gilbert, Charles Malleson, Adrian Hilton, and John Collo-
+    Poser: Robust Real-Time Ego-Body Pose Estimation in Large Scenes. arXiv preprint            mosse. 2017. Total Capture: 3D Human Pose Estimation Fusing Video and Inertial
+    arXiv:2308.06493 (2023).                                                                    Sensors. In 2017 British Machine Vision Conference (BMVC).
+Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa Laich, Patrick Snape, and
+    Christian Holz. 2022a. Avatarposer: Articulated full-body pose tracking from sparse
+10   •   Xinyu Yi, Yuxiao Zhou, and Feng Xu
+
+
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N
+   Gomez, Łukasz Kaiser, and Illia Polosukhin. 2017. Attention is all you need. Advances
+   in neural information processing systems 30 (2017).
+Vicon. [n. d.]. Award Winning Motion Capture Systems. Website. https://www.vicon.
+   com/.
+Timo von Marcard, Bodo Rosenhahn, Michael Black, and Gerard Pons-Moll. 2017.
+   Sparse Inertial Poser: Automatic 3D Human Pose Estimation from Sparse IMUs.
+   Computer Graphics Forum 36(2), Proceedings of the 38th Annual Conference of the
+   European Association for Computer Graphics (Eurographics) (2017).
+Alexander Winkler, Jungdam Won, and Yuting Ye. 2022. QuestSim: Human Motion
+   Tracking from Sparse Sensors with Simulated Avatars. In SIGGRAPH Asia 2022
+   Conference Papers. 1–8.
+Fanyi Xiao, Ling Pei, Lei Chu, Danping Zou, Wenxian Yu, Yifan Zhu, and Tao Li. 2021.
+   A deep learning method for complex human activity recognition using virtual
+   wearable sensors. In Spatial Data and Intelligence: First International Conference,
+   SpatialDI 2020, Virtual Event, May 8–9, 2020, Proceedings 1. Springer, 261–270.
+Xsens. [n. d.]. Xsens 3D motion tracking. Website. https://www.xsens.com/.
+Dongseok Yang, Doyeon Kim, and Sung-Hee Lee. 2021. Lobstr: Real-time lower-body
+   pose prediction from sparse upper-body tracking signals. In Computer Graphics
+   Forum, Vol. 40. Wiley Online Library, 265–275.
+Yongjing Ye, Libin Liu, Lei Hu, and Shihong Xia. 2022. Neural3Points: Learning to
+   Generate Physically Realistic Full-body Motion for Virtual Reality Users. In Computer
+   Graphics Forum, Vol. 41. Wiley Online Library, 183–194.
+Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav Golyanik, Shaohua Pan, Christian
+   Theobalt, and Feng Xu. 2023. EgoLocate: Real-time Motion Capture, Localization,
+   and Mapping with Sparse Body-mounted Sensors. ACM Transactions on Graphics
+   (TOG) 42, 4, Article 76 (2023), 17 pages.
+Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada, Vladislav Golyanik, Christian
+   Theobalt, and Feng Xu. 2022. Physical Inertial Poser (PIP): Physics-aware Real-time
+   Human Motion Tracking from Sparse Inertial Sensors. In IEEE/CVF Conference on
+   Computer Vision and Pattern Recognition (CVPR).
+Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2021. TransPose: Real-time 3D Human Translation
+   and Pose Estimation with Six Inertial Sensors. ACM Transactions on Graphics 40 (08
+   2021).
+Alexander D Young, Martin J Ling, and Damal K Arvind. 2011. IMUSim: A simulation
+   environment for inertial sensing algorithm design and evaluation. In Proceedings
+   of the 10th ACM/IEEE International Conference on Information Processing in Sensor
+   Networks. IEEE, 199–210.
+Xiaozheng Zheng, Zhuo Su, Chao Wen, Zhou Xue, and Xiaojie Jin. 2023. Realistic Full-
+   Body Tracking from Sparse Observations via Joint-Level Modeling. In Proceedings
+   of the IEEE/CVF International Conference on Computer Vision (ICCV). 14678–14688.
+                                                                        Physical Non-inertial Poser (PNP): Modeling Non-inertial Effects in Sparse-inertial Human Motion Capture   •   11
+
+
+A     DERIVATION OF FICTITIOUS ACCELERATION                                                              Table 3. Cosine similarity between the synthetic and real IMU accelerations
+                                                                                                         in the frequency domain. Different IMU synthesizing methods are tested
+In this section, we derive the mathematical formula for the fictitious                                   using the TotalCapture dataset. We analyze both low- and high-frequency
+acceleration of a single leaf joint within the human body’s root frame                                   components with a cut-off frequency set at 10Hz. A score closer to 1 indicates
+during motion. Following the notation and subscript conventions                                          a higher level of similarity between the synthetic and real data.
+established in the main paper, the position of the leaf joint in the
+root frame can be calculated with respect to the world frame as:
+                                                                                                                       Test band              DIP     TransPose/PIP        Ours
+                                     −1
+                             𝒑 𝑅𝐿 = 𝑹𝑊 𝑅 (𝒑𝑊 𝐿 − 𝒑𝑊 𝑅 ),                                     (10)              Low frequency (<10Hz)        0.9117         0.9092         0.9124
+                                                                                                               High frequency (>10Hz)       0.7156         0.6832         0.7758
+where 𝑊 , 𝐿, and 𝑅 stand for the world, leaf, and root frame respec-                                                  Full band             0.7866         0.8334         0.8588
+tively. By taking the time derivative of both sides of Eq. 10, we
+obtain:
+              ¤ ) (𝒑
+              −1
+    𝒑¤ 𝑅𝐿 = (𝑹𝑊                     −1 ¤        ¤𝑊 𝑅)
+                𝑅   𝑊 𝐿 − 𝒑𝑊 𝑅 ) + 𝑹𝑊 𝑅 ( 𝒑𝑊𝐿 − 𝒑
+                                      −1 ¤
+           = 𝑹¤ 𝑊 𝑅 (𝒑𝑊 𝐿 − 𝒑𝑊 𝑅 ) + 𝑹𝑊
+                𝑇
+                                                   ¤𝑊 𝑅)
+                                        𝑅 ( 𝒑𝑊 𝐿 − 𝒑
+                                                  −1 ¤
+           = (𝑹𝑊 𝑅 [𝝎 𝑅𝑅 ] × )𝑇 (𝒑𝑊 𝐿 − 𝒑𝑊 𝑅 ) + 𝑹𝑊            ¤𝑊 𝑅)
+                                                    𝑅 ( 𝒑𝑊 𝐿 − 𝒑
+                                             
+                           −1                      −1 ¤         ¤𝑊 𝑅)
+           = −[𝝎 𝑅𝑅 ] × 𝑹𝑊    𝑅 (𝒑𝑊 𝐿 − 𝒑𝑊 𝑅 ) + 𝑹𝑊 𝑅 ( 𝒑𝑊𝐿 − 𝒑
+                                −1 ¤         ¤ 𝑊 𝑅 ).
+           = −[𝝎 𝑅𝑅 ] × 𝒑 𝑅𝐿 + 𝑹𝑊 𝑅 ( 𝒑𝑊 𝐿 − 𝒑
+                                                                     (11)
+In the derivation above, it is important to note that we utilize the
+orthogonality property of a rotation matrix expressed as 𝑹 −1 = 𝑹𝑇 ,
+as well as the relationship for the time derivative 𝑹¤ = 𝑹 [𝝎] × , where
+𝝎 represents the local body-frame angular velocity. Furthermore, we
+take into account the antisymmetry property of a skew-symmetric
+matrix, written as [𝝎]𝑇× = −[𝝎] × . Continuing with our analysis, we
+further compute the time derivative of both sides of Eq. 11, resulting
+in:                                                                                                      Fig. 9. Orientation error of different IMU fusion algorithms in our recording.
+            ¤ 𝑅𝑅 ] × 𝒑 𝑅𝐿 − [𝝎 𝑅𝑅 ] × 𝒑¤ 𝑅𝐿 + (𝑹𝑊
+𝒑¥ 𝑅𝐿 = − [ 𝝎                                    ¤ ) ( 𝒑¤
+                                                −1                         −1 ¥
+                                                         𝑊 𝐿 − 𝒑¤ 𝑊 𝑅 ) + 𝑹𝑊 𝑅 ( 𝒑     ¥𝑊 𝑅 )
+                                                                                  𝑊𝐿 − 𝒑
+                                                                                                         Mean error (degrees): Xsens Dot 5.3; Noitom PN Lab 2.0; Ours 2.4.
+                                                  𝑅
+           ¤ 𝑅𝑅 ] × 𝒑 𝑅𝐿 − [𝝎 𝑅𝑅 ] × 𝒑¤ 𝑅𝐿 + (𝑹𝑊 𝑅 [𝝎 𝑅𝑅 ] × )𝑇 ( 𝒑¤ 𝑊 𝐿 − 𝒑¤ 𝑊 𝑅 ) − 𝒂 𝑅𝑅 + 𝒂 𝑅𝐿
+      = − [𝝎
+           ¤ 𝑅𝑅 ] × 𝒑 𝑅𝐿 − [𝝎 𝑅𝑅 ] × 𝒑¤ 𝑅𝐿 − [𝝎 𝑅𝑅 ] × ( 𝒑¤ 𝑅𝐿 + [𝝎 𝑅𝑅 ] × 𝒑 𝑅𝐿 ) − 𝒂 𝑅𝑅 + 𝒂 𝑅𝐿
+      = − [𝝎
+                                                                                                         IMU measurements. In this section, we provide more quantitative
+           ¤ 𝑅𝑅 ] × 𝒑 𝑅𝐿 − 2[𝝎 𝑅𝑅 ] × 𝒑¤ 𝑅𝐿 − [𝝎 𝑅𝑅 ] 2× 𝒑 𝑅𝐿 − 𝒂 𝑅𝑅 + 𝒂 𝑅𝐿 .
+      = − [𝝎                                                                                             evaluation results.
+                                                                                                  (12)
+                                                                                                            As directly computing the mean-square error (MSE) between two
+ Note that in the third line, we need to substitute Eq 11 into the third
+                                                                                                         noise sequences may not be the most suitable approach, we endeavor
+term. Finally, the result obtained in Eq. 12 is essentially identical
+                                                                                                         to assess the cosine similarity between the synthesized acceleration
+to Eq. 1 presented in the main paper, indicating that the fictitious
+                                                                                                         and the real IMU measurement in the frequency domain. Tab. 3
+acceleration consists of four terms, following the same order as
+                                                                                                         shows the similarity in magnitudes of low- and high-frequency
+in Eq. 12, which are named as the Euler, Coriolis, centrifugal, and
+                                                                                                         noise between synthetic and real sensor accelerations. Our method
+linear terms. For further reading, see [Landau and Lifshitz 1976].
+                                                                                                         has a higher similarity score, indicating that it generally yields more
+                                                                                                         realistic measurements, especially in the high-frequency component,
+B     MORE EXPERIMENTS ON IMU SYNTHESIS                                                                  which is consistent with the acceleration data visualization in Fig. 8.
+In the proposed IMU synthesis technique, we implement an IMU
+fusion algorithm based on the Error-State Kalman Filter (ESKF)                                           B.2    Evaluation on IMU Fusion
+as outlined in [Sola 2017]. In this section, we present additional                                       To evaluate our implementation of the ESKF-based IMU fusion al-
+experiments conducted on the IMU synthesis technique (Sec. B.1)                                          gorithm [Sola 2017], we conduct comparisons with Xsens [Xsens
+and the implementation of ESKF-based IMU fusion (Sec. B.2).                                              [n. d.]] and Noitom [Noitom [n. d.]] black-box orientation filter in-
+                                                                                                         tegrated within their sensors (we use Xsens Dot IMU and Noitom
+B.1      Evaluation on IMU Synthesis                                                                     PN Lab IMU). We record 5-minute IMU measurements with ground-
+The effectiveness of our IMU synthesis method is demonstrated by                                         truth orientations obtained from an optical system. We then compare
+the final improvement observed in the trained models, as depicted                                        the orientation outputs of the Xsens, Noitom, and our algorithm
+in Tab. 2 and Fig. 7b in the main paper. Readers may find interest in                                    with the ground truth. The result is shown in Fig. 9. Our algorithm
+understanding how our synthesized IMU noise exhibits similarities                                        achieves a comparable accuracy compared to Noitom PN Lab, sur-
+to those in real IMU measurements. However, directly comparing                                           passing Xsens Dot. We have observed that Xsens Dot experiences
+two noise sequences can be challenging. In Fig. 8 of the main paper,                                     drift along the gravity axis, possibly due to their utilization of a
+we visually illustrate how closely our noise patterns align with real                                    different algorithm for interpreting magnetic measurements.
+12   •    Xinyu Yi, Yuxiao Zhou, and Feng Xu
+
+
+C        DISCUSSION ON FAILURE CASES                                     floor is flat. Consequently, when the person steps on a stair, the re-
+In the supplementary video, we present three failure cases of the pro-   constructed motion briefly shows the person walking onto a higher
+posed approach. In this section, we provide an in-depth discussion       height. However, the physical optimization quickly pulls the person
+on these failure cases.                                                  back to the floor due to gravity. To accurately capture motion on
+                                                                         uneven terrain, the physical optimizer requires a scene scan as input
+   Motion with insensible acceleration. Our technique excels at cap-     to account for the unflattened ground.
+turing acceleration-dependent motion by establishing a better under-
+standing of the correlation between human motion and acceleration           Motion under severely distorted magnetic environment. The third
+measurements. However, when the subject performs a very slow             failure case in the video shows that our method does not perform
+motion where the acceleration is almost indistinguishable from the       optimally when capturing human motion in an environment with a
+sensor noise, our method cannot accurately estimate the motion.          severely distorted magnetic field. This is because the inertial sensors
+This is evident in the first failure case shown in the video, where      we use assume a constant magnetic field to filter the yaw orientation.
+the subject intentionally throws a punch very slowly. In such cases,     When the human enters an area with a different magnetic north
+the measurements of acceleration and orientation almost remain           direction, the sensor’s orientation output becomes inaccurate, which
+constant during the motion, where our algorithm fails to accurately      in turn affects our results. It is important to note that this does not
+capture the motion. However, as the speed of the motion increases,       mean the environment must be entirely free of magnetic distortion.
+our method is able to capture the motion accurately.                     As long as the magnetic field in the environment is spatially constant
+                                                                         (even if it differs from the earth’s geomagnetic field), our system
+  Motion on uneven terrain. Our method employs a physical op-            can still perform well.
+timizer adopted from PIP [Yi et al. 2022], which assumes that the
+

@@ -1,0 +1,721 @@
+                                                      Group Inertial Poser: Multi-Person Pose and Global Translation
+                                                        from Sparse Inertial Sensors and Ultra-Wideband Ranging
+
+                                                  Ying Xue, Jiaxi Jiang, Rayan Armani, Dominik Hollidt, Yi-Chi Liao, and Christian Holz
+                                                               Department of Computer Science, ETH Zürich, Switzerland
+                                                                           https://siplab.org/projects/GroupInertialPoser
+arXiv:2510.21654v1 [cs.CV] 24 Oct 2025
+
+
+
+
+                                                                                               sparse IMU+UWB tracking                   multi-person pose + global translation
+                                                                                               6 trackers/person                         SMPL parameters in a shared global space
+
+
+
+
+                                                                                                        between-person
+                                                                                                        distances
+                                                                                                        same-person
+                                                                                                        distances
+
+
+                                         Figure 1. Our method Group Inertial Poser estimates 3D full-body poses and global translation for multiple humans using inertial
+                                         measurements from a sparse set of wearable sensors, augmented by the distances between the sensors via ultra-wideband ranging. Our
+                                         approach overcomes the challenge of drift in previous inertial pose estimators to track translation, as we leverage information from body
+                                         motions across multiple people. Our IMU+UWB method stabilizes and improves individual pose estimates, relative translation estimates
+                                         between people, and global translation estimates, thereby preserving meaningful interaction dynamics.
+
+
+                                                                   Abstract                                        for accurately tracking people’s global trajectories through
+                                                                                                                   the world. We also introduce GIP-DB, the first IMU+UWB
+                                         Tracking human full-body motion using sparse wearable                     dataset for two-person tracking, which comprises 200 min-
+                                         inertial measurement units (IMUs) overcomes the limita-                   utes of motion recordings from 14 participants. In our eval-
+                                         tions of occlusion and instrumentation of the environment                 uation, Group Inertial Poser outperforms previous state-of-
+                                         inherent in vision-based approaches. However, purely IMU-                 the-art methods in accuracy and robustness across synthetic
+                                         based tracking compromises translation estimates and ac-                  and real-world data, showing the promise of IMU+UWB-
+                                         curate relative positioning between individuals, as iner-                 based multi-human motion capture in the wild. Code, mod-
+                                         tial cues are inherently self-referential and provide no di-              els, dataset: github.com/eth-siplab/GroupInertialPoser.
+                                         rect spatial reference for others. In this paper, we present
+                                         a novel approach for robustly estimating body poses and
+                                         global translation for multiple individuals by leveraging the             1. Introduction
+                                         distances between sparse wearable sensors—both on each
+                                         individual and across multiple individuals. Our method                    Accurate motion tracking is a long-standing goal in com-
+                                         Group Inertial Poser estimates these absolute distances be-               puter vision. Single-person motion tracking has been ex-
+                                         tween pairs of sensors from ultra-wideband ranging (UWB)                  tensively studied using camera-based approaches [10, 14,
+                                         and fuses them with inertial observations as input into                   23, 34, 39, 63, 76]. Extending such tracking to multi-
+                                         structured state-space models to integrate temporal motion                person motions introduces computational complexity and
+                                         patterns for precise 3D pose estimation. Our novel two-                   new challenges. While vision-based approaches are accu-
+                                         step optimization further leverages the estimated distances               rate [13, 19, 40, 43, 58, 71, 77], they struggle with occlusion
+in crowded environments and face challenges when individ-         2. A structured state-space network that efficiently models
+uals are close. Their frequent reliance on stationary camera         sequential data to improve human pose estimation. To
+setups further constrains the effective tracking range.              our knowledge, we are the first to adapt state-space mod-
+    Body-worn sensor-based approaches offer a promising              els for inertial-based human motion estimation.
+alternative to these challenges. Using sparse sets of wear-       3. An optimization-based method to estimate people’s ini-
+able motion sensors, typically inertial measurement units            tial world positions, allowing tracked users to start at ar-
+(IMUs), has become popular to capture individuals’ move-             bitrary locations and eliminating the need for calibration,
+ments independent of environmental factors such as light-            manual setup, or aligning synchronized motions.
+ing, occlusion, or dynamic backgrounds. Recent IMU-               4. GIP-DB, the first IMU+UWB two-person motion dataset
+based approaches [81, 82, 84] estimate body poses from six           with diverse activities from 14 participants who in-
+body-worn sensors in controlled environments, but they of-           teract and perform everyday movements, totaling over
+ten exhibit drift in their predictions and, thus, struggle with      200 minutes of captured motions. GIP-DB comprises
+estimating global translation. Extending these approaches            synchronized IMU signals, UWB-based distance mea-
+to multi-person constellations would further complicate ac-          surements, and SMPL body motion parameters.
+curately estimating relative positions between individuals.
+This prevents them from capturing inter-personal dynamics         2. Related Work
+and spatial relationships between people—aspects that are
+highly interesting to reconstruct when aiming to understand       Multi-Person Motion Capture. Human motion capture,
+interactions in real social scenarios.                            for both single and multiple individuals, has traditionally
+    In this paper, we introduce Group Inertial Poser (GIP),       relied on camera-based approaches, with marker-based sys-
+a novel approach for robust multi-person 3D pose and              tems [58, 71] offering high precision but requiring costly
+global translation estimation from sparse inertial sensing        setups confined to indoor environments. Recent advances in
+with inter-sensor distances (as illustrated in Figure 1). It      computer vision have enabled human pose estimation from
+first uses structured state-space models to estimate individ-     sparse images [8, 10, 14, 34] or videos [23, 35, 39, 70, 77,
+ual body poses and translations from inertial signals and         86]. Frames from third-person [27], floor [7, 11], or egocen-
+same-person sensor distances. Then, a two-step optimiza-          tric cameras [32, 66] extend naturally to multi-person sce-
+tion process refines the translation estimates: (a) Relative      narios, with challenges mainly in accurate person detection,
+position optimization aligns individuals in a shared world        tracking, and pose estimation. Efforts such as RTMO [50]
+frame using between-person distances, eliminating the need        and HigherHRNet [15] proposed efficient bottom-up ap-
+for calibrated starting positions; (b) Trajectory optimization    proaches for multi-actor tracking, while PETR [62] uses
+further improves global translation accuracy.                     transformer-based models and AlphaPose [19, 42] offers
+    To validate GIP in real-world settings, we introduce          joint pose estimation-tracking frameworks. However, track-
+GIP-DB, a novel motion dataset that captures diverse ac-          ing in crowded or occluded scenarios remains challenging
+tivities from pairs of 14 participants who interacted during      due to obstruction and inconsistent tracking [18], which
+recording. Evaluating GIP on GIP-DB, our results show             wearable inertial motion capture systems can address by
+that GIP estimates more accurate poses and translations           overcoming subject identification and occlusion issues.
+with reduced drift—despite high noise levels in between-
+person distances. Finally, we demonstrate GIP for a four-         Motion Capture with Wearable Sensors. Wearable in-
+person setting, where our method’s performance improves           ertial sensors (IMU) have emerged as an alternative ap-
+as it leverages more distances. By analyzing the recon-           proach to motion capture, given their low power, small
+structed inter-human motions, we demonstrate that GIP             form factor, and affordability. Commercial systems, such
+effectively captures relative spatial relationships and pre-      as XSens [78] or Noitom [56] use 17 to 19 IMUs with
+serves meaningful inter-personal motion dynamics—an es-           underlying biomechanical models to estimate body pose.
+sential capability for modeling human-to-human interaction        With the availability of large motion capture datasets [52,
+that previous approaches fail to achieve.                         68], learning-based methods using only sparsely worn
+                                                                  IMUs [28, 29, 53, 55, 73] are emerging. Recent approaches
+Contributions                                                     use 6 IMUs and estimate both body pose and translation
+1. Group Inertial Poser (GIP), a novel method to incorpo-         through ground contact points [33, 81] and physical con-
+   rate between-sensor distances and inertial signals to esti-    straints [82, 84, 85]. Several methods have further reduced
+   mate 3D full-body poses and global translations for mul-       input requirements to just the upper body alone [1, 22, 30–
+   tiple people. GIP is the first IMU+UWB-based solution          32, 44, 51, 64, 75, 80].
+   for estimating multi-person motion in a shared reference           IMUs detect relative acceleration and angular veloc-
+   frame and sets new state-of-the-art results.                   ity, so IMU-only methods have lower pose estimation
+       individual pose estimation                optimization inputs                        initial position optimizer              ﬁnal prediction
+                                                                                   update the relative initial position
+                                                                                                                                            reﬁned joint
+
+  6x             acceleration
+
+                 orientation                                     intermediate
+                                                                                        y
+                                                                                                                                            angles and
+                                                                                                                                            trajectories
+  IMU-UWB                                         joint angles 1 trajectory 1
+  trackers per   same-person                                                                 x
+
+  person         distances                                                          z
+
+
+                                                         between-person
+                                                          distances
+
+                                between-person
+                                distances                                                                                           SMPL in
+                                                                                                 trajectory optimizer
+                                                                                   update the gloabal translation estimates
+
+
+
+
+                                                  joint angles 2   intermediate
+                                                                    trajectory 2
+
+
+
+Figure 2. Overview of Group Inertial Poser (GIP). Our pipeline consists of three key steps. It begins with individual pose estimation
+using an SSM-based model Eθ to generate a full-body SMPL pose and translations. The optimization steps then refine these estimates
+by minimizing the discrepancy between predicted and actual between-sensor distances. First, GIP optimizes the initial relative positions
+(T012 ); second, it fine-tunes the translations for both users (T 1 , T 2 ).
+
+
+and translation accuracy compared to vision-based alterna-                                   3. Method
+tives. To address this, researchers have explored hybrid
+approaches incorporating external [59, 65, 74] or body-                                      3.1. Problem Formulation
+worn [26, 45, 83] cameras. Alternative sensing modali-                                       GIP addresses multi-person pose estimation using sparse
+ties have also been investigated, including wearable ultra-                                  inertial sensors and between-sensor distances. GIP is a
+sonic [48, 72] and electromagnetic sensors [36, 37]. Re-                                     generic approach that can be applied to any number of users.
+cently, UIP [5] proposed leveraging distance measurements                                    For simplicity and clarity, we consider a scenario with two
+from ultra-wideband ranging to constrain IMU drift. Yet,                                     users in our notation, each equipped with S = 6 sparse
+these approaches focus on single-person tracking as sensors                                  sensors placed on the head, pelvis, wrists and knees. Each
+worn by different actors are treated as disjoint problems.                                   sensor includes a 6-DoF IMU and a single UWB sensor.
+We propose a novel approach to IMU+UWB-based pose                                            For each user i ∈ {1, 2} and at each frame t, we obtain
+estimation that, for the first time, enables multi-human rela-                               3D orientations Rti ∈ RS×3 and accelerations Ait ∈ RS×3 ,
+tive pose estimation solely from inertial sensors and UWB.                                   both represented in a shared world frame. Additionally,
+                                                                                             we denote the pairwise same-person sensor distances as
+Ultra-Wideband Ranging. UWB is characterized by its                                          Dti ∈ RS×S for user i, and the between-person distances
+large bandwidth and very short waveforms, which is well-                                     as Dt12 ∈ RS×S at timestamp t. Given a sequence of length
+suited for ranging applications, such as asset tracking [6,                                  N represented by [A1 , A2 , R1 , R2 , D1 , D2 , D12 ], we pre-
+69, 87], robotic localization [4, 12, 41, 57, 88] and collab-                                dict the SMPL [49] pose parameters Θi ∈ RN ×3J and the
+oration [16, 60]. It is increasingly available in commercial                                 translation T i ∈ RN ×3 for each user i, all in a shared frame
+devices such as smartphones, smartwatches, and tags (e.g.                                    of reference. Here, J = 24 represents the number of joints.
+AirTags) [3, 17, 61]. A challenge in UWB ranging is the
+noise in non-line of sight (NLOS) conditions. This is es-
+                                                                                             3.2. Method Overview
+pecially relevant in human motion tracking, where the hu-                                    Figure 2 shows an overview of our proposed method Group
+man body is an obstacle between two ranging UWB radios.                                      Inertial Poser (GIP). The first step of our pipeline is Indi-
+Researchers have addressed this by analyzing raw channel                                     vidual Pose Estimation, which involves estimating each
+impulse response on UWB radios [2, 9, 67] or via sensor                                      person’s full-body pose independently using a learning-
+fusion with IMUs [20, 25, 54, 57] or cameras [60, 79], and                                   based pose estimator. We design a human pose estimator
+effectively filtering distance estimates [4]. Building on this                               based on State Space Models [21] to produce sequences of
+approach, GIP estimate distances in any constellation of                                     full-body SMPL poses Θ̂i and root translation trajectories
+trackers, worn by one or multiple people.                                                    T̂ i using the acceleration, orientation, and same-person sen-
+  inputs                                                                   outputs       h(t) ∈ RN to an output y(t) ∈ R. The aforementioned
+                                          joint angles                              process can be formulated as a linear Ordinary Differen-
+                                                 (subset)
+acceleration
+                                                                      estimated     tial Equation (ODE): h′ (t) = Ah(t) + Bx(t), and y(t) =
+
+
+
+
+                                                              optimizer
+                                                                          joint angles
+
+
+
+
+                                                               physics
+                                                                                    Ch(t), where A ∈ RN ×N denotes the state transition ma-
+                            sensor                joint
+ orientation            positions            velocities                               trix, while B ∈ RN ×1 and C ∈ R1×N represents the pro-
+                                                                                         jection parameters. The S4 model discretizes this continu-
+same-person                                  foot
+                                                                          estimated
+                                                                          trajectory     ous system, making it suitable for deep learning scenarios.
+ distances                                      contact
+                                                                                         Specifically, it introduces a timescale parameter ∆ and ap-
+                                                                                         plies fixed discretization rules to transform A and B into
+Figure 3. Our SSM-based model takes the global acceleration,
+rotation, and between-sensor distances to estimate the pose and
+                                                                                         discrete parameters A and B. Typically, zero-order hold
+translation via SMPL.                                                                    (ZOH) is employed as the discretization rule, defined as
+                                                                                         follows: A = exp(∆A), B = (∆A)−1 (exp(∆ A)−I)·∆B.
+                                                                                         After discretization, the SSM can be computed through lin-
+sor distances from six IMUs per person. To extend from in-                               ear recurrence, described as
+dividual pose to multi-person pose, our method introduces
+two optimization steps: The Initial Position Optimization                                                 h(t) = Ah(t − 1) + Bx(t),
+                                                                                                                                                      (2)
+refines the initial positions of the two trajectories. We define                                          y(t) = Ch(t)
+one user’s initial position P1 as the world origin (0, 0, 0).
+                                                                                            Our pose estimator consists of four structured SSM (S4)
+Our goal is to optimize the second user’s position P2 , which
+                                                                                         modules, one graph convolutional network (GCN) module,
+is relative to P1 . This step aligns trajectories into a shared
+                                                                                         and a physics optimizer. Since GCNs have been effec-
+world frame and provides a stable initialization for the next
+                                                                                         tive in capturing between-sensor distance information [5],
+optimizer. The Trajectory Optimization further refines the
+                                                                                         we incorporate a GCN to process orientation and between-
+full trajectories by integrating between-human distance Dij
+                                                                                         sensor distances, predicting sensor positions. Meanwhile,
+constraints through a trajectory optimizer. This step en-
+                                                                                         the SSM-J module takes orientation and acceleration as in-
+forces consistency with the relative distances between in-
+                                                                                         puts to estimate sensor positions. We learn adaptive weights
+dividuals. Note that, directly optimizing the entire trajec-
+                                                                                         for SSM-J and GCN to fuse their predictions effectively.
+tory (without the first optimization step) results in unstable
+                                                                                         Next, given the predicted sensor positions and the input sen-
+convergence to unrealistic paths.
+                                                                                         sor acceleration, orientation, and same-person sensor dis-
+3.3. Individual Pose Estimation                                                          tances, SSM-R, SSM-V, and SSM-C predict joint angles,
+                                                                                         joint velocities, and foot contact states, respectively. Fi-
+GIP starts from individual pose estimation and is performed
+                                                                                         nally, these predicted values are passed to a physics-based
+separately for each user. As shown in Figure 3, the human
+                                                                                         optimization module to ensure physical correctness, follow-
+pose estimator (Eθ ) is state-space model based, which uses
+                                                                                         ing [5, 82]. This produces the final estimated joint angles
+acceleration Ai , orientation Ri , and same-person distances
+                                                                                         Θ̂i and translation T̂ i .
+Di to predict SMPL pose parameters (joint orientations)
+Θ̂i [49] and translations T̂ i which are relative to their own                           3.4. Initial Position Optimization
+initial frame:
+                                                                                         GIP initializes by setting the initial position of the first per-
+                       i      i           i
+                  Θ̂ , T̂ = Eθ (A , R , D )    i       i
+                                                                                  (1)    son, T01 , as the origin in the global coordinate system, while
+                                                                                         setting the initial position of the second person as T02 . Given
+Since the pose estimator Eθ processes each user indepen-                                 these two positions, the relative position between them is
+dently, SMPL poses and translations for each user are esti-                              represented as T012 . The objective of this step is to deter-
+mated separately when multiple users are present.                                        mine the optimal T012 by minimizing the differences be-
+   Inspired by recent advancements in structured state-                                  tween two sets of between-person distances: one is derived
+space sequence models (S4), which have shown remark-                                     from prediction (denoted as P Dt ) and the other is from
+able proficiency in sequence modeling [21], we design our                                UWB sensing (denoted as Dt ). Specifically, the predicted
+pose estimator based on state-space models (SSMs). The S4                                distances are computed with the individual pose estimator
+model leverages SSMs to efficiently capture complex pat-                                 with forward kinematics. The UWB-based distances are di-
+terns in sequential data, making it highly effective for mod-                            rect measurements. Since each user wears 6 sensors, the op-
+ern, large-scale applications. Compared to traditional mod-                              timization considers only the 6 × 6 between-person sensor
+els like LSTMs [24], S4 offers improved scalability, long-                               pairs, excluding any within-user pairs, to refine the spatial
+range dependency modeling, and parallelization. SSMs rely                                alignment of the two users.
+on a classical continuous-time system that maps an input                                    To generate the predicted between-person differences, at
+sequence x(t) ∈ R, through intermediate implicit states                                  each timestamp t, we compute the global positions of all
+sensors for each person using forward kinematics applied
+                                                                                                                                                         custom sensor case
+to SMPL parameters Θ̂it and the translation Tti , which are                                                                                                        40x35 mm
+relative to each person’s initial position Pi . The predicted                                                             UWB radio
+sensor positions, denoted SPti ∈ RS×3 , are calculated as                                                                 DWM3000
+                                                                                                                          IMU
+follows:                                                                                                                  LSM6DSL
+
+                                                                                                                          reﬂective markers
+                         SPti = Pi + T̂ti + f k(Θ̂it ),                           (3)                                     for ground truth translation
+
+
+
+where f k(Θ̂it ) is the forward kinematics function that com-                                                             Xsens MVN Awinda
+putes the body mesh based on joint rotations and estimates                                                                for ground truth SMPL
+
+sensor positions from the corresponding mesh vertices.
+From the predicted sensor coordinates, we calculate the pre-                                     a                       b
+
+dicted between-person sensor distances P Dt ∈ RS×S . In
+detail, each distance is computed as:                                                           Figure 4. (a) Our dataset includes pairs of participants equipped
+                                                                                                with (b) various motion capture sensors. These sensors capture
+                                                                                                acceleration, orientation, and distance data, along with ground-
+               P Dt (j, k) = SPt1 (j) − SPt2 (k) 2 ,                              (4)
+                                                                                                truth SMPL pose parameters and translations for each participant.
+where j and k index the sensors on user 1 and user 2, re-
+spectively. The predicted distances are compared with the
+actual distances Dt12 ∈ RS×S obtained from UWB mea-
+surements.                                                                                             ∆T = T:,2:T − T:,1:T −1                                           (9)
+   To streamline the full process, we define F K as the com-                                            2
+                                                                                                      ∆ T = ∆T:,2:T −1 − ∆T:,1:T −2                                    (10)
+posite function that takes SMPL parameters, translations,
+                                                                                                             = T:,3:T − 2 × T:,2:T −1 + T:,1:T −2                      (11)
+and initial positions as input, applies forward kinematics via
+f k, and computes pairwise distances P Dt :                                                     One term penalizes the difference between true and pre-
+                                                                                                dicted velocities(∆T i vs. ∆T̂ i ), and the other does the
+                 P Dt = F K(Θ1 , Θ2 , T 1 , T 2 , T012 )                          (5)           same for accelerations (∆2 T i vs. ∆2 T̂ i ). Together, they en-
+                                                                                                courage smoother motion by constraining predicted speed
+   The goal here is to adjust T012 so that the predicted and                                    and acceleration.
+actual between-person sensor distances align as closely as
+possible over the entire trajectory of T timestamps:                                            3.6. Implementation Details
+                                                                                                We integrate four S4-based neural networks, namely SSM-
+                           T
+                           X                                                      2             J, SSM-R, SSM-V, and SSM-C (see Figure 3), each de-
+  (T012 ) = arg min              F K(Θ̂1t , Θ̂2t , T̂t1 , T̂t2 , T̂012 ) − Dt12       ,         signed to process different output features. These models
+                 T̂012                                                            2
+                           t=1
+                                                                                      (6)
+                                                                                                share a consistent architecture, beginning with a linear en-
+                                                                                                coder that maps the input features to a hidden dimension
+3.5. Trajectory Optimization                                                                    of 256. The exception is SSM-C, where the hidden dimen-
+                                                                                                sion is reduced to 32, due to the smaller output size (2).
+The initial positions optimization effectively aligns the tra-
+                                                                                                Each network then passes through two residual S4 layers,
+jectories of two people into a shared world frame. The tra-
+                                                                                                which incorporate LayerNorm and dropout (0.2) for regu-
+jectory optimization step then improves trajectories of both
+                                                                                                larization. Finally, a linear decoder maps the output repre-
+users simultaneously.
+                                                                                                sentations to the respective task-specific output spaces. We
+                         T
+                                                                                                train the model on a single NVIDIA 4090 GPU with a batch
+                                                                         2
+                                                                                                size of 256, a sequence length of 200, and a learning rate of
+                        X
+Tt1 , Tt2 = arg min          F K Θ̂1t , Θ̂2t , T̂t1 , T̂t2 , T012 − Dt12        (7)
+               1    2
+            (T̂t ,T̂t ) t=1                                                2
+                                                                                                1 × 10−3 , which decays by a factor of 0.33 every 20 epochs.
+                    X                      2                 X                      2           The initial position optimizer and trajectory optimizer uti-
+           + λ1             ∆T i − ∆T̂ i          + λ2             ∆2 T i − ∆2 T̂ i
+                  i=1,2
+                                             2
+                                                         i=1,2
+                                                                                            2   lize the L-BFGS optimizer [47], with a maximum of four
+                                                                                      (8)       iterations per optimization step and a history size of 10. We
+                                                                                                use strong Wolfe line search to ensure robust step size selec-
+In this formulation: The first term (7) enforces alignment
+                                                                                                tion and stable convergence [47].
+between predicted and observed between-person sensor dis-
+tances. The two regularization terms (8) promote translation                                    4. Group Inertial Poser Dataset (GIP-DB)
+smoothness. Let ∆T and ∆2 T denote the first- and second-
+order differences (velocity and acceleration) of a person’s                                     To evaluate our method on real-world data, we collected a
+translation:                                                                                    motion capture dataset featuring seven pairs of participants
+(10 male, 4 female) with heights ranging from 160 cm to          Metrics. Following previous work on human pose esti-
+195 cm. The dataset includes everyday movements such as          mation from inertial sensors [5, 81, 82], we evaluate the
+walking, stretching, and jogging in place, as well as interac-   predicted poses and trajectory of SMPL using the follow-
+tive activities like close conversation, sparring, handshakes,   ing metrics: SIP Error (°) evaluates the global joint angle
+and dancing. Each participant was equipped with an Xsens         error of arms (shoulder angle) and legs (hip angle). Angle
+MVN Awinda suit [78] consisting of 17 IMUs, which pro-           Error (°) evaluates all global joint angle errors. Joint Error
+vided ground-truth SMPL pose parameters via Xsens’ pro-          (cm) evaluates the root aligned mean per joint position er-
+prietary software. Additionally, they wore six custom wire-      ror (MPJPE). Trans Error @{3m, 6m} (cm) The global root
+less sensors placed on the head, pelvis, wrists, and knees.      translation error is computed over all movement pairs that
+Each custom sensor integrates a UWB radio (DWM3000)              span a distance of x meters. This metric quantifies the devi-
+and a 6DoF IMU (LSM6DSL). The UWB system, run-                   ation from the true trajectory over fixed-distance intervals.
+ning a ranging protocol and filtering pipeline from exist-       Indicates the diversion from the true trajectory over time.
+ing work [4], measured distances at 40 Hz across 12 sensor       We introduce Dist Err-{4s, 8s, 12s, 16s, 20s}(cm), which
+pairs: (15x2) same-person sensor distances and 36 between-       captures the distance error between two individuals over the
+person sensor distances. Meanwhile, each IMU recorded            corresponding time. It quantifies the multi-human relative
+acceleration At and orientation Rt at 104 Hz. We addition-       translation error, providing more meaningful insights com-
+ally captured ground-truth translation using a 20-camera         pared to global translation errors for interaction scenarios.
+OptiTrack system [58], using the pelvis sensor as the ref-
+erence point. All sensors were calibrated according to their     5.1. Evaluation Results
+respective documentation [4, 78]. Each recording session
+                                                                 Quantitative Results on the InterHuman Dataset. As
+began and ended with a T-pose and a jump to synchronize
+                                                                 shown in Table 1, GIP outperforms the baselines across all
+data across sources (Xsens, OptiTrack, and custom sen-
+                                                                 pose and translation metrics. Our model, incorporating tra-
+sors). Figure 4 illustrates our setup. In our GIP-DB dataset,
+                                                                 jectory optimization, produces significantly more accurate
+the average UWB RMSE is 5 cm for same-person measure-
+                                                                 and consistent relative translations over time. Additionally,
+ments, increasing to 15 cm for between-person measure-
+                                                                 our SSM-based pose estimation method reduces full-body
+ments due to greater occlusions.
+                                                                 joint angle error by 22% compared to UIP and 33% com-
+5. Experiments                                                   pared to PIP. Notably, when initialized using the initial posi-
+                                                                 tion optimizer, GIP closely matches the performance of the
+To assess the advantages of GIP for multi-human inertial         ground-truth-initialized version, further validating the ef-
+pose estimation, we conduct experiments on both synthetic        fectiveness of our approach. Figure 5 shows that our method
+and real-world data. We compare our method against previ-        achieves the lowest cumulative translation error.
+ous inertial sensing-based approaches, namely PIP [82] and
+UIP [5]. There are fundamental differences between GIP
+and these prior methods. Notably, neither PIP nor UIP was        Quantitative Results on the GIP-DB Dataset. Com-
+designed to estimate inter-human translation. To address         pared to finite difference-based simulations of accelerations
+this limitation, we initialize their translation at frame zero   or distances between virtual sensors, GIP-DB’s recordings
+using the ground truth. Additionally, PIP was originally de-     of actual UWB distances and IMU values are noisier as it
+signed to work solely with IMU data and does not leverage        was recorded from real-world behavior. This in turn makes
+between-sensor distances. To ensure a fair comparison, we        accurate predictions more challenging. Table 2 highlights
+provide PIP with additional sensor distance measurements         GIP’s benefits over PIP and UIP when dealing with real
+following the same approach as UIP [5].                          world noisy data. We improve all pose and translation met-
+                                                                 rics by a substantial margin, specifically, we reduce the dis-
+                                                                 tance error by 72% at 20s. Again, the initial pose opti-
+Datasets. Our evaluation aims to show the benefits of GIP
+                                                                 mizer proves its benefit and yields comparable results as
+in both synthetic and real-world scenarios. All methods are
+                                                                 the ground truth initialized experiment. We also show that
+trained from scratch to estimate individual poses using syn-
+                                                                 when we use the GIP-DB data to finetune the model, the
+thesized AMASS data [52]. Specifically, we generate syn-
+                                                                 model performance on angular prediction could be signifi-
+thetic data by computing IMU measurements (acceleration
+                                                                 cantly improved.
+and rotation) and between-sensor distances on virtual sen-
+sors, following prior work [5, 28, 82]. We use two datasets
+for evaluation: InterHuman [46] and our real-world GIP-          General Qualitative Results. Figure 6 presents a visual
+DB dataset, both of which contain two-person interactions.       comparison of our proposed method, GIP, and the state-of-
+For InterHuman, we synthesize IMU and UWB data using             the-art method, UIP. It is clear that UIP struggles to esti-
+the same procedure as for AMASS.                                 mate relative translations accurately, making it difficult to
+Table 1. Results for training on AMASS and evaluation on the InterHuman dataset. When directly comparing with PIP and UIP, we assume
+the initial position is known for all methods (upper table), as PIP and UIP cannot predict the initial relative translations. We also report
+results when GIP is not initialized with ground truth but using our initial position optimizer, which only affects the translation errors and
+shows comparable performance to the ground truth initialization. The best results are in bold.
+
+  Method                 SIP Err Angle Err Joint Err Vertex Err Dist Err-4s Dist Err-8s Dist Err-12s Dist Err-16s Dist Err-20s
+                           (°)     (°)       (cm)      (cm)        (cm)        (cm)        (cm)         (cm)         (cm)
+  PIP + D                20.95     14.89        7.98        9.40        48.82             58.25        59.71           63.39           63.72
+  UIP                    19.25     12.89        6.60        7.31        49.61             62.51        59.10           83.16           81.44
+  GIP (ours)             18.30      9.94        5.74        6.53        3.08              3.73         4.40            1.36            1.91
+  GIP (ours init.opt.)   18.30      9.94        5.74        6.53         3.19              4.00        4.70            4.90            1.91
+
+Table 2. Results for training on AMASS data and evaluation on the real-world GIP-DB dataset. When directly comparing with PIP and
+UIP, we assume the initial position is known for all methods, as PIP and UIP cannot predict the initial translation.
+
+  Method                 SIP Err Angle Err Joint Err Vertex Err Dist Err-4s Dist Err-8s Dist Err-12s Dist Err-16s Dist Err-20s
+                           (°)     (°)       (cm)      (cm)        (cm)        (cm)        (cm)         (cm)         (cm)
+  PIP + D                30.55     27.40       11.43       12.37        33.22             37.83        46.65           54.56           73.70
+  UIP                    30.18     26.16       10.88       11.50        31.11             37.49        44.24           55.73           74.93
+  GIP (ours)             27.77     23.34        9.45       10.21        23.06             23.79        21.86           19.82           20.69
+  GIP (ours init.opt.)   27.77     23.34        9.45       10.21        23.57             24.40        22.79           19.34           20.71
+  GIP (finetuned)        18.04     17.57        8.70       9.60         23.36             23.27        22.07           19.56           19.59
+
+
+                                                                          Table 3. Translation error decreases with more people involved.
+
+                                                                                Npeople                 1         2            3         4
+                                                                                Trans Error (m)       2.34      1.52          1.20     1.15
+
+
+                                                                                Table 4. Ablation study on the InterHuman [46] testset.
+                                                                          Method            SIP Err Angle Err Trans-3m Trans-6m RMSE MAE
+                                                                                              (°)     (°)       (cm)     (cm)    (cm) (cm)
+                                                                          w/o init. opt.    18.30    9.94      99.50     116.01      76.50   69.16
+                                                                          w/o traj. opt.    18.30     9.94     76.07     115.32      40.00   36.21
+                                                                          w/LSTM            19.24    12.88     66.60     103.74      42.19   38.53
+                                                                          Ours              18.30     9.94     63.85     98.93       34.86   31.11
+
+
+
+
+    Figure 5. Comparison of translation error on InterHuman.
+                                                                         6. Ablation Studies
+capture inter-personal interactions. In contrast, GIP effec-
+tively improves both the relative translations between indi-             Table 4 shows the impact of GIP’s components on pose and
+viduals and the global translations.                                     translation accuracy. All evaluations assume that the initial
+                                                                         position is unknown. The result highlights the importance
+Multi-User Scenarios. We conducted an experiment on                      of the initial position optimization, as removing this step
+a synthetic four-person EgoHumans [38] dataset. We keep                  significantly degrades translation accuracy (1st row). The
+the test subject fixed and add more people to the optimiza-              trajectory optimizer further improves the translations in a
+tion process. For example, with three people—p1, p2, and                 shared frame, improving translation accuracy (2nd row), re-
+p3—we jointly optimize the group (p1, p2, p3). When a                    ducing the translation error @6m by up to 16 cm. To assess
+fourth person, p4, is added, we perform two separate opti-               the effectiveness of SSM, we substitute SSMs with LSTMs
+mizations: first on (p1, p2, p3), then on (p1, p2, p4). Adding           (4th row) while keeping the rest of the pipeline intact (opti-
+more people improves translation estimation for the same                 mizations included). We demonstrate that LSTMs perform
+person thanks to the additional spatial constraints (Table 3).           worse in both angle errors and translations.
+UIP (SIGGRAPH’24)
+GIP (Ours)
+Ground Truth
+
+
+
+
+Figure 6. Visual comparison of GIP and UIP. GIP effectively corrects trajectory errors and preserves inter-personal interaction dynamics.
+
+
+7. Limitations and Discussion                                          demonstrates multi-person motion tracking by augment-
+                                                                       ing inertial measurements with between-sensor distances.
+Our method has demonstrated significant improvements                   We leverage these novel constraints to mitigate drift and
+over prior approaches for inertial-based motion capture                improve relative translation accuracy. Beyond improved
+across multiple datasets. Nevertheless, several limitations            single-person pose estimation with a novel SSM model, GIP
+remain. First, as noted in prior work [5], the UWB noise               robustly tracks two individuals using sparse IMU+UWB
+remains a significant challenge, particularly in multi-person          sensors and accurately estimates relative trajectories. Un-
+interactions where signal obstruction is common. Nonethe-              like previous methods, GIP allows people to start from
+less, our results suggest that future advancements in UWB              arbitrary positions and automatically determines their ini-
+precision could further enhance motion accuracy. Second,               tial relative positions via a two-step optimization. GIP of-
+our approach estimates body pose while assuming a mean                 fers quantitative and qualitative advantages—it improves
+body shape, without accounting for inter-individual shape              accuracy but also preserves crucial inter-personal interac-
+variation. Future research could extend this work by incor-            tion dynamics. Additionally, we introduce GIP-DB, the
+porating body shape estimation from sparse observations,               first IMU+UWB dataset designed for multi-person tracking
+as explored in [32]. Third, the use of optimization-based in-          using sparse inertial sensors. Evaluated with InterHuman
+ference introduces computational overhead. Although our                and GIP-DB, our approach consistently outperforms exist-
+method converges in fewer than 10 iterations and processes             ing methods in accuracy and robustness across synthetic and
+a 30-second motion sequence in 2.04 seconds, this remains              real-world data. Collectively, our work highlights the poten-
+a limiting factor for resource-constrained applications. Fi-           tial of IMU+UWB fusion for multi-person motion tracking,
+nally, our method does not explicitly mitigate foot sliding,           opening new opportunities for real-world applications.
+which can partially arise from our trajectory optimization.
+
+8. Conclusion                                                          Acknowledgments
+Accurate multi-person tracking using sparse sensing is an              We thank all participants of our data capture. We thank
+essential step toward generalized motion tracking and cap-             Adnan Harun Dogan for his help with preparing the dataset.
+turing meaningful inter-personal interactions. For this pur-           Yi-Chi Liao was supported by the ETH Zurich Postdoctoral
+pose, Group Inertial Poser overcomes the drift and lack                Fellowship Program. Ying Xue was in part supported by the
+of positional references in previous inertial methods and              Swiss National Science Foundation (Grant No. 10004941).
+References                                                           [12] Yanjun Cao, Chenhao Yang, Rui Li, Alois Knoll, and Gio-
+                                                                          vanni Beltrame. Accurate position tracking with a single uwb
+ [1] Karan Ahuja, Eyal Ofek, Mar Gonzalez-Franco, Christian               anchor. In 2020 IEEE International Conference on Robotics
+     Holz, and Andrew D Wilson. Coolmoves: User motion ac-                and Automation (ICRA), pages 2344–2350, 2020. 3
+     centuation in virtual reality. Proceedings of the ACM on In-
+                                                                     [13] Zhe Cao, Tomas Simon, Shih-En Wei, and Yaser Sheikh.
+     teractive, Mobile, Wearable and Ubiquitous Technologies, 5
+                                                                          Realtime multi-person 2d pose estimation using part affinity
+     (2):1–23, 2021. 2
+                                                                          fields. In Proceedings of the IEEE conference on computer
+ [2] Simone Angarano, Vittorio Mazzia, Francesco Salvetti,
+                                                                          vision and pattern recognition, pages 7291–7299, 2017. 1
+     Giovanni Fantin, and Marcello Chiaberge. Robust ultra-
+                                                                     [14] Ching-Hang Chen and Deva Ramanan. 3d human pose es-
+     wideband range error mitigation with deep learning at the
+                                                                          timation= 2d pose estimation+ matching. In Proceedings of
+     edge. Engineering Applications of Artificial Intelligence,
+                                                                          the IEEE conference on computer vision and pattern recog-
+     102:104278, 2021. 3
+                                                                          nition, pages 7035–7043, 2017. 1, 2
+ [3] Apple. Nearby interaction with uwb, 2023. 3
+ [4] Rayan Armani and Christian Holz. Accurately tracking rela-      [15] Bowen Cheng, Bin Xiao, Jingdong Wang, Humphrey Shi,
+     tive positions on moving trackers based on uwb ranging and           Thomas S. Huang, and Lei Zhang. Higherhrnet: Scale-aware
+     inertial sensing without anchors. In 2024 IEEE/RSJ Interna-          representation learning for bottom-up human pose estima-
+     tional Conference on Intelligent Robots and Systems (IROS).          tion. 2020 IEEE/CVF Conference on Computer Vision and
+     3, 6                                                                 Pattern Recognition (CVPR), pages 5385–5394, 2019. 2
+ [5] Rayan Armani, Changlin Qian, Jiaxi Jiang, and Christian         [16] J. A. Corrales, F. A. Candelas, and F. Torres. Hybrid tracking
+     Holz. Ultra Inertial Poser: Scalable motion capture and              of human operators using imu/uwb data fusion by a kalman
+     tracking from sparse inertial sensors and ultra-wideband             filter. In 2008 3rd ACM/IEEE International Conference on
+     ranging. In ACM SIGGRAPH 2024 Conference Papers, New                 Human-Robot Interaction (HRI), pages 193–200, 2008. 3
+     York, NY, USA, 2024. Association for Computing Machin-          [17] Nathan DeVrio, Vimal Mollyn, and Chris Harrison. Smart-
+     ery. 3, 4, 6, 8                                                      poser: Arm pose estimation with a smartphone and smart-
+ [6] Aditya Arun, Tyler Chang, Yizheng Yu, Roshan Ayyala-                 watch using uwb and imu data. In Proceedings of the 36th
+     somayajula, and Dinesh Bharadia. Real-time low-latency               Annual ACM Symposium on User Interface Software and
+     tracking for uwb tags. In Proceedings of the 20th Annual             Technology, New York, NY, USA, 2023. Association for
+     International Conference on Mobile Systems, Applications             Computing Machinery. 3
+     and Services, page 611–612, New York, NY, USA, 2022.            [18] Andreas Döring, Di Chen, Shanshan Zhang, Bernt Schiele,
+     Association for Computing Machinery. 3                               and Jürgen Gall. Posetrack21: A dataset for person search,
+ [7] Thomas Augsten, Konstantin Kaefer, René Meusel, Caroline            multi-object tracking and multi-person pose tracking. In Pro-
+     Fetzer, Dorian Kanitz, Thomas Stoff, Torsten Becker, Chris-          ceedings of the IEEE/CVF Conference on Computer Vision
+     tian Holz, and Patrick Baudisch. Multitoe: high-precision in-        and Pattern Recognition (CVPR), pages 20963–20972, 2022.
+     teraction with back-projected floors based on high-resolution        2
+     multi-touch input. In Proceedings of the 23nd Annual ACM        [19] Hao-Shu Fang, Jiefeng Li, Hongyang Tang, Chao Xu, Haoyi
+     Symposium on User Interface Software and Technology,                 Zhu, Yuliang Xiu, Yong-Lu Li, and Cewu Lu. Alpha-
+     page 209–218, New York, NY, USA, 2010. Association for               pose: Whole-body regional multi-person pose estimation
+     Computing Machinery. 2                                               and tracking in real-time. IEEE Transactions on Pattern
+ [8] Fabien Baradel*, Matthieu Armando, Salma Galaaoui, Ro-               Analysis and Machine Intelligence, 2022. 1, 2
+     main Brégier, Philippe Weinzaepfel, Grégory Rogez, and        [20] Daquan Feng, Chunqi Wang, Chunlong He, Yuan Zhuang,
+     Thomas Lucas*. Multi-hmr: Multi-person whole-body hu-                and Xiang-Gen Xia. Kalman-filter-based integration of imu
+     man mesh recovery in a single shot. In ECCV, 2024. 2                 and uwb for high-accuracy indoor positioning and naviga-
+ [9] Valentı́n Barral, Carlos J. Escudero, José A. Garcı́a-Naya,         tion. IEEE Internet of Things Journal, 7(4):3133–3146,
+     and Roberto Maneiro-Catoira. Nlos identification and miti-           2020. 3
+     gation using low-cost uwb devices. Sensors, 19(16), 2019.       [21] Albert Gu, Karan Goel, and Christopher Ré. Efficiently
+     3                                                                    modeling long sequences with structured state spaces. arXiv
+[10] Federica Bogo, Angjoo Kanazawa, Christoph Lassner, Peter             preprint arXiv:2111.00396, 2021. 3, 4
+     Gehler, Javier Romero, and Michael J Black. Keep it smpl:       [22] Vladimir Guzov, Yifeng Jiang, Fangzhou Hong, Gerard
+     Automatic estimation of 3d human pose and shape from a               Pons-Moll, Richard Newcombe, C Karen Liu, Yuting Ye,
+     single image. In European conference on computer vision,             and Lingni Ma. Hmdˆ 2: Environment-aware motion gen-
+     pages 561–578. Springer, 2016. 1, 2                                  eration from single egocentric head-mounted device. arXiv
+[11] Alan Bränzel, Christian Holz, Daniel Hoffmann, Dominik              preprint arXiv:2409.13426, 2024. 2
+     Schmidt, Marius Knaust, Patrick Lühne, René Meusel,           [23] Marc Habermann, Weipeng Xu, Michael Zollhoefer, Ger-
+     Stephan Richter, and Patrick Baudisch. Gravityspace: track-          ard Pons-Moll, and Christian Theobalt. Livecap: Real-time
+     ing users and their poses in a smart room using a pressure-          human performance capture from monocular video. ACM
+     sensing floor. In Proceedings of the SIGCHI Conference on            Transactions On Graphics (TOG), 38(2):1–17, 2019. 1, 2
+     Human Factors in Computing Systems, page 725–734, New           [24] Sepp Hochreiter and Jürgen Schmidhuber. Long short-term
+     York, NY, USA, 2013. Association for Computing Machin-
+                                                                          memory. Neural computation, 9(8):1735–1780, 1997. 4
+     ery. 2
+[25] Jeroen D. Hol, Fred Dijkstra, Henk Luinge, and Thomas B.         [37] Manuel Kaufmann, Jie Song, Chen Guo, Kaiyue Shen, Tian-
+     Schon. Tightly coupled uwb/imu pose estimation. In 2009               jian Jiang, Chengcheng Tang, Juan José Zárate, and Otmar
+     IEEE International Conference on Ultra-Wideband, pages                Hilliges. Emdb: The electromagnetic database of global 3d
+     688–692, 2009. 3                                                      human pose and shape in the wild. In Proceedings of the
+[26] Dominik Hollidt, Paul Streli, Jiaxi Jiang, Yasaman Haghighi,          IEEE/CVF International Conference on Computer Vision,
+     Changlin Qian, Xintong Liu, and Christian Holz. EgoSim:               pages 14632–14643, 2023. 3
+     an egocentric multi-view simulator and real dataset for body-    [38] Rawal Khirodkar, Aayush Bansal, Lingni Ma, Richard New-
+     worn cameras during motion and activity. In Proceedings               combe, Minh Vo, and Kris Kitani. Ego-humans: An ego-
+     of the 38th International Conference on Neural Information            centric 3d multi-human benchmark. In Proceedings of the
+     Processing Systems, 2025. 3                                           IEEE/CVF International Conference on Computer Vision,
+[27] Wenbo Hu, Changgong Zhang, Fangneng Zhan, Lei Zhang,                  pages 19807–19819, 2023. 7
+     and Tien-Tsin Wong. Conditional directed graph convolution       [39] Muhammed Kocabas, Nikos Athanasiou, and Michael J
+     for 3d human pose estimation. In Proceedings of the 29th              Black. Vibe: Video inference for human body pose and
+     ACM International Conference on Multimedia, pages 602–                shape estimation. In Proceedings of the IEEE/CVF con-
+     611, 2021. 2                                                          ference on computer vision and pattern recognition, pages
+[28] Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J                 5253–5263, 2020. 1, 2
+     Black, Otmar Hilliges, and Gerard Pons-Moll. Deep iner-          [40] Sven Kreiss, Lorenzo Bertoni, and Alexandre Alahi. Pifpaf:
+     tial poser: Learning to reconstruct human pose from sparse            Composite fields for human pose estimation. In Proceedings
+     inertial measurements in real time. ACM Transactions on               of the IEEE/CVF conference on computer vision and pattern
+     Graphics (TOG), 37(6):1–15, 2018. 2, 6                                recognition, pages 11977–11986, 2019. 1
+[29] Andela Ilic, Jiaxi Jiang, Paul Streli, Xintong Liu, and Chris-   [41] Sangmin Lee, Seungho Yoo, Joon Yeop Lee, Seongjoon
+     tian Holz. Human motion capture from loose and sparse in-             Park, and Hwangnam Kim. Drone positioning system using
+     ertial sensors with garment-aware diffusion models. arXiv             uwb sensing and out-of-band control. IEEE Sensors Journal,
+     preprint arXiv:2506.15290, 2025. 2                                    22(6):5329–5343, 2022. 3
+[30] Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa   [42] Jiefeng Li, Can Wang, Hao Zhu, Yihuan Mao, Hao-Shu
+     Laich, Patrick Snape, and Christian Holz. Avatarposer: Ar-            Fang, and Cewu Lu. Crowdpose: Efficient crowded scenes
+     ticulated full-body pose tracking from sparse motion sens-            pose estimation and a new benchmark. In Proceedings of
+     ing. In Computer Vision–ECCV 2022: 17th European Con-                 the IEEE/CVF conference on computer vision and pattern
+     ference, Tel Aviv, Israel, October 23–27, 2022, Proceedings,          recognition, pages 10863–10872, 2019. 2
+     Part V, pages 443–460. Springer, 2022. 2                         [43] Jia Li, Wen Su, and Zengfu Wang. Simple pose: Rethinking
+[31] Jiaxi Jiang, Paul Streli, Xuejing Luo, Christoph Gebhardt,            and improving a bottom-up approach for multi-person pose
+     and Christian Holz. Manikin: biomechanically accurate                 estimation. In Proceedings of the AAAI conference on artifi-
+     neural inverse kinematics for human motion estimation. In             cial intelligence, pages 11354–11361, 2020. 1
+     European Conference on Computer Vision, pages 128–146.           [44] Jiaman Li, Karen Liu, and Jiajun Wu. Ego-body pose es-
+     Springer, 2024.                                                       timation via ego-head pose estimation. In Proceedings of
+[32] Jiaxi Jiang, Paul Streli, Manuel Meier, and Christian Holz.           the IEEE/CVF Conference on Computer Vision and Pattern
+     Egoposer: Robust real-time egocentric pose estimation from            Recognition, pages 17142–17151, 2023. 2
+     sparse and intermittent observations everywhere. In Euro-        [45] Shuang Li, Jiaxi Jiang, Philipp Ruppel, Hongzhuo Liang,
+     pean Conference on Computer Vision. Springer, 2024. 2, 8              Xiaojian Ma, Norman Hendrich, Fuchun Sun, and Jianwei
+[33] Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won,                Zhang. A mobile robot hand-arm teleoperation system by
+     Alexander W. Winkler, and C. Karen Liu. Transformer in-               vision and imu. In 2020 IEEE/RSJ International Conference
+     ertial poser: Real-time human motion reconstruction from              on Intelligent Robots and Systems (IROS), pages 10900–
+     sparse imus with simultaneous terrain generation. In SIG-             10906. IEEE, 2020. 3
+     GRAPH Asia 2022 Conference Papers, New York, NY, USA,            [46] Han Liang, Wenqian Zhang, Wenxuan Li, Jingyi Yu, and Lan
+     2022. Association for Computing Machinery. 2                          Xu. Intergen: Diffusion-based multi-human motion genera-
+[34] Angjoo Kanazawa, Michael J Black, David W Jacobs, and                 tion under complex interactions. International Journal of
+     Jitendra Malik. End-to-end recovery of human shape and                Computer Vision, pages 1–21, 2024. 6, 7
+     pose. In Proceedings of the IEEE conference on computer          [47] Dong C. Liu and Jorge Nocedal. On the limited memory
+     vision and pattern recognition, pages 7122–7131, 2018. 1, 2           BFGS method for large scale optimization. Mathematical
+[35] Angjoo Kanazawa, Jason Y. Zhang, Panna Felsen, and Jiten-             Programming, 45(1-3):503–528, 1989. 5
+     dra Malik. Learning 3d human dynamics from video. In             [48] Huajun Liu, Xiaolin Wei, Jinxiang Chai, Inwoo Ha, and Tae-
+     Computer Vision and Pattern Recognition (CVPR), 2019. 2               hyun Rhee. Realtime human motion control with a small
+[36] Manuel Kaufmann, Yi Zhao, Chengcheng Tang, Lingling                   number of inertial sensors. In Symposium on interactive 3D
+     Tao, Christopher Twigg, Jie Song, Robert Wang, and Otmar              graphics and games, pages 133–140, 2011. 3
+     Hilliges. Em-pose: 3d human pose estimation from sparse          [49] Matthew Loper, Naureen Mahmood, Javier Romero, Gerard
+     electromagnetic trackers. In Proceedings of the IEEE/CVF              Pons-Moll, and Michael J Black. Smpl: A skinned multi-
+     International Conference on Computer Vision, pages 11510–             person linear model. ACM transactions on graphics (TOG),
+     11520, 2021. 3                                                        34(6):1–16, 2015. 3, 4
+[50] Peng Lu, Tao Jiang, Yining Li, Xiangtai Li, Kai Chen, and       [65] Paul Streli, Rayan Armani, Yi Fei Cheng, and Christian
+     Wenming Yang. Rtmo: Towards high-performance one-                    Holz. Hoov: Hand out-of-view tracking for proprioceptive
+     stage real-time multi-person pose estimation, 2024. 2                interaction using inertial sensing. In Proceedings of the 2023
+[51] Lingni Ma, Yuting Ye, Fangzhou Hong, Vladimir Guzov,                 CHI Conference on Human Factors in Computing Systems,
+     Yifeng Jiang, Rowan Postyeni, Luis Pesqueira, Alexander              pages 1–16, 2023. 3
+     Gamino, Vijay Baiyya, Hyo Jin Kim, et al. Nymeria: A mas-       [66] D. Tome, P. Peluse, L. Agapito, and H. Badino. xr-egopose:
+     sive collection of multimodal egocentric daily motion in the         Egocentric 3d human pose from an hmd camera. In 2019
+     wild. In European Conference on Computer Vision, pages               IEEE/CVF International Conference on Computer Vision
+     445–465. Springer, 2024. 2                                           (ICCV), pages 7727–7737, Los Alamitos, CA, USA, 2019.
+[52] Naureen Mahmood, Nima Ghorbani, Nikolaus F. Troje, Ger-              IEEE Computer Society. 2
+     ard Pons-Moll, and Michael J. Black. AMASS: Archive of          [67] Vu Tran, Zhuangzhuang Dai, Niki Trigoni, and Andrew
+     motion capture as surface shapes. In International Confer-           Markham. Deepcir: Insights into cir-based data-driven uwb
+     ence on Computer Vision, pages 5442–5451, 2019. 2, 6                 error mitigation. In 2022 IEEE/RSJ International Con-
+[53] Vimal Mollyn, Riku Arakawa, Mayank Goel, Chris Harri-                ference on Intelligent Robots and Systems (IROS), pages
+     son, and Karan Ahuja. Imuposer: Full-body pose estimation            13300–13307, 2022. 3
+     using imus in phones, watches, and earbuds. In Proceed-         [68] Matthew Trumble, Andrew Gilbert, Charles Malleson,
+     ings of the 2023 CHI Conference on Human Factors in Com-             Adrian Hilton, and John Collomosse. Total capture: 3d
+     puting Systems, New York, NY, USA, 2023. Association for             human pose estimation fusing video and inertial sensors.
+     Computing Machinery. 2                                               In Proceedings of 28th British Machine Vision Conference,
+[54] Mark W. Mueller, Michael Hamer, and Raffaello D’Andrea.              pages 1–13, 2017. 2
+     Fusing ultra-wideband range measurements with accelerom-        [69] Ubisense. https://ubisense.com/, 2023. 3
+     eters and rate gyroscopes for quadrocopter state estimation,    [70] Nicolas Ugrinovic, Boxiao Pan, Georgios Pavlakos, De-
+     2015. 3                                                              spoina Paschalidou, Bokui Shen, Jordi Sanchez-Riera,
+[55] Deepak Nagaraj, Erik Schake, Patrick Leiner, and Dirk                Francesc Moreno-Noguer, and Leonidas Guibas. Multi-
+     Werth. An rnn-ensemble approach for real time human pose             phys: Multi-person physics-aware 3d motion estimation. In
+     estimation from sparse imus. In Proceedings of the 3rd Inter-        Conference on Computer Vision and Pattern Recognition
+     national Conference on Applications of Intelligent Systems,          (CVPR), 2024. 2
+     pages 1–6, 2020. 2
+                                                                     [71] Vicon. https://wwww.vicon.com/, 2023. 1, 2
+[56] Noitom. https://www.noitom.com/, 2024. 2
+                                                                     [72] Daniel Vlasic, Rolf Adelsberger, Giovanni Vannucci, John
+[57] Aitor Ochoa-de Eribe-Landaberea, Leticia Zamora-Cadenas,
+                                                                          Barnwell, Markus Gross, Wojciech Matusik, and Jovan
+     Oier Peñagaricano-Muñoa, and Igone Velez. Uwb and imu-
+                                                                          Popović. Practical motion capture in everyday surroundings.
+     based uav’s assistance system for autonomous landing on a
+                                                                          ACM transactions on graphics (TOG), 26(3):35–es, 2007. 3
+     platform. Sensors, 22(6):2347, 2022. 3
+[58] Optitrack. https://wwww.optitrack.com/, 2023. 1, 2, 6           [73] Timo Von Marcard, Bodo Rosenhahn, Michael J Black, and
+[59] Shaohua Pan, Qi Ma, Xinyu Yi, Weifeng Hu, Xiong Wang,                Gerard Pons-Moll. Sparse inertial poser: Automatic 3d hu-
+     Xingkang Zhou, Jijunnan Li, and Feng Xu. Fusing monoc-               man pose estimation from sparse imus. In Computer graph-
+     ular images and sparse imu signals for real-time human mo-           ics forum, pages 349–360. Wiley Online Library, 2017. 2
+     tion capture. In SIGGRAPH Asia 2023 Conference Papers,          [74] Timo Von Marcard, Roberto Henschel, Michael J Black,
+     New York, NY, USA, 2023. Association for Computing Ma-               Bodo Rosenhahn, and Gerard Pons-Moll. Recovering ac-
+     chinery. 3                                                           curate 3d human pose in the wild using imus and a moving
+[60] Jorge Peña Queralta, Li Qingqing, Fabrizio Schiano, and             camera. In Proceedings of the European conference on com-
+     Tomi Westerlund. Vio-uwb-based collaborative localization            puter vision (ECCV), pages 601–617, 2018. 3
+     and dense scene reconstruction within heterogeneous multi-      [75] Jian Wang, Diogo Luvizon, Weipeng Xu, Lingjie Liu, Kri-
+     robot systems, 2022. 3                                               pasindhu Sarkar, and Christian Theobalt. Scene-aware ego-
+[61] Samsung. Galaxy s22 ultra specifications, 2023. 3                    centric 3d human pose estimation. In Proceedings of the
+[62] Dahu Shi, Xing Wei, Liangqi Li, Ye Ren, and Wenming Tan.             IEEE/CVF Conference on Computer Vision and Pattern
+     End-to-end multi-person pose estimation with transformers.           Recognition, pages 13031–13040, 2023. 2
+     In 2022 IEEE/CVF Conference on Computer Vision and Pat-         [76] Yufu Wang, Ziyun Wang, Lingjie Liu, and Kostas Daniilidis.
+     tern Recognition (CVPR), pages 11059–11068, 2022. 2                  Tram: Global trajectory and motion of 3d humans from in-
+[63] Soyong Shin, Juyong Kim, Eni Halilaj, and Michael J Black.           the-wild videos. In European Conference on Computer Vi-
+     Wham: Reconstructing world-grounded humans with accu-                sion, pages 467–487. Springer, 2024. 1
+     rate 3d motion. In Proceedings of the IEEE/CVF Conference       [77] Yufu Wang, Yu Sun, Priyanka Patel, Kostas Daniilidis,
+     on Computer Vision and Pattern Recognition, pages 2070–              Michael J Black, and Muhammed Kocabas. Prompthmr:
+     2080, 2024. 1                                                        Promptable human mesh recovery. In Proceedings of the
+[64] Sebastian Starke, Paul Starke, Nicky He, Taku Komura,                Computer Vision and Pattern Recognition Conference, pages
+     and Yuting Ye. Categorical codebook matching for embod-              1148–1159, 2025. 1, 2
+     ied character controllers. ACM Transactions on Graphics         [78] Xsens. https://www.xsens.com, 2024. 2, 6
+     (TOG), 43(4):1–14, 2024. 2
+[79] Hao Xu, Yichen Zhang, Boyu Zhou, Luqi Wang, Xinjie Yao,         [84] Xinyu Yi, Yuxiao Zhou, and Feng Xu. Physical non-inertial
+     Guotao Meng, and Shaojie Shen. Omni-swarm: A decen-                  poser (pnp): Modeling non-inertial effects in sparse-inertial
+     tralized omnidirectional visual–inertial–uwb state estimation        human motion capture. In SIGGRAPH 2024 Conference Pa-
+     system for aerial swarms. IEEE Transactions on Robotics, 38          pers, 2024. 2
+     (6):3374–3394, 2022. 3                                          [85] Xinyu Yi, Shaohua Pan, and Feng Xu. Improving global
+[80] Dongseok Yang, Doyeon Kim, and Sung-Hee Lee. Lobstr:                 motion estimation in sparse imu-based motion capture with
+     Real-time lower-body pose prediction from sparse upper-              physics. ACM Transactions on Graphics (TOG), 44(4):1–16,
+     body tracking signals. In Computer Graphics Forum, pages             2025. 2
+     265–275. Wiley Online Library, 2021. 2                          [86] Siwei Zhang, Bharat Lal Bhatnagar, Yuanlu Xu, Alexan-
+[81] Xinyu Yi, Yuxiao Zhou, and Feng Xu. Transpose: real-time             der Winkler, Petr Kadlecek, Siyu Tang, and Federica Bogo.
+     3d human translation and pose estimation with six inertial           Rohm: Robust human motion reconstruction via diffusion.
+     sensors. ACM Transactions on Graphics (TOG), 40(4):1–13,             In Proceedings of the IEEE/CVF Conference on Computer
+     2021. 2, 6                                                           Vision and Pattern Recognition, pages 14606–14617, 2024.
+[82] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada,                2
+     Vladislav Golyanik, Christian Theobalt, and Feng Xu. Phys-      [87] Minghui Zhao, Tyler Chang, Aditya Arun, Roshan Ayyala-
+     ical inertial poser (pip): Physics-aware real-time human mo-         somayajula, Chi Zhang, and Dinesh Bharadia. Uloc: Low-
+     tion tracking from sparse inertial sensors. In Proceedings of        power, scalable and cm-accurate uwb-tag localization and
+     the IEEE/CVF Conference on Computer Vision and Pattern               tracking for indoor applications. Proc. ACM Interact. Mob.
+     Recognition, pages 13167–13178, 2022. 2, 4, 6                        Wearable Ubiquitous Technol., 5(3), 2021. 3
+[83] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav                [88] Shuaikang Zheng, Zhitian Li, Yuanli Yin, Yunfei Liu,
+     Golyanik, Shaohua Pan, Christian Theobalt, and Feng Xu.              Haifeng Zhang, Pengcheng Zheng, and Xudong Zou. Multi-
+     Egolocate: Real-time motion capture, localization, and map-          robot relative positioning and orientation system based on
+     ping with sparse body-mounted sensors. ACM Transactions              uwb range and graph optimization. Measurement, 195:
+     on Graphics (TOG), 42(4), 2023. 3                                    111068, 2022. 3
+

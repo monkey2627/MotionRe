@@ -1,0 +1,1021 @@
+                                        Improving Global Motion Estimation in Sparse IMU-based Motion
+                                        Capture with Physics
+                                        XINYU YI, School of Software and BNRist, Tsinghua University, China
+                                        SHAOHUA PAN, School of Software and BNRist, Tsinghua University, China
+                                        FENG XU, School of Software and BNRist, Tsinghua University, China
+arXiv:2505.05010v1 [cs.GR] 8 May 2025
+
+
+
+
+                                        Fig. 1. Live demos of our system showcasing unconstrained 3D-space motion capture (left). The method reconstructs human motion along with 3D-space
+                                        contacts, contact forces, joint torques, and interacting proxy surfaces in real time (right).
+
+                                        By learning human motion priors, motion capture can be achieved by 6                1   INTRODUCTION
+                                        inertial measurement units (IMUs) in recent years with the development of           Human motion capture, which focuses on digitalizing full-body
+                                        deep learning techniques, even though the sensor inputs are sparse and noisy.
+                                                                                                                            human poses and movements, has long been studied and is cru-
+                                        However, human global motions are still challenging to be reconstructed
+                                        by IMUs. This paper aims to solve this problem by involving physics. It
+                                                                                                                            cial in various applications, such as augmented reality (AR), virtual
+                                        proposes a physical optimization scheme based on multiple contacts to               reality (VR), gaming, robotics, and human-computer interaction
+                                        enable physically plausible translation estimation in the full 3D space where       (HCI). Among the emerging methods, motion capture using sparsely
+                                        the z-directional motion is usually challenging for previous works. It also         worn inertial measurement units (IMUs) has gained attention due
+                                        considers gravity in local pose estimation which well constrains human              to its unique advantages. Unlike vision-based methods, IMU-based
+                                        global orientations and refines local pose estimation in a joint estimation         systems are not constrained by occlusions or the limitations of a
+                                        manner. Experiments demonstrate that our method achieves more accurate              fixed capture space, making them suitable for unconstrained envi-
+                                        motion capture for both local poses and global motions. Furthermore, by             ronments and long-duration usage. Furthermore, the sparse setup
+                                        deeply integrating physics, we can also estimate 3D contact, contact forces,        significantly reduces cost compared to commercial systems like
+                                        joint torques, and interacting proxy surfaces. Code is available at https:
+                                                                                                                            Xsens [Xsens 2025], which rely on dense IMU arrays that are expen-
+                                        //xinyu-yi.github.io/GlobalPose/.
+                                                                                                                            sive and intrusive.
+                                        CCS Concepts: • Computing methodologies → Motion capture.                              Despite these advances, sparse IMU-based motion capture re-
+                                                                                                                            mains inadequate for real-world applications due to its relatively
+                                        Additional Key Words and Phrases: Inertial Sensors, Human Pose Estimation,          low accuracy, which comes from the strong noise in the raw signal
+                                        Inertial Motion Tracking, Real-time                                                 of the IMU sensors, as mentioned by many previous works [Huang
+                                                                                                                            et al. 2018; Jiang et al. 2022b; Yi et al. 2024]. For motion capture,
+                                                                                                                            as body movements always lie in the human pose space, the noise
+                                        Authors’ addresses: Xinyu Yi, School of Software and BNRist, Tsinghua University,
+                                        Beijing, China, yixy20@mails.tsinghua.edu.cn; Shaohua Pan, School of Software and   of the sensors can be reduced by constraining the final results in
+                                        BNRist, Tsinghua University, Beijing, China, isshpan@163.com; Feng Xu, School of    the prior space, which is the key reason that the noisy IMU sensors
+                                        Software and BNRist, Tsinghua University, Beijing, China, xufeng2003@gmail.com.
+                                                                                                                            can still perform the motion capture task. However, the local pose
+                                                                                                                            prior can do little on the global 6 degree of freedom (DOF) motion
+                                                                                                                            (containing global translation and orientation), which becomes a
+                                                                                                                            key challenge in IMU-based motion capture [Yi et al. 2023]. For
+                                        This work is licensed under a Creative Commons Attribution-NonCommercial 4.0        global translation, some methods [Yi et al. 2022, 2024] use ground
+                                        International License.
+2 •   Xinyu Yi, Shaohua Pan, and Feng Xu
+
+
+contacts to constrain human global translations to a 2D ground
+plane, meaning they cannot capture true 3D global movements like
+walking upstairs or lying on a bed. For global orientation, most
+methods [Huang et al. 2018; Jiang et al. 2022b; Van Wouwe et al.
+2024; Yi et al. 2022, 2024; Zhang et al. 2024b] directly rely on the
+IMU measurement of the root joint, leading to drift in long-duration
+tracking.
+   Since the data-driven manner (learning local pose priors) can-
+not effectively denoise global motions, we propose to develop a
+physics-driven method to address this challenge. We introduce a
+novel sparse IMU-based motion capture framework designed from
+the physics perspective, which enables unconstrained 3D-space
+translation estimation and improves global orientation accuracy,
+all while ensuring the physical correctness of the captured mo-
+tion, benefiting both the global motion estimation and the local
+pose estimation. Besides considering physics in motion capture, our
+method simultaneously estimates plausible physics-related infor-
+mation as byproducts, including 3D-space contacts, contact forces,
+joint torques, and interacting proxy surfaces, all from 6 IMUs, with-
+out being limited to the ground (see Fig. 1). We believe the physical
+information extends the boundary of motion capture, making our            Fig. 2. Illustration of the correlation between human local pose and global
+technique more useful in topics like robotics and HCI.                    orientation. Given a local pose, the global 𝜙 orientation of the character is
+   To refine global translation, most existing methods rely on ground     strongly constrained, while the heading direction 𝜃 can vary.
+contact estimation to involve stationary constraints, while [Jiang
+et al. 2022b] takes a step further to estimate stationary points in
+                                                                               • A joint data and physics-based 3D contact estimation method
+3D space in a data-driven manner. We argue that a joint data and
+                                                                                 that enables unconstrained human translation estimation.
+physics-driven strategy is more powerful in handling this problem,
+                                                                               • A gravity-aware pose estimation method that accurately
+and thus we further incorporate physics to estimate 3D contacts
+                                                                                 estimates global orientations and local poses.
+which provide additional information to constrain human bodies in
+3D scenes. Our method selects a minimal set of stationary points          2 RELATED WORK
+that can physically explain human motion through contact forces,
+obtained by a physical optimization process. By solving the 3D con-       2.1 Human Motion Capture with Inertial Sensors
+tacts in motion capture, besides the global translation, the physical     We first review the works that capture human motion using wear-
+plausibility of the estimated motion can also be benefited.               able inertial sensors. Commercial systems such as [Xsens 2025]
+   Regarding global orientation, existing methods have not noticed        and [Noitom 2025] provide high accuracy but rely on dense sensor
+the value of local pose information and thus rely solely on raw           setups, which are expensive and uncomfortable for everyday use.
+IMU measurements for the estimation. However, by placing local            To reduce sensor count while maintaining accuracy, some research
+poses within a physical coordinate system, such as a gravity-aligned      incorporates additional sensors to support the inertial sensors. For
+frame, we observe that these local poses correlate with the global        example, the works [Lee and Joo 2024; Liang et al. 2023; Pan et al.
+orientations represented in this system. To better understand this        2023; von Marcard et al. 2018; Yi et al. 2023] use cameras to improve
+correlation, consider a character in a specific local pose (Fig. 2).      motion capture accuracy. However, the reliance on vision limits
+While the character can have any 𝜃 value for its heading direction        their application in certain scenarios where camera visibility may
+in a spherical coordinate system (gravity defined as the z-axis),         be obstructed or unavailable. [Armani et al. 2024] utilizes UWB
+its 𝜙 value is strongly constrained by the pose and, as a result,         sensors to support IMU sensors, but suffers from occlusion and re-
+cannot be arbitrary. Actually, the key here is that gravity influences    quires careful calibration, restricting its use. Other works [Ahuja
+human poses. Based on this observation, we involve the gravity            et al. 2021; Aliakbarian et al. 2022, 2023; Castillo et al. 2023; Dittadi
+direction in local pose estimation by simultaneously reconstructing       et al. 2021; Du et al. 2023; Jiang et al. 2023, 2022a; Lee et al. 2023;
+the local pose and refining the root-relative gravity direction. With     Ponton et al. 2023; Shin et al. 2023; Winkler et al. 2022; Yang et al.
+the refined gravity direction, we correct the global orientation error,   2021; Ye et al. 2022; Zheng et al. 2023] employ 6DoF trackers, which
+as well as the errors in local poses.                                     provide both positional and orientation information to track hu-
+   In summary, our major contributions include:                           man motion. However, these trackers require external stations or
+                                                                          cameras, limiting capture environments. IMU-based methods, on
+      • A novel real-time motion capture system that captures world-      the other hand, eliminate these limitations. SIP [von Marcard et al.
+        aligned 3D human motion, along with 3D contacts, contact          2017] reduces the number of IMUs to six using offline optimization
+        forces, joint torques, and interacting proxy surfaces, using      techniques. DIP [Huang et al. 2018] leverages deep neural networks
+        only 6 IMUs.                                                      to estimate human pose in real time. TransPose [Yi et al. 2021] uses
+                                                                  Improving Global Motion Estimation in Sparse IMU-based Motion Capture with Physics   • 3
+
+
+multi-stage estimation and contact-foot-based fusion to reconstruct         preventing unnatural leaning or depth jitter in monocular-based
+both human pose and translation. PIP [Yi et al. 2022] enhances              motion capture. IPMAN [Tripathi et al. 2023] predicts body pres-
+TransPose further by integrating physics-based optimization with a          sure heatmaps and leverages intuitive physics to enforce physically
+flat-ground assumption. TIP [Jiang et al. 2022b] resolves pose ambi-        plausible contacts, effectively mitigating unnatural floating and
+guity using stationary point estimation and reconstructs the height         penetration artifacts in human reconstruction from color images.
+map of the capture environment. DiffusionPoser [Van Wouwe et al.            Recent works [Shimada et al. 2024; Zhang et al. 2024a] incorporate
+2024] inpaints the noise during the diffusion denoising process to          physical properties such as mass and friction into motion synthesis,
+support arbitrary IMU sensor configurations. DynaIP [Zhang et al.           enabling the generation of more natural and nuanced human body
+2024b] incorporates additional real IMU data from Xsens datasets            and hand-object interactions. In the context of IMU-based motion
+and regresses the body-part-based pseudo velocity, resulting in im-         capture, works such as [Yi et al. 2022, 2024] apply physics-based
+proved performance. PNP [Yi et al. 2024] models fictitious forces           optimization to address issues like sliding, floating, and penetra-
+to fully utilize acceleration data for more accurate motion capture.        tion, thus improving global translation accuracy. However, [Yi et al.
+Some works [Mollyn et al. 2023; Xu et al. 2024] further reduce the          2022, 2024] assume a single flat ground to perform physics-based
+number of IMUs and utilize smart wearable devices to capture hu-            tracking. In contrast, our method enables 3D-space physics-based
+man motion. However, none of these previous methods fully address           optimization by estimating 3D contacts and proxy surfaces directly
+global motion accuracy. Most of the existing approaches assume a            from IMU measurements.
+flat ground to constrain global translation to a 2D plane and rely
+on noisy root IMU measurements to estimate global orientation.              3     METHOD
+In contrast, our method integrates both data-driven and physics-           Our task is to estimate human motion using 6 IMUs placed on the
+based priors to enhance global motion estimation, leading to more          forearms, lower legs, head, and pelvis in real time. Our system takes
+accurate and physically plausible global motion reconstruction.            as input the inertial measurements of the sensors, including acceler-
+                                                                           ations, angular velocities, and orientations. The output consists of
+                                                                           human poses and 3D global motions, along with physical properties
+2.2   Global Human Motion Estimation                                       such as 3D-space contacts, contact forces, joint torques, and proxy
+We review methods for estimating world-space global human mo-              surfaces with interactions.
+tion, which includes both global orientation and translation. Some            Our system consists of three modules: the pose estimator, which
+approaches explore capturing world-space human motion using                estimates human pose (both local and global) from IMU measure-
+dynamic monocular cameras. GLAMR [Yuan et al. 2022] predicts               ments; the translation estimator, which estimates global translation
+and optimizes human trajectories in the world coordinate system            and stationary joints based on pose and IMU data; and the physics
+by infilling human motion sequences. SLAHMR [Ye et al. 2023] and           optimizer, which identifies 3D contacts from the stationary joints
+PACE [You et al. 2024] optimize both camera and human motion us-           and refines the human motion using physics-based optimization.
+ing SLAM results along with a learned human motion prior. WHAM             The details of these modules are presented in Secs. 3.1, 3.2, and 3.3,
+[Shin et al. 2024] directly regresses global human motion in an au-        respectively. Finally, we introduce our walking-based calibration
+toregressive manner. WHAC [Yin et al. 2024] and TRAM [Wang et al.          method in Sec. 3.4. See Fig. 3 for an overview of our method.
+2024] transform human motion from the camera coordinate to the
+world coordinate and refine the human trajectory. GVHMR [Shen               3.1   Pose Estimator
+et al. 2024] predicts world-grounded human motion in a gravity-            The task of the pose estimator is to estimate human pose (defined
+aware world coordinate. Our method is similar to GVHMR in that             as SMPL [Loper et al. 2015] joint rotations) as well as the global
+it incorporates gravity information. However, unlike monocular-            orientation (defined as root rotation) from the IMU measurements.
+based motion capture methods, which transfer human motion into             Our estimator is built upon PNP [Yi et al. 2024], with the key im-
+a gravity-aware frame, we transfer the gravity information into            provement of integrating gravity information. We first discuss our
+the human’s root frame and refine it during the estimation process.        advantages, followed by the details of the pose estimator framework.
+This approach enables heading direction invariance. For example,
+the same human local poses with different heading directions are           3.1.1 Gravity prior in pose estimation. Estimating full-body pose
+considered as distinct poses in world coordinates. In contrast, when       from sparsely placed and noisy IMUs is inherently ambiguous. Pre-
+transferring gravity to the root frame, the gravity direction remains      vious works [Huang et al. 2018; Jiang et al. 2022b; Yi et al. 2022,
+consistent.                                                                2021, 2024; Zhang et al. 2024b] tackle this challenge by using deep
+   On the other hand, some works incorporate physics to improve            neural networks to estimate local poses in the human root frame,
+global motion estimation, such as optimization-based methods [Li           aiming to model local pose priors to resolve the ambiguity. As a
+et al. 2019; Rempe et al. 2020; Shimada et al. 2020; Tripathi et al.       result, these methods are invariant to the global orientation of the
+2023; Vondrak et al. 2012; Wei and Chai 2010; Zell et al. 2017] and        human body. However, we argue that there is a strong correlation
+reinforcement-learning-based character control [Bergamin et al.            between the human’s local pose and the global orientation relative
+2019; Isogawa et al. 2020; Liu and Hodgins 2018; Peng et al. 2018a,b;      to a gravity-aligned world frame. For instance, a person lying flat
+Yao et al. 2024; Yu et al. 2021; Yuan and Kitani 2019; Yuan et al.         is unlikely to perform walking poses. More precisely, the global
+2021]. For instance, PhysCap [Shimada et al. 2020] employs physics-        orientation around the gravity axis is independent of the body’s
+based motion optimization to adjust the global motion of the human,        local pose (as a person can perform the same pose while facing
+4   •   Xinyu Yi, Shaohua Pan, and Feng Xu
+
+
+
+
+Fig. 3. Overview of our method. We begin by estimating the human pose from IMU measurements (red). During this process, we simultaneously refine the
+root-relative gravity direction, which aids both local and global pose estimation. Next, we estimate human root velocity and joint stationary probability
+based on the pose and IMU measurements (blue). To incorporate gravity awareness, we decompose the root velocity into orthogonal components parallel
+and perpendicular to the gravity direction. Finally, we identify 3D contacts from the stationary joints using a physics-based algorithm, and perform physics
+optimization on the estimated motion (green).
+
+
+different directions), while the orientations in the other degrees of            Furthermore, we correct the IMU data based on the refined gravity
+freedoms (reflecting the body’s tilt) are correlated with the local              at the beginning of each stage.
+pose (see Fig. 2). We find the root-frame gravity direction serves                  The input to the pose estimator consists of 1) root-relative IMU
+as a reliable indicator of these orientations, as it remains constant            measurements 𝒙 ′′ , which is the concatenation of rotation matrices,
+when the person rotates around the gravity axis but changes with                 angular velocities, and accelerations, and 2) the root-frame gravity
+variations in body tilt.                                                         direction 𝒈 ′′ , which can be computed from the global orientation
+   Due to the correlation, we propose to model the joint prior distribu-                                             ′′ :
+                                                                                 measured by the IMU on the root 𝑹 root
+tion of root-frame gravity direction and local pose by simultaneously                                                 ′′ 𝑇
+                                                                                                            𝒈 ′′ = (𝑹 root ) 𝒈𝑀 ,                        (1)
+reconstructing the local pose and refining the gravity. On one hand,
+an accurate gravity direction enhances local pose estimation by                  where 𝒈 𝑀 is the gravity direction in the world frame. We use upper
+providing additional context beyond the root-relative inertial mea-              primes to indicate noise in the variables. Intuitively, the more primes
+surements. On the other hand, local pose estimation helps reduce                 a variable has, the noisier it is. We begin by employing a Long Short-
+the noise in the global orientation measured by the root’s IMU. By               Term Memory (LSTM) network [Hochreiter and Schmidhuber 1997],
+incorporating gravity prior into pose estimation, we introduce a                 denoted 𝑃𝐿, to simultaneously reconstruct the root-relative leaf
+more informative prior that improves the accuracy of both local and              joint positions 𝒑 leaf and refine the gravity vector to obtain 𝒈 ′ . We
+global pose estimation.                                                          then update the global orientation estimation by:
+                                                                                                         ′        ′′
+                                                                                                                       R 𝒈 ′ → 𝒈 ′′ ,
+                                                                                                                        
+                                                                                                       𝑹 root = 𝑹 root                                (2)
+3.1.2 Pose estimator pipeline. Following PNP [Yi et al. 2024], our                        ′
+                                                                                 where 𝑹 root is the updated global orientation and R {𝒈 ′ → 𝒈 ′′ } is
+pose estimation approach consists of three stages: first we estimate             the rotation matrix that rotates 𝒈 ′ to 𝒈 ′′ with the minimal angle.
+the leaf joint positions, then the full joint positions, and finally the         We then correct the root-relative IMU measurements based on the
+human’s pose. This multi-stage design decomposes the complex                     updated global root orientation, resulting in 𝒙 ′ . Note that the es-
+task of pose estimation into simpler subtasks focused on joint posi-             timated leaf joint positions 𝒑 leaf are relative to the ground-truth
+tion prediction and inverse kinematics, which has been shown to                  root frame. Thus, we do not need to update their values between
+outperform single-stage pose estimation methods [Yi et al. 2021].                stages. In contrast, the input IMU measurements 𝒙 ′′ are relative
+Different from PNP, we additionally input the root-frame gravity                 to the noisy root frame recorded by the IMU, requiring refinement
+direction at each stage and ask the network to simultaneously refine             across stages.
+the gravity as an additional output. This enables the network to                    Next, we concatenate 𝒙 ′ , 𝒈 ′ , and 𝒑 leaf , and feed this into a second
+learn the joint prior distribution of local pose and global orientation.         LSTM network, 𝑃𝐴, to estimate the full set of joint positions 𝒑 all
+                                                                           Improving Global Motion Estimation in Sparse IMU-based Motion Capture with Physics   • 5
+
+
+and further refine the gravity vector to 𝒈. Once again, we correct                  where 𝒗˜ 𝑡 is the refined root velocity, Δ𝑡 is the frame interval, the
+the global orientation by:                                                          superscript ·𝑡 denotes the value at frame 𝑡, and the subscript ·𝑖 refers
+                                ′
+                     𝑹 root = 𝑹 root R 𝒈 → 𝒈′ ,
+                                      
+                                                               (3)                  to the 𝑖-th joint. This optimization tries to find a root velocity that
+                                                                                    keeps all stationary joints as fixed as possible, while making the root
+and correspondingly update the root-relative IMU data to 𝒙. The                     velocity as close as possible to the estimated value. The analytical
+estimated joint positions 𝒑 all are expressed in the ground-truth root              solution of Eq. 4 is detailed in App. B.
+frame and do not need refinement.
+   Finally, we concatenate 𝒙, 𝒈, and 𝒑 all and pass them through                     3.3   Physics Optimizer
+a third LSTM network, 𝑅𝐴, to regress the body pose 𝜽 , using the
+                                                                                    The task of the physics optimizer is to determine 3D contacts and
+6D [Zhou et al. 2019] rotation representation. The network struc-
+                                                                                    perform physics-based optimization on the estimated motion. Previ-
+tures and training details follow [Yi et al. 2024]. The additional
+                                                                                    ous works [Yi et al. 2022, 2024] applied physics-based optimization
+gravity vector is supervised using L2 loss. Some small modifications
+                                                                                    under the assumption of flat ground. This limitation prevents them
+are made to accelerate the training process, which are presented in
+                                                                                    from estimating 3D movements, such as walking upstairs. For mo-
+App. A.
+                                                                                    tions like sitting, as their system is unaware of the hip contact,
+   We would like to note that we denoise the root frame orientation
+                                                                                    a large virtual force (often called residual force) must be applied
+by refining the root-relative gravity direction. This works because
+                                                                                    to the root joint to maintain balance, which is not physically cor-
+gravity is constant in the world frame but appears different when
+                                                                                    rect (real humans do not have residual force on their root joint).
+transformed into different root frames. By aligning the gravity, we
+                                                                                    To address this, we extend their method to 3D space with a novel
+effectively correct the root frame orientation. Specifically, we first
+                                                                                    double-tracking approach. We first provide an intuitive explanation
+                        ′′ ) to estimate 𝑔′ (relative to 𝑅 ′ ), and then
+input 𝑔′′ (relative to 𝑅root                              root                      of our method, followed by a detailed description of the optimizer.
+further refine it to obtain 𝑔 (relative to 𝑅root ), which serves as our
+final prediction of the root orientation.                                           3.3.1 Method explanation. The biggest challenge of performing
+                                                                                    physics-based optimization in 3D space is the lack of scene aware-
+3.2   Translation Estimator                                                         ness, making contact detection impossible. Thus, it is crucial to
+The task of the translation estimator is to estimate the human’s                    design a method that can estimate 3D contacts. We observe that
+root velocity and stationary joints from pose and IMU data. We                      contact information can often be inferred from human motion: for
+employ an LSTM network with the same structure as those in the                      example, if we see the motion of a person walking upwards, we
+pose estimator to perform this estimation. To effectively incorporate               naturally assume there are stairs beneath their feet. This is based
+gravity awareness, we input the root-frame gravity direction and                    on how we understand the physical world. We know that: 1) sup-
+ask the network to reconstruct two orthogonal components of the                     porting forces are required to prevent the person from falling, and
+root joint’s velocity: one parallel to the gravity direction and the                2) the supporting force is more likely to act on the stationary foot.
+other perpendicular to it. By doing so, we learn the conditional prior              By synthesizing this understanding, we design an algorithm that
+of global velocity conditioned on the body’s tilt represented by the                mimics this reasoning.
+root-frame gravity. Such approach is intuitive: a person lying down                    We propose a double-tracking algorithm that determines 3D con-
+is unlikely to move as freely as a standing person, even if they share              tacts and performs physics-based optimization on human motion.
+the same local pose. On the other hand, the orthogonal velocities                   First, we use a physical character to track the estimated motion
+account for the fact that human translation in the gravity direction                without any contact. To enable this tracking, we allow a large resid-
+is often constrained and less free compared to movement in the                      ual force [Shimada et al. 2020] to act on the human root joint. This
+horizontal plane.                                                                   is akin to placing the physical character in an empty scene (with-
+   Specifically, we concatenate the following inputs: 1) the denoised               out any object or ground) and allowing it to wear a rocket at the
+IMU measurements 𝒙, 2) the denoised gravity direction 𝒈, 3) the                     root joint that provides any external force needed. These forces are
+estimated human pose 𝜽 , and 4) the joint positions computed by                     not real (as real humans do not wear such a rocket) and must be
+forward kinematics FK(𝜽 ), all obtained from the pose estimator.                    explained by contact forces. Thus, after pre-tracking, we select a
+We employ an LSTM network, denoted 𝑂𝑉 , to estimate the root                        minimal set of stationary joints that best explain the residual force
+velocity 𝒗, specified by its two orthogonal components aligned with                 through contact forces, yielding a set of 3D physical contacts. Intu-
+and perpendicular to the gravity direction 𝒗 = 𝒗 ∥ + 𝒗 ⊥ , along with               itively, this is like removing the rocket from the physical character
+the joint stationary probability 𝒔. For the gravity-aligned vector 𝒗 ∥ ,            and replacing it with forces applied to the selected contact joints.
+we predict only its magnitude, as its direction (i.e., gravity direction)           Finally, using the identified contact joints and forces, we re-track
+is already estimated. For the joint stationary probability 𝒔, we follow             the human motion to obtain the physically optimized result.
+TIP [Jiang et al. 2022b] to consider five human joints for stationary                  We would like to note that this approach identifies contacts based
+estimation: the hands, the feet, and the pelvis, which results in a 5-D             on forces. For instance, if a person lightly places their foot on a
+stationary probability. After this estimation, we follow TransPose [Yi              stair but keeps their body weight entirely on the grounded foot,
+et al. 2021] to use stationary constraints to refine the root velocity              the contact cannot be identified, as the motion can be explained
+estimate:                                                                           by the supporting foot alone. However, if the person shifts their
+                          ∑︁ 1
+    min ∥𝒗˜ 𝑡 − 𝒗 𝑡 ∥ 2 +    𝑠𝑖 2 ∥FK𝑖 (𝜽 𝑡 , 𝒗˜ 𝑡 Δ𝑡) − FK𝑖 (𝜽 𝑡 −1 )∥ 2, (4)      weight onto the raised foot, our algorithm recognizes the foot as a
+     𝒗˜ 𝑡                  𝑖
+                               Δ𝑡                                                   necessary contact for maintaining balance.
+6 •     Xinyu Yi, Shaohua Pan, and Feng Xu
+
+
+3.3.2    Phsyics-based optimization.                                       positions by setting the stationary joint to be close to its current po-
+                                                                           sition. Note that Eq. 4 has already filtered error in global translation
+   Physics model and notations. We use a torque-controlled floating-
+                                                                           by optimizing root velocity to keep the stationary joint as stable as
+base character as the physics model. This character shares the same
+                                                                           possible, considering all stationary joints globally. However, it does
+skeleton structure and degrees of freedom as the SMPL [Loper et al.
+                                                                           not modify the local pose. When there are multiple stationary joints,
+2015] model. Its body mass, center of mass, and moment of inertia
+                                                                           Eq. 8 further refines local pose by explicitly constraining individual
+are extracted from the mean shape of the SMPL model, assuming
+                                                                           joint positions, ensuring more precise stationary enforcement.
+a density of 1000kg/m3 . In contrast to the SMPL model, which is
+                                                                               We then follow PIP [Yi et al. 2022] by employing dual PD con-
+driven by joint rotations, the physics character is driven by joint
+                                                                           trollers to compute the desired joint angular and linear accelerations,
+torques and external forces.
+                                                                           𝜽¥ des and 𝒓¥ des , that the physics character needs to generate in order
+   Following the notations in PIP [Yi et al. 2022], we denote the
+                                                                           to reproduce the reference motion:
+physics character’s configuration (translation and pose) as 𝒒, where
+the first three dimensions represent the global translation, followed                           𝜽¥ des = 𝑘𝑝𝜃 (𝜽 ref − 𝒒3: ) − 𝑘𝑑𝜃 𝒒¤ 3:,                    (9)
+by the root and other joints’ rotations in local Euler angles. Joint
+torques are denoted as 𝝉, which shares the same degree of freedom                                  𝒓¥ des = 𝑘𝑝𝑟 (𝒓 ref − 𝒓) − 𝑘𝑑𝑟 𝒓¤ ,                     (10)
+order as 𝒒; specifically, the first 6 dimensions correspond to the
+residual forces and torques on the root joint, which should be zero        where 𝑘𝑝𝜃 , 𝑘𝑑𝜃 , 𝑘𝑝𝑟 , and 𝑘𝑑𝑟 are the gain parameters. Intuitively,
+in real humans [Yi et al. 2022]. Global joint positions are repre-         as long as the physics character generates the acceleration, it will
+sented by 𝒓, and the global root position is represented by 𝒑, which       follow the reference motion. Next, we solve for the forces 𝝉 required
+corresponds to the first three entries of 𝒓. Time derivatives are rep-     by the physics character to generate the desired accelerations:
+resented by adding a dot (for first derivatives) and double dots (for                min ∥ 𝒒¥ 3: − 𝜽¥ des ∥ 2 + ∥ 𝑱 𝒒¥ + 𝑱¤ 𝒒¤ − 𝒓¥ des ∥ 2 + 𝛽𝜏 ∥𝝉 ∥ 2,
+second derivatives) to the symbol (e.g., 𝒓¤ and 𝒓¥ denote joint velocity             𝝉,𝒒¥                                                                  (11)
+and acceleration, respectively).                                                                     s.t. 𝑴 (𝒒) 𝒒¥ + 𝒉(𝒒, 𝒒¤ ) = 𝝉,
+   When not considering contact forces, the character follows the
+equation of motion [Featherstone 2008] defined by:                         where 𝛽𝜏 is used to control the relative weight of the regularization
+                                                                           on forces. The first two terms in Eq. 11 guide the physics character
+                                                ¤
+                            𝝉 = 𝑴 (𝒒) 𝒒¥ + 𝒉(𝒒, 𝒒),                 (5)    to generate the desired angular and linear accelerations respectively.
+where 𝑴 is the character’s inertia matrix and 𝒉 accounts for non-          Specifically, 1) 𝒒¥ 3: retrieves the angular acceleration of the physics
+inertial effects and gravity. This equation connects the physics           character’s joints, which should closely match the desired angular
+character’s torque 𝝉 and acceleration 𝒒¥ with the inertia 𝑴. Intu-         acceleration 𝜽¥ des ; meanwhile, 2) 𝒓¥ = 𝑱 𝒒¥ + 𝑱¤ 𝒒¤ computes the linear
+itively, this can be understood as analogous to Newton’s second            acceleration of the physics character’s joints, which should align
+law: 𝑭 = 𝑚𝒂. When considering the contact force, denoted as 𝝀, the         with the desired linear acceleration 𝒓¥ des from the dual PD controller.
+equation of motion becomes:                                                The last term in Eq. 11 encourages the character to use relatively
+                                                                           small forces to achieve the motion, preventing overshooting. The
+                        𝝉 + 𝑱 𝑇 𝝀 = 𝑴 (𝒒) 𝒒¥ + 𝒉(𝒒, 𝒒),
+                                                    ¤               (6)
+                                                                           equality constraint is the same as in Eq. 5, modeling the linear
+where 𝑱 is the contact point Jacobian, which maps the force at the         relationship between joint torques 𝝉 and accelerations 𝒒¥ , without
+contact point to the torque on the character’s degrees of freedom.         involving contact forces. Intuitively, Eq. 11 finds a set of joint torques
+Analogously, the left side of Eq. 6 computes the net force acting          and forces that enable the physics character to replicate the reference
+on the physical character, while the right side corresponds to the         motion. To accelerate the calculation, we reformulate Eq. 11 into an
+product of mass and acceleration.                                          unconstrained sparse least squares problem, as detailed in App. B.
+                                                                           Note that we are primarily concerned with the first 6 entries of the
+    Pre-tracking. The goal of this stage is to estimate the forces re-
+                                                                           torque vector 𝝉 :6 , which correspond to the residual force and torque
+quired for the physics character to track the reference motion with-
+                                                                           on the root joint that should be explained by physical contacts.
+out incorporating contact forces. First, we compute the reference
+joint rotations and positions for the tracking target. The reference          Contact estimation. In this stage, we estimate the contact joints
+joint rotations are directly obtained from the pose estimator, de-         that explain the residual force and torque. We begin by identifying
+noted as 𝜽 ref in the physics optimizer. The reference joint positions     contacts based on a set of rules. A joint is marked as in contact
+𝒓 ref are computed as:                                                     if it is: 1) estimated to be stationary by the translation estimator,
+                         𝒓˜ ref = FK (𝜽 ref , 𝒑 + 𝒗Δ𝑡)
+                                                  ˜    ,            (7)    and in the meanwhile, 2) either in contact in the previous frame or
+                                                                           currently touching the ground. Additionally, if two stationary joints
+                           𝒓 ref = Lerp ( 𝒓˜ ref , 𝒓, 𝒔) ,          (8)    are sufficiently close to each other and at the same height, and one
+where Lerp(𝑎, 𝑏, 𝑡) is the linear interpolation function that inter-       is judged to be in contact, we directly mark the other as in contact
+polates between 𝑎 and 𝑏 by 𝑡. 𝒑 and 𝒓 are the current root and             as well. Any stationary joints not marked as contacts are labeled as
+joint positions of the physics character, respectively, and 𝒔 is the       potential contact joints.
+estimated joint stationary probability. Eq. 7 computes the reference          At this point, we have a set of contact joints and a set of potential
+joint positions using forward kinematics on the estimated pose, with       contact joints. We then examine whether the current set of contact
+the updated root position. Eq. 8 further refines the reference joint       joints can support the human motion (i.e., explain the residual force).
+                                                                                       Improving Global Motion Estimation in Sparse IMU-based Motion Capture with Physics   • 7
+
+
+This is done by solving the following optimization problem:                                      results in the joint torques used to drive the physics character, 𝝉 ∗ ,
+                                                                                                 and the resulting acceleration of the character, 𝒒¥ ∗ . We then update
+                       min ∥(𝑱 𝑇 𝝀):6 − 𝝉 :6 ∥ 2 + 𝛽𝜆 ∥𝝀∥ 2,
+                        𝝀                                                             (12)       the character’s state by:
+                         s.t.    𝝀 ∈ friction cone,                                                                         𝒒𝑡 = 𝒒𝑡 −1 + 𝒒¤ 𝑡 −1 Δ𝑡,                        (15)
+where 𝛽𝜆 is the regularization weight. The first term in Eq. 12 tries                                                        ¤𝑡
+                                                                                                                             𝒒 =𝒒   ¤ 𝑡 −1     ¥∗
+                                                                                                                                             + 𝒒 Δ𝑡 .                       (16)
+to explain the residual force on the root joint by contact forces at
+the contact joints, while the second regularization term constrains                              Finally, the refined translation and pose 𝒒𝑡 are output.
+the contact forces to remain small. The friction cone constraints
+                                                                                                 3.4   Walking Calibration
+ensure that the contact forces satisfy the Coulomb friction condition,
+as similar in [Shimada et al. 2020; Yi et al. 2022]. Specifically, we                           Inertial motion capture typically requires calibration due to vari-
+apply friction cone constraints only on the forces exerted at the                               ations in how users wear the IMUs [Huang et al. 2018; Jiang et al.
+foot and pelvis joints, assuming the contact surface normal points                              2022b; Yi et al. 2021]. We propose a novel calibration method that
+toward the negative gravity direction, as these joints are typically in                         simultaneously determines sensor-to-bone rotations and corrects
+contact with horizontal surfaces. For the hand joints, except for the                           sensors’ relative drifts. In previous methods [Yi et al. 2022, 2021],
+cases when the hands are touching the ground, we do not impose                                  users need to take off all IMU sensors and place them with the same
+friction cone constraints, as the hands can grasp objects, allowing for                         orientation to correct their relative drifts, and then put the sensors
+arbitrary external forces. By linearizing the friction cone constraints,                        back on to perform a T-pose to determine sensor-to-bone rotations.
+Eq. 12 can be effectively solved using sparse quadratic programming,                            This two-step process is complex, time-consuming, and prone to
+see [Shimada et al. 2020]. After obtaining the optimal contact force                            errors due to any possible inaccurate placing or posing. In contrast,
+𝝀, we check the remaining residual force 𝒆 that cannot be explained                             our method only requires the user to take a single standard step
+by the current set of contact joints:                                                           forward, simultaneously correcting the drift and determining the
+                                                                                                rotations. This is achieved by leveraging the prior knowledge of
+                                𝒆 = 𝝉 :6 − (𝑱 𝑇 𝝀):6 .                                (13)      dynamic human walking motions, rather than static human poses
+If the magnitude of 𝒆 exceeds a threshold 𝑒 th , it indicates that the                          only, where the integration of each IMU’s acceleration is used to cor-
+current set of contact joints cannot fully explain the residual force                           rect the sensors’ relative drift and the known stepping poses help
+required by the character. In this case, we iteratively add potential                           to calculate the sensor-to-bone rotations. Our evaluations show
+contact joints to the set of contact joints, in increasing order of                             that this novel calibration method contributes to better real-world
+their distance to the ground, and redo the optimization in Eq. 12.                              applicability and performance.
+If the residual force decreases by more than half when adding a                                    Notations. We denote the IMU sensor frame as 𝑆, the global in-
+potential contact joint, we accept it as a real contact. Otherwise, we                          ertial frame (the reference frame in which the IMU measures its
+reject it. This process continues until either the remaining residual                           orientation) as 𝐼 , the SMPL [Loper et al. 2015] bone frame as 𝐵, and
+force falls below the threshold 𝑒 th or there are no more potential                             the SMPL body-centric frame as 𝑀. The gravitational acceleration
+contact joints to add. Finally, we obtain a set of contact joints and                           in the global inertial frame is denoted as 𝒈 𝐼 . IMU sensors typically
+the corresponding contact force 𝝀 on these joints.                                              measure raw acceleration and angular velocity in the sensor-local
+   Re-tracking. With the estimated contact joints and forces, we re-                            frame, denoted as 𝒂𝑆 and 𝝎 𝑆 , respectively. They also output the
+track the reference motion in a more physically accurate manner.                                orientation with respect to the global inertial frame, denoted as 𝑹 𝐼𝑆 .
+To prevent ground contacts from floating or penetrating the ground,                                The calibration process aims to determine the sensor-to-bone
+we first update the reference positions of the ground contacts. If a                            rotation 𝑹 𝑆𝐵 for each sensor and the global extrinsic rotation 𝑹 𝐼 𝑀 .
+contact joint is above the ground within a distance threshold 𝑑 th ,                            For more details, readers are referred to [Huang et al. 2018; Yi et al.
+we reduce its reference height by a factor of 0.1, gradually pulling                            2021]. In our method, we also estimate the relative heading error
+it towards the ground. If a joint penetrates the ground, we update                              𝑹 1 · · · 𝑹 5 , which aligns the headings of the first five sensors with
+its reference position to the ground level. Next, we recalculate the                            that of the sixth sensor. This process is typically known as "heading
+desired joint linear accelerations, denoted as 𝒓¥ ∗des , following Eq. 10,                      reset" [Xsens 2025], which traditionally requires aligning all sensors
+using the new reference joint positions. Finally, we perform the                                to the same orientation and resetting their yaw angle to the same
+re-tracking defined by:                                                                         value. However, our calibration method automatically corrects rel-
+                                                                                                ative heading drift, without requiring the IMUs to be removed or
+         min ∥ 𝒒¥ ∗3: − 𝜽¥ des ∥ 2 + ∥ 𝑱 𝒒¥ ∗ + 𝑱¤ 𝒒¤ − 𝒓¥ ∗des ∥ 2 + 𝛽𝜏∗ ∥𝝉 ∗ ∥ 2,             realigned.
+        𝝉 ∗ ,𝒒¥ ∗
+                                                                                      (14)
+                                           ¤ = 𝝉 ∗ + 𝑱 𝑇 𝝀.
+                    s.t. 𝑴 (𝒒) 𝒒¥ ∗ + 𝒉(𝒒, 𝒒)                                                       Walking-based calibration algorithm. Our design takes inspiration
+                                                                                                 from the commercial solutions [mocopi 2025; Xsens 2025], which
+Note that Eq. 14 differs from Eq. 11 in that it incorporates the updated                         also utilize a similar walking strategy. We require the subject to
+desired linear accelerations, the larger regularization weight 𝛽𝜏∗ , and                         stand straight first and record the IMU orientation measurements as
+the equation of motion that accounts for the contact forces, which                                 (1)
+                                                                                                 𝑹 𝐼𝑆 . Next, the subject takes a step forward, and we integrate each
+is introduced in Eq. 6. Intuitively, Eq. 14 solves for the joint torques
+                                                                                                 sensor’s global acceleration 𝒂 𝐼 during the step, computed from:
+that, along with the external contact forces, enable the physics
+character to replicate the reference motion. Solving this problem                                                             𝒂 𝐼 = 𝑹 𝐼𝑆 𝒂𝑆 + 𝒈 𝐼 .                         (17)
+8 •   Xinyu Yi, Shaohua Pan, and Feng Xu
+
+
+The integration for each IMU is done by:                                        rotation 𝑹 𝐼 𝑀 can be computed by:
+                                                                                                        h 𝒑¯                          𝒑¯ 6
+                                                                                                                                               i
+                          𝑡 +1                                 2                                                     𝒈        𝒈
+                     𝒑           = 𝒑 + 𝒗 Δ𝑡 + 0.5𝒂 Δ𝑡 ,
+                                     𝑡    𝑡                𝑡                                     𝑹 𝐼 𝑀 = | 𝒑¯ 6 | × |𝒈 |   − |𝒈 |   | 𝒑¯ 6 |       .   (23)
+                                                                                                              6
+                          𝑡 +1
+                                                                         (18)
+                      𝒗          = 𝒗 + 𝒂 Δ𝑡,
+                                     𝑡    𝑡
+                                                                                The sensor-to-bone rotation 𝑹 𝑆𝐵 for each sensor can be computed
+                                                                                by:
+where 𝒑 and 𝒗 are the estimated position and velocity, respectively.
+                                                                                                              (1) 𝑇
+                                                                                                                
+The integration starts from zero position and velocity. Here and                                    𝑹 𝑆𝐵 = 𝑹¯ 𝐼𝑆    𝑹 𝐼 𝑀 𝑹 𝑀𝐵 ,             (24)
+in the following, we omit the reference frame 𝐼 for simplicity. To                       (1)         (1)
+stabilize the integration, we apply the Zero-Velocity Update (ZUPT)             where 𝑹¯ 𝐼𝑆 = 𝑹𝑖 𝑹 𝐼𝑆 is the heading-corrected recorded orientation,
+technique [Skog et al. 2010], which corrects the integration error              and 𝑹 𝑀𝐵 is the known SMPL joint rotation in the standing pose.
+by using the zero velocity observation when the subject finishes
+                                                                                4     EXPERIMENTS
+the step and stands still. Concretely, we track the variance of the
+velocity 𝒗, denoted as 𝜎𝑣𝑣 , and the covariance between position 𝒑              In this section, we first provide the implementation details (Sec. 4.1).
+and velocity 𝒗, denoted as 𝜎𝑝𝑣 , by:                                            Next, we compare our method with previous sparse-IMU-based
+                                                                                motion capture approaches (Sec. 4.2). We then evaluate the key com-
+                                  𝑡 +1
+                                 𝜎𝑝𝑣      𝑡
+                                       = 𝜎𝑝𝑣    𝑡
+                                             + 𝜎𝑣𝑣 Δ𝑡,                          ponents of our method (Sec. 4.3). Finally, we discuss the limitations
+                                  𝑡 +1    𝑡
+                                                                         (19)   (Sec. 4.4). For additional results, please refer to our supplemental
+                                 𝜎𝑣𝑣   = 𝜎𝑣𝑣 + 1.
+                                                                                video.
+Once the subject stops and stands still, the integrated velocity should
+ideally be zero (in practice, it is rarely zero due to noise in the IMU         4.1    Implementation Details
+accelerations). Based on the zero-velocity observation, we update                  Networks and training. Our pose estimator consists of three LSTM
+the posterior estimate of 𝒑 as:                                                 networks: 𝑃𝐿, 𝑃𝐴, and 𝑅𝐴, and the translation estimator includes
+                                               𝜎𝑝𝑣                              one LSTM network, 𝑂𝑉 , all following the architecture in [Yi et al.
+                                   𝒑˜ = 𝒑 −        𝒗,                    (20)   2024]. Among these networks, 𝑃𝐿 and 𝑂𝑉 use a learning-based
+                                               𝜎𝑣𝑣
+                                                                                initialization scheme, following [Yi et al. 2022]. All networks are ini-
+where 𝒑˜ is the corrected position. This equation exploits the positive         tially trained independently with their respective inputs and outputs
+correlation between velocity and position. To illustrate, consider the          for 100 epochs, after which we jointly train all four networks for 200
+double integration of noisy acceleration during a step: if velocity is          epochs. During the joint training, we disable gradient propagation
+overestimated (e.g., final velocity > 0), the integrated position will          in the IMU correction module (Eq. 2 and 3), which helps stabilize the
+also tend to be overestimated. This relationship enables position               training. All estimations are supervised using L2 loss, except that
+correction when the final velocity is known. For the mathematical               the stationary probability is supervised with binary cross-entropy
+foundations of Eq. 20, readers can refer to the Kalman Filter algo-             loss. The pose output in 𝑅𝐴 is additionally supervised by apply-
+rithm [Kalman 1960]. Additionally, since we assume the subject                  ing forward kinematics and minimizing the L2 loss between the
+steps on flat ground, the translation should be horizontal, meaning             estimated and ground-truth joint positions. Other training details
+the position vector 𝒑 must be orthogonal to the gravity vector 𝒈. By            follow [Yi et al. 2024].
+enforcing this condition, we further update the position estimate as:
+                                                                                   Hyperparameters in physics optimizer. The frame interval Δ𝑡 is
+                                               𝒑˜ · 𝒈                           1/60 seconds. The gain parameters in the dual PD controllers (Eq. 9
+                                   𝒑¯ = 𝒑˜ −          𝒈.                 (21)
+                                               𝒈·𝒈                              and 10) are set to 𝑘𝑝𝜃 = 𝑘𝑝𝑟 = 3600 and 𝑘𝑑𝜃 = 𝑘𝑑𝑟 = 60, based on
+Finally, after the subject returns to a straight pose, we record the            the Taylor expansion results (see [Yi et al. 2022]). The regularization
+                                           (2)                                  on joint torque during pre-tracking (Eq. 11) and re-tracking (Eq. 14)
+IMU orientation measurements again as 𝑹 𝐼𝑆 . This step is not strictly
+                                                                   (2)   (1)
+                                                                                is set to 𝛽𝜏 = 10 −3 /𝑀 and 𝛽𝜏∗ = 3𝛽𝜏 , where 𝑀 = 80kg is the
+required, but it can be used to verify whether 𝑹 𝐼𝑆 is close to 𝑹 𝐼𝑆 ,          approximate weight of the physics character. This is used to align
+indicating if the subject is standing in a correct pose. If a significant       the unit of forces to the accelerations. The regularization on contact
+difference is found, we simply redo the calibration process.                    forces during contact estimation (Eq. 12) is set to 𝛽𝜆 = 0.4, and the
+   We now compute the calibration matrices. If the IMUs are not                 friction coefficient for modeling the Coulomb friction constraint is
+subject to drift, we should obtain the same 𝒑¯ 1 · · · 𝒑¯ 6 for the 6 IMUs,     set to 0.7. The distance threshold in the re-tracking is set to 𝑑 th =
+since the person maintains the same pose before and after the step.             0.15m. During contact estimation, if a joint’s stationary probability
+However, IMUs are often affected by heading drift (e.g., caused by              exceeds 0.7, it is marked as stationary. The threshold for determining
+magnetic interference). This causes the trajectories to diverge. In             whether a joint is touching the ground or if two joints are at the
+such case, the relative heading error can be computed by aligning               same height is set to 0.05m. The threshold for stopping the contact
+the trajectories of the first five IMUs to the sixth IMU:                       estimation process is set to 𝑒 th = 400. Since residual forces and
+                    𝑹𝑖 = R{𝒑¯ 𝑖 → 𝒑¯ 6 },           𝑖 = 1 · · · 5.       (22)   stationary joint estimations can be noisy, we employ a counter
+                                                                                for each potential contact joint. The counter increases when the
+With these alignment matrices, we modify the 𝑖-th IMU orientation               contact estimation algorithm identifies it as a contact. Only when
+measurement to 𝑹¯ 𝐼𝑆 = 𝑹𝑖 𝑹 𝐼𝑆 , where 𝑹 6 = 𝑰 (the sixth IMU’s                 the counter reaches 5 (i.e., the physics optimization continues to
+orientation does not require modifications). The global extrinsic               consider a stationary joint as in contact for 83 milliseconds), is the
+                                                                       Improving Global Motion Estimation in Sparse IMU-based Motion Capture with Physics   • 9
+
+
+joint changed to a true contact. This approach significantly reduces               Hardware and performance. Our method can run in real-time
+false positives.                                                                at 120 fps on a computer equipped with an Intel(R) Core(TM) i9-
+                                                                                13900KF CPU and an NVIDIA GeForce RTX 4090 Graphics card. For
+   Initialization. Since IMUs lack global positioning signals, our              the live demo, we use Noitom Lab sensors [Noitom 2025], which send
+method assumes the person starts at (0, 0, 0) with their body touch-            inertial measurements at 60 fps, and thus the live demo runs at the
+ing the ground. The ground height is then initialized as the lowest             same framerate. The method is implemented in PyTorch [Pytorch
+joint’s height in the first frame.                                              2025], and we develop a physics-based optimization library in C++,
+                                                                                which implements key algorithms such as the Recursive Newton-
+   Datasets. The training datasets include 1) AMASS [Mahmood                    Euler Method [Featherstone 2008] tailored for humans.
+et al. 2019], which is a motion capture dataset and we synthesize
+IMU measurements using the method in [Yi et al. 2024], and 2) DIP-
+IMU [Huang et al. 2018], which contains motion and real IMU data.                4.2   Comparisons
+We follow previous works [Huang et al. 2018; Jiang et al. 2022b;                We compare our method with previous motion capture works that
+Yi et al. 2022, 2024] to split the training and test sets for DIP-IMU.          leverage sparse IMUs as input, including DIP [Huang et al. 2018],
+Following these works, we train our method on the large synthetic               TransPose [Yi et al. 2021], TIP [Jiang et al. 2022b], PIP [Yi et al. 2022],
+AMASS dataset and fine-tune it on the relatively smaller DIP-IMU                PNP [Yi et al. 2024], and DynaIP [Zhang et al. 2024b]. Specifically,
+dataset with real IMU measurements.                                             we evaluate three versions of DynaIP: 1) DynaIP-X, which is trained
+   The test datasets include 1) TotalCapture [Trumble et al. 2017],             on the Xsens datasets as described in [Zhang et al. 2024b]; 2) DynaIP-
+which has two different calibrations. Following [Yi et al. 2024], we            XD, which is trained on the Xsens datasets and then fine-tuned on
+adopt both in our experiments, referred to as Official Calibration              the DIP-IMU train split; and 3) DynaIP-AD, which shares the same
+(with a larger IMU orientation error of about 12.1 degrees) and                 training datasets as the other methods, i.e., trained on the synthetic
+DIP Calibration (with a smaller IMU orientation error of about 8.6              AMASS dataset and then fine-tuned on the DIP-IMU train split. The
+degrees); 2) the DIP-IMU test split, which lacks translation ground             weights for this version are provided by the authors. Note that DIP
+truth and is used to evaluate pose estimation; 3) Xsens datasets,               and DynaIP do not estimate global translations, so we do not include
+as used in [Zhang et al. 2024b], including AnDy [Maurice et al.                 their results in the translation and jitter comparisons.
+2019], CIP [Palermo et al. 2022], and UNIPD [Guidolin et al. 2022].                We first compare our method with previous works on TotalCap-
+UNIPD contains minimal global movement, so we do not evaluate                   ture and DIP-IMU test split. The results are shown in Tab. 1. For pose
+translation on this dataset; 4) Nymeria dataset [Ma et al. 2024], which         estimation, our method consistently outperforms previous works
+is a large-scale multimodal dataset containing full-body motion and             in terms of both accuracy and standard deviation. On one hand,
+IMU data. Specifically, it consists of in-the-wild, long-duration (over         our method achieves better local pose estimation accuracy, which
+20 minutes) human motion sequences, which present significant                   can be attributed to incorporating gravity priors into the local pose
+challenges for sparse-IMU-based motion capture. We use this dataset             estimation. The gravity direction provides additional physics-based
+to evaluate the robustness of our method in long-duration tracking              information, aiding in the improvement of local pose regression. On
+scenarios. All test datasets include real IMU measurements.                     the other hand, the improvements in full pose (both global orienta-
+                                                                                tion and local pose) are significant, demonstrating the effectiveness
+   Metrics. To evaluate pose estimation, we adopt the following                 of our method in reducing global orientation errors by refining
+metrics: 1) SIP Error, the global orientation error of the hips and             the gravity direction. This is especially evident in the TotalCapture
+shoulders in degrees; 2) Angular Error, the global orientation error of         dataset with the official calibration, where the improvements in
+all SMPL joints in degrees; 3) Positional Error, the 3D position error          global pose are most notable due to the relatively large errors in the
+of all SMPL joints in centimeters; and 4) Mesh Error, the vertex error          global orientation measurements. While DynaIP achieves slightly
+of the posed SMPL meshes. We evaluate the pose using two different              better angular error on the DIP-IMU dataset, its generalization abil-
+settings: 1) the local setting, where we align the estimated global root        ity is weaker, as indicated by the significantly larger errors on the
+position and orientation with the ground truth before evaluating                other two datasets. In terms of jitter, our method achieves compa-
+the pose metrics. This setting follows the same method used in                  rable results to PIP and PNP, and significantly outperforms works
+previous works [Yi et al. 2022, 2021, 2024]; and 2) the global setting,         that do not incorporate physics, including TransPose and TIP.
+where only the global root position is aligned, and the full pose                  We then compare the translation estimation results on the To-
+(including global orientation) is evaluated. This setting reflects the          talCapture dataset. The cumulative translation error is shown in
+world-space pose accuracy, which is crucial for many applications.              Fig. 4. Our method consistently achieves lower drift on the dataset
+For translation estimation, we plot the global translation error curve          under both calibration conditions. It is important to note that this
+against the real traveled distance and report the average translation           dataset was recorded on flat ground, and the works TransPose, PIP,
+drift in percentage. To assess physical accuracy, we evaluate: 1)               and PNP all assume a flat ground, constraining human movements
+Root Jitter, the time derivative of the global acceleration (i.e., jerk,        to the ground plane. In contrast, our method does not rely on this
+reflecting the naturalness of the motion [Flash and Hogan 1985]) of             planar movement assumption, even achieving better translation
+the root joint, in 103 m/s3 ; and 2) Joint Jitter, the average jerk of all      accuracy. Previous methods experience much larger drift under the
+joints, also in 103 m/s3 . In all these metrics, lower values indicate          official calibration, primarily due to the increased noise in the IMU
+better performance.                                                             measurements. By incorporating gravity and physics, our method
+10    •   Xinyu Yi, Shaohua Pan, and Feng Xu
+
+
+Table 1. Comparisons on pose estimation with previous works. The local metrics evaluate the local (root-relative) pose, while the global metrics assess the full
+pose (including both the local pose and global orientation). The lowest errors and standard deviations are shown in bold respectively.
+
+
+                                               Local                                                        Global                             Root     Joint
+      Method
+                      SIP Error       Ang Error        Pos Error
+                                                               Mesh Error         SIP Error      Ang Error          Pos Error   Mesh Error     Jitter   Jitter
+                                                             TotalCapture (Official Calibration)
+        DIP          18.73±12.22     17.57±9.86    9.47±5.87 11.33±6.76         20.08±12.52 18.48±10.04          10.53±6.12     12.42±6.96        -       -
+     TransPose        18.12±9.02     14.91±5.90    7.10±3.92    8.09±4.31        17.72±9.23     13.94±5.72        7.27±4.16     8.32±4.46       1.77    1.95
+        TIP          15.62±8.11      14.45±5.80    6.76±3.60    7.79±4.06        17.26±8.34     16.67±6.16        9.06±4.30     10.17±4.84      1.24    1.74
+        PIP          14.52±7.60      13.85±5.67    6.22±3.46    7.21±3.94        14.11±7.74     13.18±5.64        6.61±3.70     7.63±4.08       0.12    0.21
+        PNP          11.35±5.88      11.10±4.90    4.89±2.74    5.60±3.04        13.95±6.77     13.54±5.70        7.37±3.72     8.23±4.04       0.16    0.27
+     DynaIP-X        25.92±11.11     16.89±6.74    8.39±4.95    9.63±5.44       24.60±11.01 15.75±6.35            8.28±4.81     9.82±5.17         -       -
+     DynaIP-XD       26.82±10.70     16.99±6.61    8.19±4.79    9.44±5.32       25.75±10.97 15.76±6.31            8.09±4.75     9.42±5.09         -       -
+     DynaIP-AD        26.12±9.80     16.71±6.39    7.60±4.55    8.76±5.06        25.43±9.90     15.60±6.09        7.72±4.55     8.96±4.92         -       -
+       Ours          10.17±5.10      10.16±4.51    4.31±2.37 4.96±2.65          10.87±5.22 10.55±4.55            4.31±2.38      5.02±2.63       0.21    0.37
+                                                              TotalCapture (DIP Calibration)
+        DIP          18.62±12.40     17.22±10.04   9.42±5.89 11.22±6.79         19.61±12.96 17.78±10.43           9.67±6.05     11.36±6.88        -       -
+     TransPose        16.60±8.80     12.90±6.14    6.56±3.92    7.43±4.33        16.88±9.23     12.76±6.27        6.68±4.04     7.45±4.39       1.65    1.88
+        TIP          13.22±7.47      12.30±5.83    5.81±3.41    6.80±3.90        15.55±8.03     14.56±6.38        7.86±3.92     8.93±4.44       1.20    1.69
+        PIP          12.93±7.12      12.04±5.80    5.61±3.35    6.51±3.84        13.35±7.56     12.11±6.06        5.80±3.50     6.61±3.92       0.11    0.20
+        PNP          10.89±5.83      10.45±5.07    4.74±2.68    5.45±3.05        11.76±6.25     11.12±5.46        5.32±2.95     6.04±3.31       0.15    0.26
+     DynaIP-X        24.59±10.38      14.85±6.81   7.42±4.76    8.54±5.22       24.87±10.77 14.54±6.85            7.38±4.75     8.36±5.11         -       -
+     DynaIP-XD       26.22±10.40      15.11±6.80   7.46±4.67    8.66±5.15       26.55±11.02 14.81±6.88            7.46±4.68     8.50±5.04         -       -
+     DynaIP-AD       27.20±10.27      15.17±6.78   7.52±4.66    8.54±5.16       27.43±10.73 14.95±6.85            7.60±4.72     8.52±5.12         -       -
+       Ours           9.81±5.06       9.99±4.78    4.25±2.41 4.94±2.75          10.24±5.41 10.15±5.05             4.18±2.44     4.87±2.76       0.20    0.35
+                                                                         DIP-IMU
+        DIP          17.35±9.56       15.36±8.55   7.59±4.19    9.05±4.93        17.33±9.54     15.41±8.59        7.61±4.18      9.05±4.90        -       -
+     TransPose       17.06±8.95        8.86±4.82   6.03±3.72    7.17±4.29        16.98±8.90      8.76±4.75        6.00±3.68      7.12±4.24      0.95    1.11
+        TIP          16.90±8.90        9.07±5.07   5.63±3.45    6.62±3.99        16.97±8.79      9.26±4.97        5.70±3.41      6.67±3.93      1.06    1.56
+        PIP          15.33±7.89        8.78±4.75   5.12±3.05    6.02±3.56        15.30±7.75      8.99±4.77        5.27±3.06      6.13±3.55      0.11    0.17
+        PNP          13.71±6.68        8.75±4.28   4.97±2.72    5.77±3.17        13.77±6.58      8.99±4.31        5.13±2.75      5.93±3.19      0.11    0.17
+     DynaIP-X        17.39±8.80        8.88±4.46   5.92±3.23    7.16±3.80        17.27±8.70      8.61±4.28        5.84±3.14      7.05±3.68        -       -
+     DynaIP-XD       13.75±7.14       7.05±3.93    4.97±2.85    5.98±3.42        13.64±7.02      6.78±3.76        4.91±2.77      5.89±3.33        -       -
+     DynaIP-AD       14.46±7.47       7.12±3.93    5.13±2.97    6.17±3.54        14.39±7.38      6.85±3.76        5.09±2.90      6.10±3.45        -       -
+       Ours          13.55±6.51        8.47±4.09   4.65±2.53 5.41±2.92          13.41±6.33       8.29±3.96        4.55±2.39      5.27±2.77      0.16    0.26
+
+
+Table 2. Additional comparisons on Xsens datasets. Ground-truth motions            Table 3. Additional comparisons on Nymeria dataset. Inertial measurements
+in these datasets are captured by Xsens [Xsens 2025] and are transferred to        are obtained from Xsens sensors using the method [Zhang et al. 2024b].
+the SMPL skeleton by [Zhang et al. 2024b].
+                                                                                                            Local                            Global
+                           Local                        Global          Trans        Method
+      Method                                                                                      Pos Error     Mesh Error         Pos Error     Mesh Error
+                  Pos Error    Mesh Error  Pos Error       Mesh Error   Drift
+                                                                                                                    Nymeria
+                                      AnDy
+   PNP            5.84±3.67    6.61±4.07   5.75±3.33        6.27±3.45   4.04%          PNP       7.87±4.01      8.81±4.46         8.03±4.12      8.96±4.55
+ DynaIP-AD        6.62±5.15    7.75±6.02   7.10±6.20        8.32±7.16      -           Ours      7.25±3.46      8.28±3.87         7.01±3.35      7.85±3.69
+   Ours           5.87±3.38    6.47±3.65   5.39±3.04        5.85±3.25   3.30%
+                                       CIP
+   PNP            6.88±4.30    7.90±4.93   7.11±4.45        8.13±5.10   5.63%
+                                                                                      We present additional pose and translation comparison results on
+ DynaIP-AD        6.30±4.17    7.10±4.47   6.36±4.19        7.14±4.47      -
+   Ours           6.05±3.61    7.00±4.10   5.60±3.18        6.40±3.58   4.80%      the Xsens datasets, comparing with two state-of-the-art methods,
+                                     UNIPD                                         PNP and DynaIP. The results are shown in Tab. 2. Our method
+   PNP            4.11±2.40    4.65±2.69   4.17±2.47        4.69±2.73     -        demonstrates higher pose estimation accuracy and lower translation
+ DynaIP-AD        4.25±2.45    4.62±2.57   4.30±2.47        4.65±2.57     -        drift compared to previous works. We also compare our method
+   Ours           3.81±2.13    4.26±2.27   3.73±1.99        4.10±2.07     -
+                                                                                   with PNP on the large-scale Nymeria dataset, and present the results
+                                                                                   in Tab. 3. This dataset features in-the-wild, long-duration tracking
+                                                                                   scenarios, making it particularly challenging for sparse-IMU-based
+effectively mitigates these noises, leading to significantly improved              motion capture. While our method exhibits slightly higher errors
+performance.                                                                       compared to the other test datasets, it still consistently outperforms
+                                                                       Improving Global Motion Estimation in Sparse IMU-based Motion Capture with Physics   •   11
+
+
+
+
+Fig. 4. Translation comparisons on the TotalCapture dataset. We plot the cumulative translation error curves and report the average translation drifts at the
+7-meter real travelled distance. A lower curve indicates better global translation accuracy.
+
+
+
+
+Fig. 5. Qualitative comparisons on full pose estimation (including both local pose and global orientation). Results are picked from the TotalCapture dataset.
+
+
+previous work on estimation accuracy. Rotational metrics are not                    Finally, we provide qualitative pose comparisons shown in Fig. 5.
+included in these results as the datasets capture human surface                   The first row demonstrates that our method estimates the global
+rotation rather than bone rotation.                                               orientation of the human more accurately, which can be attributed
+12    •   Xinyu Yi, Shaohua Pan, and Feng Xu
+
+
+              Table 4. Ablation study on the pose estimator. We examine the effectiveness of incorporating gravity for local and full pose estimation.
+
+
+                                                  Local                                                       Global                            Root     Joint
+          Method
+                          SIP Error       Ang Error     Pos Error Mesh Error            SIP Error   Ang Error        Pos Error    Mesh Error    Jitter   Jitter
+                                                                TotalCapture (Official Calibration)
+     w/o Grav Recon      10.45±5.53      10.45±4.65     4.56±2.55     5.22±2.86        12.66±5.71   12.57±4.72      6.59±2.95     7.42±3.26      0.34    0.56
+     w/o Grav Input      10.48±5.36      10.47±4.66     4.43±2.47     5.08±2.78        12.54±5.57   12.40±4.73      6.48±2.87     7.27±3.17      0.33    0.55
+          Ours           10.17±5.10      10.16±4.51     4.31±2.37 4.96±2.65           10.87±5.22 10.55±4.55         4.31±2.38     5.02±2.63      0.21    0.37
+                                                                  TotalCapture (DIP Calibration)
+     w/o Grav Recon       10.12±5.39     10.20±4.88     4.48±2.55     5.16±2.91        10.88±5.68   10.72±5.13      4.93±2.68     5.63±3.00      0.30    0.50
+     w/o Grav Input       10.09±5.42     10.21±4.91     4.43±2.53     5.11±2.88        10.94±5.73   10.78±5.20      4.88±2.65     5.57±2.97      0.30    0.50
+          Ours            9.81±5.06      9.99±4.78      4.25±2.41 4.94±2.75           10.24±5.41 10.15±5.05         4.18±2.44     4.87±2.76      0.20    0.35
+                                                                            DIP-IMU
+     w/o Grav Recon      15.01±6.98       9.33±4.45     5.05±2.70     5.83±3.09        14.97±6.90    9.35±4.41      5.03±2.64     5.79±3.01      0.19    0.32
+     w/o Grav Input      14.02±6.73       8.86±4.33     4.98±2.71     5.73±3.12        13.94±6.62    8.85±4.26      4.95±2.64     5.69±3.03      0.19    0.33
+          Ours           13.55±6.51       8.47±4.09     4.65±2.53 5.41±2.92           13.41±6.33 8.29±3.96          4.55±2.39     5.27±2.77      0.16    0.26
+
+
+Table 5. Ablation study on the pose estimator, the translation estimator,
+and the physics optimizer. We evaluate the global translation drift on the
+TotalCapture dataset with official calibration (OC) and DIP calibration (DC).
+
+
+                                               Translation Drift
+     Module         Method
+                                    TotalCapture (OC)     TotalCapture (DC)
+                w/o Grav Recon            5.76%                 4.09%
+      Pose
+                w/o Grav Input            5.55%                 3.90%
+                w/o Vel Decomp            5.14%                 3.79%
+      Tran
+                w/o Grav Input            5.30%                 3.74%
+                  w/o Physics             7.51%                 4.35%
+      Phys
+                 w/o Contact              6.09%                 4.36%
+                     Ours                 4.68%                 3.74%
+
+
+to the incorporation of gravity refinement. The second row high-                     Fig. 6. Voting results comparing walking-based calibration and T-pose cali-
+lights a more accurate local pose estimation by our method, showing                  bration across 100 evaluations. Walking-based calibration was preferred in
+that gravity awareness aids in local pose estimation. For the more                   72% of cases, T-pose calibration in 12%, and 16% were rated as comparable.
+ambiguous cases in the last two rows, our method produces more
+accurate results, further emphasizing our advantage in deeply in-
+corporating physics.                                                                 estimated velocity; and 2) w/o Contact, where we remove the contact
+                                                                                     estimation and the subsequent re-tracking stage, i.e., the physics
+4.3       Evaluations                                                                character state is updated based on the pre-tracking results.
+   Evaluation on key modules. In this section, we first conduct in-                     We begin by evaluating the pose estimation using the TotalCap-
+depth evaluations of the key components of our method. For the                       ture and DIP-IMU datasets. Specifically, we investigate the necessity
+pose estimator, we evaluate 1) w/o Grav Recon, where we remove                       of incorporating gravity direction into the pose estimator. The re-
+the gravity reconstruction in 𝑃𝐿 and 𝑃𝐴, and directly feed the noisy                 sults are presented in Tab. 4. Our full method demonstrates the best
+gravity direction obtained from the root IMU into the three stages;                  pose estimation accuracy and motion smoothness. We also observe
+and 2) w/o Grav Input, where we entirely remove the gravity di-                      that merely inputting the gravity direction without reconstructing
+rection from both the input and output of the three networks. For                    it often leads to worse results compared to not inputting it. We
+the translation estimator, we evaluate 1) w/o Vel Decomp, where we                   attribute this to the fact that the raw gravity direction is usually too
+directly regress the root velocity using 𝑂𝑉 without decomposing                      noisy for the network to effectively utilize. However, by refining the
+it w.r.t the gravity, and 2) w/o Grav Input, where we remove the                     gravity though the networks, we achieve the best results for both
+gravity input to 𝑂𝑉 and also directly output the root velocity with-                 local and full pose estimations.
+out decomposition. It should be noted that for the ablation study                       Furthermore, we evaluate the translation drift for the ablations
+of the translation estimator, we only retrain the network 𝑂𝑉 while                   of the three modules on the TotalCapture dataset. As depicted in
+keeping the weights of the pose estimator fixed. For the physics                     Tab. 5, all the key components help reduce the global translation
+optimizer, we evaluate 1) w/o Physics, where we remove the entire                    drift. Our method is particularly effective in the official-calibrated
+physics optimizer and calculate the translation by integrating the                   TotalCapture dataset, where the sensor is subject to larger noise. By
+                                                                                   Improving Global Motion Estimation in Sparse IMU-based Motion Capture with Physics   •   13
+
+
+Table 6. Evaluation on long-term pose drift. We show global joint positional
+error (in cm) across three periods of a 20-minute outdoor sequence in the
+Nymeria dataset.
+
+
+                          Period 1         Period 2         Period 3
+              PNP       7.30±4.23         7.41±4.23        8.23±6.72
+              Ours      6.18±3.42         6.52±3.58        6.38±3.37
+
+
+integrating physics into the design of our method, we significantly
+mitigate such noise, leading to better global translation accuracy.
+   Evaluation on calibration method. In this section, we demonstrate
+the advantages of our walking-based calibration method over the
+traditional T-pose calibration. Due to the lack of an existing dataset
+for quantitative comparison, we conducted a user study to evaluate
+the accuracy of our method.
+   In the study, five participants first performed a T-pose calibration,
+immediately followed by a walking-based calibration. They then
+executed a predefined 60-second motion while we recorded their
+IMU measurements and captured a reference video. Each participant
+repeated this process twice, resulting in 10 motion sequences. We                             Fig. 7. Smoothed global joint positional error curves over the 20-minute
+processed these sequences using both calibration methods, produc-                             sequence. Our method consistently maintains lower error and shows no
+ing 10 pairs of motion capture results for comparison.                                        evident drift compared to PNP.
+   Ten evaluators independently compared each pair against the
+reference video, choosing the better result or marking them as
+"comparable". The voting results are shown in Fig. 6. Across the                                To further visualize and compare the performance, we plot the
+100 evaluations, walking-based calibration was preferred in 72% of                           smoothed global joint positional error curve for the entire sequence.
+cases, indicating that the walking-based calibration method gen-                             As shown in Fig. 7, our method consistently achieves lower errors
+erally produces more accurate motion capture results than T-pose                             across the sequence and shows no evident drift over time. Addition-
+calibration. We attribute this improvement to two main factors: 1)                           ally, we select three representative frames from each of the three
+walking is easier for participants to perform accurately compared                            periods to qualitatively compare the pose reconstruction results
+to holding a precise T-pose, and 2) walking-based calibration ex-                            of our method and PNP. Our method demonstrates significantly
+ploits human motion priors to mitigate relative sensor drift. For a                          reduced drift, particularly in global orientation.
+qualitative comparison, readers are referred to the supplementary
+video.                                                                                        4.4    Limitations
+   Evaluation on long-term drift. To further evaluate long-duration                            Lack of 3D-space motion data. Our translation estimator is trained
+tracking in unconstrained environments, we explored the Nymeria                              on the AMASS and DIP-IMU datasets, which contain limited 3D-
+dataset and identified a 20-minute outdoor badminton sequence                                space movements involving height changes (e.g., walking upstairs).
+featuring fast, large-scale movements1 . We compared our method                              This limitation affects the accuracy of vertical translation estimation.
+with previous state-of-the-art method PNP for real-time tracking                             While our 3D contact estimation can help filter global translation
+of the entire 20-minute sequence and evaluated the global joint                              estimates, incorporating more diverse motion data would further
+positional error across three evenly divided segments (0:00–6:35,                            enhance translation accuracy.
+6:35–13:09, and 13:09–19:44, marked as Periods 1, 2, and 3) to assess
+potential drift over time. The results are shown in Tab. 6 (units in                           Constrained contact joints. Our method estimates the stationary
+centimeters). The results show no significant drift in our method,                           probability only for the hands, feet, and pelvis joints, restricting
+and we consistently outperform PNP in terms of pose accuracy.                                contact identification to these specific joints. Although this approach
+This stability is attributed to three key factors: 1) local pose drift                       covers most scenarios, there are situations where other parts of the
+is constrained by the learned pose prior from our gravity-involved                           body may be in contact with objects, e.g., when leaning against a
+pose estimation, 2) global pose drift is mitigated through gravity                           wall using the head.
+refinement, and 3) physics-based optimization further filters residual                           Proxy surface and contact assumptions. Our method reconstructs
+drift.                                                                                        stationary contacts based on forces, meaning sliding contacts or
+1 The selected sequence name is 20231213_s0_shawn_wright_act5_z5oir7. Readers can
+                                                                                              those with very slight forces cannot be accurately modeled. Addi-
+view this sequence on the official online data explorer at https://explorer.projectaria.      tionally, we assume that proxy surfaces are horizontal when support-
+com/nymeria/20231213_s0_shawn_wright_act5_z5oir7?p=4&st=%220%22.                              ing the foot or pelvis, meaning tilted surfaces cannot be estimated.
+14   •   Xinyu Yi, Shaohua Pan, and Feng Xu
+
+
+                                                                               By integrating gravity priors into the framework, we significantly
+                                                                               improve the accuracy of both local pose and global orientation es-
+                                                                               timation. Additionally, we enable unconstrained 3D-space motion
+                                                                               estimation through physics-based 3D contact detection. This com-
+                                                                               bination of data-driven and physics-based priors results in more
+                                                                               physically plausible motion capture, enhancing both realism and
+                                                                               accuracy in real-world environments. Our method also produces
+                                                                               valuable byproducts, including joint torques, contact forces, and
+                                                                               interactions with proxy surfaces, expanding the potential applica-
+                                                                               tions of IMU-based motion capture. Through extensive experiments,
+                                                                               we show that our approach outperforms existing methods in both
+                                                                               pose and translation accuracy, offering a robust, real-time, and cost-
+                                                                               effective solution for motion capture in unconstrained settings.
+
+
+                                                                               ACKNOWLEDGMENTS
+                                                                               This work was supported by the National Key R&D Program of
+                                                                               China (2023YFC3305600), the Zhejiang Provincial Natural Science
+                                                                               Foundation (LDT23F02024F02), and the NSFC (No.61822111, 62021002).
+                                                                               This work was also supported by THUIBCS, Tsinghua University,
+                                                                               and BLBCI, Beijing Municipal Education Commission. The authors
+                                                                               would like to thank Wenbin Lin and Yunzhe Shao for their help on
+                                                                               the live demos. Feng Xu is the corresponding author.
+
+
+                                                                               REFERENCES
+                                                                               Karan Ahuja, Eyal Ofek, Mar Gonzalez-Franco, Christian Holz, and Andrew D Wilson.
+                                                                                  2021. Coolmoves: User motion accentuation in virtual reality. Proceedings of the
+                                                                                  ACM on Interactive, Mobile, Wearable and Ubiquitous Technologies 5, 2 (2021), 1–23.
+                                                                               Sadegh Aliakbarian, Pashmina Cameron, Federica Bogo, Andrew Fitzgibbon, and
+Fig. 8. Visualization of contact force distribution during multi-contact mo-      Thomas J Cashman. 2022. Flag: Flow-based 3d avatar generation from sparse
+tions. Forces are naturally adapted according to the body’s acceleration,         observations. In Proceedings of the IEEE/CVF Conference on Computer Vision and
+demonstrating that our method allows flexible and physically plausible            Pattern Recognition. 13253–13262.
+                                                                               Sadegh Aliakbarian, Fatemeh Saleh, David Collier, Pashmina Cameron, and Darren
+force estimations.                                                                Cosker. 2023. HMD-NeMo: Online 3D Avatar Motion Generation From Sparse
+                                                                                  Observations. In Proceedings of the IEEE/CVF International Conference on Computer
+                                                                                  Vision (ICCV). 9622–9631.
+Finally, we cannot accurately capture very small height changes,               Rayan Armani, Changlin Qian, Jiaxi Jiang, and Christian Holz. 2024. Ultra Inertial
+                                                                                  Poser: Scalable Motion Capture and Tracking from Sparse Inertial Sensors and
+such as walking onto a thin block, due to the estimation inaccuracies.            Ultra-Wideband Ranging. In ACM SIGGRAPH 2024 Conference Papers (Denver, CO,
+                                                                                  USA) (SIGGRAPH ’24). Association for Computing Machinery, New York, NY, USA,
+   Ambiguous forces at multiple contacts. Resolving forces at mul-                Article 51, 11 pages. https://doi.org/10.1145/3641519.3657465
+tiple contacts is inherently ambiguous, as multiple solutions exist.           Kevin Bergamin, Simon Clavet, Daniel Holden, and James Richard Forbes. 2019. DReCon:
+                                                                                  Data-Driven Responsive Control of Physics-Based Characters. ACM Trans. Graph.
+Our method addresses this ambiguity through the regularization                    38 (nov 2019).
+terms in Eq. 11 and 12, which minimize total human joint torque                Angela Castillo, Maria Escobar, Guillaume Jeanneret, Albert Pumarola, Pablo Arbeláez,
+and contact force, respectively. Intuitively, among all solutions, this           Ali Thabet, and Artsiom Sanakoyeu. 2023. BoDiffusion: Diffusing Sparse Obser-
+                                                                                  vations for Full-Body Human Motion Synthesis. arXiv preprint arXiv:2304.11118
+regularization encourages minimal forces and torques to reproduce                 (2023).
+the motion, aligning with the natural human tendency to minimize               Andrea Dittadi, Sebastian Dziadzio, Darren Cosker, Ben Lundell, Thomas J Cashman,
+physical effort. Consequently, the regularization tends to distribute             and Jamie Shotton. 2021. Full-body motion from a single head-mounted device:
+                                                                                  Generating smpl poses from partial observations. In Proceedings of the IEEE/CVF
+forces evenly across multiple contacts. Note that these regularization            International Conference on Computer Vision. 11687–11697.
+terms only serve as a soft constraint and do not dominate the opti-            Yuming Du, Robin Kips, Albert Pumarola, Sebastian Starke, Ali Thabet, and Artsiom
+                                                                                  Sanakoyeu. 2023. Avatars grow legs: Generating smooth human motion from sparse
+mization of Eq. 11 and 12. For instance, when the body moves during               tracking inputs with diffusion model. In Proceedings of the IEEE/CVF Conference on
+multi-contact movements, the contact force distribution adapts ac-                Computer Vision and Pattern Recognition. 481–490.
+cordingly. Live demonstrations of such cases are shown in Fig. 8,              Roy Featherstone. 2008. Rigid Body Dynamics Algorithms. Springer US.
+                                                                               Tamar Flash and Neville Hogan. 1985. The Coordination of Arm Movements: An
+and additional visualizations can be found in the supplementary                   Experimentally Confirmed Mathematical Model. The Journal of neuroscience : the
+video.                                                                            official journal of the Society for Neuroscience 5 (08 1985).
+                                                                               Mattia Guidolin, Emanuele Menegatti, and Monica Reggiani. 2022. Unipd-bpe: Syn-
+5    CONCLUSION                                                                   chronized rgb-d and inertial data for multimodal body pose estimation and tracking.
+                                                                                  Data 7, 6 (2022), 79.
+In this paper, we propose a novel physics-driven approach to sparse            Sepp Hochreiter and Jürgen Schmidhuber. 1997. Long Short-term Memory. Neural
+                                                                                  computation 9 (12 1997).
+IMU-based human motion capture, addressing key challenges in esti-             Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J. Black, Otmar Hilliges, and
+mating global motion, specifically global translation and orientation.            Gerard Pons-Moll. 2018. Deep Inertial Poser Learning to Reconstruct Human Pose
+                                                                                    Improving Global Motion Estimation in Sparse IMU-based Motion Capture with Physics          •   15
+
+
+    from SparseInertial Measurements in Real Time. ACM Transactions on Graphics,               Davis Rempe, Leonidas J. Guibas, Aaron Hertzmann, Bryan Russell, Ruben Villegas,
+   (Proc. SIGGRAPH Asia) 37 (nov 2018).                                                           and Jimei Yang. 2020. Contact and Human Dynamics from Monocular Video. In
+Mariko Isogawa, Ye Yuan, Matthew O’Toole, and Kris Kitani. 2020. Optical Non-Line-                Proceedings of the European Conference on Computer Vision (ECCV).
+    of-Sight Physics-Based 3D Human Pose Estimation. In 2020 IEEE/CVF Conference on            Zehong Shen, Huaijin Pi, Yan Xia, Zhi Cen, Sida Peng, Zechen Hu, Hujun Bao, Ruizhen
+    Computer Vision and Pattern Recognition (CVPR).                                               Hu, and Xiaowei Zhou. 2024. World-Grounded Human Motion Recovery via Gravity-
+Jiaxi Jiang, Paul Streli, Manuel Meier, Andreas Fender, and Christian Holz. 2023. Ego-            View Coordinates. In SIGGRAPH Asia Conference Proceedings.
+    Poser: Robust Real-Time Ego-Body Pose Estimation in Large Scenes. arXiv preprint           Soshi Shimada, Vladislav Golyanik, Weipeng Xu, and Christian Theobalt. 2020. PhysCap:
+    arXiv:2308.06493 (2023).                                                                      physically plausible monocular 3D motion capture in real time. ACM Transactions
+Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa Laich, Patrick Snape, and          on Graphics 39 (dec 2020).
+    Christian Holz. 2022a. Avatarposer: Articulated full-body pose tracking from sparse        Soshi Shimada, Franziska Mueller, Jan Bednarik, Bardia Doosti, Bernd Bickel, Dan-
+    motion sensing. In Computer Vision–ECCV 2022: 17th European Conference, Tel Aviv,             hang Tang, Vladislav Golyanik, Jonathan Taylor, Christian Theobalt, and Thabo
+    Israel, October 23–27, 2022, Proceedings, Part V. Springer, 443–460.                          Beeler. 2024. MACS: Mass Conditioned 3D Hand and Object Motion Synthesis. In
+Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W. Winkler, and                  International Conference on 3D Vision (3DV).
+    C. Karen Liu. 2022b. Transformer Inertial Poser: Real-Time Human Motion Recon-             Myungjin Shin, Dohae Lee, and In-Kwon Lee. 2023. Utilizing Task-Generic Mo-
+    struction from Sparse IMUs with Simultaneous Terrain Generation. In SIGGRAPH                  tion Prior to Recover Full-Body Motion from Very Sparse Signals. arXiv preprint
+    Asia 2022 Conference Papers.                                                                  arXiv:2308.15839 (2023).
+Rudolph Emil Kalman. 1960. A new approach to linear filtering and prediction problems.         Soyong Shin, Juyong Kim, Eni Halilaj, and Michael J. Black. 2024. WHAM: Reconstruct-
+    (1960).                                                                                       ing World-grounded Humans with Accurate 3D Motion. In Computer Vision and
+Jiye Lee and Hanbyul Joo. 2024. Mocap Everyone Everywhere: Lightweight Mo-                        Pattern Recognition (CVPR).
+    tion Capture With Smartwatches and a Head-Mounted Camera. arXiv preprint                   Isaac Skog, Peter Handel, John-Olof Nilsson, and Jouni Rantakokko. 2010. Zero-velocity
+    arXiv:2401.00847 (2024).                                                                      detection—An algorithm evaluation. IEEE transactions on biomedical engineering 57,
+Sunmin Lee, Sebastian Starke, Yuting Ye, Jungdam Won, and Alexander Winkler. 2023.                11 (2010), 2657–2666.
+    QuestEnvSim: Environment-Aware Simulated Motion Tracking from Sparse Sensors.              Shashank Tripathi, Lea Müller, Chun-Hao P. Huang, Taheri Omid, Michael J. Black,
+    arXiv preprint arXiv:2306.05666 (2023).                                                       and Dimitrios Tzionas. 2023. 3D Human Pose Estimation via Intuitive Physics. In
+Zongmian Li, Jiri Sedlar, Justin Carpentier, Ivan Laptev, Nicolas Mansard, and Josef              Conference on Computer Vision and Pattern Recognition (CVPR). 4713–4725. https:
+    Sivic. 2019. Estimating 3D Motion and Forces of Person-Object Interactions from               //ipman.is.tue.mpg.de
+    Monocular Video. In Computer Vision and Pattern Recognition (CVPR).                        Matthew Trumble, Andrew Gilbert, Charles Malleson, Adrian Hilton, and John Collo-
+Han Liang, Yannan He, Chengfeng Zhao, Mutian Li, Jingya Wang, Jingyi Yu, and Lan                  mosse. 2017. Total Capture: 3D Human Pose Estimation Fusing Video and Inertial
+    Xu. 2023. Hybridcap: Inertia-aid monocular capture of challenging human motions.              Sensors. In 2017 British Machine Vision Conference (BMVC).
+    In Proceedings of the AAAI Conference on Artificial Intelligence, Vol. 37. 1539–1548.      Tom Van Wouwe, Seunghwan Lee, Antoine Falisse, Scott Delp, and C Karen Liu. 2024.
+Libin Liu and Jessica Hodgins. 2018. Learning Basketball Dribbling Skills Using Trajec-           DiffusionPoser: Real-time Human Motion Reconstruction From Arbitrary Sparse
+    tory Optimization and Deep Reinforcement Learning. ACM Trans. Graph. 37 (jul                  Sensors Using Autoregressive Diffusion. In Proceedings of the IEEE/CVF Conference
+    2018).                                                                                        on Computer Vision and Pattern Recognition. 2513–2523.
+Matthew Loper, Naureen Mahmood, Javier Romero, Gerard Pons-Moll, and Michael J.                Timo von Marcard, Roberto Henschel, Michael Black, Bodo Rosenhahn, and Gerard
+    Black. 2015. SMPL: A Skinned Multi-Person Linear Model. ACM Trans. Graphics                   Pons-Moll. 2018. Recovering Accurate 3D Human Pose in The Wild Using IMUs
+   (Proc. SIGGRAPH Asia) 34 (oct 2015).                                                           and a Moving Camera. In European Conference on Computer Vision (ECCV).
+Lingni Ma, Yuting Ye, Fangzhou Hong, Vladimir Guzov, Yifeng Jiang, Rowan Postyeni,             Timo von Marcard, Bodo Rosenhahn, Michael Black, and Gerard Pons-Moll. 2017.
+    Luis Pesqueira, Alexander Gamino, Vijay Baiyya, Hyo Jin Kim, Kevin Bailey,                    Sparse Inertial Poser: Automatic 3D Human Pose Estimation from Sparse IMUs.
+    David Soriano Fosas, C. Karen Liu, Ziwei Liu, Jakob Engel, Renzo De Nardi, and                Computer Graphics Forum 36(2), Proceedings of the 38th Annual Conference of the
+    Richard Newcombe. 2024. Nymeria: A Massive Collection of Multimodal Egocentric                European Association for Computer Graphics (Eurographics) (2017).
+    Daily Motion in the Wild. In the 18th European Conference on Computer Vision               Marek Vondrak, Leonid Sigal, Jessica Hodgins, and Odest Jenkins. 2012. Video-Based
+   (ECCV). https://arxiv.org/abs/2406.09905                                                       3D Motion Capture through Biped Control. ACM Trans. Graph. 31 (jul 2012).
+Naureen Mahmood, Nima Ghorbani, Nikolaus F. Troje, Gerard Pons-Moll, and Michael J.            Yufu Wang, Ziyun Wang, Lingjie Liu, and Kostas Daniilidis. 2024. TRAM: Global
+    Black. 2019. AMASS: Archive of Motion Capture as Surface Shapes. In The IEEE                  Trajectory and Motion of 3D Humans from in-the-wild Videos. arXiv preprint
+    International Conference on Computer Vision (ICCV).                                           arXiv:2403.17346 (2024).
+Pauline Maurice, Adrien Malaisé, Clélie Amiot, Nicolas Paris, Guy-Junior Richard,              Xiaolin Wei and Jinxiang Chai. 2010. VideoMocap: Modeling Physically Realistic
+    Olivier Rochel, and Serena Ivaldi. 2019. Human movement and ergonomics: An                    Human Motion from Monocular Video Sequences. ACM Trans. Graph. 29 (jul 2010).
+    industry-oriented dataset for collaborative robotics. The International Journal of         Alexander Winkler, Jungdam Won, and Yuting Ye. 2022. QuestSim: Human Motion
+    Robotics Research 38, 14 (2019), 1529–1537.                                                   Tracking from Sparse Sensors with Simulated Avatars. In SIGGRAPH Asia 2022
+mocopi. 2025. Sony Corporation - mocopi. Website. https://www.sony.net/Products/                  Conference Papers. 1–8.
+    mocopi-dev/en/.                                                                            Xsens. 2025. Xsens 3D motion tracking. Website. https://www.xsens.com/.
+Vimal Mollyn, Riku Arakawa, Mayank Goel, Chris Harrison, and Karan Ahuja. 2023.                Vasco Xu, Chenfeng Gao, Henry Hoffmann, and Karan Ahuja. 2024. MobilePoser:
+    IMUPoser: Full-Body Pose Estimation using IMUs in Phones, Watches, and Earbuds.               Real-Time Full-Body Pose Estimation and 3D Human Translation from IMUs in
+    In Proceedings of the 2023 CHI Conference on Human Factors in Computing Systems.              Mobile Consumer Devices. In Proceedings of the 37th Annual ACM Symposium on
+    1–12.                                                                                         User Interface Software and Technology. 1–11.
+Noitom. 2025. Perception Neuron series. Website. https://www.noitom.com/.                      Dongseok Yang, Doyeon Kim, and Sung-Hee Lee. 2021. Lobstr: Real-time lower-body
+Christopher C Paige and Michael A Saunders. 1982. LSQR: An algorithm for sparse                   pose prediction from sparse upper-body tracking signals. In Computer Graphics
+    linear equations and sparse least squares. ACM Transactions on Mathematical                   Forum, Vol. 40. Wiley Online Library, 265–275.
+    Software (TOMS) 8, 1 (1982), 43–71.                                                        Heyuan Yao, Zhenhua Song, Yuyang Zhou, Tenglong Ao, Baoquan Chen, and Libin
+Manuel Palermo, Sara M Cerqueira, João André, António Pereira, and Cristina P Santos.             Liu. 2024. Moconvq: Unified physics-based motion control via scalable discrete
+    2022. From raw measurements to human pose-a dataset with low-cost and high-end                representations. ACM Transactions on Graphics (TOG) 43, 4 (2024), 1–21.
+    inertial-magnetic sensor data. Scientific Data 9, 1 (2022), 591.                           Vickie Ye, Georgios Pavlakos, Jitendra Malik, and Angjoo Kanazawa. 2023. Decoupling
+Shaohua Pan, Qi Ma, Xinyu Yi, Weifeng Hu, Xiong Wang, Xingkang Zhou, Jijunnan Li,                 Human and Camera Motion from Videos in the Wild. In IEEE Conference on Computer
+    and Feng Xu. 2023. Fusing Monocular Images and Sparse IMU Signals for Real-time               Vision and Pattern Recognition (CVPR).
+    Human Motion Capture. In SIGGRAPH Asia 2023 Conference Papers. 1–11.                       Yongjing Ye, Libin Liu, Lei Hu, and Shihong Xia. 2022. Neural3Points: Learning to
+Xue Bin Peng, Pieter Abbeel, Sergey Levine, and Michiel van de Panne. 2018a. Deep-                Generate Physically Realistic Full-body Motion for Virtual Reality Users. In Computer
+    Mimic: Example-Guided Deep Reinforcement Learning of Physics-Based Character                  Graphics Forum, Vol. 41. Wiley Online Library, 183–194.
+    Skills. ACM Trans. Graph. 37 (jul 2018).                                                   Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav Golyanik, Shaohua Pan, Christian
+Xue Bin Peng, Angjoo Kanazawa, Jitendra Malik, Pieter Abbeel, and Sergey Levine.                  Theobalt, and Feng Xu. 2023. EgoLocate: Real-time Motion Capture, Localization,
+    2018b. SFV: Reinforcement Learning of Physical Skills from Videos. ACM Trans.                 and Mapping with Sparse Body-mounted Sensors. ACM Transactions on Graphics
+    Graph. 37 (nov 2018).                                                                         (TOG) 42, 4, Article 76 (2023), 17 pages.
+Jose Luis Ponton, Haoran Yun, Andreas Aristidou, Carlos Andujar, and Nuria Pelechano.          Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada, Vladislav Golyanik, Christian
+    2023. SparsePoser: Real-time Full-body Motion Reconstruction from Sparse Data.                Theobalt, and Feng Xu. 2022. Physical Inertial Poser (PIP): Physics-aware Real-time
+    ACM Transactions on Graphics 43, 1 (2023), 1–14.                                              Human Motion Tracking from Sparse Inertial Sensors. In IEEE/CVF Conference on
+Pytorch. 2025. Pytorch. Website. https://pytorch.org/.                                            Computer Vision and Pattern Recognition (CVPR).
+16   •    Xinyu Yi, Shaohua Pan, and Feng Xu
+
+
+Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2021. TransPose: Real-time 3D Human Translation         Root velocity refinement. In the translation estimator, we use joint
+   and Pose Estimation with Six Inertial Sensors. ACM Transactions on Graphics 40 (08   stationary constraints to refine the root velocity estimate. The opti-
+   2021).
+Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2024. Physical Non-inertial Poser (PNP): Modeling   mization problem in Eq. 4 can be solved analytically by finding the
+   Non-inertial Effects in Sparse-inertial Human Motion Capture. In SIGGRAPH 2024       roots of its derivative. The solution is:
+   Conference Papers.                                                                                1          ∑︁     𝑠𝑖      1                            
+Wanqi Yin, Zhongang Cai, Ruisi Wang, Fanzhou Wang, Chen Wei, Haiyi Mei, Weiye             𝒗˜ 𝑡 =     Í 𝒗𝑡 +                        FK𝑖 (𝜽 𝑡 −1 ) − FK𝑖 (𝜽 𝑡 ) . (25)
+                                                                                                                   1 + 𝑖 𝑠𝑖 Δ𝑡
+                                                                                                                       Í
+   Xiao, Zhitao Yang, Qingping Sun, Atsushi Yamashita, Ziwei Liu, and Lei Yang.                  1 + 𝑖 𝑠𝑖        𝑖
+   2024. WHAC: World-grounded Humans and Cameras. arXiv:2403.12959 [cs.CV]
+   https://arxiv.org/abs/2403.12959                                                        Physics-based tracking. The pre-tracking and re-tracking steps
+Yang You, Kai Xiong, Zhening Yang, Zhengxiang Huang, Junwei Zhou, Ruoxi Shi,
+   Zhou Fang, Adam W. Harley, Leonidas Guibas, and Cewu Lu. 2024. PACE: Pose            involve solving a quadratic programming problem as presented in
+   Annotations in Cluttered Environments.                                               Eq. 11 and 14. However, by substituting the equality constraints into
+Ri Yu, Hwangpil Park, and Jehee Lee. 2021. Human Dynamics from Monocular Video          the objective function to eliminate 𝝉, the problem transforms into
+   with Dynamic Camera Movements. ACM Trans. Graph. 40 (2021).
+Ye Yuan, Umar Iqbal, Pavlo Molchanov, Kris Kitani, and Jan Kautz. 2022. GLAMR: Global   an unconstrained sparse least squares problem, which can be solved
+   Occlusion-Aware Human Mesh Recovery with Dynamic Cameras. In Proceedings of          efficiently using the LSQR method [Paige and Saunders 1982]. We
+   the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR).
+Ye Yuan and Kris Kitani. 2019. Ego-Pose Estimation and Forecasting As Real-Time PD
+                                                                                        present the equivalent problem to Eq. 11 in the sparse least squares
+   Control. In 2019 IEEE/CVF International Conference on Computer Vision (ICCV).        formulation:
+Ye Yuan, Shih-En Wei, Tomas Simon, Kris Kitani, and Jason Saragih. 2021. SimPoE:                                                                  2
+   Simulated Character Control for 3D Human Pose Estimation. In Proceedings of the                              𝑨                   𝜽¥ des
+   IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR).                             min ­ √︁ 𝑱
+                                                                                                            ©         ª      ©   ¤
+                                                                                                                      ® 𝒒¥ − ­ − 𝑱 𝒒¤√︁+ 𝒓¥ des ® ,
+                                                                                                                                                ª
+                                                                                                                                                          (26)
+Petrissa Zell, Bastian Wandt, and Bodo Rosenhahn. 2017. Joint 3D Human Motion                           𝒒¥
+   Capture and Physical Analysis from Monocular Videos. In 2017 IEEE Conference on                          « 𝛽𝜏 𝑴 ¬         « − 𝛽𝜏 𝒉 ¬
+   Computer Vision and Pattern Recognition Workshops (CVPRW).                                                 
+Xiaohan Zhang, Bharat Lal Bhatnagar, Sebastian Starke, Ilya Petrov, Vladimir Guzov,
+                                                                                        where 𝑨 = 𝑶 𝑰 selects the corresponding entries of 𝒒¥ . Eq. 14
+   Helisa Dhamo, Eduardo Pérez Pellitero, and Gerard Pons-Moll. 2024a. FORCE:           can be accelerated in a similar manner, with only a slight modifica-
+   Dataset and Method for Intuitive Physics Guided Human-object Interaction. (2024).    tion compared to Eq. 26:
+Yu Zhang, Songpengcheng Xia, Lei Chu, Jiarui Yang, Qi Wu, and Ling Pei. 2024b. Dy-
+                                                                                                                                                 2
+   namic Inertial Poser (DynaIP): Part-Based Motion Dynamics Learning for Enhanced                            𝑨                     𝜽¥ des
+   Human Pose Estimation with Sparse Inertial Sensors. In Proceedings of the IEEE/CVF                                                      ∗
+   Conference on Computer Vision and Pattern Recognition. 1889–1899.                               min   ­ √︁ 𝑱
+                                                                                                         ©             ∗          ¤
+                                                                                                                   ® 𝒒¥ − ­ √︁ − 𝑱 𝒒¤ + 𝒓¥ des
+                                                                                                                   ª       ©                   ª
+                                                                                                                                               ® .      (27)
+Xiaozheng Zheng, Zhuo Su, Chao Wen, Zhou Xue, and Xiaojie Jin. 2023. Realistic Full-                𝒒¥ ∗       ∗                ∗
+                                                                                                         « 𝛽𝜏 𝑴 ¬
+                                                                                                                                             𝑇
+   Body Tracking from Sparse Observations via Joint-Level Modeling. In Proceedings
+                                                                                                                           « 𝛽𝜏 (−𝒉 + 𝑱 𝝀) ¬
+   of the IEEE/CVF International Conference on Computer Vision (ICCV). 14678–14688.     Solving Eq. 26 and 27 yields 𝒒¥ and 𝒒¥ ∗ , respectively, from which
+Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and Hao Li. 2019. On the Continuity
+   of Rotation Representations in Neural Networks. In 2019 IEEE/CVF Conference on
+                                                                                        we can compute 𝝉 and 𝝉 ∗ using Eq. 5 for pre-tracking and Eq. 6
+   Computer Vision and Pattern Recognition (CVPR).                                      for re-tracking, respectively. In our implementation, we utilize the
+                                                                                        LSQR solver from the SciPy library.
+
+A        ACCELERATING TRAINING
+The pose estimator estimates human pose from IMU measurements
+and the gravity direction in the root frame. When using a non-
+inertial root frame, it is necessary to model the fictitious accelera-
+tions induced by fictitious forces. In previous work PNP [Yi et al.
+2024], fictitious accelerations are regressed in an auto-regressive
+manner using an additional fully connected neural network. How-
+ever, the auto-regressive approach prevents the use of the highly
+optimized black-box RNN implementation in CUDNN, which pro-
+cesses the entire sequence at once, resulting in slower training. In
+our implementation, we retain the concept of incorporating fictitious
+accelerations but remove the auto-regressive structure. Instead, we
+combine the fictitious acceleration estimation with the first LSTM,
+which leverages historical information. Specifically, the first LSTM,
+𝑃𝐿, takes the root’s local angular velocity and acceleration as ad-
+ditional inputs, which are critical for modeling non-inertial effects
+of the root coordinate frame. The output remains unchanged. The
+goal is for the network to automatically learn to model the fictitious
+accelerations by estimating the leaf joint positions. This adjustment
+leads to comparable results with significantly faster training speed.
+
+
+B        ACCELERATING INFERRING
+To enable real-time performance, we accelerate key optimizations
+in our algorithm.
+

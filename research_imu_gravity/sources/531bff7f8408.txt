@@ -1,0 +1,1039 @@
+URL: https://ahrs.readthedocs.io/en/latest/filters/mahony.html
+
+Mahony Orientation Filter — AHRS 0.4.0 documentation
+Skip to main content
+Back to top
+Ctrl
++
+K
+Search
+Ctrl
++
+K
+Search
+Ctrl
++
+K
+Collapse Sidebar
+Expand Sidebar
+Mahony Orientation Filter
+#
+This estimator proposed by Robert Mahony et al.
+[
+MHP08
+]
+is formulated
+as a deterministic kinematic observer on the Special Orthogonal group SO(3)
+driven by an instantaneous attitude and angular velocity measurements
+[
+HM06
+]
+.
+By exploiting the geometry of the special orthogonal group a related observer,
+the
+passive complementary filter
+, is derived that decouples the gyro
+measurements from the reconstructed attitude in the observer inputs
+[
+MHP05
+]
+.
+Direct and passive filters are extended to estimate gyro bias on-line. This
+leads to an observer on SO(3), termed the
+Explicit Complementary Filter
+[
+ECM+08
+]
+, that requires only accelerometer and gyro outputs,
+suitable for hardware implementation, and providing good estimates as well as
+online gyro bias computation.
+Sensor Models
+#
+The
+gyroscopes
+measure angular
+velocity in the body-fixed frame, whose error
+model is:
+\[\Omega_y = \Omega + b + \mu \in\mathbb{R}^3\]
+where
+\(\Omega\)
+is the true angular velocity,
+\(b\)
+is a constant (or
+slow time-varying)
+bias
+, and
+\(\mu\)
+is an additive
+measurement
+noise
+.
+An ideal
+accelerometer
+measures the instantaneous linear acceleration
+\(\dot{\mathbf{v}}\)
+of
+the body frame
+minus
+the gravitational acceleration field
+\(\mathbf{g}_0\)
+. In
+practice, the output
+\(\mathbf{a}\)
+of a tri-axial accelerometer has also
+an added bias
+\(\mathbf{b}_a\)
+and noise
+\(\mu_a\)
+.
+\[\mathbf{a} = \mathbf{R}^T(\dot{\mathbf{v}}-\mathbf{g}_0) + \mathbf{b}_a + \mu_a\]
+where
+\(|\mathbf{g}_0|\approx 9.8\)
+. Under quasi-static conditions it is
+common to normalize this vector so that:
+\[\mathbf{v}_a = \frac{\mathbf{a}}{|\mathbf{a}|} \approx -\mathbf{R}^Te_3\]
+where
+\(e_3=\frac{\mathbf{g}_0}{|\mathbf{g}_0|}=\begin{bmatrix}0 & 0 & 1\end{bmatrix}^T\)
+.
+A
+magnetometer
+provides
+measurements for the magnetic field
+\[\mathbf{m} = \mathbf{R}^T\mathbf{h} + \mathbf{B}_m + \mu_b\]
+where
+\(\mathbf{h}\)
+is
+Earth’s magnetic field
+as measured at the inertial frame,
+\(\mathbf{B}_m\)
+is the local magnetic
+disturbance and
+\(\mu_b\)
+is the measurement noise.
+The magnetic intensity is irrelevant for the estimation of the attitude, and
+only the
+direction
+of the geomagnetic field will be used. Normally, this
+measurement is also normalized:
+\[\mathbf{v}_m = \frac{\mathbf{m}}{|\mathbf{m}|}\]
+The measurement vectors
+\(\mathbf{v}_a\)
+and
+\(\mathbf{v}_m\)
+are
+used to build an instantaneous algebraic rotation
+\(\mathbf{R}\)
+:
+\[\mathbf{R} \approx \mathbf{R}_y=\underset{\mathbf{R}\in SO(3)}{\operatorname{arg\,min}} (\lambda_1|e_3-\mathbf{Rv}_a|^2 + \lambda_2|\mathbf{v}_m^*-\mathbf{Rv}_m|^2)\]
+where
+\(\mathbf{v}_m^*\)
+is the referential direction of the local
+magnetic field.
+The corresponding weights
+\(\lambda_1\)
+and
+\(\lambda_2\)
+are chosen
+depending on the relative confidence in the sensor outputs.
+Two degrees of freedom in the rotation matrix are resolved using the
+acceleration readings (
+tilt
+) and the final degree of freedom is resolved
+using the magnetometer (
+heading
+.)
+The system considered is the kinematics:
+\[\dot{\mathbf{R}} = \mathbf{R}\lfloor\Omega\rfloor_\times\]
+where
+\(\lfloor\Omega\rfloor_\times\)
+denotes the
+skew-symmetric
+matrix
+of
+\(\Omega=\begin{bmatrix}\Omega_X & \Omega_Y & \Omega_Z\end{bmatrix}^T\)
+:
+\[\begin{split}\lfloor\Omega\rfloor_\times = \begin{bmatrix}
+0 & -\Omega_Z & \Omega_Y\\
+\Omega_Z & 0 & -\Omega_X\\
+-\Omega_Y & \Omega_X & 0
+\end{bmatrix}\end{split}\]
+The inverse operation taking the skew-symmetric matrix into its associated
+vector is
+\(\Omega=\mathrm{vex}(\lfloor\Omega\rfloor_\times)\)
+.
+The kinematics can also be written in terms of the quaternion representation in
+SO(3):
+\[\dot{\mathbf{q}} = \frac{1}{2}\mathbf{qp}(\Omega)\]
+where
+\(\mathbf{q}=\begin{pmatrix}q_w & \mathbf{q}_v\end{pmatrix}=\begin{pmatrix}q_w & q_x & q_y & q_z\end{pmatrix}\)
+represents a unit quaternion, and
+\(\mathbf{p}(\Omega)\)
+represents the
+unitary pure quaternion associated to the angular velocity
+\(\mathbf{p}(\Omega)=\begin{pmatrix}0 & \Omega_X & \Omega_Y & \Omega_Z\end{pmatrix}\)
+Warning
+The product of two quaternions
+\(\mathbf{p}\)
+and
+\(\mathbf{q}\)
+is the Hamilton product defined as:
+\[\begin{split}\mathbf{pq} =
+\begin{bmatrix}
+p_w q_w - p_x q_x - p_y q_y - p_z q_z \\
+p_w q_x + p_x q_w + p_y q_z - p_z q_y \\
+p_w q_y - p_x q_z + p_y q_w + p_z q_x \\
+p_w q_z + p_x q_y - p_y q_x + p_z q_w
+\end{bmatrix}\end{split}\]
+Error Criteria
+#
+We denote
+\(\hat{\mathbf{R}}\)
+as the
+estimation
+of the body-fixed
+rotation matrix
+\(\mathbf{R}\)
+. The used estimation error is the relative
+rotation from the body-fixed frame to the estimator frame:
+\[\tilde{\mathbf{R}} := \hat{\mathbf{R}}^T\mathbf{R}\]
+Mahony’s proposed observer, based on
+Lyapunov stability analysis
+, yields the
+cost
+function
+:
+\[E_\mathrm{tr} = \frac{1}{2}\mathrm{tr}(\mathbf{I}_3-\tilde{\mathbf{R}})\]
+The goal of attitude estimation is to provide a set of dynamics for an estimate
+\(\hat{\mathbf{R}}(t)\in SO(3)\)
+to drive the error rotation
+\(\tilde{\mathbf{R}}(t)\to \mathbf{I}_3\)
+, which in turn would drive
+\(\hat{\mathbf{R}}\to\mathbf{R}\)
+.
+The general form of the observer is termed as a
+Complementary Filter on SO(3)
+:
+\[\dot{\hat{\mathbf{R}}} = \lfloor\mathbf{R}\Omega + k_P\hat{\mathbf{R}}\omega\rfloor_\times\hat{\mathbf{R}}\]
+where
+\(k_P>0\)
+and the term
+\(\mathbf{R}\Omega + k_P\hat{\mathbf{R}}\omega\)
+is expressed in the inertial frame.
+The
+innovation
+or
+correction
+term
+\(\omega\)
+, derived from the error
+\(\tilde{\mathbf{R}}\)
+, can be thought of as a non-linear
+approximation of the error between
+\(\mathbf{R}\)
+and
+\(\hat{\mathbf{R}}\)
+as measured from the frame of reference associated with
+\(\hat{\mathbf{R}}\)
+.
+When no correction term is used (
+\(\omega=0\)
+) the error rotation
+\(\tilde{\mathbf{R}}\)
+will be constant.
+If
+\(\tilde{\mathbf{q}}=\begin{pmatrix}\tilde{q}_w & \tilde{\mathbf{q}}_v\end{pmatrix}\)
+is the quaternion related to
+\(\tilde{\mathbf{R}}\)
+, then:
+\[E_\mathrm{tr} = 2|\tilde{\mathbf{q}}_v|^2 = 2(1-\tilde{q}_w^2)\]
+Explicit Complementary Filter
+#
+Let
+\(\mathbf{v}_{0i}\in\mathbb{R}^3\)
+denote a set of
+\(n\geq 2\)
+known directions in the inertial (fixed) frame of reference, where the
+directions are not collinear, and
+\(\mathbf{v}_{i}\in\mathbb{R}^3\)
+are
+their associated measurements. The measurements are body-fixed frame
+observations of the fixed inertial directions:
+\[\mathbf{v}_i = \mathbf{R}^T\mathbf{v}_{0i} + \mu_i\]
+where
+\(\mu_i\)
+is a process noise. We assume that
+\(|\mathbf{v}_{0i}|=1\)
+and normalize all measurements to force
+\(|\mathbf{v}_i|=1\)
+.
+For
+\(n\)
+measures, the
+global cost
+becomes:
+\[E_\mathrm{mes} = \sum_{i=1}^nk_i-\mathrm{tr}(\tilde{\mathbf{R}}\mathbf{M})\]
+where
+\(\mathbf{M}>0\)
+is a positive definite matrix if
+\(n\geq 3\)
+,
+or positive semi-definite if
+\(n=2\)
+:
+\[\mathbf{M} = \mathbf{R}^T\mathbf{M}_0\mathbf{R}\]
+with:
+\[\mathbf{M}_0 = \sum_{i=1}^nk_i\mathbf{v}_{0i}\mathbf{v}_{0i}^T\]
+The weights
+\(k_i>0\)
+are chosen depending on the relative confidence in
+the measured directions.
+Low-cost IMUs typically measure gravitational,
+\(\mathbf{a}\)
+, and
+magnetic,
+\(\mathbf{m}\)
+, vector fields.
+\[\begin{split}\begin{array}{rcl}
+\mathbf{v}_a &=& \mathbf{R}^T\frac{\mathbf{a}_0}{|\mathbf{a}_0|} \\ && \\
+\mathbf{v}_m &=& \mathbf{R}^T\frac{\mathbf{m}_0}{|\mathbf{m}_0|}
+\end{array}\end{split}\]
+In this case, the cost function
+\(E_\mathrm{mes}\)
+becomes:
+\[E_\mathrm{mes} = k_1(1-\langle\hat{\mathbf{v}}_a, \mathbf{v}_a\rangle) + k_2(1-\langle\hat{\mathbf{v}}_m, \mathbf{v}_m\rangle)\]
+Tip
+When the IMU is subject to high magnitude accelerations (takeoff, landing
+manoeuvres, etc.) it may be wise to reduce the relative weighing of the
+accelerometer data (
+\(k_1 \ll k_2\)
+) compared to the magnetometer data.
+Conversely, when the IMU is mounted in the proximity of powerful electric
+motors leading to low confidence in the magnetometer readings choose
+\(k_1 \gg k_2\)
+.
+Expressing the kinematics of the Explicit Complementary Filter as quaternions
+we get:
+\[\begin{split}\begin{array}{rcl}
+\dot{\hat{\mathbf{q}}} &=& \frac{1}{2}\hat{\mathbf{q}}\mathbf{p}\Big(\Omega_y-\hat{b} + k_P\omega_\mathrm{mes}\Big) \\ && \\
+\dot{\hat{b}} &=& -k_I\omega_\mathrm{mes} \\ && \\
+\omega_\mathrm{mes} &=& \displaystyle\sum_{i=1}^nk_i\mathbf{v}_i\times\hat{\mathbf{v}}_i
+\end{array}\end{split}\]
+The estimated attitude rate of change
+\(\dot{\hat{\mathbf{q}}}\)
+is
+multiplied with the sample-rate
+\(\Delta t\)
+to integrate the angular
+displacement, which is finally added to the previous attitude, obtaining the
+newest estimated attitude.
+\[\mathbf{q}_t = \mathbf{q}_{t-1} + \dot{\hat{\mathbf{q}}}_t\Delta t\]
+class
+ahrs.filters.mahony.
+Mahony
+(
+gyr
+:
+ndarray
+=
+None
+,
+acc
+:
+ndarray
+=
+None
+,
+mag
+:
+ndarray
+=
+None
+,
+frequency
+:
+float
+=
+100.0
+,
+k_P
+:
+float
+=
+1.0
+,
+k_I
+:
+float
+=
+0.3
+,
+q0
+:
+ndarray
+=
+None
+,
+b0
+:
+ndarray
+=
+None
+,
+**
+kwargs
+)
+#
+Mahony’s Nonlinear Complementary Filter on SO(3)
+If
+acc
+and
+gyr
+are given as parameters, the orientations will be
+immediately computed with method
+updateIMU
+.
+If
+acc
+,
+gyr
+and
+mag
+are given as parameters, the orientations
+will be immediately computed with method
+updateMARG
+.
+Parameters
+:
+acc
+(
+numpy.ndarray, default: None
+) – N-by-3 array with measurements of acceleration in m/s^2
+gyr
+(
+numpy.ndarray, default: None
+) – N-by-3 array with measurements of angular velocity in rad/s
+mag
+(
+numpy.ndarray, default: None
+) – N-by-3 array with measurements of magnetic field in mT
+frequency
+(
+float, default: 100.0
+) – Sampling frequency in Herz
+Dt
+(
+float, default: 0.01
+) – Sampling step in seconds. Inverse of sampling frequency. Not required
+if
+frequency
+value is given
+k_P
+(
+float, default: 1.0
+) – Proportional filter gain
+k_I
+(
+float, default: 0.3
+) – Integral filter gain
+q0
+(
+numpy.ndarray, default: None
+) – Initial orientation, as a versor (normalized quaternion).
+Variables
+:
+gyr
+(
+numpy.ndarray
+) – N-by-3 array with N gyroscope samples.
+acc
+(
+numpy.ndarray
+) – N-by-3 array with N accelerometer samples.
+mag
+(
+numpy.ndarray
+) – N-by-3 array with N magnetometer samples.
+frequency
+(
+float
+) – Sampling frequency in Herz.
+Dt
+(
+float
+) – Sampling step in seconds. Inverse of sampling frequency.
+k_P
+(
+float
+) – Proportional filter gain.
+k_I
+(
+float
+) – Integral filter gain.
+q0
+(
+numpy.ndarray
+) – Initial orientation, as a versor (normalized quaternion)
+Raises
+:
+ValueError
+– When dimension of input array(s)
+acc
+,
+gyr
+, or
+mag
+are not
+    equal.
+Examples
+Assuming we have 3-axis sensor data in N-by-3 arrays, we can simply give
+these samples to their corresponding type. The Mahony algorithm can work
+solely with gyroscope samples, although the use of accelerometer samples is
+much encouraged.
+The easiest way is to directly give the full array of samples to their
+matching parameters.
+>>>
+from
+ahrs.filters
+import
+Mahony
+>>>
+orientation
+=
+Mahony
+(
+gyr
+=
+gyro_data
+,
+acc
+=
+acc_data
+)
+# Using IMU
+The estimated quaternions are saved in the attribute
+Q
+.
+>>>
+type
+(
+orientation
+.
+Q
+),
+orientation
+.
+Q
+.
+shape
+(<class 'numpy.ndarray'>, (1000, 4))
+If we desire to estimate each sample independently, we call the
+corresponding method.
+orientation
+=
+Mahony
+()
+Q
+=
+np
+.
+tile
+([
+1.
+,
+0.
+,
+0.
+,
+0.
+],
+(
+num_samples
+,
+1
+))
+# Allocate for quaternions
+for
+t
+in
+range
+(
+1
+,
+num_samples
+):
+Q
+[
+t
+]
+=
+orientation
+.
+updateIMU
+(
+Q
+[
+t
+-
+1
+],
+gyr
+=
+gyro_data
+[
+t
+],
+acc
+=
+acc_data
+[
+t
+])
+Further on, we can also use magnetometer data.
+>>>
+orientation
+=
+Mahony
+(
+gyr
+=
+gyro_data
+,
+acc
+=
+acc_data
+,
+mag
+=
+mag_data
+)
+# Using MARG
+This algorithm is dynamically adding the orientation, instead of estimating
+it from static observations. Thus, it requires an initial attitude to build
+on top of it. This can be set with the parameter
+q0
+:
+>>>
+orientation
+=
+Mahony
+(
+gyr
+=
+gyro_data
+,
+acc
+=
+acc_data
+,
+q0
+=
+[
+0.7071
+,
+0.0
+,
+0.7071
+,
+0.0
+])
+If no initial orientation is given, then an attitude using the first
+samples is estimated. This attitude is computed assuming the sensors are
+straped to a system in a quasi-static state.
+A constant sampling frequency equal to 100 Hz is used by default. To change
+this value we set it in its parameter
+frequency
+. Here we set it, for
+example, to 150 Hz.
+>>>
+orientation
+=
+Mahony
+(
+gyr
+=
+gyro_data
+,
+acc
+=
+acc_data
+,
+frequency
+=
+150.0
+)
+Or, alternatively, setting the sampling step (
+\(\Delta t = \frac{1}{f}\)
+):
+>>>
+orientation
+=
+Mahony
+(
+gyr
+=
+gyro_data
+,
+acc
+=
+acc_data
+,
+Dt
+=
+1
+/
+150
+)
+This is specially useful for situations where the sampling rate is variable:
+orientation
+=
+Mahony
+()
+Q
+=
+np
+.
+tile
+([
+1.
+,
+0.
+,
+0.
+,
+0.
+],
+(
+num_samples
+,
+1
+))
+# Allocate for quaternions
+for
+t
+in
+range
+(
+1
+,
+num_samples
+):
+orientation
+.
+Dt
+=
+new_sample_rate
+Q
+[
+t
+]
+=
+orientation
+.
+updateIMU
+(
+Q
+[
+t
+-
+1
+],
+gyr
+=
+gyro_data
+[
+t
+],
+acc
+=
+acc_data
+[
+t
+])
+Mahony’s algorithm uses an explicit complementary filter with two gains
+\(k_P\)
+and
+\(k_I\)
+to correct the estimation of the attitude.
+These gains can be set in the parameters too:
+>>>
+orientation
+=
+Mahony
+(
+gyr
+=
+gyro_data
+,
+acc
+=
+acc_data
+,
+kp
+=
+0.5
+,
+ki
+=
+0.1
+)
+Following the experimental settings of the original article, the gains are,
+by default,
+\(k_P=1\)
+and
+\(k_I=0.3\)
+.
+updateIMU
+(
+q
+:
+ndarray
+,
+gyr
+:
+ndarray
+,
+acc
+:
+ndarray
+,
+dt
+:
+float
+=
+None
+)
+→
+ndarray
+#
+Attitude Estimation with a IMU architecture.
+Parameters
+:
+q
+(
+numpy.ndarray
+) – A-priori quaternion.
+gyr
+(
+numpy.ndarray
+) – Sample of tri-axial Gyroscope in rad/s.
+acc
+(
+numpy.ndarray
+) – Sample of tri-axial Accelerometer in m/s^2.
+dt
+(
+float, default: None
+) – Time step, in seconds, between consecutive Quaternions.
+Returns
+:
+q
+– Estimated quaternion.
+Return type
+:
+numpy.ndarray
+Examples
+>>>
+orientation
+=
+Mahony
+()
+>>>
+Q
+=
+np
+.
+tile
+([
+1.
+,
+0.
+,
+0.
+,
+0.
+],
+(
+num_samples
+,
+1
+))
+# Allocate for quaternions
+>>>
+for
+t
+in
+range
+(
+1
+,
+num_samples
+):
+...
+Q
+[
+t
+]
+=
+orientation
+.
+updateIMU
+(
+Q
+[
+t
+-
+1
+],
+gyr
+=
+gyro_data
+[
+t
+],
+acc
+=
+acc_data
+[
+t
+])
+updateMARG
+(
+q
+:
+ndarray
+,
+gyr
+:
+ndarray
+,
+acc
+:
+ndarray
+,
+mag
+:
+ndarray
+,
+dt
+:
+float
+=
+None
+)
+→
+ndarray
+#
+Attitude Estimation with a MARG architecture.
+Parameters
+:
+q
+(
+numpy.ndarray
+) – A-priori quaternion.
+gyr
+(
+numpy.ndarray
+) – Sample of tri-axial Gyroscope in rad/s.
+acc
+(
+numpy.ndarray
+) – Sample of tri-axial Accelerometer in m/s^2.
+mag
+(
+numpy.ndarray
+) – Sample of tri-axail Magnetometer in uT.
+dt
+(
+float, default: None
+) – Time step, in seconds, between consecutive Quaternions.
+Returns
+:
+q
+– Estimated quaternion.
+Return type
+:
+numpy.ndarray
+Examples
+>>>
+orientation
+=
+Mahony
+()
+>>>
+Q
+=
+np
+.
+tile
+([
+1.
+,
+0.
+,
+0.
+,
+0.
+],
+(
+num_samples
+,
+1
+))
+# Allocate for quaternions
+>>>
+for
+t
+in
+range
+(
+1
+,
+num_samples
+):
+...
+Q
+[
+t
+]
+=
+orientation
+.
+updateMARG
+(
+Q
+[
+t
+-
+1
+],
+gyr
+=
+gyro_data
+[
+t
+],
+acc
+=
+acc_data
+[
+t
+],
+mag
+=
+mag_data
+[
+t
+])
+previous
+Madgwick Orientation Filter
+next
+Optimal Linear Estimator of Quaternion
+On this page
+Show Source
+© Copyright 2019-2026, Mario Garcia.
+Created using
+Sphinx
+7.1.2.
+Built with the
+PyData Sphinx Theme
+0.17.1.

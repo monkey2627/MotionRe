@@ -1,0 +1,38 @@
+{
+  "date": "2026-09-15",
+  "finalized_date": "2026-09-16",
+  "mode": "targeted_literature_review",
+  "question": "Can gravity/dynamic-acceleration separation and observation reliability improve sparse-IMU human motion reconstruction across lying, rolling and crawling?",
+  "constraints": {
+    "physical_imus": "Fewer than six for the proposed method; six as a reference baseline",
+    "deployment": "Causal mobile on-device inference; runtime claims require measurement",
+    "excluded": ["rehabilitation templates", "template matching", "template-derived features"],
+    "mutations": "Research artifacts only; no model, adapter or historical benchmark edits"
+  },
+  "starting_materials": [
+    "papers/",
+    "papersNewWay/",
+    "code/benchmark_results_analysis.md",
+    "code/research_imu_contact/imu_contact_innovation_review_2026-09-15.md"
+  ],
+  "searches": [
+    "inertial gravity human pose",
+    "VQF",
+    "gravity acceleration decoupling inertial",
+    "inertial orientation learning",
+    "EqNIO"
+  ],
+  "source_strategy": "Local paper method sections and implementation inspection, arXiv search/abstract/full-text pages, author documentation, institutional repository and previously verified CVF records",
+  "limits": [
+    "Not an exhaustive systematic review or a first-in-literature certification",
+    "The VQF arXiv HTML endpoint returned 404; abstract and author documentation were available",
+    "Some references have only abstract or selected-section verification; the report labels reading depth",
+    "No new training, server benchmark or phone deployment measurement was performed"
+  ],
+  "artifacts": {
+    "report": "imu_gravity_pose_disentanglement_review_2026-09-15.md",
+    "new_sources": "sources/",
+    "reused_sources": "../research_imu_contact/sources/",
+    "retrieval_tool": "../research_imu_contact/retrieve.py"
+  }
+}

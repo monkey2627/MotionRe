@@ -1,0 +1,199 @@
+URL: https://arxiv.org/abs/1805.10410
+
+[1805.10410] Contact-Aided Invariant Extended Kalman Filtering for Legged Robot State Estimation
+Skip to main content
+Search arXiv
+Press Enter to search ·
+Advanced search
+Computer Science > Robotics
+arXiv:1805.10410
+(cs)
+[Submitted on 26 May 2018]
+Title:
+Contact-Aided Invariant Extended Kalman Filtering for Legged Robot State Estimation
+Authors:
+Ross Hartley
+,
+Maani Ghaffari Jadidi
+,
+Jessy W. Grizzle
+,
+Ryan M. Eustice
+View a PDF of the paper titled Contact-Aided Invariant Extended Kalman Filtering for Legged Robot State Estimation, by Ross Hartley and 3 other authors
+View PDF
+HTML (experimental)
+Abstract:
+This paper derives a contact-aided inertial navigation observer for a 3D bipedal robot using the theory of invariant observer design. Aided inertial navigation is fundamentally a nonlinear observer design problem; thus, current solutions are based on approximations of the system dynamics, such as an Extended Kalman Filter (EKF), which uses a system's Jacobian linearization along the current best estimate of its trajectory. On the basis of the theory of invariant observer design by Barrau and Bonnabel, and in particular, the Invariant EKF (InEKF), we show that the error dynamics of the point contact-inertial system follows a log-linear autonomous differential equation; hence, the observable state variables can be rendered convergent with a domain of attraction that is independent of the system's trajectory. Due to the log-linear form of the error dynamics, it is not necessary to perform a nonlinear observability analysis to show that when using an Inertial Measurement Unit (IMU) and contact sensors, the absolute position of the robot and a rotation about the gravity vector (yaw) are unobservable. We further augment the state of the developed InEKF with IMU biases, as the online estimation of these parameters has a crucial impact on system performance. We evaluate the convergence of the proposed system with the commonly used quaternion-based EKF observer using a Monte-Carlo simulation. In addition, our experimental evaluation using a Cassie-series bipedal robot shows that the contact-aided InEKF provides better performance in comparison with the quaternion-based EKF as a result of exploiting symmetries present in the system dynamics.
+Comments:
+Published in the proceedings of Robotics: Science and Systems 2018
+Subjects:
+Robotics (cs.RO)
+Cite as:
+arXiv:1805.10410
+[cs.RO]
+(or
+arXiv:1805.10410v1
+[cs.RO]
+for this version)
+https://doi.org/10.48550/arXiv.1805.10410
+Focus to learn more
+arXiv-issued DOI via DataCite
+Related DOI
+:
+https://doi.org/10.15607/RSS.2018.XIV.050
+Focus to learn more
+DOI(s) linking to related resources
+Submission history
+From: Ross Hartley [
+view email
+]
+[v1]
+Sat, 26 May 2018 01:58:02 UTC (5,965 KB)
+Full-text links:
+Access Paper:
+View a PDF of the paper titled Contact-Aided Invariant Extended Kalman Filtering for Legged Robot State Estimation, by Ross Hartley and 3 other authors
+View PDF
+HTML (experimental)
+TeX Source
+view license
+Current browse context:
+cs.RO
+< prev
+|
+next >
+new
+|
+recent
+|
+2018-05
+Change to browse by:
+cs
+References & Citations
+NASA ADS
+Google Scholar
+Semantic Scholar
+DBLP
+- CS Bibliography
+listing
+|
+bibtex
+Ross Hartley
+Maani Ghaffari Jadidi
+Jessy W. Grizzle
+Ryan M. Eustice
+export BibTeX citation
+Loading...
+BibTeX formatted citation
+×
+loading...
+Data provided by:
+Bookmark
+Bibliographic Tools
+Bibliographic and Citation Tools
+Bibliographic Explorer Toggle
+Bibliographic Explorer
+(
+What is the Explorer?
+)
+Connected Papers Toggle
+Connected Papers
+(
+What is Connected Papers?
+)
+Litmaps Toggle
+Litmaps
+(
+What is Litmaps?
+)
+scite.ai Toggle
+scite Smart Citations
+(
+What are Smart Citations?
+)
+Code, Data, Media
+Code, Data and Media Associated with this Article
+alphaXiv Toggle
+alphaXiv
+(
+What is alphaXiv?
+)
+Links to Code Toggle
+CatalyzeX Code Finder for Papers
+(
+What is CatalyzeX?
+)
+DagsHub Toggle
+DagsHub
+(
+What is DagsHub?
+)
+GotitPub Toggle
+Gotit.pub
+(
+What is GotitPub?
+)
+Huggingface Toggle
+Hugging Face
+(
+What is Huggingface?
+)
+ScienceCast Toggle
+ScienceCast
+(
+What is ScienceCast?
+)
+Demos
+Demos
+Replicate Toggle
+Replicate
+(
+What is Replicate?
+)
+Spaces Toggle
+Hugging Face Spaces
+(
+What is Spaces?
+)
+Spaces Toggle
+TXYZ.AI
+(
+What is TXYZ.AI?
+)
+Related Papers
+Recommenders and Search Tools
+Link to Influence Flower
+Influence Flower
+(
+What are Influence Flowers?
+)
+Core recommender toggle
+CORE Recommender
+(
+What is CORE?
+)
+Author
+Venue
+Institution
+Topic
+About arXivLabs
+arXivLabs: experimental projects with community collaborators
+arXivLabs is a framework that allows collaborators to develop and share new arXiv features directly on our website.
+Both individuals and organizations that work with arXivLabs have embraced and accepted our values of openness, community, excellence, and user data privacy. arXiv is committed to these values and only works with partners that adhere to them.
+Have an idea for a project that will add value for arXiv's community?
+Learn more about arXivLabs
+.
+Which authors of this paper are endorsers?
+|
+Disable MathJax
+(
+What is MathJax?
+)
+We gratefully acknowledge support from
+        our
+major funders
+,
+member institutions
+,
+,
+        and all contributors.
+Major funding support from

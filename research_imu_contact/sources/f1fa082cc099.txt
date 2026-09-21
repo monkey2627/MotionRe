@@ -1,0 +1,41 @@
+URL: https://openaccess.thecvf.com/content/ICCV2025/html/Shao_MagShield_Towards_Better_Robustness_in_Sparse_Inertial_Motion_Capture_Under_ICCV_2025_paper.html
+
+ICCV 2025 Open Access Repository
+ICCV 2025
+open access
+These ICCV 2025 papers are the Open Access versions, provided by the
+Computer Vision Foundation.
+Except for the watermark, they are identical to the accepted versions;
+the final published version of the proceedings is available on IEEE Xplore.
+This material is presented to ensure timely dissemination of scholarly and technical work.
+Copyright and all rights therein are retained by authors or by other copyright holders.
+All persons copying this information are expected to adhere to the terms and constraints invoked 
+by each author's copyright.
+Powered by:
+Sponsored by:
+MagShield: Towards Better Robustness in Sparse Inertial Motion Capture Under Magnetic Disturbances
+Yunzhe Shao, Xinyu Yi, Lu Yin, Shihui Guo, Junhai Yong, Feng Xu
+; Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2025, pp. 29021-29030
+Abstract
+This paper proposes a novel method, named MagShield, designed to address the issue of magnetic disturbances in sparse inertial motion capture (MoCap) systems. Existing Inertial Measurement Units (IMUs) are prone to orientation estimation errors in magnetically disturbed environments, limiting the practical application of inertial Mocap systems in real-world scenarios. To address this problem, MagShield employs a "detect-then-correct" strategy, first detecting magnetic disturbances through multi-IMU joint analysis, and then correcting orientation errors using human motion priors. MagShield can be ntegrated with most existing sparse inertial MoCap systems, improving their performance in magnetically disturbed environments. Experimental results demonstrate that MagShield significantly enhances the accuracy of motion capture under magnetic interference and exhibits good compatibility across different sparse inertial MoCap systems. Code and dataset are available at https://github.com/YZ-Shiao/MagShield.
+Related Material
+[
+pdf
+]
+[
+supp
+]
+[
+arXiv
+]
+[
+bibtex
+]
+@InProceedings{Shao_2025_ICCV,
+    author    = {Shao, Yunzhe and Yi, Xinyu and Yin, Lu and Guo, Shihui and Yong, Junhai and Xu, Feng},
+    title     = {MagShield: Towards Better Robustness in Sparse Inertial Motion Capture Under Magnetic Disturbances},
+    booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+    month     = {October},
+    year      = {2025},
+    pages     = {29021-29030}
+}

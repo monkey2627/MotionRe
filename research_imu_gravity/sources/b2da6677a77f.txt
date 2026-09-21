@@ -1,0 +1,57 @@
+URL: https://x-io.co.uk/open-source-imu-and-ahrs-algorithms/
+
+Open source IMU and AHRS algorithms – x-io Technologies
+Open source IMU and AHRS algorithms
+Posted on July 31, 2012 by x-io Technologies
+Looking for the Madgwick algorithm?
+The open source Madgwick algorithm is now called
+Fusion
+and is available on GitHub.  This algorithm powers the
+x-IMU3,
+our third generation, high-performance IMU.
+In 2009
+Sebastian Madgwick
+developed an IMU and AHRS sensor fusion algorithm as part of his Ph.D research at the
+University of Bristol
+. The algorithm was posted on
+Google Code
+with
+IMU
+,
+AHRS
+and
+camera stabilisation application
+demo videos on
+YouTube
+. The algorithm received thousands of downloads but the code project was never maintained or updated. All resources are now provided and maintained here. The algorithm source code is available in
+C
+,
+C#
+and
+MATLAB
+. The source code also includes Madgwick’s implementation of Robert Mayhony’s ‘
+DCM filter
+‘ in
+quaternion form
+.
+DOWNLOADS
+Original internal report (.pdf)
+IEEE conference paper (IEEE Explore)
+MATLAB code (Includes example data and script)
+C# code (x-IMU Example project)
+C code (Header and source files)
+USER CONTRIBUTIONS
+LabVIEW library by Roger Isaksson (Google Code)
+x-io Technologies Limited
+Bristol, UK
+Company No. 07574188
+Archive
+About
+Contact
+© 2026 | All Rights Reserved
+© 2026 | All Rights Reserved
+This site is protected by reCAPTCHA and the Google
+Privacy Policy
+and
+Terms of Service
+apply.

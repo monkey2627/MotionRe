@@ -1,0 +1,59 @@
+URL: https://openresearch-repository.anu.edu.au/items/db91f02d-9a17-4ead-bc64-86ed5bc9c6f4
+
+Non-linear complementary filters on the special orthogonal group
+Skip to main content
+X
+Cultural advice
+The Australian National University acknowledges, celebrates and pays our respects to the Ngunnawal and Ngambri people of the Canberra region and to all First Nations Australians on whose traditional lands we meet and work, and whose cultures are among the oldest continuing cultures in human history.
+Aboriginal and Torres Strait Islander peoples are advised that ANU Library collections may include images, names, voices, and other representations of deceased persons.
+Material in the collection may contain terms, language or views that reflect the period in which the item was created and may be considered inappropriate today.
+Cultural advice
+Open Research Repository
+Library
+Non-linear complementary filters on the special orthogonal group
+Loading...
+Date
+2008
+Authors
+Mahony, Robert
+Hamel, Tarek
+Pflimlin, Jean-Michel
+Journal Title
+Journal ISSN
+Volume Title
+Publisher
+Institute of Electrical and Electronics Engineers (IEEE Inc)
+Abstract
+This paper considers the problem of obtaining good attitude estimates from measurements obtained from typical low cost inertial measurement units. The outputs of such systems are characterized by high noise levels and time varying additive biases. We formulate the filtering problem as deterministic observer kinematics posed directly on the special orthogonal group SO(3) driven by reconstructed attitude and angular velocity measurements. Lyapunov analysis results for the proposed observers are derived that ensure almost global stability of the observer error. The approach taken leads to an observer that we term the direct complementary filter. By exploiting the geometry of the special orthogonal group a related observer, termed the passive complementary filter, is derived that decouples the gyro measurements from the reconstructed attitude in the observer inputs. Both the direct and passive filters can be extended to estimate gyro bias online. The passive filter is further developed to provide a formulation in terms of the measurement error that avoids any algebraic reconstruction of the attitude. This leads to an observer on SO(3), termed the explicit complementary filter, that requires only accelerometer and gyro outputs; is suitable for implementation on embedded hardware; and provides good attitude estimates as well as estimating the gyro biases online. The performance of the observers are demonstrated with a set of experiments performed on a robotic test-bed and a radio controlled unmanned aerial vehicle.
+Show more
+Description
+Keywords
+Keywords: Active filters; Feature extraction; Gyroscopes; Passive filters; Speech processing; Unmanned aerial vehicles (UAV); Velocity measurement; Wave filters; Attitude estimates; Complementary filter; Nonlinear observer; Special orthogonal group; Units of measur Attitude estimates; Complementary filter; Nonlinear observer; Special orthogonal group
+Citation
+URI
+http://hdl.handle.net/1885/26479
+Collections
+ANU Research Publications
+Source
+IEEE Transactions on Automatic Control
+Type
+Journal article
+Book Title
+Entity type
+Access Statement
+License Rights
+DOI
+10.1109/tac.2008.923738
+Restricted until
+2037-12-31
+Downloads
+File
+Description
+01_Mahony_Non-linear_complementary_2008.pdf
+(937.31 KB)
+Full item page
+DSpace software
+copyright © 2002-2026
+LYRASIS
+Privacy policy
+End User Agreement

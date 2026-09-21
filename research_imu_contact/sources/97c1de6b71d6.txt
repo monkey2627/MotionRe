@@ -1,0 +1,3962 @@
+URL: https://arxiv.org/html/2604.21926v1
+
+Seeing Without Eyes: 4D Human–Scene Understanding from Wearable IMUs
+Report GitHub Issue
+×
+Title:
+Content selection saved. Describe the issue below:
+Description:
+Submit without GitHub
+Submit in GitHub
+arXiv is now an independent nonprofit!
+Learn more
+×
+Back to arXiv
+License: CC BY 4.0
+arXiv:2604.21926v1 [cs.CV] 23 Apr 2026
+Seeing Without Eyes: 4D Human–Scene Understanding from Wearable IMUs
+Hao-Yu Hsu
+*
+Tianhang Cheng
+*
+Jing Wen
+Alexander G. Schwing
+Shenlong Wang
+Affiliation:
+University of Illinois at Urbana-Champaign
+E-mail
+{haoyuyh3, tcheng12, jw116, aschwing, shenlong}@illinois.edu
+Abstract
+Understanding human activities and their surrounding environments typically relies on visual perception, yet cameras pose persistent challenges in privacy, safety, energy efficiency, and scalability. We explore an alternative: 4D perception without vision. Its goal is to reconstruct human motion and 3D scene layouts purely from everyday wearable sensors. For this we introduce IMU-to-4D, a framework that repurposes large language models for non-visual spatiotemporal understanding of human-scene dynamics. IMU-to-4D uses data from a few inertial sensors from earbuds, watches, or smartphones and predicts detailed 4D human motion together with coarse scene structure. Experiments across diverse human-scene datasets show that IMU-to-4D yields more coherent and temporally stable results than SoTA cascaded pipelines, suggesting wearable motion sensors alone can support rich 4D understanding. Project page:
+https://tianhang-cheng.github.io/IMU4D/
+Keywords:
+Multimodal learning Inertial measurement units Human motion understanding
+*
+*
+footnotetext:
+Equal contribution.
+Figure 1
+:
+IMU-to-4D
+reconstructs full 4D human–scene dynamics from only a few everyday wearable IMUs. Given sparse inertial signals from devices such as earbuds, smartphones, or watches, our method predicts SMPL-X body motion, generates textual activity descriptions, and recovers a coarse 3D scene layout with object identities.
+1
+Introduction
+Recent advances in multimodal foundation models have expanded how AI perceives and assists in daily life. Yet their understanding of the physical world remains limited: most rely on vision-centric sensing such as cameras or LiDAR, which, while informative, introduces persistent challenges w.r.t. privacy, safety, energy efficiency, and scalability. As AI systems become more integrated into daily life, there is an increasing demand for non-visual, privacy-preserving, and low-power modalities that can still capture the richness of human-environment interaction.
+Imagine an assistant that can recall how many times you drank water today, where you left your keys, or whether you’ve been sitting too long—without recording a single image. Such a system would extend AI’s utility to personal health, memory, and accessibility. This motivates a research question:
+How much can everyday motion sensors embedded in earbuds, watches, and smartphones reveal about our activities and environments?
+To answer this question, we propose
+IMU-to-4D
+, a framework for vision-free 4D perception that reconstructs detailed human motion and the surrounding 3D environment purely from inertial signals. The key insight behind IMU-to-4D:
+motion, human activities, and environment are inherently coupled
+—everyday inertial traces encode not only how the body moves but also what surrounds it,
+e.g
+.
+, a wrist acceleration may indicate placing a cup, while a brief free fall of an earbud reveals a nearby surface. Recent multimodal foundation models have demonstrated that such coupled structure across modalities can be effectively captured by leveraging rich pre-trained representations from LLMs and extending them to new modalities through unified architectures. Building on this intuition, IMU-to-4D repurposes large language models (LLMs) as spatiotemporal reasoners, jointly modeling the distribution of sequential inertial signals, human motions, 3D layouts, and semantic activities. To achieve this, we develop a novel tokenization scheme for each modality (IMU, motion, and scene layout) that balances expressiveness, alignment, and compactness. We then use the input and output embeddings to formulate a sequential prediction problem within an LLM and jointly finetune the model with a multi-task loss in a two-stage training process. This unified formulation allows the model to infer coherent, context-aware 4D representations from as few as 2-3 inertial sensors—substantially improving temporal and spatial consistency compared with cascaded pipelines (IMU
+→
+\rightarrow
+motion
+→
+\rightarrow
+scene).
+Through the compositional reasoning capacity of LLMs, IMU-to-4D bridges physical dynamics with spatial and semantic context, enabling a holistic understanding of human-scene interaction without relying on visual input.
+Experiments on diverse datasets show that IMU-to-4D achieves more coherent and physically consistent reconstructions than prior approaches. Our results demonstrate that ubiquitous wearable sensors alone can support rich, privacy-preserving 4D understanding of human activities and their environments—paving the way for embodied AI that perceives the world through motion rather than sight.
+Our contributions are threefold:
+•
+We introduce the first framework that recovers 4D human motion, scene layouts, and textual descriptions from as few as three IMU sensors by repurposing LLMs for cross-modal structural reasoning.
+•
+We design novel tokenization schemes tailored for IMU and human motions for token-efficient yet expressive sequence modeling.
+•
+Experiments show that our joint reasoning framework outperforms pipelined SoTA methods and enables ambient scene understanding without vision.
+2
+Related Work
+Table 1
+:
+Motion- and scene-understanding task comparison.
+Task
+Input Modality
+Output Modality
+Raw IMU
+GT Motion
+Visuals
+Motion
+Text
+3D Scene
+Motion-to-Text
+[
+6
+,
+10
+]
+✓
+✓
+✓
+Motion-Chat
+[
+121
+,
+16
+]
+✓
+✓
+✓
+Motion-to-Scene
+[
+98
+,
+64
+,
+48
+]
+✓
+✓
+Ego-Understand
+[
+30
+,
+22
+]
+✓
+✓
+✓
+✓
+IMU-to-Motion
+[
+97
+,
+63
+,
+103
+]
+✓
+✓
+IMU-to-4D (Ours)
+✓
+✓
+✓
+✓
+IMU-Based Human Motion Estimation.
+We are not the first to approach human pose estimation from wearable IMUs. Earlier works
+[
+76
+,
+82
+,
+32
+,
+104
+,
+13
+,
+103
+,
+36
+,
+39
+,
+123
+,
+105
+,
+80
+,
+92
+,
+102
+,
+122
+]
+explored IMU-based motion capture as a cost-effective alternative to optical tracking systems
+[
+62
+]
+. These methods typically rely on specialized, low-noise IMUs attached to the body via custom suits to achieve accurate reconstruction
+[
+74
+]
+. While effective in controlled settings, such setups are costly, intrusive, and impractical for everyday users.
+Subsequent studies
+[
+63
+,
+97
+,
+110
+]
+shifted toward commodity devices—smartphones, smartwatches, and wireless earbuds—to infer human motion from sparse, noisy IMU signals. This direction motivated IMU-to-4D as a path toward ubiquitous, low-cost human sensing. Yet, existing models remain task-specific and small-scale, often exhibiting temporal drift, weak global consistency, and no scene awareness.
+As a fix, recent efforts have incorporated egocentric video alongside IMU signals
+[
+30
+,
+111
+,
+99
+,
+44
+,
+66
+]
+, which injects high-level semantic cues about activities and surroundings. However, such vision-augmented methods reintroduce privacy risks, increase sensing costs, and break the goal of lightweight, always-on perception. In contrast, our IMU-to-4D studies foundation models that jointly reason about human motion, scene geometry, and semantics—using as input only a few everyday inertial sensors and no visual data. By coupling human motion and environment, IMU-to-4D delivers higher spatio-temporal coherence and richer scene understanding than prior IMU-based approaches.
+Motion-Scene and Motion-Object Synthesis.
+Another line of research focuses on generating scene layouts or object configurations from human motion. The key insight: human motion and surrounding environments exhibit strong semantic and geometric correlations—for example, specific actions often co-occur with particular spatial contexts. To capture these relationships, several paired motion-scene and motion-object datasets
+[
+27
+,
+25
+,
+1
+,
+47
+,
+3
+,
+100
+,
+28
+,
+109
+,
+57
+,
+40
+,
+70
+]
+have been developed, enabling bidirectional synthesis: generating human motion conditioned on scenes
+[
+26
+,
+83
+,
+84
+,
+115
+,
+42
+,
+88
+,
+118
+,
+38
+]
+or generating plausible scene layout from motion trajectories
+[
+98
+,
+101
+,
+48
+,
+33
+,
+64
+]
+. Early methods based on motion planning, inverse kinematics, or hand-crafted heuristics synthesized feasible human-scene interactions
+[
+61
+,
+118
+]
+, but were limited in flexibility and generalization. More recent works adopt end-to-end learning to translate between modalities
+[
+100
+,
+31
+,
+42
+,
+108
+,
+69
+,
+95
+,
+96
+]
+(
+e.g
+.
+, scene → motion or motion → scene), though they often lack physical grounding and dynamic consistency. To address this, reinforcement learning and physics-based rewards such as collision-free or energy-efficient motion have been introduced
+[
+43
+,
+29
+,
+60
+,
+48
+,
+4
+,
+20
+]
+. Language-guided approaches
+[
+88
+,
+87
+,
+37
+,
+46
+,
+96
+]
+further enhance controllability by linking motion intent with scene semantics. Despite these advances, existing methods typically assume clean human pose inputs from optical motion capture or simulation—conditions too idealized for real-world deployment. In contrast, IMU-to-4D operates directly on sparse, raw inertial measurements, jointly reasoning about human motion and scene structure. This formulation naturally exploits the synergy between motion and environment while remaining robust, scalable, and deployable in real-world settings.
+Large Multimodal Foundation Models.
+Large multimodal foundation models have demonstrated a remarkable ability in unifying diverse modalities into a coherent framework for understanding, reasoning, and perception
+[
+56
+,
+93
+,
+11
+]
+. The key idea is to project different modalities into a shared token space and train autoregressive or diffusion based models that align language with other sensory inputs or desired outputs. This formulation has achieved significant success in visual question answering
+[
+56
+,
+93
+,
+11
+,
+7
+,
+85
+,
+90
+,
+119
+,
+55
+,
+72
+,
+89
+,
+19
+,
+2
+,
+78
+,
+8
+]
+, audio and speech understanding
+[
+21
+,
+107
+]
+, and robot manipulation
+[
+41
+,
+34
+]
+. Recently, inertial signals have also been explored as an additional modality within such models
+[
+30
+,
+117
+]
+, and human motion has been incorporated for language-conditioned motion generation or human motion-based conversation
+[
+121
+,
+116
+,
+6
+,
+112
+,
+86
+,
+58
+,
+49
+,
+75
+,
+15
+,
+23
+]
+. However, their use for ambient sensing and human-scene perception remains largely underexplored. Our architecture extends this line of work by positioning IMU-to-4D within the multimodal foundation model paradigm, bridging motion sensing and unified 4D understanding.
+3
+Method
+Figure 2
+:
+Overview of IMU-to-4D.
+(Left) Motion Tokenizer. The root trajectory is chunked into fixed-length windows and normalized, where normalized chunks are VQ-quantized and normalization parameters
+μ
+\mu
+and
+σ
+\sigma
+are separately quantized via non-uniform binning, together yielding compact discrete root tokens. Body poses are continuously encoded via an MLP to produce body tokens. (Right) Multi-modal Transformer. Inertial signals from earbuds, smartphone, and watch are encoded and fed into a unified transformer, which jointly decodes human motion via bidirectional attention, and motion descriptions and scene layout autoregressively via causal attention.
+IMU-to-4D takes sparse IMU readings and predicts 4D human motions, motion descriptions, and scene layouts. We repurpose large language models and train on diverse motion–text–scene datasets to enable unified 4D ambient scene understanding. Fig.
+2
+shows the overall architecture. We describe details next.
+3.1
+Problem Formulation
+Formally, our goal is to learn a model
+f
+𝜽
+f_{\boldsymbol{\theta}}
+that takes IMU signals
+𝐒
+imu
+\mathbf{S}_{\mathrm{{imu}}}
+as input, and outputs human motions
+𝐌
+\mathbf{M}
+, motion descriptions
+𝐓
+\mathbf{T}
+, and 3D scene layouts
+𝐋
+\mathbf{L}
+:
+𝐌
+,
+𝐓
+,
+𝐋
+=
+f
+𝜽
+​
+(
+𝐒
+imu
+)
+.
+\mathbf{M},\mathbf{T},\mathbf{L}=f_{\boldsymbol{\theta}}(\mathbf{S}_{\mathrm{{imu}}}).
+The input
+IMU signal
+is denoted as
+𝐒
+imu
+∈
+ℝ
+T
+×
+N
+imu
+×
+d
+imu
+\mathbf{S}_{\mathrm{{imu}}}\in\mathbb{R}^{T\times N_{\mathrm{imu}}\times d_{\mathrm{imu}}}
+, where
+T
+T
+is the total number of time frames and
+N
+imu
+N_{\mathrm{imu}}
+is the number of IMU sensors. Each sensor provides linear acceleration
+𝒂
+∈
+ℝ
+3
+\boldsymbol{a}\in\mathbb{R}^{3}
+, angular velocity
+𝝎
+∈
+ℝ
+3
+\boldsymbol{\omega}\in\mathbb{R}^{3}
+from a gyroscope, and a relative rotation
+𝐑
+∈
+ℝ
+9
+\mathbf{R}\in\mathbb{R}^{9}
+computed by integrating the angular velocity, giving
+d
+imu
+=
+15
+d_{\mathrm{imu}}=15
+readings per sensor per frame. Sensors are typically mounted at the ears, wrists, and thighs — corresponding to earbuds, watches, and smartphones placed in pockets. Since some devices may not always be available in practice, we set
+N
+imu
+∈
+[
+1
+,
+5
+]
+N_{\mathrm{imu}}\in[1,5]
+to accommodate varying sensor availability. We assume a 6-DoF IMU configuration without magnetometer readings, as many wearable devices do not provide reliable and accessible magnetometer data, and such readings are often corrupted by environmental magnetic interference.
+The output consists of three modalities. The
+4D human motion
+refers to motion trajectory
+𝐌
+∈
+ℝ
+T
+×
+69
+\mathbf{M}\in\mathbb{R}^{T\times 69}
+, including global translation
+𝐭
+∈
+ℝ
+3
+\mathbf{t}\in\mathbb{R}^{3}
+, global orientation
+𝐫
+root
+∈
+ℝ
+3
+\mathbf{r}_{\text{root}}\in\mathbb{R}^{3}
+, and body joint rotations
+𝐫
+joint
+∈
+ℝ
+N
+joints
+×
+3
+\mathbf{r}_{\text{joint}}\in\mathbb{R}^{N_{\text{joints}}\times 3}
+, where
+N
+joints
+=
+21
+N_{\text{joints}}=21
+. We adopt SMPL-X
+[
+67
+]
+as the body representation and convert all rotations into a 6D representation
+[
+120
+]
+for stable training. The
+text description
+𝐓
+∈
+ℤ
+N
+text
+\mathbf{T}\in\mathbb{Z}^{N_{\text{text}}}
+is a sequence of
+N
+text
+N_{\text{text}}
+discrete token indices encoding a natural language description of the observed activity.
+Finally, the
+3D scene layout
+is defined as a set of objects
+𝐋
+=
+{
+𝐎
+i
+}
+i
+=
+1
+N
+obj
+\mathbf{L}=\{\mathbf{O}_{i}\}_{i=1}^{N_{\text{obj}}}
+, where
+N
+obj
+N_{\text{obj}}
+is the number of predicted objects. Each object
+𝐎
+i
+\mathbf{O}_{i}
+is described by its class label
+𝐨
+class
+∈
+{
+1
+,
+…
+,
+C
+}
+\mathbf{o}_{\text{class}}\in\{1,\ldots,C\}
+being one of
+C
+C
+possible object categories, orientation
+𝐨
+orient
+∈
+ℝ
+6
+\mathbf{o}_{\text{orient}}\in\mathbb{R}^{6}
+, and translation
+𝐨
+transl
+∈
+ℝ
+3
+\mathbf{o}_{\text{transl}}\in\mathbb{R}^{3}
+.
+Taking IMU signals as input, we formulate the task as next-token prediction. The model generates output modalities sequentially in the order of motion, text, object IDs, and object poses, where each step is conditioned on all previously generated outputs projected back into a unified embedding space.
+Specifically, we first predict the motions across all timesteps all at once.
+Next, conditioned on the inputs and predicted motions, the model autoregressively decodes each text token until an
+<EOT>
+token is generated. Finally, the model predicts object class IDs, one at a time, terminating when a designated stop token is produced, allowing the object count
+K
+K
+to be determined dynamically. The model then predicts the continuous 6-DoF poses for each of the
+K
+K
+objects.
+Figure 3
+:
+Comparison of motion tokenizers and their integration with LLMs.
+TokenHMR
+[
+14
+]
+encodes each frame independently, lacking temporal modeling across frames. Motion-VQ
+[
+91
+]
+compresses a temporal window into a few tokens, achieving compactness but at the cost of reconstruction quality. FAST
+[
+68
+]
+applies frequency-domain compression to capture temporal structure over the entire sequence. Our method employs a 1D VQ-VAE with non-uniform binning to tokenize root-joint motion within fixed-length temporal windows, achieving both good reconstruction quality and effective temporal modeling.
+3.2
+Tokenization and Embeddings
+Our approach is a multimodal foundation model that requires all modalities to be projected into a shared vector space. Therefore, effective encoding and tokenization are critical to our method. We first describe the tokenization strategies for each modality to balance compactness, expressiveness, and cross-modal consistency.
+IMU Encoding.
+Given raw IMU signals of length
+T
+T
+, we divide them into
+T
+/
+d
+win
+T/d_{\mathrm{win}}
+non-overlapping windows (
+d
+win
+=
+4
+d_{\mathrm{win}}=4
+) and project each window into a continuous embedding of dimension
+d
+h
+d_{\mathrm{h}}
+using an MLP to match the transformer embedding space.
+Each device is encoded independently, and the resulting embeddings are concatenated to form the full input sequence. Embeddings corresponding to inactive IMU devices are replaced with
+<MASK>
+embeddings.
+Motion Tokens.
+Fig.
+2
+(left) illustrates our motion tokenization pipeline. We propose a novel motion tokenization scheme that preserves temporal coherence and achieves better reconstruction quality.
+Unlike FAST
+[
+68
+]
+, which encodes motion tokens in the frequency domain, we follow prior works
+[
+14
+,
+91
+]
+and adopt a straightforward time-domain encoding. However, existing time-domain approaches fail to comprehensively tokenize motion. TokenHMR
+[
+14
+]
+does not explicitly encode temporal coherence, while Motion-VQ
+[
+91
+]
+is limited in the reconstruction quality. We highlight the differences in Fig.
+3
+.
+We identify that the low reconstruction quality of Motion-VQ stems from the pose normalization strategy. In Motion-VQ, poses are normalized using statistics computed over the entire dataset. Although normalized, the poses remain highly diverse, making it difficult for a fixed-size codebook to capture fine-grained motion details.
+To address this issue, we instead normalize poses on a per-window basis. For each
+N
+N
+-frame window, poses are normalized using the mean and variance computed from those
+N
+N
+frames, rather than the statistics of the entire dataset. This strategy reduces the diversity within each normalized pose sequence. The normalized
+N
+N
+-frame poses are then tokenized and quantized into few tokens using a VQ-VAE based on TOTEM
+[
+77
+]
+. Quantizing less diverse pose sequences with the same-size codebook improves both the representation capacity and the reconstruction quality.
+Note that per-window normalization removes the global scale and offset required to reconstruct the original motion sequence. To compensate for this loss, we additionally predict the mean and variance for each
+N
+N
+-frame clip. These statistics are used during decoding to restore the original pose values and maintain temporal consistency across windows.
+Finally, we describe our choice of pose representations. To ensure long-range stability, human poses are represented using absolute joint angles rather than frame-to-frame relative rotations. In contrast, global translation and rotation are expressed as relative motions to improve smoothness, reduce dynamic range, and remove bias toward absolute coordinates.
+Scene Tokens.
+We represent a scene as a collection of objects, i.e.,
+𝐋
+=
+{
+𝐎
+i
+}
+i
+=
+1
+N
+obj
+\mathbf{L}=\{\mathbf{O}_{i}\}_{i=1}^{N_{\text{obj}}}
+, each described by a class label
+𝐨
+class
+∈
+{
+1
+,
+…
+,
+C
+}
+\mathbf{o}_{\text{class}}\in\{1,\dots,C\}
+, orientation
+𝐨
+orient
+∈
+ℝ
+6
+\mathbf{o}_{\text{orient}}\in\mathbb{R}^{6}
+, and translation
+𝐨
+transl
+∈
+ℝ
+3
+\mathbf{o}_{\text{transl}}\in\mathbb{R}^{3}
+. We tokenize the discrete
+𝐨
+class
+\mathbf{o}_{\text{class}}
+as one-hot labels and map to embeddings via a learned embedding layer. The orientation
+𝐨
+orient
+\mathbf{o}_{\text{orient}}
+and translation
+𝐨
+transl
+\mathbf{o}_{\text{transl}}
+are continuous, so we predict their values directly from the final transformer hidden states using a dedicated MLP head.
+Text Tokens.
+We adopt the tokenizer and detokenizer from the pretrained Phi-1.5 model
+[
+51
+]
+for texts. To support our multimodal setup, We extend the vocabulary with special tokens that mark the start and end of each IMU token, as well as the start and end of each output modality (text, motion, and scene).
+3.3
+Architecture
+Our architecture is illustrated in Fig.
+2
+. We use Phi-1.5 as our backbone and use pretrained checkpoints from Show-o
+[
+93
+]
+. We adopt the 1.5B-parameter variant to balance efficiency and performance.
+Multimodal Integration.
+To handle multiple input modalities, we map all inputs into a unified continuous embedding space for joint sequential processing, as detailed in Sec.
+3.2
+.
+Modality-specific projection layers encode IMU readings, human motions, and 3D object attributes into embeddings of the same dimension as the language model’s token embeddings. For outputs, modality-specific linear heads decode the final hidden states into discrete logits for motion, text, and object class, and continuous values for object 6-DoF pose regression.
+3.4
+Training
+The model is trained with teacher forcing. Due to the scarcity of joint motion–text–scene datasets, we adopt a two-stage training strategy:
+Stage 1: IMU-to-MotionText Pretraining.
+Starting from Show-o’s pretrained weights, we train the model to jointly predict human motions and text descriptions from IMU signals using the large-scale motion-text dataset
+[
+15
+,
+37
+]
+with synthesized IMU data. This stage establishes IMU–motion–text alignment as a strong foundation for the subsequent stage.
+Stage 2: IMU-to-4D Finetuning.
+Since human–scene interaction data are scarce — constituting only about 0.1% of the full dataset — and vary significantly in annotation scope (human–object interactions vs. full scene layouts), we finetune the pretrained model separately on each 3D dataset
+[
+40
+,
+57
+]
+for domain adaptation. This stage jointly optimizes all modality-specific heads, IMU encoder, and the transformer backbone. We use cross-entropy loss for motion, text, and object class predictions, and L1 loss for continuous attributes such as orientation and translation of the objects.
+Table 2
+:
+Quantitative comparison of IMU-to-Motion (3pt) on LINGO.
+Evaluated on 60 frames using 3 sensors (ear, wrist, thigh). We highlight the
+best
+and
+second best
+values. *BoDiffusion 3pt (ear, left wrist, right wrist).
+Method
+#IMU Trained
+MPJPE
+↓
+\downarrow
+PA-MPJPE
+↓
+\downarrow
+MPJRE
+↓
+\downarrow
+MPJVE
+↓
+\downarrow
+MTE
+↓
+\downarrow
+BoDiffusion (3pt*)
+3pt*
+106.43
+68.58
+21.88
+145.42
+23.39
+IMUPoser (3pt)
+3-5pt
+65.90
+51.01
+12.49
+99.73
+N/A
+MobilePoser (3pt)
+3-5pt
+85.77
+75.60
+22.43
+114.97
+124.91
+Ours (3pt) (AR)
+3-5pt
+59.47
+49.66
+14.33
+84.73
+26.85
+Ours (3pt) (Bidirectional)
+3-5pt
+39.86
+29.14
+10.73
+52.72
+16.49
+Table 3
+:
+Quantitative comparison of IMU-to-Motion (5pt) on LINGO.
+Evaluated on 60 frames using 5 sensors (ear, both wrists, both thighs). We highlight the
+best
+and
+second best
+values.
+Method
+#IMU Trained
+MPJPE
+↓
+\downarrow
+PA-MPJPE
+↓
+\downarrow
+MPJRE
+↓
+\downarrow
+MPJVE
+↓
+\downarrow
+MTE
+↓
+\downarrow
+IMUPoser (5pt)
+3-5pt
+58.96
+45.90
+11.33
+89.09
+N/A
+MobilePoser (5pt)
+3-5pt
+70.93
+53.73
+19.37
+100.06
+70.81
+Ours (5pt) (AR)
+3-5pt
+40.39
+31.54
+10.45
+59.09
+15.61
+Ours (5pt) (Bidirectional)
+3-5pt
+30.49
+21.77
+8.48
+41.99
+12.16
+Motion 1: Jumping sideways.
+Motion 2: Walking forward.
+Figure 4
+:
+IMU-to-Motion comparison on MotionMillions.
+White:
+GT
+, blue:
+IMU-to-4D (ours)
+, red:
+MobilePoser
+. Ours aligns more closely with the GT.
+4
+Experiments
+In this section, we start with the implementation details and evaluation settings. Then we evaluate IMU-to-4D on 4D human motion, text description, and 3D scene layout across four datasets. Our experiments are designed to answer three key questions:
+(1) How accurately can IMU-to-4D infer everyday human activities and their surrounding scene?
+(2) Does large-scale pre-training on a foundation model provide advantages over task-specific specialized models?
+(3) Does joint reasoning outperform a pipelined approach that cascades state-of-the-art modules?
+4.1
+Implementation Details
+Training Data.
+We construct training data from multiple sources to cover diverse human-scene interactions. We use MotionMillion
+[
+15
+]
+and LINGO
+[
+37
+]
+for IMU-to-MotionText pretraining. We collect large-scale text-motion pairs from the MotionMillion
+[
+15
+]
+dataset, filtering out sequences with over-jittered motions or irregular joint angles. This yields 800k motion sequences totaling 2,000 hours at 30 FPS. We convert the original relative motion format to absolute pelvis rotations and translations via accumulation. We synthesize IMU signals by virtually attaching sensors to five body locations (ear, both wrists, both thighs) following MobilePoser
+[
+97
+]
+, computing virtual IMU readings via forward kinematics, and injecting real-world sensor noise during training following GlobalPose
+[
+102
+]
+.
+For IMU-to-4D finetuning, we use HUMOTO
+[
+57
+]
+which provides data about human-object interactions. Detailed dataset statistics are provided in the supplementary material.
+Training Details.
+We randomly sample IMU devices from plausible device-location combinations following MobilePoser
+[
+97
+]
+. Motion sequences undergo random cropping and augmentation. To ensure stable learning, we align all human motions to the first frame, with zero translation and orientation along the
++
+Z
++\mathrm{Z}
+direction.
+Stage-1
+pretraining runs for 500k iterations using AdamW with learning rate 5e-4.
+Stage-2
+finetuning uses the same learning rate for 30k iterations on HUMOTO
+[
+57
+]
+.
+Figure 5
+:
+Qualitative results of scene prediction on Humoto.
+In each example, the left side shows the ground-truth motion, text description, and 3D scene, while the right side presents our model’s joint predictions of motion, text, and 3D scene. The predictions closely match the ground truth and faithfully capture the semantics of the human activities.
+Figure 6
+:
+Ambiguity of scene prediction given IMU signals as inputs.
+Due to the inherently ambiguity, the model will have different output from the ground-truth, which also reflected in the text prediction.
+4.2
+Experimental Settings
+Tasks and Evaluation Datasets.
+We evaluate two tasks:
+(1)
+IMU-to-Motion (I2M)
+, which predicts human motion from IMU signals. We use DIP-IMU
+[
+32
+]
+and IMUPoser
+[
+63
+]
+as our evaluation datasets, both of which provide IMU signals captured in real-world settings. We evaluate under two configurations: a 3-point (3pt) setup with IMUs mounted on one ear, one wrist, and one thigh, and a 5-point (5pt) setup with IMUs mounted on one ear, both wrists, and both thighs.
+(2)
+IMU-to-MotionText (I2MT)
+, which jointly predicts motion sequences and captions from IMU inputs. We conduct our evaluation on LINGO
+[
+37
+]
+and HumanML3D
+[
+24
+]
+. Note that HumanML3D is a superset of AMASS
+[
+59
+]
+—a dataset widely adopted for IMU pretraining in prior work
+[
+97
+,
+63
+]
+. We use a 5pt setup for I2MT.
+(3)
+IMU-to-MotionTextScene (I2MTS)
+, which requires holistic reasoning over motion, text descriptions, and 3D scene layouts. We evaluate the scene predictions on HUMOTO
+[
+57
+]
+.
+Evaluation Metrics.
+We evaluate three output modalities: 4D human motion, text description, and 3D scene layout. For motion, we follow prior work
+[
+97
+,
+30
+]
+and report joint accuracy (MPJPE, PA-MPJPE), mesh accuracy (MPJVE), and trajectory error (MTE) for long-horizon prediction, all in millimeters, and joint rotation error (MPJRE) in degrees. For text, we adopt the linguistic metrics from MotionGPT3
+[
+121
+]
+and report BLEU
+[
+65
+]
+, ROUGE-L
+[
+53
+]
+, CIDEr
+[
+81
+]
+, and BERT-Score
+[
+114
+]
+. For 3D layout, we report 3D bounding box IoU (3D-IoU), precision and recall at IoU threshold 0.5 (P@0.5, R@0.5), and identity-level precision and recall (ID-P, ID-R) of predicted objects. For more details on metrics, please refer to the supplementary material.
+Baselines.
+For IMU-to-Motion, we compare against IMUPoser
+[
+63
+]
+and MobilePoser
+[
+97
+]
+, both using same IMU placement as ours. We also compare against BoDiffusion
+[
+5
+]
+, which predicts motion from head and two wrists.
+For IMU-to-MotionText and IMU-to-MotionTextScene, since no prior work jointly predicts motion, text, and 3D layout from IMU inputs, we build a modular pipeline (denoted as
+Mod-I2MTS
+): MobilePoser for IMU-to-motion, MotionGPT3
+[
+121
+]
+for motion-to-text captioning, and Summon
+[
+98
+]
+for motion-to-scene layout prediction.
+MotionGPT3 provides bidirectional motion–text reasoning, while Summon predicts contact labels and retrieves CAD assets for scene synthesis – representing recent SoTA in motion-to-text and motion-to-scene tasks. All baselines except Summon are retrained on our data; as Summon requires contact-point supervision which is unavailable in our datasets, we evaluate it using their pretrained weights.
+Attention Variants.
+We evaluate two variants of our model that differ in the attention mechanism applied over motion tokens.
+Ours (Bidirectional)
+(or
+Ours (Bi)
+) applies bidirectional self-attention over the full motion sequence, which reduces error accumulation and yields lower reconstruction error.
+Ours (AR)
+applies causal (autoregressive) attention, generating motion tokens one at a time conditioned on past tokens, enabling streaming inference and is more suitable for online or low-latency deployment settings. Both variants share the same training procedure and model architecture.
+Figure 7
+:
+Qualitative comparison on IMU-to-3D scene prediction.
+White:
+Ground-truth
+, blue:
+IMU-to-4D (ours)
+, red:
+Mod-I2MTS
+. Our model predicts more accurate layouts than baselines. Baselines fail to predict any 3D objects on certain IMU sequences, as shown on the right.
+Frame 0
+Frame 132
+Frame 227
+Frame 617
+Frame 955
+Figure 8
+:
+IMU-to-Motion and relocalization on ParaHome
+[
+40
+]
+.
+White: ground truth; blue: our prediction. As the subject moves, pure IMU integration accumulates drift. Our relocalization module uses scene layout—via semantic and affordance cues—to infer global position and correct the drift, aligning the predicted trajectory with the true motion over time.
+4.3
+Experimental Results
+Table 4
+:
+Quantitative comparison of IMU-to-Motion on real-world IMU datasets DIP-IMU
+[
+32
+]
+and IMUPoser
+[
+63
+]
+.
+We omit MTE following MobilePoser
+[
+97
+]
+. Evaluated on 200 frames using 3pt setup (ear, wrist, thigh). Our method outperforms baselines, showing strong generalization to noisy, in-the-wild sensor data.
+DIP-IMU
+IMUPoser
+Method
+MPJPE
+↓
+\downarrow
+PA-MPJPE
+↓
+\downarrow
+MPJRE
+↓
+\downarrow
+MPJVE
+↓
+\downarrow
+MPJPE
+↓
+\downarrow
+PA-MPJPE
+↓
+\downarrow
+MPJRE
+↓
+\downarrow
+MPJVE
+↓
+\downarrow
+IMUPoser
+54.09
+43.70
+12.69
+73.74
+68.41
+58.61
+13.59
+99.95
+MobilePoser
+49.60
+39.45
+12.19
+66.19
+109.51
+89.44
+19.34
+166.97
+Ours (AR)
+47.38
+44.98
+5.05
+71.07
+73.33
+72.58
+9.56
+112.49
+Ours (Bidirectional)
+15.06
+13.27
+1.88
+18.70
+49.89
+46.44
+7.11
+66.03
+IMU-to-Motion.
+We first evaluate the accuracy of IMU-to-4D’s human activity inference through the IMU-to-Motion task. As shown in Tab.
+2
+and Tab.
+3
+, our model outperforms all baselines in motion prediction. Qualitative results in Fig.
+4
+further demonstrate that our method follows ground-truth motion more faithfully with better long-term consistency. This improvement stems from fundamental differences in architecture. IMUPoser
+[
+63
+]
+and MobilePoser
+[
+97
+]
+use recurrent architectures to estimate motion recursively, making them prone to drift and error accumulation over time. In contrast, our method takes only raw IMU signals and processes the entire sequence jointly via self-attention, enabling comprehensive temporal reasoning and producing more coherent motion synthesis over extended horizons. We include BoDiffusion
+[
+5
+]
+for completeness, though its reliance on privileged headset and hand controller inputs, which omit lower-body coverage, makes it a less direct comparison for full-body motion estimation.
+We further validate using a 3-IMU setup (ear, wrist, thigh) on real-world dataset DIP-IMU
+[
+32
+]
+and IMUPoser
+[
+63
+]
+in Tab.
+4
+. This configuration reflects real-world scenarios where IMU signals can be obtained from everyday devices such as earbuds, smartwatches, and smartphones. Our method outperforms both baselines, demonstrating strong generalization to noisy, real-world sensor data.
+Table 5
+:
+Quantitative comparison of IMU-to-MotionText using 60-frame IMUs from 5 devices.
+The baseline
+Mod-I2MTS
+pipeline combines three state-of-the-art components—
+MobilePoser
+(IMU→motion),
+MotionGPT3
+(motion→text), and
+Summon
+(motion→scene)—to match the capabilities of our IMU-to-4D model.
+We use 5pt setup (ear, both wrists, both thighs). Bold values indicate the best performance. Our unified foundation-model approach consistently surpasses this strong modular baseline.
+Benchmark
+Method
+Motion Metrics
+Text Metrics
+MPJPE
+↓
+\downarrow
+PA-MPJPE
+↓
+\downarrow
+MJPRE
+↓
+\downarrow
+MPJVE
+↓
+\downarrow
+MTE
+↓
+\downarrow
+ROUGE-L
+↑
+\uparrow
+Cider
+↑
+\uparrow
+BLEU@1
+↑
+\uparrow
+BLEU@4
+↑
+\uparrow
+BERT
+↑
+\uparrow
+LINGO
+Mod-I2MTS
+69.95
+52.71
+19.31
+98.26
+65.10
+15.35
+28.78
+19.17
+7.39
+7.64
+Ours (AR)
+40.39
+31.54
+10.45
+59.09
+15.61
+45.42
+134.88
+41.68
+26.90
+33.26
+Ours (Bi)
+30.49
+21.77
+8.48
+41.99
+12.16
+56.39
+252.87
+52.74
+39.69
+46.10
+HumanML
+Mod-I2MTS
+62.13
+54.80
+13.82
+86.14
+146.10
+26.20
+3.79
+35.67
+4.44
+22.86
+Ours (AR)
+26.08
+19.33
+5.59
+34.18
+39.05
+29.74
+12.58
+39.32
+8.35
+28.04
+Ours (Bi)
+17.05
+13.84
+3.49
+22.99
+22.95
+33.34
+19.49
+44.14
+12.27
+32.62
+HUMOTO
+Mod-I2MTS
+66.93
+62.15
+14.96
+94.12
+146.41
+20.95
+31.11
+22.03
+2.50
+9.82
+Ours (AR)
+43.97
+42.83
+6.69
+63.81
+48.81
+27.42
+57.80
+32.84
+7.85
+21.74
+Ours (Bi)
+26.04
+20.72
+6.62
+34.22
+36.00
+27.16
+46.74
+32.97
+4.87
+20.43
+ParaHome
+Mod-I2MTS
+60.25
+42.70
+14.57
+81.54
+67.72
+31.91
+200.38
+23.90
+3.93
+23.19
+Ours (AR)
+40.98
+23.62
+8.91
+56.90
+17.55
+58.87
+248.17
+55.61
+39.87
+53.24
+Ours (Bi)
+27.56
+13.80
+6.31
+35.51
+7.53
+61.14
+226.95
+58.37
+39.85
+39.85
+Table 6
+:
+Quantitative comparison of scene generations in IMU-to-MotionTextScene on HUMOTO
+[
+57
+]
+.
+Our method consistently outperform modular baseline and our model trained only for IMU-to-Scene without motions and texts in 3D scene generations. Evaluated on full length of IMU.
+Method
+3D-IoU
+↑
+\uparrow
+P@0.5
+↑
+\uparrow
+R@0.5
+↑
+\uparrow
+ID-P
+↑
+\uparrow
+ID-R
+↑
+\uparrow
+Mod-I2MTS
+0.00
+1.66
+0.83
+1.94
+6.67
+Ours (scene only)
+2.86
+10.83
+11.94
+13.61
+11.94
+Ours
+47.78
+41.67
+11.55
+44.44
+51.41
+IMU-to-MotionText and IMU-to-MotionTextScene.
+Next, we evaluate the I2MT and I2MTS tasks to demonstrate the benefits of jointly reasoning across modalities.
+As shown in Tab.
+5
+, our model—which jointly reasons about motion and text from IMU signals—achieves superior performance across all motion and text evaluation metrics compared to a modular baseline Mod-I2MTS that processes IMU signals sequentially through separate single-purpose models (MobilePoser for IMU-to-Motion, MotionGPT3 for motion-to-text, and Summon for text-to-scene). The modular pipeline suffers from error propagation, where inaccuracies in motion prediction cascade into downstream text and scene generation. In contrast, our unified framework learns all modalities within a single model, enabling cross-modal understanding through shared representations.
+We further evaluate scene quality produced by our I2MTS model on HUMOTO in Tab.
+6
+. Our approach achieves stronger cross-modal consistency, demonstrating the advantage of unified multimodal learning over sequential pipelines. To highlight the effectiveness of joint reasoning across the three modalities, we compare our full model with a variant that predicts scenes only (denoted as “Ours (scene only)”). Joint reasoningz significantly improves scene quality, increasing the 3D-IoU from 2.86 to 47.78. The similar R@0.5 score suggests that the recall bottleneck may be attributed to the inherent sparsity or ambiguity of the IMU input, which limits the model’s ability to anchor new object instances. However, once an instance is anchored, our unified learning paradigm provides a much higher upper bound on reconstruction quality compared to the scene-only variant. We provide qualitative comparisons with the baseline method Mod-I2MTS in Fig.
+7
+. Our approach produces 3D scenes that are closer to the ground truth.
+Application: Re-Localization in 3D scene.
+Imagine a daily scenario in which a person performs many activities within the same environment, such as their home. From IMU signals collected during these activities, can our model infer the 3D scene layout and the human–scene interactions?
+To evaluate this capability, we conduct an experiment on ParaHome
+[
+40
+]
+. ParaHome provides motion sequences captured within a fixed 3D scene, mimicking the setting where many daily activities occur in the same home environment. We fine-tune our model on a subset of these motion sequences. Given new IMU signals, the model not only predicts the relative motion but also recovers the person’s initial global translation and orientation. We refer to this task as 3D re-localization.
+Successfully solving this task indicates that the model has developed a comprehensive understanding of both the 3D scene and the activities performed within it. This is because IMU signals only provide motion relative to the first reading and do not contain absolute positional information. To recover the global location, the model must implicitly encode the scene structure during fine-tuning and reason about which activities are taking place and where in the scene such activities are plausible.
+As shown in Fig.
+8
+, our model successfully performs this challenging task, producing predictions with minimal differences in global location, orientation, and pose compared to the ground truth. The predicted motions are fully compatible with the underlying 3D scene.
+4.4
+Analysis
+We summarize our key conclusions from the results as follows:
+(1) Accuracy of IMU-to-4D.
+Across all six benchmarks, our system delivers clear state-of-the-art performance under realistic sparse-IMU settings. Scene estimation and text descriptions are also strong, demonstrating the feasibility of perceiving the 4D world using IMUs alone.
+(2) Benefits of large pre-training.
+Yes – large pre-training provides a strong foundation model that consistently improves generalization and performance compared to task-specific models. We observe that both I2M and I2MT scale effectively with increasing model capacity. For I2MTS, where 3D scene layout data are limited, the benefits are even more pronounced, as shown in Tab.
+6
+.
+(3) Joint reasoning vs. cascaded state-of-the-art modules.
+Joint reasoning wins. As shown in Tab.
+5
+and Tab.
+6
+, our approach significantly outperforms the Modular-I2MTS pipeline, even though the pipeline cascades SoTA models for each subtask—highlighting the advantages of synergistic multimodal learning.
+(4) Challenges and Limitations.
+While large-scale data-driven learning helps capture correlations between motion and scene layout, certain cases remain inherently ambiguous due to limited sensory input.
+As illustrated in Fig.
+6
+, the poses predicted from IMU signals closely match the ground truth, while the generated text descriptions and 3D scenes differ. This ambiguity arises because certain activities are difficult to distinguish from IMU signals alone—for example, determining whether a person is carrying a plastic bowl or a cutting board, or differentiating a floor lamp from tableware. Resolving such ambiguities would require additional input signals or IMU readings over longer time spans, which we leave for future work.
+5
+Conclusion
+We introduced IMU-to-4D, a framework that enables rich 4D human–scene understanding without relying on cameras. By repurposing large language models for non-visual spatiotemporal reasoning, our approach reconstructs detailed human motion and coarse scene structure using only a few everyday wearable IMUs. Experiments across diverse datasets show that IMU-to-4D produces more coherent and temporally stable estimates than state-of-the-art cascaded pipelines, highlighting the potential of wearable motion sensors as a privacy-preserving, scalable alternative to vision-based perception.
+Acknowledgment.
+This project is supported by the Amazon Illinois AICE Center Research Grant. Hao-Yu Hsu is supported by the Amazon AI PhD Scholarship. We thank the NCSA for providing computing resources. We also thank Prof. Romit Roy Choudhury, Dr. Robinson Piramuthu, and Dr. Gunnar Sigurdsson for their helpful discussions.
+References
+[1]
+J. P. Araújo, J. Li, K. Vetrivel, R. Agarwal, J. Wu, D. Gopinath, A. W. Clegg, and K. Liu
+(2023)
+Circle: capture in rich contextual environments
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 21211–21221
+.
+Cited by:
+§2
+.
+[2]
+S. Bai, K. Chen, X. Liu, J. Wang, W. Ge, S. Song, K. Dang, P. Wang, S. Wang, J. Tang,
+et al.
+(2025)
+Qwen2. 5-vl technical report
+.
+arXiv preprint arXiv:2502.13923
+.
+Cited by:
+§2
+.
+[3]
+B. L. Bhatnagar, X. Xie, I. A. Petrov, C. Sminchisescu, C. Theobalt, and G. Pons-Moll
+(2022)
+Behave: dataset and method for tracking human object interactions
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 15935–15946
+.
+Cited by:
+§2
+.
+[4]
+J. Braun, S. Christen, M. Kocabas, E. Aksan, and O. Hilliges
+(2024)
+Physically plausible full-body hand-object interaction synthesis
+.
+In
+2024 International Conference on 3D Vision (3DV)
+,
+pp. 464–473
+.
+Cited by:
+§2
+.
+[5]
+A. Castillo, M. Escobar, G. Jeanneret, A. Pumarola, P. Arbeláez, A. Thabet, and A. Sanakoyeu
+(2023)
+Bodiffusion: diffusing sparse observations for full-body human motion synthesis
+.
+In
+Proceedings of the IEEE/CVF International Conference on Computer Vision
+,
+pp. 4221–4231
+.
+Cited by:
+§4.2
+,
+§4.3
+.
+[6]
+L. Chen, S. Lu, A. Zeng, H. Zhang, B. Wang, R. Zhang, and L. Zhang
+(2024)
+Motionllm: understanding human behaviors from human motions and videos
+.
+arXiv preprint arXiv:2405.20340
+.
+Cited by:
+§2
+,
+Table 1
+.
+[7]
+X. Chen, Z. Wu, X. Liu, Z. Pan, W. Liu, Z. Xie, X. Yu, and C. Ruan
+(2025)
+Janus-pro: unified multimodal understanding and generation with data and model scaling
+.
+arXiv preprint arXiv:2501.17811
+.
+Cited by:
+§2
+.
+[8]
+Z. Chen, W. Wang, Y. Cao, Y. Liu, Z. Gao, E. Cui, J. Zhu, S. Ye, H. Tian, Z. Liu,
+et al.
+(2024)
+Expanding performance boundaries of open-source multimodal models with model, data, and test-time scaling
+.
+arXiv preprint arXiv:2412.05271
+.
+Cited by:
+§2
+.
+[9]
+J. Chung, C. Wuu, H. Yang, Y. Tai, and C. Tang
+(2021)
+Haa500: human-centric atomic action dataset with curated videos
+.
+In
+Proceedings of the IEEE/CVF international conference on computer vision
+,
+pp. 13465–13474
+.
+Cited by:
+§S5.1
+.
+[10]
+G. Delmas, P. Weinzaepfel, T. Lucas, F. Moreno-Noguer, and G. Rogez
+(2024)
+Posescript: linking 3d human poses and natural language
+.
+IEEE transactions on pattern analysis and machine intelligence
+.
+Cited by:
+Table 1
+.
+[11]
+C. Deng, D. Zhu, K. Li, C. Gou, F. Li, Z. Wang, S. Zhong, W. Yu, X. Nie, Z. Song, G. Shi, and H. Fan
+(2025)
+Emerging properties in unified multimodal pretraining
+.
+arXiv preprint arXiv:2505.14683
+.
+Cited by:
+§2
+.
+[12]
+J. Devlin, M. Chang, K. Lee, and K. Toutanova
+(2019)
+Bert: pre-training of deep bidirectional transformers for language understanding
+.
+In
+Proceedings of the 2019 conference of the North American chapter of the association for computational linguistics: human language technologies, volume 1 (long and short papers)
+,
+pp. 4171–4186
+.
+Cited by:
+§S6.1
+.
+[13]
+A. Dittadi, S. Dziadzio, D. Cosker, B. Lundell, T. J. Cashman, and J. Shotton
+(2021)
+Full-body motion from a single head-mounted device: generating smpl poses from partial observations
+.
+In
+Proceedings of the IEEE/CVF International Conference on Computer Vision
+,
+pp. 11687–11697
+.
+Cited by:
+§2
+.
+[14]
+S. K. Dwivedi, Y. Sun, P. Patel, Y. Feng, and M. J. Black
+(2024)
+Tokenhmr: advancing human mesh recovery with a tokenized pose representation
+.
+In
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition
+,
+pp. 1323–1333
+.
+Cited by:
+Figure 3
+,
+Figure 3
+,
+§3.2
+.
+[15]
+K. Fan, S. Lu, M. Dai, R. Yu, L. Xiao, Z. Dou, J. Dong, L. Ma, and J. Wang
+(2025)
+Go to zero: towards zero-shot motion generation with million-scale data
+.
+In
+Proceedings of the IEEE/CVF International Conference on Computer Vision
+,
+pp. 13336–13348
+.
+Cited by:
+§2
+,
+§3.4
+,
+§4.1
+,
+§S5.1
+.
+[16]
+Y. Feng, J. Lin, S. K. Dwivedi, Y. Sun, P. Patel, and M. J. Black
+(2024)
+Chatpose: chatting about 3d human pose
+.
+In
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition
+,
+pp. 2093–2103
+.
+Cited by:
+Table 1
+.
+[17]
+M. Fieraru, M. Zanfir, E. Oneata, A. Popa, V. Olaru, and C. Sminchisescu
+(2021)
+Learning complex 3d human self-contact
+.
+In
+Proceedings of the AAAI Conference on Artificial Intelligence
+,
+Vol.
+35
+,
+pp. 1343–1351
+.
+Cited by:
+§S5.1
+.
+[18]
+M. Fieraru, M. Zanfir, S. C. Pirlea, V. Olaru, and C. Sminchisescu
+(2021)
+Aifit: automatic 3d human-interpretable feedback models for fitness training
+.
+In
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition
+,
+pp. 9919–9928
+.
+Cited by:
+§S5.1
+.
+[19]
+Y. Ge, S. Zhao, J. Zhu, Y. Ge, K. Yi, L. Song, C. Li, X. Ding, and Y. Shan
+(2024)
+Seed-x: multimodal models with unified multi-granularity comprehension and generation
+.
+arXiv preprint arXiv:2404.14396
+.
+Cited by:
+§2
+.
+[20]
+A. Ghosh, R. Dabral, V. Golyanik, C. Theobalt, and P. Slusallek
+(2023)
+IMoS: intent-driven full-body motion synthesis for human-object interactions
+.
+In
+Computer Graphics Forum
+,
+Vol.
+42
+,
+pp. 1–12
+.
+Cited by:
+§2
+.
+[21]
+S. Ghosh, S. Kumar, A. Seth, C. K. R. Evuru, U. Tyagi, S. Sakshi, O. Nieto, R. Duraiswami, and D. Manocha
+(2024)
+GAMA: a large audio-language model with advanced audio understanding and complex reasoning abilities
+.
+In
+Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing
+,
+Cited by:
+§2
+.
+[22]
+K. Grauman, A. Westbury, L. Torresani, K. Kitani, J. Malik, T. Afouras, K. Ashutosh, V. Baiyya, S. Bansal, B. Boote,
+et al.
+(2024)
+Ego-exo4d: understanding skilled human activity from first-and third-person perspectives
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 19383–19400
+.
+Cited by:
+Table 1
+.
+[23]
+C. Guo, I. Hwang, J. Wang, and B. Zhou
+(2025)
+SnapMoGen: human motion generation from expressive texts
+.
+arXiv preprint arXiv:2507.09122
+.
+Cited by:
+§2
+.
+[24]
+C. Guo, S. Zou, X. Zuo, S. Wang, W. Ji, X. Li, and L. Cheng
+(2022)
+Generating diverse and natural 3d human motions from text
+.
+In
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition
+,
+pp. 5152–5161
+.
+Cited by:
+§4.2
+,
+§S5.1
+,
+§S6.1
+.
+[25]
+V. Guzov, A. Mir, T. Sattler, and G. Pons-Moll
+(2021)
+Human poseitioning system (hps): 3d human pose estimation and self-localization in large scenes from body-mounted sensors
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 4318–4329
+.
+Cited by:
+§2
+.
+[26]
+M. Hassan, D. Ceylan, R. Villegas, J. Saito, J. Yang, Y. Zhou, and M. J. Black
+(2021)
+Stochastic scene-aware motion prediction
+.
+In
+Proceedings of the IEEE/CVF International Conference on Computer Vision
+,
+pp. 11374–11384
+.
+Cited by:
+§2
+.
+[27]
+M. Hassan, V. Choutas, D. Tzionas, and M. J. Black
+(2019)
+Resolving 3d human pose ambiguities with 3d scene constraints
+.
+In
+Proceedings of the IEEE/CVF international conference on computer vision
+,
+pp. 2282–2292
+.
+Cited by:
+§2
+.
+[28]
+M. Hassan, P. Ghosh, J. Tesch, D. Tzionas, and M. J. Black
+(2021)
+Populating 3d scenes by learning human-scene interaction
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 14708–14718
+.
+Cited by:
+§2
+.
+[29]
+M. Hassan, Y. Guo, T. Wang, M. Black, S. Fidler, and X. B. Peng
+(2023)
+Synthesizing physical character-scene interactions
+.
+In
+ACM SIGGRAPH 2023 Conference Proceedings
+,
+pp. 1–9
+.
+Cited by:
+§2
+.
+[30]
+F. Hong, V. Guzov, H. J. Kim, Y. Ye, R. Newcombe, Z. Liu, and L. Ma
+(2025)
+Egolm: multi-modal language model of egocentric motions
+.
+In
+Proceedings of the Computer Vision and Pattern Recognition Conference
+,
+pp. 5344–5354
+.
+Cited by:
+§2
+,
+§2
+,
+Table 1
+,
+§4.2
+.
+[31]
+S. Huang, Z. Wang, P. Li, B. Jia, T. Liu, Y. Zhu, W. Liang, and S. Zhu
+(2023)
+Diffusion-based generation, optimization, and planning in 3d scenes
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 16750–16761
+.
+Cited by:
+§2
+.
+[32]
+Y. Huang, M. Kaufmann, E. Aksan, M. J. Black, O. Hilliges, and G. Pons-Moll
+(2018)
+Deep inertial poser: learning to reconstruct human pose from sparse inertial measurements in real time
+.
+ACM Transactions on Graphics (TOG)
+37
+(
+6
+),
+pp. 1–15
+.
+Cited by:
+§2
+,
+§4.2
+,
+§4.3
+,
+Table 4
+,
+Table 4
+,
+§S6.2
+.
+[33]
+I. Hwang, B. Zhou, Y. M. Kim, J. Wang, and C. Guo
+(2025)
+Scenemi: motion in-betweening for modeling human-scene interactions
+.
+arXiv preprint arXiv:2503.16289
+.
+Cited by:
+§2
+.
+[34]
+P. Intelligence, K. Black, N. Brown, J. Darpinian, K. Dhabalia, D. Driess, A. Esmail, M. Equi, C. Finn, N. Fusai,
+et al.
+(2025)
+π
+\pi
+0. 5: a vision-language-action model with open-world generalization, 2025
+.
+URL https://arxiv. org/abs/2504.16054
+.
+Cited by:
+§2
+.
+[35]
+B. Jiang, X. Chen, W. Liu, J. Yu, G. Yu, and T. Chen
+(2023)
+Motiongpt: human motion as a foreign language
+.
+Advances in Neural Information Processing Systems
+36
+,
+pp. 20067–20079
+.
+Cited by:
+§S1.2
+,
+Table S2
+,
+Table S2
+,
+§S6.1
+.
+[36]
+J. Jiang, P. Streli, H. Qiu, A. Fender, L. Laich, P. Snape, and C. Holz
+(2022)
+Avatarposer: articulated full-body pose tracking from sparse motion sensing
+.
+In
+European conference on computer vision
+,
+pp. 443–460
+.
+Cited by:
+§2
+.
+[37]
+N. Jiang, Z. He, Z. Wang, H. Li, Y. Chen, S. Huang, and Y. Zhu
+(2024)
+Autonomous character-scene interaction synthesis from text instruction
+.
+In
+SIGGRAPH Asia 2024 Conference Papers
+,
+pp. 1–11
+.
+Cited by:
+Table S1
+,
+Table S1
+,
+Table S2
+,
+Table S2
+,
+§2
+,
+§3.4
+,
+§4.1
+,
+§4.2
+,
+§S5.1
+.
+[38]
+N. Jiang, Z. Zhang, H. Li, X. Ma, Z. Wang, Y. Chen, T. Liu, Y. Zhu, and S. Huang
+(2024)
+Scaling up dynamic human-scene interaction modeling
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 1737–1747
+.
+Cited by:
+§2
+,
+§S5.1
+.
+[39]
+Y. Jiang, Y. Ye, D. Gopinath, J. Won, A. W. Winkler, and C. K. Liu
+(2022)
+Transformer inertial poser: real-time human motion reconstruction from sparse imus with simultaneous terrain generation
+.
+In
+SIGGRAPH Asia 2022 Conference Papers
+,
+pp. 1–9
+.
+Cited by:
+§2
+.
+[40]
+J. Kim, J. Kim, J. Na, and H. Joo
+(2025)
+Parahome: parameterizing everyday home activities towards 3d generative modeling of human-object interactions
+.
+In
+Proceedings of the Computer Vision and Pattern Recognition Conference
+,
+pp. 1816–1828
+.
+Cited by:
+§2
+,
+§3.4
+,
+Figure 8
+,
+Figure 8
+,
+§S4.1
+,
+§4.3
+,
+§S5.2
+.
+[41]
+M. J. Kim, K. Pertsch, S. Karamcheti, T. Xiao, A. Balakrishna, S. Nair, R. Rafailov, E. Foster, G. Lam, P. Sanketi,
+et al.
+(2024)
+Openvla: an open-source vision-language-action model
+.
+arXiv preprint arXiv:2406.09246
+.
+Cited by:
+§2
+.
+[42]
+N. Kulkarni, D. Rempe, K. Genova, A. Kundu, J. Johnson, D. Fouhey, and L. Guibas
+(2024)
+Nifty: neural object interaction fields for guided human motion synthesis
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 947–957
+.
+Cited by:
+§2
+.
+[43]
+J. Lee and H. Joo
+(2023)
+Locomotion-action-manipulation: synthesizing human-scene interactions in complex 3d environments
+.
+In
+Proceedings of the IEEE/CVF International Conference on Computer Vision
+,
+pp. 9663–9674
+.
+Cited by:
+§2
+.
+[44]
+J. Lee and H. Joo
+(2024)
+Mocap everyone everywhere: lightweight motion capture with smartwatches and a head-mounted camera
+.
+In
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition
+,
+pp. 1091–1100
+.
+Cited by:
+§2
+.
+[45]
+B. Li, Y. Zhao, S. Zhelun, and L. Sheng
+(2022)
+Danceformer: music conditioned 3d dance generation with parametric motion transformer
+.
+In
+Proceedings of the AAAI Conference on Artificial Intelligence
+,
+Vol.
+36
+,
+pp. 1272–1279
+.
+Cited by:
+§S5.1
+.
+[46]
+J. Li, A. Clegg, R. Mottaghi, J. Wu, X. Puig, and C. K. Liu
+(2024)
+Controllable human-object interaction synthesis
+.
+In
+European Conference on Computer Vision
+,
+pp. 54–72
+.
+Cited by:
+§2
+.
+[47]
+J. Li, J. Wu, and C. K. Liu
+(2023)
+Object motion guided human motion synthesis
+.
+ACM Transactions on Graphics (TOG)
+42
+(
+6
+),
+pp. 1–11
+.
+Cited by:
+Figure S2
+,
+Figure S2
+,
+§2
+,
+§S3.1
+.
+[48]
+J. Li, T. Huang, Q. Zhu, and T. Wong
+(2024)
+Physics-based scene layout generation from human motion
+.
+In
+ACM SIGGRAPH 2024 Conference Papers
+,
+pp. 1–10
+.
+Cited by:
+§2
+,
+Table 1
+.
+[49]
+J. Li, J. Cao, H. Zhang, D. Rempe, J. Kautz, U. Iqbal, and Y. Yuan
+(2025)
+GENMO: a generalist model for human motion
+.
+arXiv preprint arXiv:2505.01425
+.
+Cited by:
+§2
+.
+[50]
+R. Li, J. Zhao, Y. Zhang, M. Su, Z. Ren, H. Zhang, Y. Tang, and X. Li
+(2023)
+Finedance: a fine-grained choreography dataset for 3d full body dance generation
+.
+In
+Proceedings of the IEEE/CVF International Conference on Computer Vision
+,
+pp. 10234–10243
+.
+Cited by:
+§S5.1
+.
+[51]
+Y. Li, S. Bubeck, R. Eldan, A. Del Giorno, S. Gunasekar, and Y. T. Lee
+(2023)
+Textbooks are all you need ii: phi-1.5 technical report
+.
+arXiv preprint arXiv:2309.05463
+.
+Cited by:
+§S2.2
+,
+§3.2
+.
+[52]
+H. Liang, W. Zhang, W. Li, J. Yu, and L. Xu
+(2024)
+Intergen: diffusion-based multi-human motion generation under complex interactions
+.
+International Journal of Computer Vision
+132
+(
+9
+),
+pp. 3463–3483
+.
+Cited by:
+§S5.1
+.
+[53]
+C. Lin
+(2004)
+Rouge: a package for automatic evaluation of summaries
+.
+In
+Text summarization branches out
+,
+pp. 74–81
+.
+Cited by:
+§4.2
+,
+§S6.1
+.
+[54]
+J. Lin, A. Zeng, S. Lu, Y. Cai, R. Zhang, H. Wang, and L. Zhang
+(2023)
+Motion-x: a large-scale 3d expressive whole-body human motion dataset
+.
+Advances in Neural Information Processing Systems
+36
+,
+pp. 25268–25280
+.
+Cited by:
+§S5.1
+.
+[55]
+H. Liu, W. Yan, M. Zaharia, and P. Abbeel
+(2024)
+World model on million-length video and language with blockwise ringattention
+.
+arXiv preprint arXiv:2402.08268
+.
+Cited by:
+§2
+.
+[56]
+H. Liu, C. Li, Q. Wu, and Y. J. Lee
+(2023)
+Visual instruction tuning
+.
+In
+NeurIPS
+,
+Cited by:
+§2
+.
+[57]
+J. Lu, C. P. Huang, U. Bhattacharya, Q. Huang, and Y. Zhou
+(2025)
+HUMOTO: a 4d dataset of mocap human object interactions
+.
+arXiv preprint arXiv:2504.10414
+.
+Cited by:
+§2
+,
+§3.4
+,
+§4.1
+,
+§4.1
+,
+§S4.1
+,
+§4.2
+,
+Table 6
+,
+Table 6
+,
+§S5.2
+.
+[58]
+S. Lu, J. Wang, Z. Lu, L. Chen, W. Dai, J. Dong, Z. Dou, B. Dai, and R. Zhang
+(2025)
+Scamo: exploring the scaling law in autoregressive motion generation model
+.
+In
+Proceedings of the Computer Vision and Pattern Recognition Conference
+,
+pp. 27872–27882
+.
+Cited by:
+§2
+.
+[59]
+N. Mahmood, N. Ghorbani, N. F. Troje, G. Pons-Moll, and M. J. Black
+(2019)
+AMASS: archive of motion capture as surface shapes
+.
+In
+Proceedings of the IEEE/CVF international conference on computer vision
+,
+pp. 5442–5451
+.
+Cited by:
+§4.2
+.
+[60]
+J. Merel, S. Tunyasuvunakool, A. Ahuja, Y. Tassa, L. Hasenclever, V. Pham, T. Erez, G. Wayne, and N. Heess
+(2020)
+Catch & carry: reusable neural controllers for vision-guided whole-body tasks
+.
+ACM Transactions on Graphics (TOG)
+39
+(
+4
+),
+pp. 39–1
+.
+Cited by:
+§2
+.
+[61]
+A. Mir, X. Puig, A. Kanazawa, and G. Pons-Moll
+(2024)
+Generating continual human motion in diverse 3d scenes
+.
+In
+2024 International Conference on 3D Vision (3DV)
+,
+pp. 903–913
+.
+Cited by:
+§2
+.
+[62]
+T. B. Moeslund and E. Granum
+(2001)
+A survey of computer vision-based human motion capture
+.
+Computer vision and image understanding
+81
+(
+3
+),
+pp. 231–268
+.
+Cited by:
+§2
+.
+[63]
+V. Mollyn, R. Arakawa, M. Goel, C. Harrison, and K. Ahuja
+(2023)
+Imuposer: full-body pose estimation using imus in phones, watches, and earbuds
+.
+In
+Proceedings of the 2023 CHI Conference on Human Factors in Computing Systems
+,
+pp. 1–12
+.
+Cited by:
+§S1.2
+,
+Table S2
+,
+Table S2
+,
+§2
+,
+Table 1
+,
+§4.2
+,
+§4.2
+,
+§4.3
+,
+Table 4
+,
+Table 4
+,
+§S6.1
+,
+§S6.2
+.
+[64]
+Y. Nie, A. Dai, X. Han, and M. Nießner
+(2022)
+Pose2room: understanding 3d scenes from human activities
+.
+In
+European Conference on Computer Vision
+,
+pp. 425–443
+.
+Cited by:
+§2
+,
+Table 1
+.
+[65]
+K. Papineni, S. Roukos, T. Ward, and W. Zhu
+(2002)
+Bleu: a method for automatic evaluation of machine translation
+.
+In
+Proceedings of the 40th annual meeting of the Association for Computational Linguistics
+,
+pp. 311–318
+.
+Cited by:
+§4.2
+,
+§S6.1
+.
+[66]
+C. Patel, H. Nakamura, Y. Kyuragi, K. Kozuka, J. C. Niebles, and E. Adeli
+(2025)
+UniEgoMotion: a unified model for egocentric motion reconstruction, forecasting, and generation
+.
+In
+Proceedings of the IEEE/CVF International Conference on Computer Vision
+,
+pp. 10318–10329
+.
+Cited by:
+§2
+.
+[67]
+G. Pavlakos, V. Choutas, N. Ghorbani, T. Bolkart, A. A. Osman, D. Tzionas, and M. J. Black
+(2019)
+Expressive body capture: 3d hands, face, and body from a single image
+.
+In
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition
+,
+pp. 10975–10985
+.
+Cited by:
+§3.1
+.
+[68]
+K. Pertsch, K. Stachowicz, B. Ichter, D. Driess, S. Nair, Q. Vuong, O. Mees, C. Finn, and S. Levine
+(2025)
+Fast: efficient action tokenization for vision-language-action models
+.
+arXiv preprint arXiv:2501.09747
+.
+Cited by:
+Figure 3
+,
+Figure 3
+,
+§3.2
+.
+[69]
+I. A. Petrov, R. Marin, J. Chibane, and G. Pons-Moll
+(2025)
+Tridi: trilateral diffusion of 3d humans, objects, and interactions
+.
+In
+Proceedings of the IEEE/CVF International Conference on Computer Vision
+,
+pp. 5523–5535
+.
+Cited by:
+§2
+.
+[70]
+X. Puig, K. Ra, M. Boben, J. Li, T. Wang, S. Fidler, and A. Torralba
+(2018)
+Virtualhome: simulating household activities via programs
+.
+In
+Proceedings of the IEEE conference on computer vision and pattern recognition
+,
+pp. 8494–8502
+.
+Cited by:
+§2
+.
+[71]
+A. R. Punnakkal, A. Chandrasekaran, N. Athanasiou, A. Quiros-Ramirez, and M. J. Black
+(2021)
+BABEL: bodies, action and behavior with english labels
+.
+In
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition
+,
+pp. 722–731
+.
+Cited by:
+§S5.1
+.
+[72]
+L. Qu, H. Zhang, Y. Liu, X. Wang, Y. Jiang, Y. Gao, H. Ye, D. K. Du, Z. Yuan, and X. Wu
+(2025)
+Tokenflow: unified image tokenizer for multimodal understanding and generation
+.
+In
+Proceedings of the Computer Vision and Pattern Recognition Conference
+,
+pp. 2545–2555
+.
+Cited by:
+§2
+.
+[73]
+A. Radford, J. Wu, R. Child, D. Luan, D. Amodei, I. Sutskever,
+et al.
+(2019)
+Language models are unsupervised multitask learners
+.
+OpenAI blog
+1
+(
+8
+),
+pp. 9
+.
+Cited by:
+§S2.2
+.
+[74]
+M. Schepers, M. Giuberti, G. Bellusci,
+et al.
+(2018)
+Xsens mvn: consistent tracking of human motion using inertial sensing
+.
+Xsens Technol
+1
+(
+8
+).
+Cited by:
+§2
+.
+[75]
+J. Shi, L. Liu, Y. Sun, Z. Zhang, J. Zhou, and Q. Nie
+(2025)
+GenM
+3
+{}^{3}
+: generative pretrained multi-path motion model for text conditional human motion generation
+.
+arXiv preprint arXiv:2503.14919
+.
+Cited by:
+§2
+.
+[76]
+Sony Corporation
+(2025)
+Mocopi - mobile motion capture system
+.
+Note:
+Accessed: November 2025
+External Links:
+Link
+Cited by:
+§2
+.
+[77]
+S. Talukder, Y. Yue, and G. Gkioxari
+(2024)
+Totem: tokenized time series embeddings for general time series analysis
+.
+arXiv preprint arXiv:2402.16412
+.
+Cited by:
+§3.2
+.
+[78]
+C. Team
+(2024)
+Chameleon: mixed-modal early-fusion foundation models, 2024
+.
+URL https://arxiv. org/abs/2405.09818
+9
+(
+8
+).
+Cited by:
+§2
+.
+[79]
+S. Tsuchida, S. Fukayama, M. Hamasaki, and M. Goto
+(2019)
+AIST dance video database: multi-genre, multi-dancer, and multi-camera database for dance information processing.
+.
+In
+ISMIR
+,
+Vol.
+1
+,
+pp. 6
+.
+Cited by:
+§S5.1
+.
+[80]
+T. Van Wouwe, S. Lee, A. Falisse, S. Delp, and C. K. Liu
+(2024)
+Diffusionposer: real-time human motion reconstruction from arbitrary sparse sensors using autoregressive diffusion
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 2513–2523
+.
+Cited by:
+§2
+.
+[81]
+R. Vedantam, C. Lawrence Zitnick, and D. Parikh
+(2015)
+Cider: consensus-based image description evaluation
+.
+In
+Proceedings of the IEEE conference on computer vision and pattern recognition
+,
+pp. 4566–4575
+.
+Cited by:
+§4.2
+,
+§S6.1
+.
+[82]
+T. Von Marcard, B. Rosenhahn, M. J. Black, and G. Pons-Moll
+(2017)
+Sparse inertial poser: automatic 3d human pose estimation from sparse imus
+.
+In
+Computer graphics forum
+,
+Vol.
+36
+,
+pp. 349–360
+.
+Cited by:
+§2
+.
+[83]
+J. Wang, H. Xu, J. Xu, S. Liu, and X. Wang
+(2021)
+Synthesizing long-term 3d human motion and interaction in 3d scenes
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 9401–9411
+.
+Cited by:
+§2
+.
+[84]
+J. Wang, Y. Rong, J. Liu, S. Yan, D. Lin, and B. Dai
+(2022)
+Towards diverse and natural scene-aware 3d human motion synthesis
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 20460–20469
+.
+Cited by:
+§2
+.
+[85]
+X. Wang, X. Zhang, Z. Luo, Q. Sun, Y. Cui, J. Wang, F. Zhang, Y. Wang, Z. Li, Q. Yu,
+et al.
+(2024)
+Emu3: next-token prediction is all you need
+.
+arXiv preprint arXiv:2409.18869
+.
+Cited by:
+§2
+.
+[86]
+Y. Wang, S. Zheng, B. Cao, Q. Wei, W. Zeng, Q. Jin, and Z. Lu
+(2024)
+Scaling large motion models with million-level human motions
+.
+arXiv preprint arXiv:2410.03311
+.
+Cited by:
+§2
+.
+[87]
+Z. Wang, Y. Chen, B. Jia, P. Li, J. Zhang, J. Zhang, T. Liu, Y. Zhu, W. Liang, and S. Huang
+(2024)
+Move as you say interact as you can: language-guided human motion generation with scene affordance
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 433–444
+.
+Cited by:
+§2
+.
+[88]
+Z. Wang, Y. Chen, T. Liu, Y. Zhu, W. Liang, and S. Huang
+(2022)
+Humanise: language-conditioned human motion generation in 3d scenes
+.
+Advances in Neural Information Processing Systems
+35
+,
+pp. 14959–14971
+.
+Cited by:
+§2
+.
+[89]
+S. Wu, H. Fei, L. Qu, W. Ji, and T. Chua
+(2024)
+Next-gpt: any-to-any multimodal llm
+.
+In
+Forty-first International Conference on Machine Learning
+,
+Cited by:
+§2
+.
+[90]
+Y. Wu, Z. Zhang, J. Chen, H. Tang, D. Li, Y. Fang, L. Zhu, E. Xie, H. Yin, L. Yi,
+et al.
+(2024)
+Vila-u: a unified foundation model integrating visual understanding and generation
+.
+arXiv preprint arXiv:2409.04429
+.
+Cited by:
+§2
+.
+[91]
+L. Xiao, S. Lu, H. Pi, K. Fan, L. Pan, Y. Zhou, Z. Feng, X. Zhou, S. Peng, and J. Wang
+(2025)
+MotionStreamer: streaming motion generation via diffusion-based autoregressive model in causal latent space
+.
+arXiv preprint arXiv:2503.15451
+.
+Cited by:
+Figure 3
+,
+Figure 3
+,
+§3.2
+.
+[92]
+X. Xiao, J. Wang, P. Feng, A. Gong, X. Zhang, and J. Zhang
+(2024)
+Fast human motion reconstruction from sparse inertial measurement units considering the human shape
+.
+Nature Communications
+15
+(
+1
+),
+pp. 2423
+.
+Cited by:
+§2
+.
+[93]
+J. Xie, W. Mao, Z. Bai, D. J. Zhang, W. Wang, K. Q. Lin, Y. Gu, Z. Chen, Z. Yang, and M. Z. Shou
+(2024)
+Show-o: one single transformer to unify multimodal understanding and generation
+.
+arXiv preprint arXiv:2408.12528
+.
+Cited by:
+§2
+,
+§3.3
+,
+§S4.1
+.
+[94]
+L. Xu, X. Lv, Y. Yan, X. Jin, S. Wu, C. Xu, Y. Liu, Y. Zhou, F. Rao, X. Sheng,
+et al.
+(2024)
+Inter-x: towards versatile human-human interaction analysis
+.
+In
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition
+,
+pp. 22260–22271
+.
+Cited by:
+§S5.1
+.
+[95]
+S. Xu, D. Li, Y. Zhang, X. Xu, Q. Long, Z. Wang, Y. Lu, S. Dong, H. Jiang, A. Gupta,
+et al.
+(2025)
+Interact: advancing large-scale versatile 3d human-object interaction generation
+.
+In
+Proceedings of the Computer Vision and Pattern Recognition Conference
+,
+pp. 7048–7060
+.
+Cited by:
+§2
+.
+[96]
+S. Xu, Y. Wang, L. Gui,
+et al.
+(2024)
+Interdreamer: zero-shot text to 3d dynamic human-object interaction
+.
+Advances in Neural Information Processing Systems
+37
+,
+pp. 52858–52890
+.
+Cited by:
+§2
+.
+[97]
+V. Xu, C. Gao, H. Hoffmann, and K. Ahuja
+(2024)
+Mobileposer: real-time full-body pose estimation and 3d human translation from imus in mobile consumer devices
+.
+In
+Proceedings of the 37th Annual ACM Symposium on User Interface Software and Technology
+,
+pp. 1–11
+.
+Cited by:
+§S1.2
+,
+Table S2
+,
+Table S2
+,
+§2
+,
+Table 1
+,
+§4.1
+,
+§4.1
+,
+§4.2
+,
+§4.2
+,
+§4.2
+,
+§4.3
+,
+Table 4
+,
+Table 4
+,
+§S6.1
+.
+[98]
+S. Ye, Y. Wang, J. Li, D. Park, C. K. Liu, H. Xu, and J. Wu
+(2022)
+Scene synthesis from human motion
+.
+In
+SIGGRAPH Asia 2022 Conference Papers
+,
+pp. 1–9
+.
+Cited by:
+§2
+,
+Table 1
+,
+§4.2
+,
+§S6.2
+.
+[99]
+B. Yi, V. Ye, M. Zheng, Y. Li, L. Müller, G. Pavlakos, Y. Ma, J. Malik, and A. Kanazawa
+(2025)
+Estimating body and hand motion in an ego-sensed world
+.
+In
+Proceedings of the Computer Vision and Pattern Recognition Conference
+,
+pp. 7072–7084
+.
+Cited by:
+§2
+.
+[100]
+H. Yi, C. P. Huang, S. Tripathi, L. Hering, J. Thies, and M. J. Black
+(2023)
+MIME: human-aware 3d scene generation
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 12965–12976
+.
+Cited by:
+§2
+.
+[101]
+H. Yi, C. P. Huang, D. Tzionas, M. Kocabas, M. Hassan, S. Tang, J. Thies, and M. J. Black
+(2022)
+Human-aware object placement for visual environment reconstruction
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 3959–3970
+.
+Cited by:
+§2
+.
+[102]
+X. Yi, S. Pan, and F. Xu
+(2025)
+Improving global motion estimation in sparse imu-based motion capture with physics
+.
+ACM Transactions on Graphics (TOG)
+44
+(
+4
+),
+pp. 1–16
+.
+Cited by:
+§S1.1
+,
+Table S1
+,
+§2
+,
+§4.1
+.
+[103]
+X. Yi, Y. Zhou, M. Habermann, S. Shimada, V. Golyanik, C. Theobalt, and F. Xu
+(2022)
+Physical inertial poser (pip): physics-aware real-time human motion tracking from sparse inertial sensors
+.
+In
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition
+,
+pp. 13167–13178
+.
+Cited by:
+§2
+,
+Table 1
+.
+[104]
+X. Yi, Y. Zhou, and F. Xu
+(2021)
+Transpose: real-time 3d human translation and pose estimation with six inertial sensors
+.
+ACM Transactions On Graphics (TOG)
+40
+(
+4
+),
+pp. 1–13
+.
+Cited by:
+§2
+.
+[105]
+X. Yi, Y. Zhou, and F. Xu
+(2024)
+Physical non-inertial poser (pnp): modeling non-inertial effects in sparse-inertial human motion capture
+.
+In
+ACM SIGGRAPH 2024 Conference Papers
+,
+pp. 1–11
+.
+Cited by:
+§S1.1
+,
+Table S1
+,
+§2
+.
+[106]
+Y. Yin, C. Guo, M. Kaufmann, J. J. Zarate, J. Song, and O. Hilliges
+(2023)
+Hi4d: 4d instance segmentation of close human interaction
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 17016–17027
+.
+Cited by:
+§S5.1
+.
+[107]
+D. Zhang, S. Li, X. Zhang, J. Zhan, P. Wang, Y. Zhou, and X. Qiu
+(2023)
+SpeechGPT: empowering large language models with intrinsic cross-modal conversational abilities
+.
+External Links:
+2305.11000
+Cited by:
+§2
+.
+[108]
+J. Zhang, Y. Zhang, H. Zhang, X. Zhou, B. Zhou, R. Shao, Z. Hu, and Y. Liu
+(2025)
+Ins-hoi: instance aware human-object interactions recovery
+.
+IEEE Transactions on Pattern Analysis and Machine Intelligence
+.
+Cited by:
+§2
+.
+[109]
+J. Zhang, J. Zhang, Z. Song, Z. Shi, C. Zhao, Y. Shi, J. Yu, L. Xu, and J. Wang
+(2024)
+HOI-mˆ 3: capture multiple humans and objects interaction within contextual environment
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 516–526
+.
+Cited by:
+§2
+.
+[110]
+L. Zhang, X. Yi, and F. Xu
+(2025)
+BaroPoser: real-time human motion tracking from imus and barometers in everyday devices
+.
+In
+Proceedings of the 38th Annual ACM Symposium on User Interface Software and Technology
+,
+pp. 1–9
+.
+Cited by:
+§2
+.
+[111]
+M. Zhang, Y. Huang, R. Liu, and Y. Sato
+(2024)
+Masked video and body-worn imu autoencoder for egocentric action recognition
+.
+In
+European Conference on Computer Vision
+,
+pp. 312–330
+.
+Cited by:
+§2
+.
+[112]
+M. Zhang, D. Jin, C. Gu, F. Hong, Z. Cai, J. Huang, C. Zhang, X. Guo, L. Yang, Y. He,
+et al.
+(2024)
+Large motion model for unified multi-modal motion generation
+.
+In
+European Conference on Computer Vision
+,
+pp. 397–421
+.
+Cited by:
+§2
+.
+[113]
+S. Zhang, Q. Ma, Y. Zhang, Z. Qian, T. Kwon, M. Pollefeys, F. Bogo, and S. Tang
+(2022)
+Egobody: human body shape and motion of interacting people from head-mounted devices
+.
+In
+European conference on computer vision
+,
+pp. 180–200
+.
+Cited by:
+§S5.1
+.
+[114]
+T. Zhang, V. Kishore, F. Wu, K. Q. Weinberger, and Y. Artzi
+(2019)
+Bertscore: evaluating text generation with bert
+.
+arXiv preprint arXiv:1904.09675
+.
+Cited by:
+§4.2
+,
+§S6.1
+.
+[115]
+Y. Zhang and S. Tang
+(2022)
+The wanderings of odysseus in 3d scenes
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 20481–20491
+.
+Cited by:
+§2
+.
+[116]
+Y. Zhang, D. Huang, B. Liu, S. Tang, Y. Lu, L. Chen, L. Bai, Q. Chu, N. Yu, and W. Ouyang
+(2024)
+Motiongpt: finetuned llms are general-purpose motion generators
+.
+In
+Proceedings of the AAAI Conference on Artificial Intelligence
+,
+Vol.
+38
+,
+pp. 7368–7376
+.
+Cited by:
+§2
+.
+[117]
+Y. Zhang, K. Ayush, S. Qiao, A. A. Heydari, G. Narayanswamy, M. A. Xu, A. A. Metwally, S. Xu, J. Garrison, X. Xu,
+et al.
+(2025)
+SensorLM: learning the language of wearable sensors
+.
+arXiv preprint arXiv:2506.09108
+.
+Cited by:
+§2
+.
+[118]
+K. Zhao, Y. Zhang, S. Wang, T. Beeler, and S. Tang
+(2023)
+Synthesizing diverse human motions in 3d indoor scenes
+.
+In
+Proceedings of the IEEE/CVF international conference on computer vision
+,
+pp. 14738–14749
+.
+Cited by:
+§2
+.
+[119]
+C. Zhou, L. Yu, A. Babu, K. Tirumala, M. Yasunaga, L. Shamis, J. Kahn, X. Ma, L. Zettlemoyer, and O. Levy
+(2024)
+Transfusion: predict the next token and diffuse images with one multi-modal model
+.
+arXiv preprint arXiv:2408.11039
+.
+Cited by:
+§2
+.
+[120]
+Y. Zhou, C. Barnes, J. Lu, J. Yang, and H. Li
+(2019)
+On the continuity of rotation representations in neural networks
+.
+In
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition
+,
+pp. 5745–5753
+.
+Cited by:
+§3.1
+.
+[121]
+B. Zhu, B. Jiang, S. Wang, S. Tang, T. Chen, L. Luo, Y. Zheng, and X. Chen
+(2025)
+MotionGPT3: human motion as a second modality
+.
+arXiv preprint arXiv:2506.24086
+.
+Cited by:
+§S1.2
+,
+Table S2
+,
+Table S2
+,
+§2
+,
+Table 1
+,
+§4.2
+,
+§4.2
+,
+§S6.1
+.
+[122]
+C. Zuo, J. Huang, X. Jiang, Y. Yao, X. Shi, R. Cao, X. Yi, F. Xu, S. Guo, and Y. Qin
+(2025)
+Transformer imu calibrator: dynamic on-body imu calibration for inertial motion capture
+.
+ACM Transactions on Graphics (TOG)
+44
+(
+4
+),
+pp. 1–14
+.
+Cited by:
+§2
+.
+[123]
+C. Zuo, Y. Wang, L. Zhan, S. Guo, X. Yi, F. Xu, and Y. Qin
+(2024)
+Loose inertial poser: motion capture with imu-attached loose-wear jacket
+.
+In
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition
+,
+pp. 2209–2219
+.
+Cited by:
+§2
+.
+Supplementary Material for
+Seeing Without Eyes: 4D Human–Scene Understanding from Wearable IMUs
+We provide supplementary videos, including comparisons with baselines and failure cases, in the supplementary file
+index.html
+. In this supplementary material, we provide additional results and implementation details. It is organized as follows:
+•
+Sec.
+S1
+provides additional baseline comparisons for the IMU-to-Motion task, as well as alternative modular pipeline configurations used as baselines for the IMU-to-MotionText task.
+•
+Sec.
+S2
+includes ablation studies on input configurations and model designs.
+•
+Sec.
+S3
+demonstrates diverse outputs through qualitative results.
+•
+Sec.
+S4
+provides implementation details for both the training and testing phases.
+•
+Sec.
+S5
+describes the datasets used for IMU-to-MotionText pretraining and IMU-to-MotionTextScene fine-tuning.
+•
+Sec.
+S6
+details the evaluations.
+•
+Sec.
+S7
+illustrates failure cases and limitations.
+S1
+More Baseline Comparisons
+In this section, we provide comparisons to additional baselines of IMU-to-Motion and IMU-to-MotionText.
+S1.1
+IMU-to-Motion
+In Tab.
+2
+and Tab.
+3
+of the main paper, we compare our method with BoDiffusion, IMUPoser, and MobilePoser under the 3-sensor setting (3pt), with IMUs mounted on one ear, one wrist, and one thigh, and the 5-sensor setting (5pt), with IMUs mounted on one ear, both wrists, and both thighs.
+Here, in Tab.
+S1
+, we further evaluate our method against PNP
+[
+105
+]
+and GlobalPose
+[
+102
+]
+under a privileged 6-sensor setting (6pt), which adds a torso-mounted IMU to the 5pt configuration and typically requires users to wear full motion-tracking suits. Our model significantly outperforms PNP and GlobalPose on MTE while achieving comparable performance on the other evaluation metrics. Note that this privileged 6pt setting is generally impractical for real-world deployment. We include them as upper-bound references.
+Table S1
+:
+Quantitative comparison of IMU-to-motion on LINGO
+[
+37
+]
+under a privileged 6-sensor setting (6pt).
+Evaluated on 60 frames. Units are in millimeters (mm). Note that this setting includes a torso-mounted IMU, which helps reduce drift but is impractical for real-world deployment. We include them as upper-bound references and show that our model adapted to the same 6-point setting achieves the best result on MTE and remains competitive in the other evaluation metrics.
+Method
+#IMU Trained
+MPJPE
+↓
+\downarrow
+PA-MPJPE
+↓
+\downarrow
+MPJRE
+↓
+\downarrow
+MPJVE
+↓
+\downarrow
+MTE
+↓
+\downarrow
+PNP
+[
+105
+]
+6pt
+26.95
+22.38
+7.78
+32.20
+35.69
+GlobalPose
+[
+102
+]
+6pt
+24.88
+21.05
+7.62
+29.30
+39.88
+Ours
+6pt
+24.61
+23.70
+8.19
+36.83
+7.55
+S1.2
+Alternative Modular Pipeline Configurations in IMU-to-MotionText
+In the main paper, we use a cascaded pipeline of MobilePoser (IMU
+→
+\to
+motion) and MotionGPT3 (motion
+→
+\to
+text) as the baseline for IMU-to-MotionText. To show the effectiveness of joint modeling over cascaded approaches, we further compare additional combinations of state-of-the-art IMU-to-motion methods (IMUPoser
+[
+63
+]
+, MobilePoser
+[
+97
+]
+) and motion-to-text methods (MotionGPT
+[
+35
+]
+, MotionGPT3
+[
+121
+]
+) as modular pipelines.
+As shown in Table
+S2
+, our unified model consistently outperforms all modular combinations across all text metrics on the LINGO dataset, validating the benefits of joint multimodal generation over cascaded approaches.
+Table S2
+:
+Ablation on alternative IMU-to-motion and motion-to-text methods on LINGO
+[
+37
+]
+.
+Evaluated on 60 frames. We compare combinations of IMU-to-motion methods (IMUPoser
+[
+63
+]
+, MobilePoser
+[
+97
+]
+) with motion-to-text methods (MotionGPT
+[
+35
+]
+, MotionGPT3
+[
+121
+]
+) as modular pipelines. Our unified model consistently outperforms all modular combinations across all text metrics.
+IMU
+→
+\rightarrow
+Motion
+Motion
+→
+\rightarrow
+Text
+ROUGE-L
+↑
+\uparrow
+CIDEr
+↑
+\uparrow
+BLEU@1
+↑
+\uparrow
+BLEU@4
+↑
+\uparrow
+BERT
+↑
+\uparrow
+IMUPoser
+MotionGPT
+18.72
+11.64
+17.26
+4.21
+-6.07
+IMUPoser
+MotionGPT3
+27.63
+43.33
+28.97
+13.08
+15.69
+MobilePoser
+MotionGPT
+18.83
+35.40
+20.11
+7.47
+8.68
+MobilePoser
+MotionGPT3
+15.35
+28.78
+19.17
+7.39
+7.64
+Ours
+56.39
+252.87
+52.74
+39.69
+46.10
+S2
+Ablation Studies
+S2.1
+Input Configurations
+We evaluate the effect of different numbers of IMU devices at inference time and compare the performance with MobilePoser. For each device count from 1 to 5, we select three sensor-placement combinations and report the mean performance and standard deviation. As shown in Fig.
+S1
+, our model (blue) consistently achieves lower errors and exhibits more stable performance than MobilePoser (red) across different IMU configurations. Moreover, our approach shows lower standard deviations for the same number of sensors but different placements, demonstrating its robustness to variations in sensor configuration.
+Figure S1
+:
+Model performance with different number of IMU devices on LINGO dataset.
+Left
+: Trajectory accuracy (MTE).
+Right
+: Human pose accuracy (MPJPE). Red is MobilePoser and blue is our model. The boundary of the transparent area means the 1 standard deviation of different IMU devices combinations. Results show that our model has less error and more stable with different IMU device combinations.
+S2.2
+Model Architecture
+We ablate the choice of base language model and the attention mechanism used for the IMU stream. As shown in Table
+S3
+, bi-directional and causal attention achieve similar performance on the IMU-to-Motion task. This is likely because the generated tokens can attend to the full IMU context regardless of the attention pattern applied within the IMU stream.
+We further compare two base models,
+i.e
+.
+, GPT-2-medium
+[
+73
+]
+and Phi-1.5
+[
+51
+]
+. The results show that Phi-1.5 consistently outperforms GPT-2-medium. Therefore, we adopt Phi-1.5 as our backbone model.
+Table S3
+:
+Ablation on model architectures for IMU-to-motion on LINGO dataset from 60 frames of 5 IMU devices.
+Attention
+Base model
+Params
+MPJPE
+↓
+\downarrow
+PA-MPJPE
+↓
+\downarrow
+MPJRE
+↓
+\downarrow
+MPJVE
+↓
+\downarrow
+MTE
+↓
+\downarrow
+Causal
+GPT-2-medium
+345M
+67.00
+58.03
+15.80
+101.74
+30.66
+Causal
+Phi-1.5
+1.3B
+40.39
+31.54
+10.45
+59.09
+15.61
+Bidirectional
+GPT-2-medium
+345M
+48.85
+36.96
+12.49
+63.43
+29.53
+Bidirectional
+Phi-1.5
+1.3B
+30.49
+21.77
+8.48
+41.99
+12.16
+Frame 0
+Frame 14
+Frame 24
+Frame 42
+Frame 59
+Figure S2
+:
+Dynamic object prediction on OMOMO
+[
+47
+]
+.
+White: ground truth; blue: our prediction. Our method can be extended to jointly predict dynamic objects and human motions from IMU signals, producing coherent human-object interactions.
+S3
+More Qualitative Results
+S3.1
+Generating Dynamic Objects from IMU signals
+Our approach can be extended to dynamic object prediction with minimal modifications. Instead of predicting only the object ID and a single 6D pose, we predict the object ID, the hand with which the object interacts, and a sequence of 6D poses defined relative to the corresponding hand joint. We finetune our checkpoint on OMOMO
+[
+47
+]
+dataset. As shown in Fig.
+S2
+, our approach predicts plausible object dynamics along with human motions from IMU signals.
+S3.2
+Diverse Sampling from Same IMU Input
+Our model enables diverse sampling of text tokens. As shown in Fig.
+S3
+and Fig.
+S4
+, it generates diverse and plausible text descriptions from the same IMU input.
+Note that to encourage more diverse sampling, we slightly flatten the vocabulary distribution by setting the softmax temperature to
+T
+=
+1.2
+T=1.2
+at the start of text token generation.
+Start Frame
+End Frame
+Predicted Texts
+GT:
+stand up from seat.
+Pred Samples:
+(a)
+cover punching bag with left hand while sitting;
+(b)
+stand up while holding phone in left hand;
+(c)
+lean left, rise, remain seated, then stand.
+GT:
+play guitar with both hands while sitting.
+Pred Samples:
+(a)
+play guitar with left hand sitting;
+(b)
+slide guitar using left hand and right-hand slap;
+(c)
+play guitar with both hands while seated.
+GT:
+walk forward.
+Pred Samples:
+(a)
+walk forward with phone in left hand;
+(b)
+walk forward with earphone in left hand;
+(c)
+walk back while holding bottle.
+GT:
+walk back right.
+Pred Samples:
+(a)
+walk back right holding bottle in right hand;
+(b)
+walk back right with phone in right hand;
+(c)
+turn right holding mat.
+Figure S3
+:
+Text sampling diversity on LINGO dataset with identical IMU input.
+White: ground-truth motion, blue: our prediction.
+Start Frame
+End Frame
+Predicted Texts
+GT:
+A man gives a wave with his left hand.
+Pred Samples:
+(a)
+A man waves confidently with his left hand;
+(b)
+someone standing raises and waves their left hand;
+(c)
+they wave with the left hand to one side.
+GT:
+A person moves with a sense of resolve and determination.
+Pred Samples:
+(a)
+the person walks in a straight, consistent line;
+(b)
+they advance with confidence and vitality;
+(c)
+the person steps forward and turns left.
+GT:
+A person circles halfway before sprinting around the same circular path.
+Pred Samples:
+(a)
+he is circling the area to the left;
+(b)
+jogging around the circle to showcase his spirit;
+(c)
+he completes a counter-clockwise circle while running in nature.
+GT:
+Three left sidesteps, followed by three right sidesteps and a step back, then repeat.
+Pred Samples:
+(a)
+he is switching side steps to the left and right;
+(b)
+moving left while stepping back to the right;
+(c)
+the person moves left and right sideways, laterally.
+Figure S4
+:
+Text sampling diversity on HumanML3D dataset with identical IMU input.
+White: ground-truth motion, blue: our prediction.
+For each sequence, we sample three text descriptions at temperature
+T
+=
+1.2
+T=1.2
+and visualize the corresponding motion interpretations.
+S4
+Implementation Details
+S4.1
+Training
+Data augmentation.
+During training, we apply three augmentation strategies to improve robustness. First, we randomly sample a plausible IMU sensor configuration and mask unused sensors to simulate real-world scenarios. Second, each IMU–motion sequence is randomly cropped and re-aligned to the first frame to enhance temporal robustness. Third, we randomly drop text descriptions with probability
+p
+=
+0.3
+p=0.3
+to accommodate datasets without text annotations. Since our sequence follows the order IMU
+→
+\to
+Motion
+→
+\to
+Text
+→
+\to
+Scene, masking text during training also prevents erroneous tokens from propagating to the downstream 3D scene layout prediction.
+Training details.
+For IMU-to-MotionText pretraining, we train on 4 NVIDIA A100 GPUs (40GB) with an effective batch size of 96 using gradient accumulation for 500k iterations, which takes approximately 5 days. For IMU-to-MotionTextScene finetuning, we train for 30k iterations on HUMOTO
+[
+57
+]
+and 50k iterations on ParaHome
+[
+40
+]
+. For both stages, we adopt the same optimizer and learning rate scheduler as Show-o
+[
+93
+]
+.
+S4.2
+Inference
+Sampling stop condition.
+Given an IMU input sequence of length
+T
+T
+, the model outputs human motion of the same length
+T
+T
+. For text and scene generation, decoding proceeds autoregressively until the model emits the special end tokens
+<EOT>
+and
+<EOOBJ>
+, where
+<EOT>
+and
+<EOOBJ>
+are the stop tokens of text and scene respectively.
+Shifted window with pose averaging.
+Given an IMU input of length
+T
+T
+, we perform two overlapping inference passes: the first produces prediction
+m
+1
+m_{1}
+over the full sequence, and the second produces a shifted prediction
+m
+2
+m_{2}
+by offsetting the input by two frames. The final motion is obtained by averaging over the overlapping region as
+m
+final
+=
+(
+m
+1
++
+m
+2
+)
+/
+2
+m_{\mathrm{final}}=(m_{1}+m_{2})/2
+, which yields smoother and more accurate results in local coordinates.
+S5
+Dataset Details
+S5.1
+Datasets for IMU-to-MotionText Pretraining.
+We use MotionMillion
+[
+15
+]
+as our primary data source for IMU-to-MotionText pretraining. This dataset aggregates large-scale motion sequences reconstructed from web videos and existing motion datasets. To ensure data quality, we remove datasets with irregular joint angles, heavy drift, jittering, or self-collisions. After filtering, we retain the following high-quality datasets: BABEL
+[
+71
+]
+, PhantomDance
+[
+45
+]
+, AIST
+[
+79
+]
+, FineDance
+[
+50
+]
+, Fit3D
+[
+18
+]
+, HI4D
+[
+106
+]
+, HumanSC3D
+[
+17
+]
+, InterHuman
+[
+52
+]
+, Inter-X
+[
+94
+]
+, TRUMANS
+[
+38
+]
+, EgoBody
+[
+113
+]
+, HAA500
+[
+9
+]
+, HumanML3D
+[
+24
+]
+, and Motion-X
+[
+54
+]
+. The filtered dataset contains approximately 800k sequences. We additionally incorporate LINGO
+[
+37
+]
+, which provides 20k high-quality motion-captured sequences. We follow the original train/val/test split for MotionMillion and apply an 80/10/10 split for LINGO.
+S5.2
+Datasets of IMU-to-MotionTextScene finetuning
+We adopt two human-scene interaction datasets for IMU-to-MotionTextScene finetuning.
+HUMOTO
+[
+57
+]
+is a high-fidelity human-object interaction dataset with 735 sequences (7,875 seconds at 30 fps) capturing interactions with 63 objects and 72 articulated parts. We use 705 sequences for training and 30 for testing. We use the first-frame 3D bounding box annotations of 63 object classes as ground truth, excluding articulated parts. Since HUMOTO provides motion in MIXAMO format, we apply motion retargeting to recover SMPL-X parameters.
+ParaHome
+[
+40
+]
+comprises 207 high-quality SMPL-X motion sequences (486 minutes total) from 38 participants, captured with 70 synchronized RGB cameras and wearable IMU-based motion capture suits. The dataset captures full-body and hand motion with multiple objects in home environments, paired with text descriptions. We use 166 sequences for training and 41 for testing. A key characteristic of ParaHome is that the major scene layout remains consistent across sequences while human activities and interactions vary. This property makes it particularly suitable for our 3D scene re-localization task, where the goal is to situate predicted motions within a fixed environment. Therefore, we do not utilize the 3D object annotations and instead focus on localizing human motion relative to the static scene layout.
+S6
+Quantitative Evaluation Details
+S6.1
+Metrics Definitions
+Motion metrics.
+We evaluate motion quality using five metrics adopted from MobilePoser
+[
+97
+]
+. MPJPE (Mean Per Joint Position Error) measures the average Euclidean distance between predicted and ground truth joint positions. PA-MPJPE (Procrustes-Aligned MPJPE) first aligns the predicted joints to the ground truth using rigid transformation then computes MPJPE. MPJRE (Mean Per Joint Rotation Error) computes the angular differences between predicted and ground truth joint rotations. MPJVE (Mean Per Joint Vertices Error) measures the difference in human meshes between predictions and ground truth. MTE (Mean Trajectory Error) evaluates the accuracy of the root joint’s global trajectory.
+Text metrics.
+Following MotionGPT3
+[
+121
+]
+, we adopt five widely-used linguistic metrics to evaluate text description quality. BERTScore
+[
+114
+]
+computes semantic similarity between predicted and reference texts using contextual embeddings from pre-trained BERT
+[
+12
+]
+models. BLEU@1 and BLEU@4
+[
+65
+]
+measure n-gram precision with brevity penalty, where BLEU@1 focuses on unigram overlap (word-level accuracy) and BLEU@4 captures longer phrase structures up to 4-grams. ROUGE-L
+[
+53
+]
+computes the longest common subsequence between predicted and reference texts, emphasizing sequential word order and sentence structure. CIDEr
+[
+81
+]
+weighs n-gram matches by their informativeness using TF-IDF, prioritizing distinctive and descriptive terms over common words.
+We clarify the negative BERTScore (-6.07) reported for IMUPoser
+[
+63
+]
++ MotionGPT
+[
+35
+]
+in Tab.
+S2
+. IMUPoser predicts only local joint rotations without global translation; filling in the missing translation channels with zeros corrupts the 263-dimensional HumanML3D representation
+[
+24
+]
+that both MotionGPT and MotionGPT3 require as input. MotionGPT is more severely affected because its VQ-VAE quantizes motion into discrete tokens, so even small input corruptions can map to entirely wrong codebook entries. MotionGPT3, by contrast, encodes motion into a continuous latent space, which degrades much less under partial input corruption.
+3D scene metrics.
+For 3D scene prediction, we evaluate both geometric accuracy and object recognition. We report 3D bounding box IoU (3D-IoU), which measures the volumetric overlap between predicted and ground-truth object bounding boxes. Precision and recall at IoU threshold 0.5 (
+P@0.5
+,
+R@0.5
+) assess how many predicted objects have sufficient geometric overlap with ground-truth objects, and vice versa. To evaluate object category recognition independently of localization quality, we additionally report identity-level precision and recall (ID-P, ID-R), which measure whether the predicted object classes match the ground-truth classes regardless of spatial accuracy. Together, these metrics capture both how well the model identifies which objects are present in the scene and how accurately it localizes them in 3D space.
+S6.2
+Evaluation Details
+For motion evaluation, we use the first 60 frames of each sequence across all benchmarks, except for the real-world DIP-IMU
+[
+32
+]
+and IMUPoser
+[
+63
+]
+dataset where we use 200 frames to better capture long-horizon performance with real sensor noise. For text evaluation, when multiple ground-truth captions are available for a single motion sequence, we compute the score between the predicted text and each reference caption individually, and take the maximum score as the final metric. For 3D scene evaluation, we manually map each fitted object from SUMMON
+[
+98
+]
+to the corresponding object category in our class taxonomy. Both the baseline and our model are finetuned separately on each dataset before evaluation on the respective test set.
+S7
+Failure Cases and Limitations
+In this section, we discuss the failure cases of our approach.
+Drifting.
+Human motion may drift over time due to the accumulation of prediction errors. This issue is shared by all methods. We hope that incorporating loop-closure mechanisms could alleviate this problem. We leave it for future work.
+Hallucinations and penetrations in scene predictions.
+IMU-to-scene prediction is highly ill-posed, as multiple scene layouts can correspond to the same IMU signals or motion sequences. We observe that the objects hallucinated by our approach may sometimes not match the ground truth. This issue could be alleviated with larger-scale datasets that reduce such ambiguities or by incorporating stronger human priors about scene layouts.
+Another issue is that the objects predicted by our approach may sometimes exhibit interpenetrations. This occurs because our model does not explicitly enforce penetration constraints. Incorporating such penalties could help alleviate this issue.
+Experimental support, please
+view the build logs
+for errors. Generated by
+L
+A
+T
+E
+xml
+.
+Instructions for reporting errors
+We are continuing to improve HTML versions of papers, and your feedback helps enhance accessibility and mobile
+      support. To report errors in the HTML that will help us improve conversion and rendering, choose any of the
+      methods listed below:
+Click the "Report Issue"
+(
+)
+button, located in the page header.
+Tip:
+You can select the relevant text first, to include it in your report.
+Our team has already identified
+the following issues
+. We appreciate your time reviewing and reporting rendering errors we
+      may not have found yet. Your efforts will help us improve the HTML versions for all readers, because disability
+      should not be a barrier to accessing research. Thank you for your continued support in championing open access for
+      all.
+Have a free development cycle? Help support accessibility at arXiv! Our collaborators at LaTeXML maintain a
+list of packages that need conversion
+, and welcome
+developer contributions
+.
+We gratefully acknowledge support from
+        our
+major funders
+,
+member institutions
+,
+,
+        and all contributors.
+Major funding support from

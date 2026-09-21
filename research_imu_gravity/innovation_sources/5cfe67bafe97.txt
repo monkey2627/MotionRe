@@ -1,0 +1,199 @@
+URL: https://arxiv.org/abs/2310.04874
+
+[2310.04874] AirIMU: Learning Uncertainty Propagation for Inertial Odometry
+Skip to main content
+Search arXiv
+Press Enter to search ·
+Advanced search
+Computer Science > Robotics
+arXiv:2310.04874
+(cs)
+[Submitted on 7 Oct 2023 (
+v1
+), last revised 15 May 2024 (this version, v4)]
+Title:
+AirIMU: Learning Uncertainty Propagation for Inertial Odometry
+Authors:
+Yuheng Qiu
+,
+Chen Wang
+,
+Can Xu
+,
+Yutian Chen
+,
+Xunfei Zhou
+,
+Youjie Xia
+,
+Sebastian Scherer
+View a PDF of the paper titled AirIMU: Learning Uncertainty Propagation for Inertial Odometry, by Yuheng Qiu and 6 other authors
+View PDF
+HTML (experimental)
+Abstract:
+Inertial odometry (IO) using strap-down inertial measurement units (IMUs) is critical in many robotic applications where precise orientation and position tracking are essential. Prior kinematic motion model-based IO methods often use a simplified linearized IMU noise model and thus usually encounter difficulties in modeling non-deterministic errors arising from environmental disturbances and mechanical defects. In contrast, data-driven IO methods struggle to accurately model the sensor motions, often leading to generalizability and interoperability issues. To address these challenges, we present AirIMU, a hybrid approach to estimate the uncertainty, especially the non-deterministic errors, by data-driven methods and increase the generalization abilities using model-based methods. We demonstrate the adaptability of AirIMU using a full spectrum of IMUs, from low-cost automotive grades to high-end navigation grades. We also validate its effectiveness on various platforms, including hand-held devices, vehicles, and a helicopter that covers a trajectory of 262 kilometers. In the ablation study, we validate the effectiveness of our learned uncertainty in an IMU-GPS pose graph optimization experiment, achieving a 31.6\% improvement in accuracy. Experiments demonstrate that jointly training the IMU noise correction and uncertainty estimation synergistically benefits both tasks.
+Subjects:
+Robotics (cs.RO)
+; Artificial Intelligence (cs.AI)
+Cite as:
+arXiv:2310.04874
+[cs.RO]
+(or
+arXiv:2310.04874v4
+[cs.RO]
+for this version)
+https://doi.org/10.48550/arXiv.2310.04874
+Focus to learn more
+arXiv-issued DOI via DataCite
+Submission history
+From: Yuheng Qiu [
+view email
+]
+[v1]
+Sat, 7 Oct 2023 17:08:22 UTC (26,360 KB)
+[v2]
+Tue, 10 Oct 2023 18:53:38 UTC (26,360 KB)
+[v3]
+Thu, 12 Oct 2023 12:56:33 UTC (26,360 KB)
+[v4]
+Wed, 15 May 2024 16:14:00 UTC (15,156 KB)
+Full-text links:
+Access Paper:
+View a PDF of the paper titled AirIMU: Learning Uncertainty Propagation for Inertial Odometry, by Yuheng Qiu and 6 other authors
+View PDF
+HTML (experimental)
+TeX Source
+view license
+Current browse context:
+cs.RO
+< prev
+|
+next >
+new
+|
+recent
+|
+2023-10
+Change to browse by:
+cs
+cs.AI
+References & Citations
+NASA ADS
+Google Scholar
+Semantic Scholar
+export BibTeX citation
+Loading...
+BibTeX formatted citation
+×
+loading...
+Data provided by:
+Bookmark
+Bibliographic Tools
+Bibliographic and Citation Tools
+Bibliographic Explorer Toggle
+Bibliographic Explorer
+(
+What is the Explorer?
+)
+Connected Papers Toggle
+Connected Papers
+(
+What is Connected Papers?
+)
+Litmaps Toggle
+Litmaps
+(
+What is Litmaps?
+)
+scite.ai Toggle
+scite Smart Citations
+(
+What are Smart Citations?
+)
+Code, Data, Media
+Code, Data and Media Associated with this Article
+alphaXiv Toggle
+alphaXiv
+(
+What is alphaXiv?
+)
+Links to Code Toggle
+CatalyzeX Code Finder for Papers
+(
+What is CatalyzeX?
+)
+DagsHub Toggle
+DagsHub
+(
+What is DagsHub?
+)
+GotitPub Toggle
+Gotit.pub
+(
+What is GotitPub?
+)
+Huggingface Toggle
+Hugging Face
+(
+What is Huggingface?
+)
+ScienceCast Toggle
+ScienceCast
+(
+What is ScienceCast?
+)
+Demos
+Demos
+Replicate Toggle
+Replicate
+(
+What is Replicate?
+)
+Spaces Toggle
+Hugging Face Spaces
+(
+What is Spaces?
+)
+Spaces Toggle
+TXYZ.AI
+(
+What is TXYZ.AI?
+)
+Related Papers
+Recommenders and Search Tools
+Link to Influence Flower
+Influence Flower
+(
+What are Influence Flowers?
+)
+Core recommender toggle
+CORE Recommender
+(
+What is CORE?
+)
+Author
+Venue
+Institution
+Topic
+About arXivLabs
+arXivLabs: experimental projects with community collaborators
+arXivLabs is a framework that allows collaborators to develop and share new arXiv features directly on our website.
+Both individuals and organizations that work with arXivLabs have embraced and accepted our values of openness, community, excellence, and user data privacy. arXiv is committed to these values and only works with partners that adhere to them.
+Have an idea for a project that will add value for arXiv's community?
+Learn more about arXivLabs
+.
+Which authors of this paper are endorsers?
+|
+Disable MathJax
+(
+What is MathJax?
+)
+We gratefully acknowledge support from
+        our
+major funders
+,
+member institutions
+,
+,
+        and all contributors.
+Major funding support from

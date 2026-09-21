@@ -1,0 +1,38 @@
+URL: https://openaccess.thecvf.com/content/ICCV2025/html/Kim_Probabilistic_Inertial_Poser_ProbIP_Uncertainty-aware_Human_Motion_Modeling_from_Sparse_ICCV_2025_paper.html
+
+ICCV 2025 Open Access Repository
+ICCV 2025
+open access
+These ICCV 2025 papers are the Open Access versions, provided by the
+Computer Vision Foundation.
+Except for the watermark, they are identical to the accepted versions;
+the final published version of the proceedings is available on IEEE Xplore.
+This material is presented to ensure timely dissemination of scholarly and technical work.
+Copyright and all rights therein are retained by authors or by other copyright holders.
+All persons copying this information are expected to adhere to the terms and constraints invoked 
+by each author's copyright.
+Powered by:
+Sponsored by:
+Probabilistic Inertial Poser (ProbIP): Uncertainty-aware Human Motion Modeling from Sparse Inertial Sensors
+Min Kim, Younho Jeon, Sungho Jo
+; Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV), 2025, pp. 25893-25902
+Abstract
+Wearable Inertial Measurement Units (IMUs) allow non-intrusive motion tracking, but limited sensor placements can introduce uncertainty in capturing detailed full-body movements. Existing methods mitigate this issue by selecting more physically plausible motion patterns but do not directly address inherent uncertainties in the data. We introduce the Probabilistic Inertial Poser (ProbIP), a novel probabilistic model that transforms sparse IMU data into human motion predictions without physical constraints. ProbIP utilizes RU-Mamba blocks to predict a matrix Fisher distribution over rotations, effectively estimating both rotation matrices and associated uncertainties. To refine motion distribution through layers, our Progressive Distribution Narrowing (PDN) technique enables stable learning across a diverse range of motions. Experimental results demonstrate that ProbIP achieves state-of-the-art performance on multiple public datasets with six and fewer IMU sensors. Our contributions include the development of ProbIP with RU-Mamba blocks for probabilistic motion estimation, applying Progressive Distribution Narrowing (PDN) for uncertainty reduction, and evidence of superior results with six and reduced sensor configurations.
+Related Material
+[
+pdf
+]
+[
+supp
+]
+[
+bibtex
+]
+@InProceedings{Kim_2025_ICCV,
+    author    = {Kim, Min and Jeon, Younho and Jo, Sungho},
+    title     = {Probabilistic Inertial Poser (ProbIP): Uncertainty-aware Human Motion Modeling from Sparse Inertial Sensors},
+    booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+    month     = {October},
+    year      = {2025},
+    pages     = {25893-25902}
+}

@@ -1,0 +1,745 @@
+                                         Shape-aware Inertial Poser: Motion Tracking for Humans with Diverse
+                                         Shapes Using Sparse Inertial Sensors
+                                         LU YIN, Xiamen University, China
+                                         ZIYING SHI, Xiamen University, China
+                                         YINGHAO WU, Xiamen University, China
+                                         XINYU YI, Tsinghua University, China
+                                         FENG XU, Tsinghua University, China
+                                         SHIHUI GUO*, Xiamen University, China
+                                         Human motion capture with sparse inertial sensors has gained significant                        Shapes Using Sparse Inertial Sensors. ACM Trans. Graph. 44, 6 (Decem-
+arXiv:2510.17101v1 [cs.GR] 20 Oct 2025
+
+
+
+
+                                         attention recently. However, existing methods almost exclusively rely on a                      ber 2025), 12 pages. https://doi.org/10.1145/3763311
+                                         template adult body shape to model the training data, which poses challenges
+                                         when generalizing to individuals with largely different body shapes (such as
+                                         a child). This is primarily due to the variation in IMU-measured acceleration
+                                         caused by changes in body shape. To fill this gap, we propose Shape-aware
+                                         Inertial Poser (SAIP), the first solution considering body shape differences in
+                                         sparse inertial-based motion capture. Specifically, we decompose the sensor
+                                         measurements related to shape and pose in order to effectively model their
+                                         joint correlations. Firstly, we train a regression model to transfer the IMU-
+                                         measured accelerations of a real body to match the template adult body
+                                         model, compensating for the shape-related sensor measurements. Then,
+                                         we can easily follow the state-of-the-art methods to estimate the full body
+                                         motions of the template-shaped body. Finally, we utilize a second regression
+                                         model to map the joint velocities back to the real body, combined with
+                                         a shape-aware physical optimization strategy to calculate global motions
+                                         on the subject. Furthermore, our method relies on body shape awareness,
+                                         introducing the first inertial shape estimation scheme. This is accomplished
+                                         by modeling the shape-conditioned IMU-pose correlation using an MLP-
+                                         based network. To validate the effectiveness of SAIP, we also present the first
+                                         IMU motion capture dataset containing individuals of different body sizes.
+                                         This dataset features 10 children and 10 adults, with heights ranging from
+                                         110 cm to 190 cm, and a total of 400 minutes of paired IMU-Motion samples.
+                                         Extensive experimental results demonstrate that SAIP can effectively handle
+                                         motion capture tasks for diverse body shapes. The code and dataset are
+                                         available at https://github.com/yinlu5942/SAIP.
+                                                                                                                                         Fig. 1. Left: Live comparison on a child subject between the state-of-the-art
+                                         CCS Concepts: • Computing methodologies → Motion capture.                                       inertial motion capture system PNP [Yi et al. 2024] (red) and our method (green).
+                                                                                                                                         Our solution effectively handles the child character, whereas PNP shows errors.
+                                         Additional Key Words and Phrases: Human Pose Estimation, Inertial Sensors
+                                                                                                                                         Right: Additional live demonstrations of our method showcase its capability to
+                                         ACM Reference Format:                                                                           handle complex motions across diverse body shapes.
+                                         Lu Yin, Ziying Shi, Yinghao Wu, Xinyu Yi, Feng Xu, and Shihui Guo*. 2025.
+                                         Shape-aware Inertial Poser: Motion Tracking for Humans with Diverse
+                                                                                                                                         1   Introduction
+                                         Authors’ Contact Information: Lu Yin, Xiamen University, School of Informatics, Xia-            Human motion capture is a highly promising technique that is
+                                         men, China, yinlu@stu.xmu.edu.cn; Ziying Shi, Xiamen University, School of Informat-
+                                         ics, Xiamen, China, 23020241154433@stu.xmu.edu.cn; Yinghao Wu, Xiamen University,               showing increasing impact across fields such as VR/AR, embodied
+                                         School of Informatics, Xiamen, China, 30920231154365@stu.xmu.edu.cn; Xinyu Yi,                  intelligence, rehabilitation, and animation. Motion capture with
+                                         Tsinghua University, School of Software and BNRist, Beijing, China, yixy20@mails.               dense markers or wearable sensors [Noitom 2017; Paulich et al.
+                                         tsinghua.edu.cn; Feng Xu, Tsinghua University, School of Software and BNRist, Beijing,
+                                         China, feng-xu@tsinghua.edu.cn; Shihui Guo*, Xiamen University, Xiamen, China,                  2018; Point 2011] has demonstrated very high precision but requires
+                                         guoshihui@xmu.edu.cn.                                                                           heavy systems that are not applicable to end users. Image-based
+                                         Permission to make digital or hard copies of all or part of this work for personal or
+                                                                                                                                         solutions [Sun et al. 2019; Ye et al. 2022; Yu et al. 2021b; Zhang
+                                         classroom use is granted without fee provided that copies are not made or distributed           et al. 2021; Zhao et al. 2024] are much more lightweight but suffer
+                                         for profit or commercial advantage and that copies bear this notice and the full citation       from occlusions and challenging lighting, and they are not suitable
+                                         on the first page. Copyrights for components of this work owned by others than the
+                                         author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or          for everyday use, as camera shooting is always required. Recently,
+                                         republish, to post on servers or to redistribute to lists, requires prior specific permission   there has been a new trend to use sparse Inertial Measurement Units
+                                         and/or a fee. Request permissions from permissions@acm.org.                                     (IMUs) for motion capture [Huang et al. 2018; Jiang et al. 2022b;
+                                         © 2025 Copyright held by the owner/author(s). Publication rights licensed to ACM.
+                                         ACM 1557-7368/2025/12-ART                                                                       Von Marcard et al. 2017; Wu et al. 2024; Yi et al. 2022, 2021, 2024].
+                                         https://doi.org/10.1145/3763311                                                                 Using only six IMUs placed on key body parts (hands, legs, head, and
+
+                                                                                                                                                ACM Trans. Graph., Vol. 44, No. 6, Article . Publication date: December 2025.
+2   •   Lu Yin, Ziying Shi, Yinghao Wu. et al
+
+
+waist), they significantly enhance comfort and portability, offering            shape-conditioned IMU signals. We develop an MLP-based estima-
+great potential for everyday motion capture tasks.                              tion algorithm that uses IMU data, pose, and body height as inputs.
+   However, due to the scarcity of real-world data, state-of-the-art            Since our motion tracking framework relies on shape input, we
+sparse IMU-based systems are predominantly trained on synthesized               initialize the shape using body height for the first window’s pose
+IMU data derived from a template human body model. Consequently,                estimation, then iteratively refine the predicted shape and pose over
+existing methods implicitly approach inertial motion capture by only            time.
+modeling the relationship between human pose and IMU signals. We                   Additionally, to validate our SAIP method and enrich open-source
+argue that this is inadequate, as IMU signals are influenced not only           IMU-based motion datasets, we present a multi-shape inertial mo-
+by human motion but also by shape variations. While these systems               tion capture dataset. This dataset comprises recordings from 10
+perform well on many adult characters, their accuracy significantly             adults over 18 years old and 10 children aged 5-10, totaling 1.5
+declines when applied to subjects like children, whose body shapes              million frames (over 7 hours) of diverse activities, including sports,
+substantially deviate from the training samples (see Fig. 1).                   daily actions, and freestyle movements. The dataset features subjects
+   The identified issue primarily arises from shape-conditioned IMU             ranging from young children as short as 118 cm to adults exceeding
+measurements, where positional kinematic data (e.g., position, ve-              190 cm, covering a broad spectrum of body sizes.
+locity, acceleration of joint and mesh) varies due to changes in body              In summary, our contributions are:
+shape. The impact of body shape on IMU signals manifests in var-
+ious ways (see Fig. 2): for instance, acceleration during rotation                  • The first shape-aware sparse inertial human motion capture
+around a parent joint is primarily influenced by bone length (rota-                   solution, achieving real-time motion tracking for diverse
+tion radius), while rotation around the bone itself is affected by limb               shapes (including small children), which we call SAIP.
+fatness and other shape attributes. In contrast, other motions such                 • A learning-based approach to bidirectionally regress posi-
+as jumping or falling, are largely unaffected by shape variations                     tional signals (acceleration and velocity) between various-
+in positional data, leading to specific scenarios. The complexity of                  shaped bodies and a template SMPL body model, addressing
+shape-conditioned IMU measurements underscores the importance                         the kinematic signal difference affected by human shapes.
+of modeling the relationship between body shape and IMU signals, a                  • Shape acquisition is achieved through modeling the shape-
+critical task in inertial motion capture. To model this relationship,                 pose conditioned IMU signals using an MLP-based algorithm.
+one potential solution is to retrain the system using synthesized                     We are the first system to estimate human shape using only
+IMU-motion data across diverse body shapes, though this approach                      sparse IMUs and body height input.
+complicates training due to the need to learn the triadic relationship              • A Multi-shaped Inertial Motion Capture Dataset (MID) with
+among body shapes, poses, and IMU signals. Alternatively, we pro-                     IMU and ground truth motion data collected from 20 various-
+pose disentangling this triadic relationship, offering a more efficient               shaped subjects, which is also the first IMU database with
+way to address the challenge.                                                         examples of pre-teen children.
+   In this paper, we address errors in inertial motion capture caused
+by body shape variations by proposing the first shape-aware solu-
+                                                                                2 Related Work
+tion, which independently models the effects of body shapes and
+poses on IMU signals. Our approach involves two key steps: 1)                   2.1 Human Motion Tracking using IMU sensors
+modeling the correlation between IMU signals and body shape by                  Motion reconstruction using IMUs typically involves attaching the
+mapping IMU measurements from diverse real body shapes to a                     IMUs to key body parts and solving inverse kinematics (IK) based
+template body shape under identical poses, and 2) leveraging an es-             on IMU measurements to obtain joint rotations (body pose). In
+tablished pose estimation framework designed for the template body              commercial systems such as Xsens [Paulich et al. 2018] and Noitom
+shape to model the relationship between IMU signals and motion.                 PN Series [Noitom 2017], human pose estimation using dense IMUs
+To accomplish this, we first propose a learning-based kinematic sig-            (e.g. 17 IMUs) have achieved high accuracy.
+nal retargeting method for step 1). Specifically, we synthesize IMU                In recent years, methods that use sparse IMUs (e.g., only 6 IMUs)
+measurements across various body shapes under identical poses,                  attached to the arms, legs, head, and waist have garnered signifi-
+and train a neural network to map the input IMU data from a real                cant attention. Huang [2018] was the first to use recurrent neural
+human body to the corresponding IMU data of a template adult                    networks (RNNs) to estimate human pose in an end-to-end manner.
+body model. In step 2), we adopt state-of-the-art techniques to de-             Yi [2021] introduced a multi-stage prediction framework that incor-
+compose the motion capture task into local pose estimation and                  porates joint position information to estimate more accurate human
+global movement estimation. While the local pose regressed from                 pose, achieving global motion tracking as well. In subsequent studies,
+the template body’s IMU data aligns with the real body shape, the               Jiang [2022b] and Wu [2024] employed the transformer architecture
+global movement requires recalculation. To address this, we utilize             to improve pose estimation accuracy, while Yi [2022] proposed a
+a second retargeting network to regress the real body’s joint veloci-           physics-based optimization method to calculate global movement
+ties from those of the template body and implement a shape-aware                and make the predicted human motion physically plausible. Most
+physics optimization module to calculate the global movements of                recently, Yi [2024] addressed the challenge of modeling non-inertial
+the real body. Furthermore, the retargeting nets require awareness              forces when the root joint operates in a non-inertial coordinate
+of the real body shape. To address this, we introduce the first human           system, thereby correcting acceleration measurements to achieve
+shape estimation scheme in a sparse IMU-only system by modeling                 more accurate motion tracking under acceleration-domain motions.
+
+ACM Trans. Graph., Vol. 44, No. 6, Article . Publication date: December 2025.
+                                                       Shape-aware Inertial Poser: Motion Tracking for Humans with Diverse Shapes Using Sparse Inertial Sensors    •   3
+
+
+   Some studies also apply IMU data using nonattached techniques.                   3     Method
+For example, Zuo [2024] estimate upper body pose using IMUs                         Our task is to reconstruct human motion from 6 IMUs attached
+embedded in a loose-wear jacket for a comfort user experience. An-                  to the human body. The input is each IMU’s acceleration 𝐴 ∈ R3 ,
+other widely followed approach involves integrating additional 3D                   angular velocity 𝜔 ∈ R3 , and orientation 𝑅 ∈ SO(3). The outputs
+position information alongside IMU data. Using VR device trackers                   are the human pose defined as joint rotations using the 6D [Zhou
+with cameras or external stations such as HMDs (Head Mounted De-                    et al. 2019] representation 𝜃 ∈ R6𝑛 and global translation of the
+vices) and controllers, some studies can generate full-body motions                 root joint 𝑟𝑟𝑜𝑜𝑡 ∈ R3 , where 𝑛 = 24 denotes the number of the body
+from 3 trackers on head and wrists [Aliakbarian et al. 2022; Dittadi                joints in the SMPL [Loper et al. 2023] skeleton.
+et al. 2021; Du et al. 2023; Feng et al. 2024; Jiang et al. 2024, 2022a;
+Lee and Joo 2024; Lee et al. 2023; Liang et al. 2023; Winkler et al.                3.1    Shape-conditioned IMU Signals
+2022; Yang et al. 2024, 2021a], while Ponton [2023] uses 6 trackers
+to perform high accuracy motion tracking. However, most existing                    Previous work often assumes a mean body shape when estimating
+methods rely on a template SMPL [Loper et al. 2023] body model                      motion from sparse IMUs. However, we argue that body shape signif-
+to represent output motion. While this approach performs well for                   icantly influences IMU measurements, where large inconsistencies
+many adult subjects, it struggles to accommodate a diverse range of                 between the assumed and actual body shape can substantially de-
+body shapes, particularly those of small children.                                  grade motion estimation accuracy. For instance, when capturing a
+                                                                                    child’s movement, IMUs generate smaller acceleration compared
+                                                                                    to an adult’s. Interpreting these measurements based on an adult’s
+2.2   Human Shape Estimation                                                        body shape will produce incorrect motion dynamics.
+Human shape estimation involves reconstructing human meshes                            Modeling the influence of body shape on IMU signals is nontrivial.
+from real-world data inputs. Pioneering efforts in this field relies                As illustrated in Fig. 2, when individuals with different body shapes
+on optical data, such as images and videos, which provide rich in-                  perform the same motion (i.e., identical joint rotations), their accel-
+formation about body shape [Cai et al. 2023; Chibane et al. 2020;                   eration patterns can vary significantly and cannot be approximated
+Kocabas et al. 2020; Li et al. 2021b,a; Pang et al. 2022; Sengupta et al.           by a simple scale factor. For instance: motion like 1) body swing
+2020; Shen et al. 2023; Yang et al. 2021b]. However, other applica-                 induces accelerations proportional to local bone length, and 2) body
+tions—including body-worn sensor-based pose estimation, human                       twist produces accelerations correlated with body fatness; while
+action recognition, and humanoid control—also require shape in-                     other motion like 3) jumping can yield shape-invariant accelera-
+formation, yet lack access to camera-based inputs. Recent studies                   tions (e.g., gravitational acceleration). Thus, real-world IMU signals
+have explored alternatives for shape estimation in sensor-based                     couple multiple aspects of body shape, e.g. bone lengths and fat dis-
+systems; for instance, Yang [2024] propose a calibration process to                 tribution, in a pose-dependent manner, making their interpretation
+adapt human skeletons, while Jiang [2024] leverage head-mounted                     highly context-dependent.
+displays (HMDs) to estimate shape proportions. Nevertheless, these
+approaches rely on additional data, such as controller positions                    3.2    Framework Overview
+or HMD-derived images, restricting their applicability to specific
+                                                                                    Our method consists of two core components:
+system configurations.
+                                                                                       Shape-Aware Motion Tracking (Fig. 3, top half) captures shape-
+                                                                                    dependent human motion from IMU signals and body shape infor-
+2.3   Motion Capture Datasets                                                       mation. To decouple shape and motion in the IMU measurements,
+Human motion data typically consists of a sequence of poses that                    we first retarget the IMU signals to a template model with a mean
+describe a person’s actions, while many applications also empha-                    body shape while preserving the motion (Kinematic Signal Retar-
+size global movement expressed in 3D coordinates. With the rapid                    geting Module, Section 3.2). These shape-invariant signals are then
+progress in deep learning, extracting human poses from videos and                   processed by an off-the-shelf motion estimator, yielding pose and
+RGB images to derive motion data has become a dominant approach.                    translation estimates aligned with the mean shape. Next, we fix the
+Many large-scale motion datasets also rely on dense marker sys-                     estimated pose and retarget the translation back to the real shape
+tems [Black et al. 2023; Chatzitofis et al. 2020; Kratzer et al. 2020; Lin          using a velocity-based retargeting network. Finally, to enhance phys-
+et al. 2023; Mahmood et al. 2019; Plappert et al. 2016]. In addition to             ical plausibility, we apply a shape-aware physics-based optimization
+optical systems, inertial sensors offer another effective method for                to refine the reconstructed motion (Section 3.3).
+acquiring high-precision human motion data. In recent years, the                       Inertial Mesh Reconstruction (Fig. 3, bottom half) progres-
+research community has seen the emergence of several open-source                    sively refines the estimated body shape using both the reconstructed
+IMU databases, such as [Huang et al. 2018; Maurice et al. 2019;                     motion and input IMU measurements (Section 3.4).
+Palermo et al. 2022; Trumble et al. 2017]. Although various motion                     The two components operate synergistically: Shape-Aware Mo-
+capture datasets encompass a broad spectrum of body shapes, most                    tion Tracking provides accurate kinematic data for mesh refine-
+lack child subjects. Datasets that do include children, such as [Aloba              ment, while Inertial Mesh Reconstruction improves shape estima-
+et al. 2018], suffer from noise and suboptimal quality. The dataset                 tion which in turn enhances motion tracking accuracy. Additionally,
+proposed in [Dong et al. 2020] collects motion data from 8 children                 we introduce the MID Dataset, a novel collection of IMU and mo-
+for a style transfer task, but it is limited to basic actions like walking,         tion data under diverse body shapes to facilitate evaluation (Section
+running, and jumping, lacking motion diversity.                                     3.5).
+
+                                                                                           ACM Trans. Graph., Vol. 44, No. 6, Article . Publication date: December 2025.
+4   •   Lu Yin, Ziying Shi, Yinghao Wu. et al
+
+
+                                                                                   (3) Simulated joint acceleration and velocity data derived from
+                                                                                       motion data.
+                                                                                   AMASS [Mahmood et al. 2019] dataset contains motion data for
+                                                                                adults and their corresponding SMPL body shapes. To enrich body
+                                                                                shapes, we scale the original shapes obtained from AMASS within a
+                                                                                range of 0.5 to 1.2, resulting in shapes with heights ranging from 0.8
+                                                                                to 2.0 m, covering a much wilder range of human bodies, including
+                                                                                children subjects. To compute the correct global movement under
+                                                                                body shape variations, we adjust the global velocity of the root joint
+                                                                                based on foot-ground contact. For a given motion sequence and its
+                                                                                paired body model, we calculate forward kinematics (FK) to obtain
+                                                                                four mesh vertices’ positions 𝑣𝑖 at the tips and heels of both feet in
+                                                                                frame 𝑖. The initial position tran𝑇0 of the target body 𝑇 is aligned
+                                                                                with the SMPL body 𝑀: the 𝑥- and 𝑧-coordinates of tran𝑇0 match
+                                                                                those of tran𝑀 0 , while the 𝑦-coordinate (vertical position) is also
+                                                                                determined by the scale, ensuring foot-ground contact. For the rest
+                                                                                of the motion sequence, if ∥𝑣𝑖 − 𝑣𝑖 −1 ∥ < 0.5 cm, we consider the
+                                                                                vertex to be stationary (i.e., in contact with the ground). For each
+                                                                                frame 𝑖, if any vertex satisfies the stationary condition, we calculate
+Fig. 2. Illustration of Our Motivation: IMU signals in real-life actions are
+                                                                                the velocity of that vertex 𝑉𝑖 (in the root joint frame). Since the
+influenced by various shape-related factors. Without kinematic signal re-       vertex is stationary, translation of the root joint is updated as:
+targeting, current baseline methods, trained solely on adult data, fail to                              tran𝑇𝑖 = tran𝑇𝑖−1 + 𝑉𝑖 .                    (1)
+accurately perform inertial motion tracking for subjects with diverse shapes,
+as the input signals deviate significantly from the training samples.           When neither foot satisfies the stationary condition (e.g., during a
+                                                                                jump), the root joint global position is updated as:
+                                                                                                       tran𝑇𝑖 = tran𝑇𝑖−1 + 𝑉𝑖𝑀 ,                    (2)
+3.3     Learning-based Kinematic Signal Retargeting                             where the scaled body and the SMPL body have identical root joint
+Baseline methods for motion capture typically decompose the task                velocities during jumping motions. This ensures that the IMU ac-
+into two subtasks: local pose estimation and global movement esti-              celeration measurements correspond to gravitational acceleration.
+mation. These methods take IMU measurements as input and output                 Finally, we use the acceleration synthesis algorithm based on energy
+local poses and global joint velocities. To address the challenges              optimization proposed in [Yi et al. 2024] to generate the required
+outlined in Section 3.1.1, we propose the following approach:                   IMU acceleration data 𝐴𝑅 and 𝐴𝑇 .
+   The first kinematic signal retargeting network, denoted as 𝑅𝑎𝑐𝑐 in
+Fig. 3, takes positional IMU data (acceleration 𝐴𝑅 ) and body shape             3.4   Global motion reconstruction
+information 𝛽 as inputs and regresses the acceleration 𝐴𝑇 corre-                We conduct global motion estimation using the regressed acceler-
+sponding to the template body shape. We adopt the pose estimation               ation 𝐴𝑇 , alongside other IMU measurements such as orientation
+component from state-of-the-art PNP [Yi et al. 2024], using the stan-           and angular velocity. Initially, we adopt the method from [Yi et al.
+dardized IMU data as input to infer local poses and joint velocities            2024] to model non-inertial acceleration, employing a neural auto-
+𝑉𝑇 . Here, local poses are represented by joint rotations, which are            regressive estimator to learn the physically accurate fictitious forces
+not affected by body shape variations. Analogous to 𝑅𝑎𝑐𝑐 , a second             resulting from the non-inertial root coordinate frame of the human
+kinematic signal retargeting network, 𝑅𝑣𝑒𝑙 , takes body shape infor-            body, yielding the fictitious force acceleration. Next, following the
+mation as input and maps the joint velocities to the target body                framework in [Yi et al. 2021], we utilize three neural networks to
+shape. Through this process, we obtain the pose and global joint                sequentially predict: the positions of five leaf-node joints, full-body
+velocities of the target body. To model the temporal nature of IMU              joint positions, and joint rotations. For global movement estimation,
+signals, 𝑅𝑎𝑐𝑐 and 𝑅𝑣𝑒𝑙 employ recurrent neural networks (see our                we apply the approach from [Yi et al. 2022] to regress joint velocities
+supplementary paper for implementation details).                                𝑉 ∈ R24×3 and foot-ground contact probabilities.
+   The inputs and outputs of the retargeting networks consist of                   Our implementation of a learning-based kinematic signal retar-
+shape-conditioned positional data (acceleration and velocity). Such             geting method and global motion estimator (Section 3.1) effectively
+ground truth data is evidently unavailable in real-world scenarios.             estimates local pose and global movement by independently model-
+To train 𝑅𝑎𝑐𝑐 and 𝑅𝑣𝑒𝑙 , we need:                                               ing the influence of body shape variations and IMU signals on the
+    (1) A set of diverse body shapes, including not only SMPL shapes            output motion. Subsequently, state-of-the-art approaches [Yi et al.
+        but child characters.                                                   2022] employ a physics-based optimization strategy, leveraging the
+    (2) Motion data corresponding to these body shapes, as different            estimated local pose, foot-ground contact, and joint velocities to
+        global movements occur for individuals performing the same              produce more physically plausible human motion. However, this
+        action.                                                                 strategy relies on a fixed adult body model [Shimada et al. 2020],
+
+ACM Trans. Graph., Vol. 44, No. 6, Article . Publication date: December 2025.
+                                                        Shape-aware Inertial Poser: Motion Tracking for Humans with Diverse Shapes Using Sparse Inertial Sensors    •   5
+
+
+
+
+Fig. 3. Pipeline of Our Method: 1) Shape-Aware Motion Tracking: Real IMU signals are first mapped to a template-shaped model using 𝑅𝑎𝑐𝑐 . Next, a global
+motion estimator regresses local pose and joint velocities, followed by 𝑅𝑣𝑒𝑙 to map the estimated velocities back to the target character. Our shape-aware
+motion optimizer employs a dynamic model tailored to the real body shape to derive physically accurate global motion. 2) Inertial Mesh Reconstruction: We
+utilize an MLP-based shape estimator to achieve shape awareness by leveraging IMU signals and the estimated pose.
+
+
+limiting its adaptability to diverse body shapes. To overcome this,                  height to compute a scale factor relative to the template body height.
+we introduce a dynamic model that integrates body shape infor-                       This scaled zero shape initializes the retargeting networks in the
+mation. For a human body with known shape parameters 𝛽, we                           first window, producing a size-aware-only initial local pose. Sub-
+compute physical properties such as mass, center of mass, and iner-                  sequently, our MLP estimates an initial body shape from the pose
+tia, enabling the original optimization strategy to adaptively control               and IMU signals within this window. Using these estimated shape
+characters with varying body shapes. We will elaborate on this                       parameters, the motion tracking algorithm performs shape-aware
+physics-based optimization technique in Section. 3.6.                                motion estimation in the second window. As the number of win-
+                                                                                     dows increases, both body shape and pose estimation improve in
+                                                                                     accuracy (Alg. 1).
+ALGORITHM 1: Inertial Mesh Reconstruction
+  Data: IMU acceleration 𝐴𝑅 , orientation 𝑅, subject body height 𝐻𝑅 ,
+          template body height 𝐻𝑇 , template body shape 𝛽 0 , refine time
+          window 𝑊 .
+                                                                                     3.6    Shape-aware Dynamic Model
+  Result: Sequence of local poses 𝜃 = {𝜃 1 , 𝜃 2 , . . . }, SMPL shape               Physical optimization is employed to derive globally consistent
+            parameters 𝛽                                                             motion that adheres to physical constraints based on kinematic esti-
+  Initialize scale ← 𝐻𝑅 /𝐻𝑇 , 𝛽 ← 𝛽 0 ∗ scale, 𝜃 ← [ ], 𝑡 ← 1, 𝑊 ← 60;               mations. While some studies utilize optimization-based techniques
+   while 𝐴𝑅 and 𝑅 is available do                                                    [Andrews et al. 2016; Li et al. 2019; Rempe et al. 2020; Shimada et al.
+       𝜃 𝑡 ← PoseEstimator(𝐴𝑅 , 𝛽, . . . ) // Estimate pose for current
+                                                                                     2020] to determine optimal forces and human motion that comply
+         frame.
+                                                                                     with physical laws, such as the equation of motion [Featherstone
+       𝜃 ← 𝜃 ∪ {𝜃 𝑡 } // Append pose to sequence.
+       if 𝑡 mod 𝑊 = 0 then                                                           2014], others leverage reinforcement learning [Bergamin et al. 2019;
+            𝛽 ← ShapeEstimator(𝐴𝑅 , scale, 𝜃 𝑡 −𝑊 +1→𝑡 ) // Update                   Isogawa et al. 2020; Schreiner et al. 2024; Yu et al. 2021a; Yuan and
+              shape parameters every window                                          Kitani 2019; Yuan et al. 2021] in physics-based character control,
+       end                                                                           harnessing advanced non-differentiable physics simulators. Among
+  end                                                                                these, our approach most closely aligns with that of Yi et al. [Yi
+                                                                                     et al. 2022], which implements a dual PD (Proportional-Derivative)
+                                                                                     controller for joint rotations and positions. This method introduces
+                                                                                     a novel dual PD controller to enhance global character control and
+3.5   Inertial Mesh Reconstruction                                                   accuracy, marking the first explicit integration of physics-based
+In Section 3.1, we analyzed how body shape variations affect ac-                     optimization into sparse IMU-based motion capture. However, dis-
+celeration under identical poses, leveraging body shape and the                      crepancies between joint velocities and the fixed physical properties
+target character’s acceleration to regress local pose. Likewise, shape-              of the dynamic model hinder precise global motion control. To ad-
+conditioned acceleration variations encode body shape information,                   dress this, we propose a shape-aware enhancement to this approach.
+which we exploit using an MLP to regress SMPL shape parameters                          The joint positions and the mesh vertex positions of the human
+𝛽 from 𝐴𝑅 and the predicted pose. We employ a 60-frame (1-second)                    body in the initial state for individuals with different body shapes
+window to update body shape. Our system uses the subject’s body                      are first obtained by calculating the forward kinematics (FK). Then,
+
+                                                                                            ACM Trans. Graph., Vol. 44, No. 6, Article . Publication date: December 2025.
+6   •   Lu Yin, Ziying Shi, Yinghao Wu. et al
+
+
+                                                                                      complete consent form before motion capture commenced. Addi-
+                                                                                      tionally, all live demonstration recordings and the use of images
+                                                                                      in our supplementary video were conducted with explicit written
+                                                                                      consent from all participants.
+
+                                                                                      3.7.2 Motion Capture. Data collection was performed using Noitom’s
+                                                                                      PN series sensors and the PN Studio system [Noitom 2017], which
+                                                                                      utilizes 17 PN IMU sensors attached at fixed positions to measure
+                                                                                      IMU data and compute joint rotations. Prior to data collection, each
+                                                                                      participant’s bone lengths were measured and used by the PN Studio
+                                                                                      software to construct skeletal models, enabling accurate pose and
+                                                                                      global movement capture. We opted for a 17-IMU motion capture
+                                                                                      system over marker-based systems due to two key limitations of the
+Fig. 4. Our MID dataset contains IMU-Motion paired samples collected                  latter: 1) marker-based systems require custom-tailored MoCap suits
+from 20 subjects with diverse shapes.                                                 for children, as commercial options are designed solely for adults,
+                                                                                      and 2) the active nature of children often leads to markers detaching
+                                                                                      during capture, complicating data processing. In contrast, the 17-
+the body is sliced along the x-axis (in SMPL coordinates, x-left, y-                  IMU system adapts to diverse body shapes without requiring a suit,
+up, z-formward) with a defualt step size 𝑟𝑒𝑠 (resolution for mesh                     as IMUs are simply attached to fixed positions, ensuring stability and
+voxelization) of 2 cm, where the global inner points 𝑃 are deter-                     ease of use. In comparison to multiview camera systems, the 17-IMU
+mined. The weight of points is calculated using linear interpolation.                 system provides more accuracy and represents the most precise ref-
+Whereas the weighted mass of the points, as seen from joints is:                      erence we could obtain, as chosen by other datasets in the research
+                             𝑤𝑖 𝑗 = weight𝑖 𝑗 ∗ 𝑟𝑒𝑠 3                           (3)   community (such as Nymeria [Ma et al. 2024] and DIP-IMU [Huang
+                                                                                      et al. 2018]). During data collection, we first explained the process
+Then, mass of joint 𝑖 is:
+                                                                                      to child participants and demonstrated MoCap results to engage
+                                             𝑀
+                                             ∑︁                                       their interest and attention. Given children’s typically lower compli-
+                                  𝑚𝑖 =             𝑤𝑖 𝑗 ,                       (4)   ance, we avoided prescribing specific actions, instead encouraging
+                                             𝑗=1
+                                                                                      freestyle movements. This approach yielded a diverse, child-styled
+where 𝑀 is total number of inner points and 𝑤𝑖 𝑗 is mass weight of                    motion dataset, reflecting varied expressions across different body
+joint 𝑖 as seen from point 𝑗. We then compute centor of mass (com)                    shapes (Fig. 4). Moreover, the 17-IMU system’s independence from
+of joint 𝑖 as:                                                                        camera setups and optical constraints enabled data collection in
+                             Í𝑀
+                                𝑗=1 𝑤 𝑖 𝑗 (𝑃𝑖 − 𝑗𝑖 )                                  unconstrained outdoor environments, such as playgrounds and bas-
+                        𝑐𝑖 =                                      (5)                 ketball courts. Consequently, our dataset includes extended global
+                                      𝑚𝑖
+Next, we have the contribution of all points to the center of mass of                 movement sequences, featuring minutes-long recordings of children
+joint 𝑖 defined as the inertia:                                                       walking and running.
+                                       𝑀
+                                       ∑︁                                             3.7.3 Dataset Composition. The MID dataset provides the follow-
+                                𝐼𝑖 =         𝑤𝑖 𝑗 𝑅 𝑗 𝑅𝑇𝑗 ,                     (6)   ing: 1. Motion Data: Raw motion data files are exported from PN
+                                       𝑗=1
+                                                                                      Studio in BVH and FBX formats, based on Noitom’s default skeletal
+where 𝑅 𝑗 is the offset vector of point 𝑗 relative to the com, denoted as             structure. Additionally, we provide processed motion data aligned
+[𝑃 𝑗 − 𝑐𝑖 ] × We incorporate body shape-informed physical properties                  with the SMPL skeleton, including local pose and global root joint
+mass, com and inertia into the dual PD controller to achieve our                      position data. 2. IMU Data: Raw IMU data, recorded in the sensor
+shape-aware physical optimization strategy. Physical optimization is                  coordinate system, are calibrated to the SMPL coordinate system
+implemented using the Rigid Body Dynamics Library (RBDL)[Felis                        for inertial motion capture applications. The dataset includes ac-
+2016].                                                                                celeration, angular velocity, and orientation data from 17 IMUs (
+                                                                                      featuring the 6 IMUs used in our sparse inertial motion capture
+3.7     Multi-shape Inertial MoCap Dataset (MID)                                      task) in CSV format at 60 FPS. In total, the MID dataset contains
+We introduce the Multi-shape Inertial MoCap Dataset (MID), which,                     1.5 million frames (over 7 hours) of motion and IMU data. We also
+to our knowledge, is the first IMU dataset in the research community                  leverage this dataset to validate our proposed SAIP method.
+to include pre-teen children. The dataset comprises 20 participants:
+10 children aged 5–10 years and 10 adults over 18 years, with heights                 4 Experiments
+ranging from 110 cm to over 190 cm, ensuring a diverse range of                       4.1 Implementation Details
+body shapes (Fig. 4).
+                                                                                      Datasets We utilize the augmented AMASS dataset (Section 3.2) to
+3.7.1 Consent. All participants signed an informed consent form                       synthesize IMU data for training. The augmented DanceDB dataset
+before joining the study. For child participants, we provided an                      [Aristidou et al. 2019] (which we call DanceDB*), featuring child
+age-appropriate consent version, while their parents received the                     body shapes with heights ranging from 0.8 m to 1.2 m, serves as one
+
+ACM Trans. Graph., Vol. 44, No. 6, Article . Publication date: December 2025.
+                                                    Shape-aware Inertial Poser: Motion Tracking for Humans with Diverse Shapes Using Sparse Inertial Sensors    •   7
+
+
+Table 1. Quantitative comparison results with state-of-the-art. The              Table 2. Ablation studies on the kinematic signal retargeting networks,
+transofmer-based method ASIP [Wu et al. 2024] is retrained using our             shape estimator and shape-aware physics optimization scheme. Conducted
+augmented data containing subjects with diverse shapes.                          on DanceDB*.
+
+
+    Method       SIP Err   Ang Err     Joint Err   Mesh Err      Jitter           Method              SIP Err      Ang Err       Joint Err     Mesh Err        Jitter
+                              DanceDB*                                            w/o 𝑅𝑎𝑐𝑐             15.17          9.93         6.62           7.66         0.31
+                                                                                  w/o 𝑅𝑣𝑒𝑙             12.27          8.28         5.19           5.98         0.37
+  TransPose      47.06       32.83      19.85        23.31       4.17
+                                                                                  w/o Dynamic          12.71          9.01         5.55           6.48         0.35
+     PIP         19.48       12.16       8.20        9.58        0.32
+                                                                                  w/o Shape            15.82         10.23         7.20           8.34         0.36
+     TIP         20.14       13.59       8.48        9.70        0.80
+                                                                                  SAIP (ours)          12.23         8.27          5.17           5.96         0.35
+    ASIP         17.68       12.10       7.98        8.46        0.71
+     PNP         15.58       10.46       6.90        8.02        0.86
+  SAIP (ours)    12.23       8.27       5.17         5.96        0.35
+                                 MID                                             4.2    Comparisons
+  TransPose      26.29       15.68       8.40        9.08        0.20            In this section, we evaluate our proposed SAIP method against
+     PIP         25.10       13.59       9.54        11.52       0.09            state-of-the-art inertial motion capture techniques, including Trans-
+     TIP         31.68       17.99       9.76        11.14       0.27            Pose [Yi et al. 2021], PIP [Yi et al. 2022], TIP [Jiang et al. 2022b],
+    ASIP         22.20       13.75       8.81        9.42        0.16            ASIP [Wu et al. 2024], and PNP [Yi et al. 2024], using the DanceDB*
+     PNP         23.22       14.60       8.18        9.09        0.10            dataset and real-world IMU-motion data from our MID dataset. We
+  SAIP (ours)    21.00       8.67        5.24        6.09        0.12            present the performance of our method in Tab. 1 and our supplemen-
+                                                                                 tary video. SAIP consistently outperforms state-of-the-art methods
+                                                                                 on both the augmented test dataset and real-world data, achieving
+                                                                                 a significant reduction in pose estimation errors compared to the
+                                                                                 second-best method. This demonstrates SAIP’s robustness in mo-
+                                                                                 tion tracking across subjects with diverse shapes, including young
+of the test sets. The shape estimator is also trained on the AMASS               children. Notably, we retrained the transformer-based Sequence
+dataset. Additionally, we validate our method on our real-world                  Structure Module (SSM) proposed in ASIP [Wu et al. 2024] using
+MID dataset and the TotalCature[Trumble et al. 2017] dataset.                    the same training dataset as our model, augmented with additional
+Metrics We use the same metrics as in [Wu et al. 2024; Yi et al.                 child-specific data from the original adult AMASS dataset. Given
+2022, 2021, 2024] to evaluate motion tracking accuracy: 1) SIP Errors            transformers’ [Vaswani et al. 2017] sensitivity to data volume, in-
+(degrees) measures mean global orientation error of shoulders and                corporating child data markedly enhanced test performance. Never-
+hips, 2) Angular Error (degrees) measures mean global rotation error             theless, our method still achieves a 35% improvement in mesh error.
+for all body joints, 3) Positional Error (cm) measures mean position             We attribute this phenomenon to the fact that simply expanding the
+error of all body joints, 4) Mesh Error (cm) measures mean vertex                training data is insufficient, a point we later elaborate on in the eval-
+position error of all SMPL meshes, and 5) Jitter Error (103 m/s3 ) mea-          uation section. Although our method exhibits slightly higher jitter
+sures mean body joints jerk. We alse evaluate body shape esimating               error than PIP, this does not indicate instability; rather, it reflects our
+results using 6) Mesh Error-T (cm): mesh error in the T-pose. For all            adoption of our baseline algorithm PNP’s non-inertial acceleration
+of the above metrics, smaller values indicate higher accuracy.                   modeling, which increases sensitivity to motion dynamics.
+Network Setup The retargeting networks 𝑅𝑎𝑐𝑐 and 𝑅𝑣𝑒𝑙 , are imple-
+mented as Recurrent Neural Networks (RNNs), comprising a linear                  4.3    Evaluations
+input layer, two long short-term memory (LSTM) layers, and a linear              We conducted ablation studies on the key components of our frame-
+output layer. The linear layers employ ReLU as the activation func-              work, including: (1) removing 𝑅𝑎𝑐𝑐 and 𝑅𝑣𝑒𝑙 regression components
+tion, with the hidden layer dimension set to 256. For both RNNs,                 before and after the global motion estimator, respectively, (2) us-
+a dropout rate of 40% is applied and the batch size is set to 256.               ing a template body shape instead of our MLP shape estimator to
+The shape estimator contains 4 layers with a hidden width of 512.                achieve shape awareness (w/o Shape module or w/o Shape), and (3)
+All networks are optimized using the ADAM optimizer in training.                 replacing the shape-aware physical optimization scheme with [Yi
+In the template-shaped global motion estimation stage, we follow                 et al. 2022] (w/o Dynamic model or w/o Dynamic) to evaluate the
+[Yi et al. 2024], utilizing 5 RNNs to regress local poses and global             effectiveness of our shape-aware optimization.
+movements and a fully connected network as the fictitious force                     We report the quantitative results of pose accuracy in Tab. 2 and
+estimator.                                                                       translation estimation error in Fig. 5, our SAIP method generally
+System Hardware Our MID dataset is collected using the Noitom                    outperforms the alternatives. The vanilla physical optimization mod-
+PN Studio system. Our system utilizes 6 Noitom PN Lab series                     ule in [Yi et al. 2022] fails to match children’s joint velocities and
+sensors at a frame rate of 60fps. Our network is trained on an Nvidia            poses accurately, resulting in a larger translation error gap. Since
+RTX 4090 graphics card and is run in real-time on a laptop with                  𝑅𝑣𝑒𝑙 focuses on the global movement retargeting, it primarily affects
+Intel(R) Core(TM) i7-12700H CPU without GPU.                                     global motion results and has a relatively smaller impact on pose
+
+                                                                                        ACM Trans. Graph., Vol. 44, No. 6, Article . Publication date: December 2025.
+8   •   Lu Yin, Ziying Shi, Yinghao Wu. et al
+
+
+
+
+Fig. 5. Comparison of translation drifting error. We plot the global position error accumulation curve with respect to the real traveled distance. A lower curve
+indicates smaller drift. Left: Ablation study on our MID dataset demonstrate the effectiveness of the proposed modules on handling subjects with diverse body
+shapes. Right: Comparison with state-of-the-art PNP on the TotalCapture dataset shows that our method achieves higher accuracy even on near-template
+subjects.
+
+
+
+
+                                                                                   Fig. 7. Shape and Motion Reconstruction Error Across Subjects. We plot
+                                                                                   the shape error in dark colors and the pose estimation error in light colors,
+                                                                                   utilizing the corresponding shapes.
+
+Fig. 6. Demonstration of the acceleration difference caused by shape varia-
+tion, and qualitative evaluation on the proposed acceleration retargeting
+method.                                                                               We validated the necessity of our SAIP method by designing
+                                                                                   alternative approaches (Tab. 3). Two configurations without retar-
+                                                                                   geting networks were assessed: (1) a naive scaling approach, where
+                                                                                   positional data was directly scaled based on body height as a substi-
+                                                                                   tute for retargeting networks (Naive Scaling), and (2) utilizing our
+accuracy-related metrics compared to 𝑅𝑎𝑐𝑐 . We demonstrate the gap                 data-augmented AMASS dataset in place of the original AMASS to
+between the accelerations of bodies with different shapes and the                  train the baseline (End-to-End Training). The results underscore
+role of 𝑅𝑎𝑐𝑐 in addressing this gap in Fig. 6.                                     the critical role of independently modeling shape-conditioned IMU
+   When directly using children’s accelerations as input, the pose es-             signals through our retargeting networks. Configurations with re-
+timator erroneously reconstructs the pose as one resembling adults’                targeting networks further highlighted the importance of shape
+lower-acceleration movements, such as shallow squats, limited kick-                awareness, where we replaced our approach with two alternative
+ing, or less pronounced limb movements. In contrast, our 𝑅𝑎𝑐𝑐 effec-               body shape representations: (3) retraining our retargeting networks
+tively regresses accelerations (orange), accurately reconstructing                 using the 23 bone lengths 𝐵 ∈ R23 from the SMPL model (Skeleton-
+the dynamic motions of the children.                                               only), and (4) using body height alone to scale the template body
+
+ACM Trans. Graph., Vol. 44, No. 6, Article . Publication date: December 2025.
+                                                     Shape-aware Inertial Poser: Motion Tracking for Humans with Diverse Shapes Using Sparse Inertial Sensors    •   9
+
+
+       Table 3. Quantitative comparison with alternative designs.
+
+
+         Method             SIP Err Ang Err Joint Err Mesh Err
+                        w/o Retargeting nets
+     Naive Scaling           20.25      12.98       9.10        10.44
+  End-to-end Training        17.82      11.92       9.71        11.34
+                         w/ Retargeting nets
+     Skeleton-only           12.71      8.95        5.53         6.22
+       Size-only             13.01      9.01        5.55         6.48
+ Shape Inference (ours)      12.27      8.28        5.19         5.98
+ Using GT Shape (ours)       12.23      8.27        5.17         5.96
+
+
+
+(Size-only). Both alternatives, lacking detailed information on body
+fat and other shape proportions, performed inferior to our method.
+Ultimately, the results obtained using our shape prediction module
+(Shape Inference, ours) closely approximated those achieved with
+ground truth shapes (Using GT Shape, ours).                                       Fig. 8. (a) Synergistically refine process: Shape-Aware Motion Tracking
+   We further evaluate the effectiveness of our MLP shape estimator.              delivers precise kinematic data to refine the mesh, while Inertial Mesh Re-
+In Fig. 7, our method (blue) pioneers shape prediction in inertial                construction enhances shape estimation, thereby further improving motion
+motion capture tasks, with predictions converging closer to the true              tracking accuracy. (b) Qualitative evaluation of Inertial Mesh Reconstruc-
+shape as data accumulates. Compared to scaling a template human                   tion across diverse subjects shows that the estimated shape (red) closely
+model (size-aware-only, orange), incorporating shape awareness                    aligns with the ground truth (green). Examples are picked from the AMASS
+                                                                                  testset.
+also reduces the pose estimation mesh error (light-colored). In Fig. 8,
+we illustrate the shape refinement process with additional qualita-
+tive results. As time progresses, the estimated shape closely aligns
+with the ground truth. Simultaneously, the shape estimation error                    Our proposed method pioneers a system for predicting human
+(blue) decreases, leading to a corresponding reduction in motion                  body shapes using IMU sensors by modeling the relationship be-
+reconstruction error (orange) using the estimated shape, thus val-                tween shape, IMU data, and pose, enabling shape-aware pose es-
+idating our shape-pose refinement approach. Furthermore, Fig. 8                   timation. However, this approach relies on the influence of shape
+(b) demonstrates that our method successfully reconstructs diverse                variations on IMU data, making it less effective for subjects with
+shapes as a byproduct, achieving strong alignment with the ground                 body shapes similar to the template model, where IMU data changes
+truth.                                                                            are minimal and insufficient for accurate shape prediction.
+                                                                                     The proposed SAIP system relies on human height for initializing
+4.4   Limitations and Discussions                                                 shape information. Without this, predicting poses within acceptable
+Our method addresses the limitations of baseline approaches in                    error margins for individuals with significant size differences (e.g.,
+human motion capture by accounting for shape variations, such                     very short children) becomes challenging, hindering the pose-shape
+as those in children or individuals with diverse heights and body                 refinement process. Additionally, our shape-aware system does not
+compositions. However, our approach has the following constraints.                account for individuals with physical disabilities, despite the po-
+   Our method inherits limitations of baseline inertial motion cap-               tential applications in medical rehabilitation and sports training.
+ture techniques. For instance, it struggles to handle ground contact              Future work in this area offers substantial room for improvement.
+beyond the feet, such as crawling or rolling on the ground. More-                 Additionally, our method’s shape prediction error (mesh error-T)
+over, our shape-aware physical optimization scheme adopts certain                 ranges from 1.6 cm to 2.1 cm, while many optical methods based
+assumptions from PIP [Yi et al. 2022], such as a flat ground plane.               on images or videos achieve around 1.3 cm, indicating a gap in
+Consequently, interactions with terrain or objects—like pull-ups or               precision compared to these approaches. Future improvements in
+climbing—cause gravity in the optimization to pull the body back                  convergence accuracy are necessary to bridge this disparity.
+to the ground.                                                                       Despite the advantages of sparse inertial motion capture, these
+   In nine-axis IMUs commonly used for inertial motion capture,                   challenges highlight significant opportunities for further research
+magnetometers calibrate yaw rotation, assuming the magnetic field                 and development.
+aligns with the Earth’s. However, in environments with magnetic in-
+terference (e.g., near powered devices or metal objects), IMU sensors             5    Conclusion
+experience disruptions, leading to yaw misalignment and inaccurate                In this paper, we tackle the body shape factor in sparse-IMU-based
+poses.                                                                            human motion capture. While existing methods treat this task as
+
+                                                                                         ACM Trans. Graph., Vol. 44, No. 6, Article . Publication date: December 2025.
+10   •   Lu Yin, Ziying Shi, Yinghao Wu. et al
+
+
+modeling the correlation between IMU signals and motion, we con-                                SIGGRAPH Conference on Motion, Interaction and Games. 1–11.
+tend that IMU signals are influenced not only by human motion but                           Yuming Du, Robin Kips, Albert Pumarola, Sebastian Starke, Ali Thabet, and Artsiom
+                                                                                                Sanakoyeu. 2023. Avatars Grow Legs: Generating Smooth Human Motion from
+also by shape variations, leading to increased errors when applied                              Sparse Tracking Inputs with Diffusion Model. In CVPR.
+to individuals with diverse body shapes if ignored. We propose a                            Roy Featherstone. 2014. Rigid body dynamics algorithms. Springer.
+                                                                                            Martin L. Felis. 2016. RBDL: an efficient rigid-body dynamics library using recursive
+learning-based kinematic signal retargeting method to model shape-                              algorithms. Autonomous Robots (2016), 1–17. doi:10.1007/s10514-016-9574-0
+conditioned IMU signals, complemented by an inertial shape estima-                          Han Feng, Wenchao Ma, Quankai Gao, Xianwei Zheng, Nan Xue, and Huijuan Xu.
+tion scheme to enable shape awareness. To validate our approach,                                2024. Stratified avatar generation from sparse observations. In Proceedings of the
+                                                                                                IEEE/CVF Conference on Computer Vision and Pattern Recognition. 153–163.
+we introduce the a multi-shaped IMU-motion dataset, including                               Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J Black, Otmar Hilliges, and
+pre-teen children. Experimental results validate our motivation,                                Gerard Pons-Moll. 2018. Deep inertial poser: Learning to reconstruct human pose
+demonstrating that our Shape-aware Inertial Poser (SAIP) system ef-                             from sparse inertial measurements in real time. ACM Transactions on Graphics
+                                                                                                (TOG) 37, 6 (2018), 1–15.
+fectively tracks motion across diverse body shapes while pioneering                         Mariko Isogawa, Ye Yuan, Matthew O’Toole, and Kris M Kitani. 2020. Optical non-line-
+human shape estimation using sparse IMUs.                                                       of-sight physics-based 3d human pose estimation. In Proceedings of the IEEE/CVF
+                                                                                                Conference on Computer Vision and Pattern Recognition. 7013–7022.
+                                                                                            Jiaxi Jiang, Paul Streli, Manuel Meier, and Christian Holz. 2024. Egoposer: Robust
+Acknowledgments                                                                                 real-time egocentric pose estimation from sparse and intermittent observations
+                                                                                                everywhere. In European Conference on Computer Vision. Springer, 277–294.
+The authors would like to thank Xuanmiao Guo, Tianchang Chen,                               Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Rene Fender, Larissa Laich, Patrick Snape,
+Luyi Fan, Xiangyi Fan, Heng Jin, Jinzhi Qian, Rongyi Quan, Ziqian                               and Christian Holz. 2022a. AvatarPoser: Articulated Full-Body Pose Tracking from
+                                                                                                Sparse Motion Sensing. In European Conference on Computer Vision. https://api.
+Rao, JingLing Wang, Peiyuan Wang, Yile Pan and Shifan Jiang for                                 semanticscholar.org/CorpusID:251135349
+their help on live demos and dataset collection. This work is sup-                          Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won, Alexander W Winkler, and
+ported by National Natural Science Foundation of China (62472364,                               C Karen Liu. 2022b. Transformer inertial poser: Real-time human motion recon-
+                                                                                                struction from sparse imus with simultaneous terrain generation. In SIGGRAPH
+62072383), the Public Technology Service Platform Project of Xi-                                Asia 2022 Conference Papers. 1–9.
+amen City (No.3502Z20231043), Xiaomi Young Talents Program /                                Muhammed Kocabas, Nikos Athanasiou, and Michael J Black. 2020. Vibe: Video infer-
+                                                                                                ence for human body pose and shape estimation. In Proceedings of the IEEE/CVF
+Xiaomi Foundation and the Fundamental Research Funds for the                                    conference on computer vision and pattern recognition. 5253–5263.
+Central Universities (20720240058), “Young Eagle Plan" Top Talents                          Philipp Kratzer, Simon Bihlmaier, Niteesh Balachandra Midlagajni, Rohit Prakash, Marc
+of Fujian Province. This work is supported by the National Key R&D                              Toussaint, and Jim Mainprice. 2020. Mogaze: A dataset of full-body motions that
+                                                                                                includes workspace geometry and eye-gaze. IEEE Robotics and Automation Letters 6,
+Program of China (2023YFC3305600). This work is also supported                                  2 (2020), 367–373.
+by THUIBCS, Tsinghua University, and BLBCI, Beijing Municipal                               Jiye Lee and Hanbyul Joo. 2024. Mocap everyone everywhere: Lightweight motion
+Education Commission. Shihui Guo is the corresponding author.                                   capture with smartwatches and a head-mounted camera. In Proceedings of the
+                                                                                                IEEE/CVF conference on computer vision and pattern recognition. 1091–1100.
+                                                                                            Sunmin Lee, Sebastian Starke, Yuting Ye, Jungdam Won, and Alexander Winkler. 2023.
+References                                                                                      Questenvsim: Environment-aware simulated motion tracking from sparse sensors.
+                                                                                                In ACM SIGGRAPH 2023 Conference Proceedings. 1–9.
+Sadegh Aliakbarian, Pashmina Cameron, Federica Bogo, Andrew Fitzgibbon, and                 Jiefeng Li, Chao Xu, Zhicun Chen, Siyuan Bian, Lixin Yang, and Cewu Lu. 2021b. Hybrik:
+    Thomas J Cashman. 2022. Flag: Flow-based 3d avatar generation from sparse                   A hybrid analytical-neural inverse kinematics solution for 3d human pose and shape
+    observations. In Proceedings of the IEEE/CVF Conference on Computer Vision and              estimation. In Proceedings of the IEEE/CVF conference on computer vision and pattern
+    Pattern Recognition. 13253–13262.                                                           recognition. 3383–3393.
+Aishat Aloba, Gianne Flores, Julia Woodward, Alex Shaw, Amanda Castonguay, Isabella         Zhongguo Li, Magnus Oskarsson, and Anders Heyden. 2021a. 3d human pose and
+    Cuba, Yuzhu Dong, Eakta Jain, and Lisa Anthony. 2018. Kinder-Gator: The UF Kinect           shape estimation through collaborative learning and multi-view model-fitting. In
+    Database of Child and Adult Motion.. In Eurographics (Short Papers). 13–16.                 Proceedings of the IEEE/CVF winter conference on applications of computer vision.
+Sheldon Andrews, Ivan Huerta, Taku Komura, Leonid Sigal, and Kenny Mitchell. 2016.              1888–1897.
+    Real-time physics-based motion capture with sparse sensors. In Proceedings of the       Zongmian Li, Jiri Sedlar, Justin Carpentier, Ivan Laptev, Nicolas Mansard, and Josef
+    13th European conference on visual media production (CVMP 2016). 1–10.                      Sivic. 2019. Estimating 3d motion and forces of person-object interactions from
+Andreas Aristidou, Ariel Shamir, and Yiorgos Chrysanthou. 2019. Digital Dance Ethnog-           monocular video. In Proceedings of the IEEE/CVF Conference on Computer Vision and
+    raphy: Organizing Large Dance Collections. J. Comput. Cult. Herit. 12, 4, Article 29        Pattern Recognition. 8640–8649.
+    (Nov. 2019), 27 pages. doi:10.1145/3344383                                              Han Liang, Yannan He, Chengfeng Zhao, Mutian Li, Jingya Wang, Jingyi Yu, and Lan
+Kevin Bergamin, Simon Clavet, Daniel Holden, and James Richard Forbes. 2019. DReCon:            Xu. 2023. Hybridcap: Inertia-aid monocular capture of challenging human motions.
+    data-driven responsive control of physics-based characters. ACM Transactions On             In Proceedings of the AAAI conference on artificial intelligence, Vol. 37. 1539–1548.
+    Graphics (TOG) 38, 6 (2019), 1–11.                                                      Jing Lin, Ailing Zeng, Shunlin Lu, Yuanhao Cai, Ruimao Zhang, Haoqian Wang, and
+Michael J Black, Priyanka Patel, Joachim Tesch, and Jinlong Yang. 2023. Bedlam: A syn-          Lei Zhang. 2023. Motion-x: A large-scale 3d expressive whole-body human motion
+    thetic dataset of bodies exhibiting detailed lifelike animated motion. In Proceedings       dataset. Advances in Neural Information Processing Systems 36 (2023), 25268–25280.
+    of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. 8726–8737.       Matthew Loper, Naureen Mahmood, Javier Romero, Gerard Pons-Moll, and Michael J
+Zhongang Cai, Wanqi Yin, Ailing Zeng, Chen Wei, Qingping Sun, Wang Yanjun, Hui En               Black. 2023. SMPL: A skinned multi-person linear model. In Seminal Graphics
+    Pang, Haiyi Mei, Mingyuan Zhang, Lei Zhang, et al. 2023. Smpler-x: Scaling up               Papers: Pushing the Boundaries, Volume 2. 851–866.
+    expressive human pose and shape estimation. Advances in Neural Information              Lingni Ma, Yuting Ye, Fangzhou Hong, Vladimir Guzov, Yifeng Jiang, Rowan Postyeni,
+    Processing Systems 36 (2023), 11454–11468.                                                  Luis Pesqueira, Alexander Gamino, Vijay Baiyya, Hyo Jin Kim, et al. 2024. Nymeria:
+Anargyros Chatzitofis, Leonidas Saroglou, Prodromos Boutis, Petros Drakoulis, Niko-             A massive collection of multimodal egocentric daily motion in the wild. In European
+    laos Zioulis, Shishir Subramanyam, Bart Kevelham, Caecilia Charbonnier, Pablo               Conference on Computer Vision. Springer, 445–465.
+    Cesar, Dimitrios Zarpalas, et al. 2020. Human4d: A human-centric multimodal             Naureen Mahmood, Nima Ghorbani, Nikolaus F. Troje, Gerard Pons-Moll, and Michael J.
+    dataset for motions and immersive media. IEEE Access 8 (2020), 176241–176262.               Black. 2019. AMASS: Archive of Motion Capture as Surface Shapes. In International
+Julian Chibane, Thiemo Alldieck, and Gerard Pons-Moll. 2020. Implicit functions in              Conference on Computer Vision. 5442–5451.
+    feature space for 3d shape reconstruction and completion. In Proceedings of the         Pauline Maurice, Adrien Malaisé, Clélie Amiot, Nicolas Paris, Guy-Junior Richard,
+    IEEE/CVF conference on computer vision and pattern recognition. 6970–6981.                  Olivier Rochel, and Serena Ivaldi. 2019. Human movement and ergonomics: An
+Andrea Dittadi, Sebastian Dziadzio, Darren Cosker, Ben Lundell, Thomas J Cashman,               industry-oriented dataset for collaborative robotics. The International Journal of
+    and Jamie Shotton. 2021. Full-body motion from a single head-mounted device:                Robotics Research 38, 14 (2019), 1529–1537.
+    Generating smpl poses from partial observations. In Proceedings of the IEEE/CVF         Noitom. 2017. Perception neuron. (2017). https://www.noitom.com/
+    International Conference on Computer Vision. 11687–11697.                               Manuel Palermo, Sara Cerqueira, João André, António Pereira, and Cristina P Santos.
+Yuzhu Dong, Andreas Aristidou, Ariel Shamir, Moshe Mahler, and Eakta Jain. 2020.                2022. Complete Inertial Pose Dataset: from raw measurements to pose with low-cost
+    Adult2child: Motion style transfer using cyclegans. In Proceedings of the 13th ACM
+
+
+ACM Trans. Graph., Vol. 44, No. 6, Article . Publication date: December 2025.
+                                                               Shape-aware Inertial Poser: Motion Tracking for Humans with Diverse Shapes Using Sparse Inertial Sensors      •   11
+
+
+   and high-end MARG sensors. arXiv preprint arXiv:2202.06164 (2022).                           sensors. In Proceedings of the IEEE/CVF conference on computer vision and pattern
+Hui En Pang, Zhongang Cai, Lei Yang, Tianwei Zhang, and Ziwei Liu. 2022. Bench-                 recognition. 5746–5756.
+   marking and analyzing 3d human pose and shape estimation beyond algorithms.               Ye Yuan and Kris Kitani. 2019. Ego-pose estimation and forecasting as real-time pd
+   Advances in Neural Information Processing Systems 35 (2022), 26034–26051.                    control. In Proceedings of the IEEE/CVF International Conference on Computer Vision.
+Monique Paulich, Martin Schepers, Nina Rudigkeit, and Giovanni Bellusci. 2018. Xsens            10082–10092.
+   MTw Awinda: Miniature wireless inertial-magnetic motion tracker for highly accu-          Ye Yuan, Shih-En Wei, Tomas Simon, Kris Kitani, and Jason Saragih. 2021. Simpoe:
+   rate 3D kinematic applications. Xsens: Enschede, The Netherlands (2018), 1–9.                Simulated character control for 3d human pose estimation. In Proceedings of the
+Matthias Plappert, Christian Mandery, and Tamim Asfour. 2016. The kit motion-                   IEEE/CVF conference on computer vision and pattern recognition. 7159–7169.
+   language dataset. Big data 4, 4 (2016), 236–252.                                          Jianfeng Zhang, Yujun Cai, Shuicheng Yan, Jiashi Feng, et al. 2021. Direct multi-view
+Natural Point. 2011. Optitrack. Natural Point, Inc. Natural Point Inc (2011).                   multi-person 3d pose estimation. Advances in Neural Information Processing Systems
+Jose Luis Ponton, Haoran Yun, Andreas Aristidou, Carlos Andujar, and Nuria Pelechano.           34 (2021), 13153–13164.
+   2023. SparsePoser: Real-time full-body motion reconstruction from sparse data.            Qitao Zhao, Ce Zheng, Mengyuan Liu, and Chen Chen. 2024. A single 2d pose with
+   ACM Transactions on Graphics 43, 1 (2023), 1–14.                                             context is worth hundreds for 3d human pose estimation. Advances in Neural
+Davis Rempe, Leonidas J Guibas, Aaron Hertzmann, Bryan Russell, Ruben Villegas,                 Information Processing Systems 36 (2024).
+   and Jimei Yang. 2020. Contact and human dynamics from monocular video. In                 Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and Hao Li. 2019. On the continuity
+   Computer Vision–ECCV 2020: 16th European Conference, Glasgow, UK, August 23–28,              of rotation representations in neural networks. In Proceedings of the IEEE/CVF
+   2020, Proceedings, Part V 16. Springer, 71–87.                                               conference on computer vision and pattern recognition. 5745–5753.
+Paul Schreiner, Rasmus Netterstrøm, Hang Yin, Sune Darkner, and Kenny Erleben. 2024.         Chengxu Zuo, Yiming Wang, Lishuang Zhan, Shihui Guo, Xinyu Yi, Feng Xu, and
+   ADAPT: AI-Driven Artefact Purging Technique for IMU Based Motion Capture. In                 Yipeng Qin. 2024. Loose Inertial Poser: Motion Capture with IMU-attached Loose-
+   Computer Graphics Forum, Vol. 43. Wiley Online Library, e15172.                              Wear Jacket. In Proceedings of the IEEE/CVF Conference on Computer Vision and
+Akash Sengupta, Ignas Budvytis, and Roberto Cipolla. 2020. Synthetic training for accu-         Pattern Recognition (CVPR). 2209–2219.
+   rate 3d human pose and shape estimation in the wild. arXiv preprint arXiv:2009.10013
+   (2020).
+Xiaolong Shen, Zongxin Yang, Xiaohan Wang, Jianxin Ma, Chang Zhou, and Yi Yang.
+   2023. Global-to-local modeling for video-based 3d human pose and shape estimation.
+   In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition.
+   8887–8896.
+Soshi Shimada, Vladislav Golyanik, Weipeng Xu, and Christian Theobalt. 2020. Physcap:
+                                                                                             A More Evaluations
+   Physically plausible monocular 3d motion capture in real time. ACM Transactions           A.1 Motion Tracking on Near-Template Shapes.
+   on Graphics (ToG) 39, 6 (2020), 1–16.
+Ke Sun, Bin Xiao, Dong Liu, and Jingdong Wang. 2019. Deep high-resolution represen-          We also present quantitative results (Tab. 4) the TotalCapture [Trum-
+   tation learning for human pose estimation. In Proceedings of the IEEE/CVF conference
+   on computer vision and pattern recognition. 5693–5703.
+                                                                                             ble et al. 2017] dataset. On action-rich real adult data, although the
+Matthew Trumble, Andrew Gilbert, Charles Malleson, Adrian Hilton, and John P                 baseline method effectively performs motion tracking, our approach
+   Collomosse. 2017. Total capture: 3D human pose estimation fusing video and                achieves higher accuracy, which we attribute to its shape-aware
+   inertial sensors.. In BMVC, Vol. 2. London, UK, 1–13.
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N             nature.
+   Gomez, Łukasz Kaiser, and Illia Polosukhin. 2017. Attention is all you need. Advances
+   in neural information processing systems 30 (2017).
+Timo Von Marcard, Bodo Rosenhahn, Michael J Black, and Gerard Pons-Moll. 2017.
+   Sparse inertial poser: Automatic 3d human pose estimation from sparse imus. In            A.2     Shape-error Analysis.
+   Computer graphics forum, Vol. 36. Wiley Online Library, 349–360.
+Alexander Winkler, Jungdam Won, and Yuting Ye. 2022. Questsim: Human motion track-           On three test datasets featuring children of varying heights, our
+   ing from sparse sensors with simulated avatars. In SIGGRAPH Asia 2022 Conference
+   Papers. 1–8.
+                                                                                             method reduces joint position error by 23%, 9%, and 19% compared
+Yinghao Wu, Chaoran Wang, Lu Yin, Shihui Guo, and Yipeng Qin. 2024. Accurate                 to the second-best results, respectively (Tab. 5). The redirection of
+   and Steady Inertial Pose Estimation through Sequence Structure Learning and               input shape-related data proves instrumental in this improvement.
+   Modulation. In NeurIPS.
+Dongseok Yang, Jiho Kang, Lingni Ma, Joseph Greer, Yuting Ye, and Sung-Hee Lee. 2024.        Additionally, for adults with larger body sizes (e.g., 191 cm compared
+   DivaTrack: Diverse Bodies and Motions from Acceleration-Enhanced Three-Point              to the 176 cm template), our approach consistently surpasses state-
+   Trackers. In Computer Graphics Forum, Vol. 43. Wiley Online Library, e15057.              of-the-art performance across all evaluation metrics.
+Dongseok Yang, Doyeon Kim, and Sung-Hee Lee. 2021a. Lobstr: Real-time lower-body
+   pose prediction from sparse upper-body tracking signals. In Computer Graphics
+   Forum, Vol. 40. Wiley Online Library, 265–275.
+Gengshan Yang, Deqing Sun, Varun Jampani, Daniel Vlasic, Forrester Cole, Ce Liu, and
+   Deva Ramanan. 2021b. Viser: Video-specific surface embeddings for articulated 3d
+   shape reconstruction. Advances in Neural Information Processing Systems 34 (2021),
+   19326–19338.
+Hang Ye, Wentao Zhu, Chunyu Wang, Rujie Wu, and Yizhou Wang. 2022. Faster
+   voxelpose: Real-time 3d human pose estimation by orthographic projection. In
+   European Conference on Computer Vision. Springer, 142–159.                                Table 4. Quantitative comparison results with state-of-the-art on TotalCap-
+Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada, Vladislav Golyanik, Christian          ture.
+   Theobalt, and Feng Xu. 2022. Physical inertial poser (pip): Physics-aware real-time
+   human motion tracking from sparse inertial sensors. In Proceedings of the IEEE/CVF
+   Conference on Computer Vision and Pattern Recognition. 13167–13178.                             Method        SIP Err      Ang Err       Joint Err      Mesh Err        Jitter
+Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2021. Transpose: Real-time 3d human translation
+   and pose estimation with six inertial sensors. ACM Transactions on Graphics (TOG)                                            TotalCapture
+   40, 4 (2021), 1–13.
+Xinyu Yi, Yuxiao Zhou, and Feng Xu. 2024. Physical Non-inertial Poser (PNP): Modeling          TransPose          18.12         14.91          7.10           8.09         1.95
+   Non-inertial Effects in Sparse-inertial Human Motion Capture. In SIGGRAPH 2024                 PIP             14.52         13.85          6.22           7.21         0.21
+   Conference Papers.
+Ri Yu, Hwangpil Park, and Jehee Lee. 2021a. Human dynamics from monocular video                   TIP             15.62         14.45          6.76           7.79         1.74
+   with dynamic camera movements. ACM Transactions on Graphics (TOG) 40, 6 (2021),               ASIP             13.45         11.97          5.28           7.06         0.23
+   1–14.
+Tao Yu, Zerong Zheng, Kaiwen Guo, Pengpeng Liu, Qionghai Dai, and Yebin Liu. 2021b.
+                                                                                                  PNP             11.36         11.11          4.89           5.60         0.32
+   Function4d: Real-time human volumetric capture from very sparse consumer rgbd               SAIP (ours)        11.22         10.96          4.75           5.47         0.42
+
+
+                                                                                                     ACM Trans. Graph., Vol. 44, No. 6, Article . Publication date: December 2025.
+12    •   Lu Yin, Ziying Shi, Yinghao Wu. et al
+
+
+Table 5. Quantitative comparison results with state-of-the-art methods on
+our shape-diverse subjects selected from the MID dataset.
+
+     Method         SIP Err     Angle Err     Joint Err   Mesh Err      Jitter Err
+                              Subject 1 (height 118 cm)
+     TransPose       28.26        12.41           8.68      10.25          0.05
+     PIP             29.97        13.72           6.10      6.66           0.05
+     TIP             31.24        22.48           6.83      7.68           0.09
+     ASIP            36.56        14.26           9.59      10.31          0.10
+     PNP             28.47        15.52           4.60      5.49           0.05
+     SAIP (ours)     25.64        9.51            3.40      3.97           0.04
+                              Subject 2 (height 138 cm)
+     TransPose       26.53        16.32            9.02     10.75          0.19
+     PIP             24.62        13.32           10.13     11.03          0.10
+     TIP             30.04        16.50            8.17     11.00          0.22
+     ASIP            23.38        13.01            5.79     6.21           0.19
+     PNP             24.40        13.25            8.07     7.11           0.09
+     SAIP (ours)     20.58        8.44            5.08      5.81           0.10
+                              Subject 3 (height 144 cm)
+     TransPose       26.44        14.19           11.52     13.84          0.13
+     PIP             25.07        13.59            9.54     11.52          0.10
+     TIP             37.98        15.67           12.48     13.10          0.19
+     ASIP            26.14        12.68           10.52     11.82          0.11
+     PNP             17.02        11.61            6.08     7.26           0.09
+     SAIP (ours)     14.23        9.93            4.60      5.71           0.09
+                              Subject 4 (height 191 cm)
+     TransPose       15.51        12.09           5.49       6.14          0.70
+     PIP             14.92        10.27           4.23       5.02          0.12
+     TIP             15.41        9.08            4.71       5.41          0.12
+     ASIP            16.42        9.19            5.42       6.19          0.10
+     PNP             15.38        10.62           4.61       5.40          0.12
+     SAIP (ours)     13.12        7.40            4.18       4.82          0.12
+
+
+
+
+ACM Trans. Graph., Vol. 44, No. 6, Article . Publication date: December 2025.
+

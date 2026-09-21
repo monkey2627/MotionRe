@@ -1,0 +1,621 @@
+                                              DiffusionPoser: Real-time Human Motion Reconstruction From Arbitrary
+                                                           Sparse Sensors Using Autoregressive Diffusion
+
+                                                 Tom Van Wouwe              Seunghwan Lee    Antoine Falisse              Scott Delp         C. Karen Liu
+                                                                                       Stanford University
+                                                                    [tvwouwe,lsw9021,afalisse,delp,ckliu38]@stanford.edu
+arXiv:2308.16682v2 [cs.CV] 28 Mar 2024
+
+
+
+
+                                                                 Abstract
+
+                                            Motion capture from a limited number of body-worn sen-
+                                         sors, such as inertial measurement units (IMUs) and pres-
+                                         sure insoles, has important applications in health, human
+                                         performance, and entertainment. Recent work has focused
+                                         on accurately reconstructing whole-body motion from a
+                                         specific sensor configuration using six IMUs. While a com-
+                                         mon goal across applications is to use the minimal num-
+                                         ber of sensors to achieve required accuracy, the optimal
+                                         arrangement of the sensors might differ from application
+                                         to application. We propose a single diffusion model, Dif-
+                                         fusionPoser, which reconstructs human motion in real-time
+                                         from an arbitrary combination of sensors, including IMUs
+                                         placed at specified locations, and, pressure insoles. Un-
+                                         like existing methods, our model grants users the flexibility
+                                         to determine the number and arrangement of sensors tai-
+                                         lored to the specific activity of interest, without the need
+                                         for retraining. A novel autoregressive inferencing scheme       Figure 1. (Left) Examples of live reconstruction using Dif-
+                                         ensures real-time motion reconstruction that closely aligns     fusionPoser. (Right) Subject instrumented with IMUs. We
+                                         with measured sensor signals. The generative nature of Dif-     assume IMUs may be attached at 13 specific locations: pelvis,
+                                                                                                         thighs, shanks, feet, arms, wrists, torso, head.
+                                         fusionPoser ensures realistic behavior, even for degrees-of-
+                                         freedom not directly measured. Qualitative results can be
+                                         found on our website: https://diffusionposer.github.io/.
+                                                                                                         video represents an alternative or supplementary modality,
+                                                                                                         it introduces potential privacy concerns. With IMU sensors
+                                                                                                         being the cheapest alternative of these mobile sensing tech-
+                                         1. Introduction                                                 nologies, much research has focused on motion reconstruc-
+                                             Portable and minimally intrusive tools for estimating hu-   tion from these. Configurations with few sensors, i.e. sparse
+                                         man motion have important applications in health and hu-        configurations, are desirable for user convenience and ad-
+                                         man performance as they allow continuous monitoring of          herence. However, a sparse configuration as opposed to a
+                                         the motions of the body and the forces in the musculoskele-     dense configuration, does not allow direct measurement of
+                                         tal system [19, 45]. Mobile sensing technologies also have      the full body motion. Besides sparsity, sensor noise is an
+                                         applications in virtual and augmented reality, and video        important challenge. To tackle the problems of sparsity and
+                                         games [32,33]. Truly wearable sensors such as inertial mea-     noise in the case of IMUs, both optimization [48] and data-
+                                         surement units (IMUs) (e.g. [2]), pressure insoles (e.g. [6])   driven [11, 36] methods have been used.
+                                         or electromagnetic sensors (e.g. [15]), have an advantage          Prior data-driven methods that reconstruct motion from
+                                         compared to video-based motion capture, as they are ego-        sparse IMU sensor configurations focused on a specific
+                                         centric, do not suffer from occlusion or poor lighting, and     number of sensors in a specific configuration [11, 13, 36,
+                                         offer an infinite measurement volume. While egocentric          48, 52, 53]. In practice, applications would benefit from a
+real-time system that is more flexible and where the user            DiffusionPoser has interesting features for health and
+can optimize the number of sensors and configuration to the      biomedical research applications. It reconstructs motion
+activity of interest.                                            from wearable IMU sensors that have extended battery lives
+   Here we present a single diffusion generative model, Dif-     and are portable. It allows users to select a sensor configu-
+fusionPoser, that reconstructs human motion in real-time         ration while trading off comfort and specific accuracy that
+from ad-hoc sensor configurations, i.e. any number (be-          suits their goal best, on-the-fly, without retraining. Finally,
+tween one and thirteen) and combination of IMUs and/or           DiffusionPoser runs at 20Hz making it useful for health and
+pressure insoles can be used.                                    performance interventions such as guidance of rehabilita-
+   The use of a diffusion generative model is key to allow       tion exercises or training using biofeedback [46].
+any combination of sensors. It results in realistic motion re-
+construction in correspondence with measured signals, even       2. Related Work
+for very sparse configurations. Our generative model is also
+robust to cases where sensor signals are corrupted or lost.      Motion Capture using sparse IMUs. An IMU measures
+   Two developments, that both utilize the inpainting de-        3D linear acceleration, 3D angular velocity, and the direc-
+noising technique [22], differentiate our model from previ-      tion of the magnetic North. These measurements are noisy
+ous motion diffusion models such as [7, 20, 42, 44] and en-      and expressed in the local IMU frame. Commercially avail-
+able our real-time sensor-based motion reconstruction ap-        able IMU systems come with proprietary sensor fusion al-
+plication:                                                       gorithms providing orientation and acceleration for use in
+                                                                 downstream applications (e.g., [31]). Linear accelerations
+ 1. We use an autoregressive inference scheme (Section           remain noisy and are therefore sometimes smoothed before
+    3.4.1) where at every time step the motion history is        being used as reconstruction input (e.g. [13]).
+    used to generate a full motion sequence, including the           Early work performing human motion reconstruction
+    current frame of interest.                                   from sparse IMUs performed database search based on four
+                                                                 [41] or five accelerometer signals [36]. In recent years,
+ 2. We use a tailored motion representation and in-
+                                                                 several works focused on reconstructing whole-body mo-
+    painting denoising, rather than a conditional model,
+                                                                 tion from six IMU sensors placed on the wrists (2), on the
+    to control motion generation. The motion representa-
+                                                                 shanks (2), on the pelvis, and on the head. Sparse Iner-
+    tion consists of contact labels, root translation, global
+                                                                 tial Poser [48] relies on this configuration and does offline
+    segment orientations and global linear accelerations of
+                                                                 motion reconstruction by optimizing a sequence of poses to
+    segment-specific sites.
+                                                                 match measured signals.
+   We demonstrate the capability of DiffusionPoser to opti-          Deep Inertial Poser [11] introduced the use of a human
+mize sensors configurations for applications that might re-      motion prior: a bi-directional RNN architecture is trained
+quire different levels of accuracy for specific body regions.    on a motion dataset. IMU signals for training were synthe-
+We show that, in the case of using three sensors, the best       sized from the AMASS motion dataset [23]. Other data-
+configuration instruments, the pelvis and wrists when op-        driven algorithms have built on this work to improve accu-
+timizing whole-body reconstruction, the pelvis and thighs        racy and address root translation estimation. Transpose [53]
+when optimizing reconstruction of leg motion, and the up-        combines several RNNs to predict the full pose, including
+per arms and pelvis when optimizing reconstruction of the        the root motion. An extension of this work, Physics Iner-
+back, neck and shoulder joints. All these configurations can     tial Poser (PIP) [52], adds a physics layer to refine the joint
+be used without retraining. We show that such flexibility        orientations and root motion predictions. Transformer Iner-
+does not come at the cost of accuracy as DiffusionPoser          tial Poser (TIP) [13], addresses root motion estimation by
+achieves accuracy that is on par with state-of-the-art regres-   predicting stationary points on feet, hands and pelvis and
+sive models that focus on a single specific six sensor IMU       applying a correction accordingly.
+setup [11, 13, 52, 53].                                              A downside of the prior work, that we address with Dif-
+   Our method is agnostic to the underlying skeleton mod-        fusionPoser, is that only one specific IMU configuration is
+els and we present two versions of DiffusionPoser for dif-       allowed. One other prior work performs online reconstruc-
+ferent skeletons. First, we use the SMPL body model [21].        tion from a flexible and sparse IMU configuration: IMU-
+Second, because we aim to enable biomedical research ap-         Poser [25] uses an LSTM to predict motion from different
+plications, we implemented DiffusionPoser for a different        IMU configurations including up to three sensors embed-
+and more physiologically realistic skeleton: the OpenSim         ded in a phone, watch, and earbuds. Compared to our work,
+musculoskeletal model [34]. While DiffIP for the SMPL            IMUPoser has a limited number of possible locations for
+model was trained on the available AMASS dataset we cre-         the sensors and does not reconstruct root motion.
+ated a new dataset specific to OpenSim models by combin-             Finally, several systems complement inertial measure-
+ing three existing motion capture datasets [14, 40, 43].         ments with another sensory modality to improve reconstruc-
+tion (e.g.: optical markers [3], lidar [30], third-person video   3.1. Skeleton model and IMU instrumentation
+[24], first-person video [51], and depth camera [55]).
+                                                                     We implemented DiffusionPoser for two body models:
+                                                                  SMPL [21] and OpenSim [18]. The system works identical
+Diffusion for human motion reconstruction. Diffusion              for both models. Training is slightly different because of
+models [37] are a class of deep generative models. During         different definitions of the underlying kinematic tree. We
+training, a neural net learns the inverse mapping of samples      provide further detail on the OpenSim model in Appendix
+from the target distribution that are gradually noised (i.e.      A and focus on SMPL here.
+denoising). At inference, the neural net is used to perform a        The SMPL skeleton model is a 75 dof kinematic tree
+denoising process starting from pure noise, thus generating       consisting of a root segment (6 dof) and 23 additional seg-
+a clean sample. A recent overview of diffusion models for         ments connected by ball-and-socket joints (3 dof). We as-
+human motion generation can be found in Section 7 of [28].        sume that IMUs can only be attached at specific locations
+    A diffusion generative model can be controlled in dif-        to 13 of the 23 body segment (Figure 1). These specific at-
+ferent manners. One approach that has been employed in            tachment sites should be respected at inference as they are
+motion generative systems is to utilize a conditional gener-      used to synthesize the training data (Section 3.3).
+ative model. In this model, a specific condition, such as text       For the upper and lower limbs we opted to attach the
+(e.g., [42]) or music (e.g., [44]), is provided during both       sensors in positions as distal as possible without hamper-
+the training and inference phases. Text-to-motion genera-         ing joint motion. As location within a body segment does
+tive systems that rely on diffusion [16, 42, 54] have been        not influence the orientation estimate of a body, we choose
+shown to improve expressiveness and robustness compared           this placement to maximize the signal-to-noise ratio for the
+to prior generative models [1, 27] based on variational au-       measured linear acceleration. The root and torso IMU were
+toencoders [17].                                                  attached at locations that provide a good articulation be-
+    Similar to our work, human motion diffusion models            tween sensor and body segment with few soft tissue arti-
+have been been used to reconstruct motion from differ-            facts. Similar to prior work [13, 52, 53] we will ignore the
+ent sensory modalities such as monocular camera [8, 10],          toes, wrist and finger joints in our evaluations as in several
+egocentric camera [20], or position and orientation sensors       motion training datasets these dofs are not articulated.
+[7,12,50]. There are two important distinctions between our
+work and the systems mentioned here. First, the mentioned         3.2. Diffusion Model
+systems have access to a good estimate of position as in-         3.2.1   Features
+put, whereas we start from noisy linear acceleration signals.
+Second, the prior works are conditional models for which          Our diffusion model generates sequences of N=61 feature
+the sensor measurement is the condition of the generative         vectors. The feature vector in each frame represents the
+process. We use the sensor measurement for guidance in-           combination of whole-body pose and IMU information in a
+stead of using it as a condition. This allows to maintain         compact manner:
+flexibility with respect to what sensor signals we have ac-                         \label {eq:state} \bm {x}_{frame} = (\bm {R}, \bm {a}, \Delta \bm {p}, \bm {p_y}, \bm {b}).    (1)
+cess to.
+                                                                           24×6
+    Indeed, when using conditional models, we cannot use          R ∈ R          are the global orientations of the body seg-
+a different condition during inference than during training.      ments, parameterized by 6-DOF representation [56]. The
+Guidance on the other hand typically only interferes during       orientations of the 13 body segments that are potentially
+inference. There are several ways to do guidance [28] and         instrumented also represent IMU orientation estimates as
+we take inspiration from [42,44] that use inpainting denois-      there is no relative orientation between IMU and body seg-
+ing as a flexible approach to control (part of) the features of   ment after calibration. a ∈ R13×3 are the linear acceler-
+a generated motion. Different from how inpainting denois-         ations, expressed in the world frame, of the IMU locations
+ing is used in [44] to generate long sequence motions by          on the potentially instrumented body segments. To com-
+having small overlapping temporal patches, we generate a          plete our whole-body motion representation we have ∆p,
+continuous motion sequence in a fully autoregressive man-         the 2D change in root position from one frame to the next,
+ner. Each newly generate window of motion has an overlap-         and py the root vertical position. For the heel and toe of
+ping temporal patch with the previous window that covers          each foot, we add a binary contact feature b ∈ R2×2 that
+all but the last frame.                                           will be used to regularize generated motion (Section 3.2.3).
+                                                                  The full feature vector is x ∈ R61x190 .
+3. DiffusionPoser
+                                                                  3.2.2   Diffusion Framework
+   DiffusionPoser reconstructs whole-body human motion
+in real-time based on measurements from sparse IMUs in            Training and architecture of our diffusion framework are
+arbitrary configurations and/or pressure insoles.                 similar to [42, 44]. Diffusion is modeled as a Markov nois-
+                                                                                                                                         Similar to [44], our loss is composed of a simple loss [9,42]
+                                                                                                                                         and several auxiliary losses:
+
+                                                                                                                                                                                                                          \mathcal {L} = \mathcal {L}_{\rm simple} + \mathcal {L}_{\rm vel} + \mathcal {L}_{\rm FK} +\mathcal {L}_{\rm drift} + \mathcal {L}_{\rm slide}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       (5)
+                                                                                                                                         with
+
+                                                                                                                                           & \mathcal {L}_{\rm simple} = \sum _{i=1}^N||\hat {\bm {x}}_0^{(i)} - \bm {x}^{(i)}||^2,\\ \noindent & \mathcal {L}_{\rm vel} = \sum _{i=1}^{N-1}||(\hat {\bm {R}}_0^{(i+1)} - \hat {\bm {R}}_0^{(i)}) - (\bm {R}^{(i+1)} - \bm {R}^{(i)})||^2,\\ \noindent & \mathcal {L}_{\rm FK} = \sum _{i=1}^N||{\rm FK}(\hat {\bm {R}}_0^{(i)}) - {\rm FK}(\bm {R}^{(i)})||^2,\\ \noindent & \mathcal {L}_{\rm drift} = \sum _{i=1}^N||\hat {\bm {p}}_0^{(i)} - \bm {p}^{(i)}||^2\;\; {\rm where}\;\;\bm {p}^{(i)} = \sum _{j=1}^i \Delta \bm {p}^{(j)},\\ \noindent & \mathcal {L}_{\rm slide} = \sum _{i=1}^{N-1}||\hat {\bm {b}}_0^{(i)} \cdot [{\rm FK}_{\rm ft}(\hat {\bm {R}}_0^{(i+1)}) - {\rm FK}_{\rm ft}(\hat {\bm {R}}_0^{(i)}) + \bm {\Delta p}_0^{(i)}]||^2.
+
+
+
+
+Figure 2. DiffIP transformer decoder network. Architecture of
+the denoiser fθ (ẑt , t, h) that predicts the sample (x̂0 ) given the
+noised sample zt , denoising step t and the body height h. We use
+the transformer decoder architecture from [47] and use the step
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     (10)
+embedding and height embedding for cross attention as well as
+self attention by concatenating them to the input embedding.                                                                             Lsimple supervises the features, including contact labels
+                                                                                                                                           (i)
+                                                                                                                                         b̂0 , directly. Lvel encourages smooth motion [26]. LFK is
+                                                                                                                                         a kinematic loss to encourage realistic joint positions [35],
+ing process with latents {xt }t=0:T , with T = 1000. The                                                                                 with FKft the forward kinematics functions mapping global
+forward noising process is defined as:                                                                                                   orientations to foot positions relative to the root. Compared
+                                                                                                                                         to prior work we explicitly add Ldrift , which penalizes drift
+                 q(\bm {z}_{t}|\bm {x})\sim \mathcal {N}(\sqrt {\overline {\alpha }_t}\bm {x},(1-\overline {\alpha }_t)\bm {I})    (2)   by accumulating the absolute root translation error across
+                                                                                                                                         frames. Ldrift is required because we choose to predict ∆p,
+where αt ∈ [0, 1] are constants which follow a monotoni-
+                                                                                                                                         rather than p; a design choice to improve performance when
+cally decreasing (cosine) schedule for increasing t, such that
+                                                                                                                                         generative motion models are used autoregressively [29].
+xT ∼ N (0, I). We learn an approximation of the reverse
+                                                                                                                                         Lslide encourages the model to generate motion where foot
+diffusion process, i.e., the denoising process, by training a
+                                                                                                                                         motion is consistent with foot contact prediction (minimiz-
+transformer neural network fθ (Figure 2), with parameters
+                                                                                                                                         ing foot velocity when in contact) [44].
+θ, which takes a noised version ẑt of the ground truth mo-
+tion x, the noise step t and condition h and generates a de-                                                                             3.3. Training data
+noised version x̂0 that aims to match x:
+                                                                                                                                             We used AMASS [23] for training. IMU orientations
+                                                                                                                                         were synthesized as the global orientations of the body
+                                          \bm {f}_\theta (\bm {\hat {z}}_t,t,h) = \hat {\bm {x}}_0.                                (3)
+                                                                                                                                         segments. IMU linear accelerations were derived by dou-
+The condition h is subject height. Height is associated with                                                                             ble differentation of selected vertex positions that were
+body segment lengths, which mathematically underlie the                                                                                  obtained by a forward kinematic pass. To better match
+relation between body orientations and body accelerations                                                                                measured and synthesized linear accelerations we averaged
+and, body orientations and root motion.                                                                                                  these at the original sampling rate using a moving average
+                                                                                                                                         sliding window of 166ms (e.g., 11 frames at 60Hz) [13].
+                                                                                                                                         Finally, we resampled at 20Hz. Contact labels were anno-
+3.2.3   Training losses                                                                                                                  tated by applying a velocity threshold (0.3m/s) for each of
+                                                                                                                                         the four potential contact points (heels and toes) [53].
+For training fθ we follow DDPM [9] by sampling a diffu-                                                                                      Sampling from training data was done following a prob-
+sion step t from a uniform distribution U ∈ [0, T ], randomly                                                                            ability that was assigned to each trial based on a simple en-
+sampling a motion sequence from our training dataset, nois-                                                                              ergy metric. The sampling strategy encouraged the model
+ing this motion x to ẑt , predicting x̂0 and performing gra-                                                                            to predict more diverse motion when deployed purely gen-
+dient descent on our loss L                                                                                                              erative and improved reconstruction accuracy (Section 4.7).
+                                                                                                                                         For the energy metric, we estimated center-of-mass (COM )
+                                                    \mathop {\mathbb {E}}_{\bm {x},t}\mathcal {L}(\hat {\bm {x}}_0,\bm {x}).       (4)   position of each segment as the midpoint between joints and
+calculated COM velocity. Then we calculated linear ki-                   ALGORITHM 1: Inpainting denoising with Dif-
+                                                  ˙ 2,
+netic energy for each segment: 0.5 · msegment · COM                      fusionPoser
+with msegment in Appendix D.                                               Given : c, m, xinput
+                                                                           xT = xinput
+3.4. Inference
+                                                                           for t= T-1, T-2, ... 1√do
+3.4.1   Autoregressive inference                                               noise ẑt ∼ N ( αt xt+1 , (1 − αt )I)
+                                                                               predict x̂0 = pθ (ẑt , t, c)
+                                                                               edit xt = m ⊙ xinput + (1 − m) ⊙ x̂0
+                                                                           end
+                                                                           xoutput = xt
+
+
+                                                                        transition from frame N − 1 to N is corrected by changing
+                                                                        the root motion. We do this by first calculating the mean
+                                                                        horizontal position change between frames N − 1 and N
+                                                                        across the points that are predicted to be in contact. We
+                                                                        then subtract this mean position change from the predicted
+                                                                        horizontal root position change between frames N − 1 and
+                                                                        N . Note that this heuristic does not guarantee predicted
+                                                                        contact points to be static, as it only makes the mean of the
+Figure 3. Four step autoregressive inference including denois-
+                                                                        contact points to be static.
+ing inpainting. Motion is reconstructed frame-by-frame in real-
+time following a four step process. New predictions are shifted
+into history and serve as input for the reconstruction at the consec-   4. Evaluations
+utive timesteps.
+                                                                           We performed several experiments and evaluations to
+   Inference is run at 20Hz and consists of a four step pro-            quantify reconstruction performance for different IMU con-
+cess (Figure 3). At each timestep a new observation is made             figurations, to compare DiffusionPoser to Transpose [53],
+of the features measured by the sensors. The new observa-               PIP [52] and TIP [13] and to demonstrate multimodality.
+tion, together with the history of measured features and the            We show that DiffusionPoser has a comparable reconstruc-
+history of reconstructed motion are input to the inpainting             tion accuracy to other methods, while offering users the
+denoising process. The output from the inpainting denois-               flexibility to select sensor setting on-the-fly. Next, we per-
+ing [38] process is a prediction of unobserved features at the          formed experiments to show robustness of DiffusionPoser
+current frame. The predicted features are concatenated with             to sensor signal corruption and to examine the effect of dif-
+the measured features. Finally, we apply a correction of the            ferent denoising schemes. Finally we did several ablations.
+root motion 3.4.2 and shift the new frame into the history                 Following [13, 52, 53] we performed evaluations using
+before a new measurement is acquired.                                   the TotalCapture dataset with real IMU data for sensors
+   Our inpainting denoising algorithm 1 takes as input                  on the pelvis, head, wrists and shanks (‘TotalCaptureReal’)
+xinput which consists for frames 0 to N − 1 of the mea-                 [11, 43]. Next we also used ‘TotalCaptureSynth’, a ver-
+sured and reconstructed feature history. For the final frame,           sion of the TotalCapture dataset where we synthesized all
+frame N , the observed features are set to the sensor mea-              IMU signals. ‘TotalCaptureSynth’ does not allow to eval-
+surements. The unobserved features of frame N , that we                 uate sim-to-real error but is useful to understand the effect
+will predict, are initialized from the reconstructions at frame         of different configurations on reconstruction accuracy. We
+N − 1. The inpainting mask (m) covers all features for                  also used DIP-IMU for additional baseline comparison [11].
+frames 0 to N − 1 and the observed features for frame                   Evaluations are done using 30 denoising steps (Section 4.6).
+N . xinput are inpainted using our denoiser, which leads to                We report the following evaluation metrics:
+xoutput . From xoutput we take the unobserved features at               Local Angular Error, LA [◦ ]: Rotation difference between
+frame N and concatenate these with the measured features.               ground-truth and reconstructed local joint angles. We use
+                                                                        specific LA metrics to quantify reconstruction accuracy of
+                                                                        the back (neck, shoulder and spine joints) and legs (hip,
+3.4.2   Root correction
+                                                                        knee and ankle joints).
+We exploit the predicted contact information to correct foot            Global Angular Error, GA [◦ ]: Rotation difference be-
+sliding artifacts and reduce root drift. The motion of points           tween ground-truth and reconstructed local global segment
+on the feet that are predicted to be in contact during the              orientations.
+Joint Position Error, JPE [cm]: Difference between cor-             the performance for a range of selected configurations on
+responding joint positions, expressed in the root frame, of         TotalCaptureSynth. This was the only experiment where
+reconstructed and ground-truth motions.                             we used TotalCaptureSynth because we did not have real
+Jitter [−]: Ratio of the global jitter averaged across joints       IMU data for all the potentially instrumented segments that
+of the reconstructed over the jitter of the ground truth mo-        we wanted to test. A full table with results can be found
+tion. Global jitter of a joint was calculated as the third          in Appendix C, Table 4. Table 1 shows the optimal con-
+derivative of absolute position using finite differences.           figuration when using four, three and two IMU sensors for
+Root Translation Error, RE [m]: Distance between root               the different evaluation metrics. Note how instrumenting
+position of ground-truth and reconstructed motion at 2s, 5s         thighs is best to reconstruct leg kinematics, whereas shanks
+and 10s into the motion.                                            are preferred to improve root translation error.
+   The metrics are based on Transpose, TIP and PIP. Be-
+cause there is no exact correspondence between metrics              Table 1. Optimal IMU configurations for four, three and two
+across papers, values do not exactly correspond to the orig-        sensors for different tasks.
+inal papers. This is further explained in Appendix B.
+                                                                     # GA [◦ ]               legsLA [◦ ]       backLA [◦ ]          RE10 [m]
+                                                                     4     plvs, hd,         plvs, hd          plvs, hd             thr , thl
+                                                                           wrr , wrl         thr , thl         armr , arml          shr , shl
+                                                                     3     plvs,             plvs,             plvs,                plvs,
+                                                                           wrr , wrl         thr , thl         armr , arml          shr , shl
+                                                                     2     armr , arml       plvs, shr         armr , arml          shr , shl
+
+
+
+                                                                    4.2. Sim-to-real error and reconstruction quality
+                                                                        We evaluated real vs synthetic reconstruction quality. We
+                                                                    performed exhaustive evaluation for all possible IMU con-
+                                                                    figurations with six or fewer sensors with the potentially
+                                                                    instrumented segments limited to wrists, shanks, pelvis and
+                                                                    head. Qualitative results of reconstructions from real data
+                                                                    and a comparison to PIP [52] are shown in Figure 4. Ta-
+                                                                    ble 2 reports sim-to-real comparisons for selected configu-
+                                                                    rations. Quantitative results for all configurations we tested
+                                                                    with real IMU data are in Appendix C, Table 5.
+
+                                                                      Table 2. Sim-to-real error for selected IMU configurations.
+
+                                                                     config                IMU       GA [◦ ]   Jitter[-]     RE2[m]        RE10[m]
+
+                                                                         plvs, hd, wrr ,   real      14.4      2.8           0.25          0.25
+                                                                         wrl , shr , shl   synth     7.0       2.8           0.09          0.17
+
+                                                                         plvs, hd,         real      24.9      2.7           0.26          0.26
+Figure 4. Motion reconstructions with PIP and DiffusionPoser             shr , shl         synth     22.3      2.5           0.17          0.17
+(Ours) for different IMU configurations of a TotalCaptureReal
+                                                                                           real      36.4      2.8           0.30          0.30
+sequence. Yellow: PIP with pelvis, head, wrists and shanks. Grey:        plvs, shr , shl
+                                                                                           synth     28.1      2.5           0.21          0.21
+ground truth. Purple: Ours with pelvis, head, wrists and shanks.
+                                                                                           real      39.2      4.3           0.47          0.47
+Orange: Ours with wrists, shanks. Blue: Ours with pelvis and             shr , shl
+                                                                                           synth     29.9      3.1           0.26          0.26
+wrists. Green: Ours with shanks.
+
+                                                                       Despite the many sources of sim-to-real-error our model
+4.1. Optmizing IMU configurations across tasks
+                                                                    performs well on real data (see also Section 4.3). The fol-
+   We show the capabality of DiffusionPoser to optimize             lowing are sources that contribute to sim-to-real error: (1)
+sensor configurations for specific activities by evaluating         imperfect sensor-to-bone orientation calibration, (2) relative
+on different metrics to quantify accuracy for: whole-body           motion between sensor and bone, (3) imperfect placement
+(GA), leg kinematics (legsLA), back kinematics (backLA)             of the IMU with respect to vertex positions used during
+and global translation (RE10). We optimized sensor config-          data synthesis, (4) IMU orientation estimation error by the
+urations for two, three and four IMU sensors by evaluating          proprietary algorithm and (5) differences synthetic and real
+Table 3. Comparison of DiffusionPoser to different baselines for TotalCaptureReal. Numbers are averages over all trials, bracketed
+numbers are the metrics from the trial with the highest error.
+
+ system           LA [◦ ]        GA [◦ ]         JPE [cm]         Jitter [-]         RE2s [m]              RE5s [m]         RE10s [m]
+ Transpose        13.9(24.3)     16.1(25.2)      6.4(12.7)        5.0(9.7)           0.19(0.98)            0.26(1.38)       0.29(1.4)
+ PIP              11.9(20.1)     14.4(22.7)      5.3(10.7)        1.1(1.5)           0.12(0.45)            0.17(0.60)       0.27(1.07)
+ TIP              12.0(20.0)     14.3(21.4)      6.2(12.1)        5.3(13.0)          0.17(0.46)            0.33(0.53)       0.32(0.98)
+ DiffusionPoser   13.0(21.5)     14.4(23.4)      6.1(12.3)        2.8(4.5)           0.14(0.41)            0.20(0.6)        0.25(0.75)
+
+
+
+data noise properties. We noted that (1) and (2) are substan-         Table 4. Adding insoles for ground truth contact labels im-
+tial in ‘TotalCaptureReal’.                                           proves reconstruction accuracy.
+
+4.3. Comparison to baselines for six IMUs                                config       insole      GA[◦ ]      Jitter[-]   RE2[m]   RE10[m]
+
+    We compare DiffusionPoser to Transpose, PIP and TIP                  plvs, hd,    No          29.4        2.7         0.14     0.33
+                                                                         shr , shl    Yes         29.1        2.6         0.12     0.26
+on ‘TotalCaptureReal’ for the six IMU sensor configuration:
+                                                                         plvs, hd,    No          18.0        3.2         0.34     0.96
+pelvis, head, wrists, shanks (Table 3). We reran and evalu-              wrr , wrl    Yes         16.9        3.0         0.3      0.67
+ated Transpose, PIP and TIP to ensure we were making a
+fair comparison starting from the exact same input data and
+reporting the same evaluation metrics.                                tion occurs regularly in practical settings (e.g. packet loss,
+    Evaluation metrics for all four systems are close. Diffu-         out-of-range). We provide examples on our project website
+sionPoser is within 1.1 degrees and 1cm of the system with            where we drop the signal from all sensors for a couple of
+the best scores for angular error and joint position error. Op-       seconds. DiffusionPoser continues to generate realistic mo-
+tical motion capture will result in variations that are similar       tion in real-time. Once the signal is back, a natural transi-
+or even larger than 1 degree for the exact same underly-              sition to the actual motion is generated. Regressive models,
+ing motion performed by the same subject due to marker                such as PIP [52] are not capable of such online infilling.
+noise, differences in marker placement and parameter set-
+tings of the motion capture processing pipeline [5, 49]. The          4.6. Reducing denoising steps and optimal spread
+jitter metric is significanlty lower in PIP than in Diffusion-            For DiffusionPoser to run online we sped up the denois-
+Poser. Several trials reconstructed by PIP have less jitter           ing process by reducing the number of denoising steps fol-
+than the ground truth motion, indicating that PIP could be            lowing DDIM [7, 38]. For our large base model, a NVIDIA
+oversmoothing in such cases. From our videos it is clear              A4000 GPU can achieve real-time at 30 denoising steps,
+that our reconstructed motion smoothness is reasonable.               but for weaker GPUs it is required to reduce to 10 or even 5
+    We performed an additional validation with real IMU               denoising steps. Here we analyzed how accuracy degrades
+data using the DIP-IMU dataset [11] with comparison to                with reducing the number of denoising steps (Table 5) and
+Transpose, PIP and TIP. Conclusions are the same with                 how these steps are best spread (Table 6).
+evaluation metrics being even closer as for TotalCapture-                 Accuracy improved with increasing number of denois-
+Real. Results are in Appendix Table 3.                                ing steps but saturated around 30 steps. Scaling up to 100
+4.4. Multimodality: Adding shoe insoles                               denoising steps only gave a marginal improvement. When
+                                                                      reducing the number of denoising steps to 5 we sacrificed
+   Because we use contact information while reconstruct-              the jitter metric mostly.
+ing motion we can exploit ground truth information when                   Concerning different denoising schemes (Table 6), for
+pressure insoles are worn. We performed a quantitative                10A we only used the last 10 denoising steps. For 10B
+analysis on ‘TotalCaptureReal’ by using ground truth con-             we used the last 20 denoising steps with a spread of 2.
+tact labels as part of the measured signals. Using ground             For 10C we started at step 100 and decayed exponen-
+truth contact labels improved accuracy (Table 4). When                tially to zero. 10D has the following irregular spread:
+wearing IMUs on the shank the improvement from wear-                  1000/850/700/550/400/250/100/10/2/0. We observed a
+ing insoles is less because the shank IMUs provide good               trade-off where starting from high noise levels resulted in
+information to estimate the contact label.                            slightly worse angular errors and more jitter but improved
+                                                                      root estimation error. This could be explained as we initial-
+4.5. Dealing with signal corruption and loss
+                                                                      ized the unknown features of the last frame as a copy of the
+   DiffusionPoser can deal with corrupted or lost signal by           prior frame. Since orientations are smooth, a few denoising
+relying on its generative nature. Signal loss and corrup-             steps are enough for the model to make a good prediction
+Table 5. Evaluation of decreasing numbers of denoising steps      Table 7. Ablations. Transformer model size is reported between
+for the 6 IMU configuration.                                      brackets: layers/feature dimension/feedforward dimension
+
+ #steps     GA[◦ ]      Jitter[-]   RE2[m]        RE10[m]          Ablation              GA[◦ ]   Jitter[-]   RE2[m]   RE10[m]
+ 5          16.0        4.4         0.17          0.32             Ours
+                                                                   (8/512/2048)          14.4     2.8         0.14     0.25
+ 10         15.8        3.3         0.15          0.25
+                                                                   model size
+ 30         14.4        2.8         0.14          0.25             (4/512/2048)          14.9     2.7         0.11     0.22
+ 100        14.3        2.8         0.14          0.24             model size
+                                                                   (8/256/1024)          15.3     2.7         0.11     0.25
+ Table 6. Evaluation of differently spreading denoising steps.     Ours
+                                                                   w/o energy metric     15.4     2.6         0.14     0.28
+
+ spread     GA[◦ ]      Jitter[-]   RE2[m]        RE10[m]          Ours
+                                                                   w/o height            14.5     2.8         0.14     0.27
+ 10A        15.3        2.0         0.42          0.97             Ours
+ 10B        15.4        2.1         0.42          0.89             w/o root correction   14.4     2.15        0.32     0.54
+
+ 10C        15.4        2.4         0.45          0.67
+ 10D        15.8        3.3         0.15          0.25
+                                                                     We use XSens IMU sensors and stream processed (MTw
+                                                                  Awinda) orientation and linear acceleration at 60Hz. We ap-
+of the next frame. The change in root position (∆p) is not        ply a moving average filter with current frame and five past
+smooth and adding more noise allows the model to change           and five future frames on the acceleration and downsample
+the initialization of the last frame more. For all other evalu-   both signals to 20Hz to match our synthetic training data.
+ations in this paper we used a spacing similar to 10D as the         We perform indoor experiments with a mixture of mo-
+increase in angular error and jitter was small relative to the    tions including walking, jogging, jumping, lunges and kick-
+gain in root estimation accuracy.                                 ing and some specific gait deviations that are observed in
+                                                                  patient populations. Next we also perform a live demon-
+4.7. Additional experiments and ablations
+                                                                  stration of our system with a tennis player outdoors.
+    We performed several additional experiments and abla-            The latency between the real and visualized motion re-
+tions (Table 7). We found that reducing the number of trans-      sults from (1) XSens to system communication, (2) moving
+former layers is a more effective way to reduce model size        average filter (83ms) and (3) our reconstruction algorithm
+than reducing the feature dimension. Interestingly, and we        (45ms). We noticed that the latency of the XSens system in-
+do not know why, root translation error was slightly better in    creased when the distance to the receiver station increased.
+smaller models. We found that not using the energy metric         The latency of our reconstruction algorithm is similar to
+for sampling during training increased the GA by 1◦ . Next,       TIP [13], and significantly more than PIP (16ms) [52].
+we found that ablating height as a condition did not change
+much. This could in part be explained by the subjects in To-
+talCapture having an average stature. Finally, it is clear that   5. Conclusion
+using the contact label predictions to perform root motion
+correction improves root translation error. Root correction          DiffusionPoser allows immediate use of arbirtary sensor
+slightly increased jitter.                                        configurations and thus optimizing these configurations for
+    We performed a comparison of DiffusionPoser with a re-        specific activities. This generative model provides robust-
+gressive model that takes in an input mask to encode sensor       ness in motion prediction against sparsity, noisy and cor-
+configuration. This was only implemented for the OpenSim          rupted sensor measurements. Our evaluations show state-
+version of DiffusionPoser and we show that DiffusionPoser         of-the-art performance when using six sensors and little
+is more accurate and robust than the regressive model (Ap-        degradation in performance when using fewer sensors.
+pendix A, Table 2).                                                  The latency of DiffusionPoser is a limitation for appli-
+                                                                  cations that require short latencies such as visual illusion
+4.8. Live demonstration
+                                                                  (<50ms according to [39]) or control of an assistive device
+   We tested our system live with different configurations        (e.g., 40-60ms to assist balance with an exoskeleton accord-
+in an indoor and outdoor setting (tennis court). Using our        ing to [4]). Other future work is to extend our system to es-
+system requires a quick sensor-to-world calibration. Next,        timate joint torques and muscle forces. This could lead to a
+the sensors are attached at the correct body locations and a      breakthrough system for biomechanists and users interested
+sensor-to-bone calibration is done by standing in T-pose.         in health and performance.
+References                                                            [12] Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa
+                                                                           Laich, Patrick Snape, and Christian Holz. Avatarposer: Ar-
+ [1] Chaitanya Ahuja and Louis-Philippe Morency.               Lan-        ticulated full-body pose tracking from sparse motion sens-
+     guage2pose: Natural language grounded pose forecasting.               ing. In Proceedings of European Conference on Computer
+     2019 International Conference on 3D Vision (3DV), pages               Vision. Springer, 2022. 3
+     719–728, 2019. 3                                                 [13] Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won,
+ [2] Mazen Al Borno, Johanna O’Day, Vanessa Ibarra, James                  Alexander W. Winkler, and C. Karen Liu. Transformer in-
+     Dunne, Ajay Seth, Ayman Habib, Carmichael Ong, Jen-                   ertial poser: Real-time human motion reconstruction from
+     nifer Hicks, Scott Uhlrich, and Scott Delp. Opensense:                sparse imus with simultaneous terrain generation. In SIG-
+     An open-source toolbox for inertial-measurement-unit-based            GRAPH Asia 2022 Conference Papers, SA ’22, New York,
+     measurement of lower extremity kinematics over long du-               NY, USA, 2022. Association for Computing Machinery. 1,
+     rations. Journal of neuroengineering and rehabilitation,              2, 3, 4, 5, 8
+     19(1):1–11, 2022. 1                                              [14] Hanbyul Joo, Hao Liu, Lei Tan, Lin Gui, Bart Nabbe,
+ [3] Sheldon Andrews, Ivan Huerta, Taku Komura, Leonid Sigal,              Iain Matthews, Takeo Kanade, Shohei Nobuhara, and Yaser
+     and Kenny Mitchell. Real-time physics-based motion cap-               Sheikh. Panoptic studio: A massively multiview system for
+     ture with sparse sensors. In Proceedings of the 13th Euro-            social motion capture. In The IEEE International Conference
+     pean Conference on Visual Media Production (CVMP 2016),               on Computer Vision (ICCV), 2015. 2
+     CVMP 2016, New York, NY, USA, 2016. Association for              [15] Manuel Kaufmann, Yi Zhao, Chengcheng Tang, Lingling
+     Computing Machinery. 3                                                Tao, Christopher Twigg, Jie Song, Robert Wang, and Otmar
+ [4] Owen N Beck, Max K Shepherd, Rish Rastogi, Giovanni                   Hilliges. Em-pose: 3d human pose estimation from sparse
+     Martino, Lena H Ting, and Gregory S Sawicki. Exoskeletons             electromagnetic trackers. In Proceedings of the IEEE/CVF
+     need to react faster than physiological responses to improve          international conference on computer vision, pages 11510–
+     standing balance. Science robotics, 8(75):eadf1080, 2023. 8           11520, 2021. 1
+ [5] A Cappozzo, F Catani, A Leardini, MG Benedetti, and U            [16] Jihoon Kim, Jiseob Kim, and Sungjoon Choi. Flame: free-
+     Della Croce. Position and orientation in space of bones dur-          form language-based motion synthesis & editing. In Pro-
+     ing movement: experimental artefacts. Clinical Biomechan-             ceedings of the Thirty-Seventh AAAI Conference on Artifi-
+     ics, 11(2):90–100, 1996. 7                                            cial Intelligence and Thirty-Fifth Conference on Innovative
+ [6] Chariklia Chatzaki, Vasileios Skaramagkas, Nikolaos                   Applications of Artificial Intelligence and Thirteenth Sym-
+     Tachos, Georgios Christodoulakis, Evangelia Maniadi, Zi-              posium on Educational Advances in Artificial Intelligence,
+     novia Kefalopoulou, Dimitrios I Fotiadis, and Manolis Tsik-           AAAI’23/IAAI’23/EAAI’23. AAAI Press, 2023. 3
+     nakis. The smart-insole dataset: Gait analysis using wearable    [17] Diederik P Kingma and Max Welling. Auto-encoding varia-
+     sensors with a focus on elderly and parkinson’s patients. Sen-        tional bayes. arXiv preprint arXiv:1312.6114, 2013. 3
+     sors, 21(8):2821, 2021. 1                                        [18] Adrian KM Lai, Allison S Arnold, and James M Wakel-
+ [7] Yuming Du, Robin Kips, Albert Pumarola, Sebastian Starke,             ing. Why are antagonist muscles co-activated in my simula-
+     Ali Thabet, and Artsiom Sanakoyeu. Avatars grow legs:                 tion? a musculoskeletal model for analysing human locomo-
+     Generating smooth human motion from sparse tracking in-               tor tasks. Annals of biomedical engineering, 45:2762–2774,
+     puts with diffusion model. In CVPR, 2023. 2, 3, 7                     2017. 3
+ [8] Jia Gong, Lin Geng Foo, Zhipeng Fan, Qiuhong Ke, Hossein         [19] Chang June Lee and Jung Keun Lee. Inertial motion capture-
+     Rahmani, and Jun Liu. Diffpose: Toward more reliable 3d               based wearable systems for estimation of joint kinetics: A
+     pose estimation. In Proceedings of the IEEE/CVF Confer-               systematic review. Sensors, 22(7):2507, 2022. 1
+     ence on Computer Vision and Pattern Recognition (CVPR),          [20] Jiaman Li, C. Karen Liu, and Jiajun Wu. Ego-body pose
+     June 2023. 3                                                          estimation via ego-head pose estimation, 2023. 2, 3
+ [9] Jonathan Ho, Ajay Jain, and Pieter Abbeel. Denoising dif-        [21] Matthew Loper, Naureen Mahmood, Javier Romero, Gerard
+     fusion probabilistic models. In H. Larochelle, M. Ranzato,            Pons-Moll, and Michael J. Black. Smpl: A skinned multi-
+     R. Hadsell, M.F. Balcan, and H. Lin, editors, Advances in             person linear model. ACM Trans. Graph., 34(6), nov 2015.
+     Neural Information Processing Systems, volume 33, pages               2, 3
+     6840–6851. Curran Associates, Inc., 2020. 4                      [22] Andreas Lugmayr, Martin Danelljan, Andrés Romero, Fisher
+[10] Karl Holmquist and Bastian Wandt. Diffpose: Multi-                    Yu, Radu Timofte, and Luc Van Gool. Repaint: Inpaint-
+     hypothesis human pose estimation using diffusion models.              ing using denoising diffusion probabilistic models. 2022
+     In Proceedings of the IEEE/CVF International Conference               IEEE/CVF Conference on Computer Vision and Pattern
+     on Computer Vision (ICCV), pages 15977–15987, October                 Recognition (CVPR), pages 11451–11461, 2022. 2
+     2023. 3                                                          [23] Naureen Mahmood, Nima Ghorbani, Nikolaus F. Troje, Ger-
+[11] Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J.                ard Pons-Moll, and Michael J. Black. AMASS: Archive of
+     Black, Otmar Hilliges, and Gerard Pons-Moll. Deep inertial            motion capture as surface shapes. In International Confer-
+     poser: Learning to reconstruct human pose from sparse iner-           ence on Computer Vision, pages 5442–5451, Oct. 2019. 2,
+     tial measurements in real time. ACM Transactions on Graph-            4
+     ics, (Proc. SIGGRAPH Asia), 37:185:1–185:15, Nov. 2018.          [24] Charles Malleson, Andrew Gilbert, Matthew Trumble, John
+     Two first authors contributed equally. 1, 2, 5, 7                     Collomosse, Adrian Hilton, and Marco Volino. Real-time
+     full-body motion capture from video and imus. In 2017 In-           nonequilibrium thermodynamics. In Francis Bach and David
+     ternational Conference on 3D Vision (3DV), pages 449–457,           Blei, editors, Proceedings of the 32nd International Con-
+     2017. 3                                                             ference on Machine Learning, volume 37 of Proceedings
+[25] Vimal Mollyn, Riku Arakawa, Mayank Goel, Chris Harri-               of Machine Learning Research, pages 2256–2265, Lille,
+     son, and Karan Ahuja. Imuposer: Full-body pose estimation           France, 07–09 Jul 2015. PMLR. 3
+     using imus in phones, watches, and earbuds. In Proceedings     [38] Jiaming Song, Chenlin Meng, and Stefano Ermon. Denois-
+     of the 2023 CHI Conference on Human Factors in Comput-              ing diffusion implicit models. In ICLR 2021, Virtual Event,
+     ing Systems, CHI ’23, New York, NY, USA, 2023. Associa-             Austria, May 3-7, 2021. OpenReview.net, 2021. 5, 7
+     tion for Computing Machinery. 2                                [39] Jan-Philipp Stauffert, Florian Niebling, and Marc Erich
+[26] Mathis Petrovich, Michael J. Black, and Gül Varol. Action-         Latoschik. Latency and cybersickness: Impact, causes, and
+     conditioned 3D human motion synthesis with transformer              measures. a review. Frontiers in Virtual Reality, 1:582204,
+     VAE. In International Conference on Computer Vision                 2020. 8
+     (ICCV), 2021. 4                                                [40] Agnieszka Szczkesna, Monika Błaszczyszyn, and Mag-
+[27] Mathis Petrovich, Michael J. Black, and Gül Varol. TEMOS:          dalena Pawlyta. Optical motion capture dataset of selected
+     Generating diverse human motions from textual descriptions.         techniques in beginner and advanced kyokushin karate ath-
+     In European Conference on Computer Vision (ECCV), 2022.             letes. Scientific Data, 8(1):13, 2021. 2
+     3                                                              [41] Jochen Tautges, Arno Zinke, Björn Krüger, Jan Baumann,
+[28] Ryan Po, Wang Yifan, and Vladislav Golyanik et al. State of         Andreas Weber, Thomas Helten, Meinard Müller, Hans-
+     the art on diffusion models for visual computing. In ArXiv,         Peter Seidel, and Bernd Eberhardt. Motion reconstruction
+     2023. 3                                                             using sparse accelerometer data. ACM Trans. Graph., 30(3),
+[29] Davis Rempe, Tolga Birdal, Aaron Hertzmann, Jimei Yang,             may 2011. 2
+     Srinath Sridhar, and Leonidas J. Guibas. Humor: 3d human
+                                                                    [42] Guy Tevet, Sigal Raab, Brian Gordon, Yoni Shafir, Daniel
+     motion model for robust pose estimation. In International
+                                                                         Cohen-or, and Amit Haim Bermano. Human motion diffu-
+     Conference on Computer Vision (ICCV), 2021. 4
+                                                                         sion model. In The Eleventh International Conference on
+[30] Yiming Ren, Chengfeng Zhao, Yannan He, Peishan Cong,                Learning Representations, 2023. 2, 3, 4
+     Han Liang, Jingyi Yu, Lan Xu, and Yuexin Ma. Lidar-aid
+                                                                    [43] Matt Trumble, Andrew Gilbert, Charles Malleson, Adrian
+     inertial poser: Large-scale human motion capture by sparse
+                                                                         Hilton, and John Collomosse. Total capture: 3d human pose
+     inertial and lidar sensors. IEEE Transactions on Visualiza-
+                                                                         estimation fusing video and inertial sensors. In 2017 British
+     tion and Computer Graphics, 29(5):2337–2347, 2023. 3
+                                                                         Machine Vision Conference (BMVC), 2017. 2, 5
+[31] Daniel Roetenberg, Henk Luinge, Per Slycke, et al. Xsens
+     mvn: Full 6dof human motion tracking using miniature in-       [44] Jonathan Tseng, Rodrigo Castellon, and Karen Liu. Edge:
+     ertial sensors. Xsens Motion Technologies BV, Tech. Rep,            Editable dance generation from music. In Proceedings of
+     1:1–7, 2009. 2                                                      the IEEE/CVF Conference on Computer Vision and Pattern
+                                                                         Recognition (CVPR), pages 448–458, June 2023. 2, 3, 4
+[32] Martin Schepers, Matteo Giuberti, Giovanni Bellusci, et al.
+     Xsens mvn: Consistent tracking of human motion using in-       [45] Scott D. Uhlrich, Antoine Falisse, Łukasz Kidziński, Julie
+     ertial sensing. Xsens Technol, 1(8), 2018. 1                        Muccini, Michael Ko, Akshay S. Chaudhari, Jennifer L.
+[33] Paul Schreiner, Maksym Perepichka, Hayden Lewis, Sune               Hicks, and Scott L. Delp. Opencap: Human movement dy-
+     Darkner, Paul G. Kry, Kenny Erleben, and Victor B. Zor-             namics from smartphone videos. PLOS Computational Biol-
+     dan. Global position prediction for interactive motion cap-         ogy, 19(10):1–26, 10 2023. 1
+     ture. Proc. ACM Comput. Graph. Interact. Tech., 4(3), sep      [46] Scott D. Uhlrich, Rachel W. Jackson, Ajay Seth, Julie Kole-
+     2021. 1                                                             sar, and Scott L. Delp. Muscle coordination retraining in-
+[34] Ajay Seth, Jennifer L Hicks, Thomas K Uchida, Ayman                 spired by musculoskeletal simulations reduces knee contact
+     Habib, Christopher L Dembia, James J Dunne, Carmichael F            force. Scientific reports, 2022. 2
+     Ong, Matthew S DeMers, Apoorva Rajagopal, Matthew Mil-         [47] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszko-
+     lard, et al. Opensim: Simulating musculoskeletal dynamics           reit, Llion Jones, Aidan N. Gomez, Łukasz Kaiser, and Illia
+     and neuromuscular control to study human and animal move-           Polosukhin. Attention is all you need. In Proceedings of the
+     ment. PLoS computational biology, 14(7):e1006223, 2018.             31st International Conference on Neural Information Pro-
+     2                                                                   cessing Systems, NIPS’17, page 6000–6010, Red Hook, NY,
+[35] Mingyi Shi, Kfir Aberman, Andreas Aristidou, Taku Ko-               USA, 2017. Curran Associates Inc. 4
+     mura, Dani Lischinski, Daniel Cohen-Or, and Baoquan            [48] Timo Von Marcard, Bodo Rosenhahn, Michael J Black, and
+     Chen. Motionet: 3d human motion reconstruction from                 Gerard Pons-Moll. Sparse inertial poser: Automatic 3d hu-
+     monocular video with skeleton consistency. ACM Trans.               man pose estimation from sparse imus. In Computer graph-
+     Graph., 40(1), sep 2020. 4                                          ics forum, volume 36, pages 349–360. Wiley Online Library,
+[36] Ronit Slyper and Jessica K. Hodgins. Action capture with ac-        2017. 1, 2
+     celerometers. SCA ’08, page 193–199, Goslar, DEU, 2008.        [49] Jason M. Wilken, Kelly M. Rodriguez, Melissa Brawner,
+     Eurographics Association. 1, 2                                      and Benjamin J. Darter. Reliability and minimal detectible
+[37] Jascha Sohl-Dickstein, Eric Weiss, Niru Maheswaranathan,            change values for gait kinematics and kinetics in healthy
+     and Surya Ganguli. Deep unsupervised learning using                 adults. Gait and Posture, 35(2):301–307, 2012. 7
+[50] Alexander Winkler, Jungdam Won, and Yuting Ye. Quest-
+     sim: Human motion tracking from sparse sensors with simu-
+     lated avatars. In SIGGRAPH Asia 2022 Conference Papers,
+     SA ’22, New York, NY, USA, 2022. Association for Com-
+     puting Machinery. 3
+[51] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav
+     Golyanik, Shaohua Pan, Christian Theobalt, and Feng Xu.
+     Egolocate: Real-time motion capture, localization, and
+     mapping with sparse body-mounted sensors. ACM Trans.
+     Graph., 42(4), jul 2023. 3
+[52] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada,
+     Vladislav Golyanik, Christian Theobalt, and Feng Xu. Phys-
+     ical inertial poser (pip): Physics-aware real-time human mo-
+     tion tracking from sparse inertial sensors. In IEEE/CVF
+     Conference on Computer Vision and Pattern Recognition
+     (CVPR), June 2022. 1, 2, 3, 5, 6, 7, 8
+[53] Xinyu Yi, Yuxiao Zhou, and Feng Xu. Transpose: Real-time
+     3d human translation and pose estimation with six inertial
+     sensors. ACM Trans. Graph., 40(4), jul 2021. 1, 2, 3, 4, 5
+[54] Mingyuan Zhang, Zhongang Cai, Liang Pan, Fangzhou
+     Hong, Xinying Guo, Lei Yang, and Ziwei Liu. Motiondif-
+     fuse: Text-driven human motion generation with diffusion
+     model. arXiv preprint arXiv:2208.15001, 2022. 3
+[55] Zerong Zheng, Tao Yu, Hao Li, Kaiwen Guo, Qionghai Dai,
+     Lu Fang, and Yebin Liu. Hybridfusion: Real-time perfor-
+     mance capture using a single depth sensor and sparse imus.
+     In Proceedings of the European Conference on Computer Vi-
+     sion (ECCV), September 2018. 3
+[56] Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and
+     Hao Li. On the continuity of rotation representations in neu-
+     ral networks. In 2019 IEEE/CVF Conference on Computer
+     Vision and Pattern Recognition (CVPR), pages 5738–5746,
+     2019. 3
+

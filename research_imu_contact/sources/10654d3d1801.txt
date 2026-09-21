@@ -1,0 +1,118 @@
+URL: https://arxiv.org/search/?query=Probabilistic+Inertial+Poser&searchtype=all&abstracts=show&order=-announced_date_first&size=50
+
+Search | arXiv e-print repository
+Skip to main content
+arXiv is now an independent nonprofit!
+Learn more
+×
+Search arXiv
+Press Enter to search ·
+Advanced search
+Search
+Search v0.5.6 released 2020-02-24
+Search term or terms
+Field
+All fields
+Title
+Author(s)
+Abstract
+Comments
+Journal reference
+ACM classification
+MSC classification
+Report number
+arXiv identifier
+DOI
+ORCID
+License (URI)
+arXiv author ID
+Help pages
+Full text
+Search
+Show abstracts
+Hide abstracts
+Advanced Search
+Sorry, your query for
+all: Probabilistic Inertial Poser
+produced no results.
+Searching by Author Name
+Using the
+Author(s) field
+produces best results for author name searches.
+For the most precise name search, follow
+surname(s), forename(s)
+or
+surname(s), initial(s)
+pattern: example Hawking, S or Hawking, Stephen
+For best results on multiple author names,
+separate individuals with a ;
+(semicolon). Example: Jin, D S; Ye, J
+Author names enclosed in quotes will return only
+exact matches
+. For example, "Stephen Hawking" will not return matches for Stephen W. Hawking.
+Diacritic character variants are automatically searched in the Author(s) field.
+Queries with no punctuation will treat each term independently.
+Searching by subcategory
+To search within a subcategory select
+All fields
+.
+A subcategory search can be combined with an author or keyword search by clicking on
+add another term
+in advanced search.
+Tips
+Wildcards:
+Use ? to replace a single character or * to replace any number of characters.
+Can be used in any field, but not in the first character position. See Journal References tips for exceptions.
+Expressions:
+TeX expressions can be searched, enclosed in single $ characters.
+Phrases:
+Enclose phrases in double quotes for exact matches in title, abstract, and comments.
+Dates:
+Sorting by announcement date will use the year and month the
+original version
+(v1) of the paper was announced.
+Sorting by submission date will use the year, month and day the
+latest version
+of the paper was submitted.
+Journal References:
+If a journal reference search contains a wildcard, matches will be made using wildcard matching as expected. For example,
+math*
+will match
+math
+,
+maths
+,
+mathematics
+.
+If a journal reference search does
+not
+contain a wildcard, only exact phrases entered will be matched. For example,
+math
+would match
+math
+or
+math and science
+but not
+maths
+or
+mathematics
+.
+All journal reference searches that do not contain a wildcard are literal searches: a search for
+Physica A
+will match all papers with journal references containing
+Physica A
+, but a search for
+Physica A, 245 (1997) 181
+will only return the paper with journal reference
+Physica A, 245 (1997) 181
+.
+Search v0.5.6 released 2020-02-24
+We gratefully acknowledge support from
+        our
+major funders
+,
+member institutions
+,
+,
+        and all contributors.
+Major funding support from

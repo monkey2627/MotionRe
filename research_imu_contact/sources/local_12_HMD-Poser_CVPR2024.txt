@@ -1,0 +1,948 @@
+                                             HMD-Poser: On-Device Real-time Human Motion Tracking from Scalable
+                                                                    Sparse Observations
+
+                                                                     Peng Dai, Yang Zhang, Tao Liu, Zhen Fan, Tianyuan Du,
+                                                                            Zhuo Su, Xiaozheng Zheng, Zeming Li,
+                                                                                      PICO, ByteDance
+arXiv:2403.03561v1 [cs.CV] 6 Mar 2024
+
+
+
+
+                                                         {daipeng.2022, zhangyang.0621, liutao.96, fanzhen.0315, dutianyuan,
+                                                                     suzhuo, zhengxiaozheng, lizeming.001}@bytedance.com
+
+
+
+                                                                 Abstract                                                              ."0"(01 +2345 .12"678-
+
+
+                                           It is especially challenging to achieve real-time human
+                                        motion tracking on a standalone VR Head-Mounted Dis-
+                                        play (HMD) such as Meta Quest and PICO. In this pa-
+                                        per, we propose HMD-Poser, the first unified approach to                                                                            $
+                                        recover full-body motions using scalable sparse observa-
+                                        tions from HMD and body-worn IMUs. In particular, it
+                                        can support a variety of input scenarios, such as HMD,
+                                        HMD+2IMUs, HMD+3IMUs, etc. The scalability of in-                       !"#$%&' !(#$%&')*+&,-              !.#$%&')/+&,-
+                                        puts may accommodate users’ choices for both high track-
+                                        ing accuracy and easy-to-wear. A lightweight temporal-                  %&'$!59611$:';<-#                          >1"057?1$&8@10 +2A1612.1$
+                                        spatial feature learning network is proposed in HMD-Poser                                                              82$%&'$'1=7.1
+
+                                        to guarantee that the model runs in real-time on HMDs.
+                                        Furthermore, HMD-Poser presents online body shape es-
+                                        timation to improve the position accuracy of body joints.               C$="67"(01$24?(16$8A
+                                                                                                               /';<$+&,-$!;35782"0#
+                                        Extensive experimental results on the challenging AMASS
+                                        dataset show that HMD-Poser achieves new state-of-the-
+                                        art results in both accuracy and real-time performance. We                      $
+                                        also build a new free-dancing motion dataset to evaluate
+                                                                                                              ."0"(01 3"6-1 ;(-16="5782-    '67=72B "2$C="5"6 82$%&' 72 >1"0D57?1
+                                        HMD-Poser’s on-device performance and investigate the
+                                        performance gap between synthetic data and real-captured
+                                        sensor data. Finally, we demonstrate our HMD-Poser with            Figure 1. HMD-Poser can handle scalable input scenarios, includ-
+                                                                                                           ing (a) HMD, (b) HMD+2IMUs wherein two IMUs are worn on
+                                        a real-time Avatar-driving application on a commercial
+                                                                                                           the lower legs, (c) HMD+3IMUs wherein a third IMU is added to
+                                        HMD. Our code and free-dancing motion dataset are avail-           the pelvis, etc. HMD-Poser runs on HMD and outputs full-body
+                                        able here.                                                         motion data to drive an Avatar in real-time.
+
+
+                                        1. Introduction                                                    body motions, especially lower-body motions, is inherently
+                                        Human motion tracking (HMT), which aims at estimating              an under-constrained problem with such sparse tracking sig-
+                                        the orientations and positions of body joints in 3D space, is      nals. Second, computing resources are usually highly re-
+                                        highly demanded in various VR applications, such as gam-           stricted in portable HMDs, which makes deploying a real-
+                                        ing and social interaction. However, it is quite challeng-         time HMT model on HMDs even harder.
+                                        ing to achieve both accurate and real-time HMT on HMDs.               Prior works have focused on improving the accuracy of
+                                        There are two main reasons. First, since only the user’s           full-body tracking. One category of methods utilizes three
+                                        head and hands are tracked by HMD (including hand con-             6DOFs (degrees of freedom) from HMD to estimate full-
+                                        trollers) in the typical VR setting, estimating the user’s full-   body motions, and they could be roughly classified into
+the physics-simulator-driven methods [24, 48] and the data-     the-art results on the AMASS dataset and runs in real-time
+driven methods [3, 4, 8, 9, 16, 59]. These methods usu-         on consumer-grade HMDs. (3) A free-dancing motion cap-
+ally have difficulties in some uncorrelated upper-lower body    ture dataset is built for on-device evaluation. It is the first
+motions where different lower-body movements are repre-         dataset that contains synchronized ground-truth 3D human
+sented by similar upper-body observations. As a result, it’s    motions and real-captured HMD and IMU sensor data.
+hard for them to accurately drive an Avatar with unlim-
+ited movements in VR applications. The other category of        2. Related Work
+methods [15, 36, 50–52] uses six 3DOF IMUs (inertial mea-
+                                                                HMT has attracted much interest in recent years. Ex-
+surement units) worn on the user’s head, forearms, pelvis,
+                                                                isting works generate tracking results from optical mark-
+and lower legs respectively for HMT. While these meth-
+                                                                ers [11, 29, 54], depth sensors [5, 40, 41, 49, 53], monoc-
+ods could improve lower-body tracking accuracy by adding
+                                                                ular images [6, 14, 18–20, 22, 23, 25, 37, 42], ego-centric
+legs’ IMU data, it’s theoretically difficult for them to pro-
+                                                                views [2, 26, 46, 47], single-view videos [7, 10, 27, 55, 56,
+vide accurate body joint positions due to the inherent drift-
+                                                                58], and multi-view videos [28, 33, 57]. Recently, methods
+ing problem of IMU sensors. Recently, SparsePoser [38]
+                                                                using sparse signals from HMD or wearable IMU sensors,
+combined HMD with three 6DOF trackers on the pelvis and
+                                                                have received more attention [3, 9, 16, 50, 51].
+feet to improve accuracy. However, 6DOF trackers usually
+need extra base stations which make them user-unfriendly        2.1. HMT in HMD Setting
+and they are much more expensive than 3DOF IMUs.
+                                                                In a typical VR HMD setting, the upper body is tracked by
+    Different from existing methods, we propose HMD-            signals from HMD with hand controllers, while the lower
+Poser to combine HMD with scalable 3DOF IMUs. Con-              body’s tracking signals are absent. One advantage of this
+sidering users’ preferences between easy-to-wear and high       setting is that HMD could provide reliable global posi-
+accuracy, HMD-Poser designs a unified framework to be           tions of the user’s head and hands with SLAM, rather than
+compatible with scalable observations, as shown in Fig. 1.      only 3DOF data from IMUs. Existing methods fall into
+Scalability means it can handle multiple input scenarios, in-   two categories. First is the physics-simulator-based meth-
+cluding a) HMD, b) HMD+2IMUs, c) HMD+3IMUs, etc.                ods [24, 48]. QuestSim [48] and QuestEnvSim [24] utilized
+Furthermore, unlike existing works that use the same de-        Nvidia’s IsaacGym [32] for physics simulation and rein-
+fault shape parameters for joint position calculation, our      forcement learning for model training. However, physics
+HMD-Poser involves hand representations relative to the         simulators are typically non-differential black boxes, mak-
+head coordinate frame to estimate the user’s body shape pa-     ing these methods incompatible with existing machine
+rameters online. It can improve the joint position accuracy     learning frameworks and difficult to deploy to HMDs. Sec-
+when the users’ body shapes vary in real applications.          ond is the data-driven methods [3, 4, 8, 9, 16, 59]. HMD-
+    Real-time on-device execution is another key factor         NeMo [4], Avatarposer [16], and AvatarJLM [59] relied
+that affects users’ VR experience. Nevertheless, it has         on regression models to establish a direct mapping from
+been overlooked in most existing methods. Recent meth-          sparse tracking data to target 3D human motions. Other
+ods [9, 16, 59] usually adopt the clip setting, i.e., pro-      works tried to improve performance by generative models,
+cessing all input data within a clip during each model in-      such as normalizing flows [3], Variational Autoencoders
+ference, which may increase computational cost and time         (VAE) [8] and diffusion models [9]. Although these meth-
+delay. Motivated by HMD-NeMo [4], our HMD-Poser                 ods have shown promising results on public datasets such as
+introduces a lightweight temporal-spatial feature learning      AMASS [31], they still have many failure cases, e.g., when
+(TSFL) network that combines long short-term memory             the upper body remains stationary but the lower legs move.
+(LSTM) [13] networks for temporal feature capturing with
+Transformer [44] encoders for spatial correlation learning.     2.2. HMT from Wearable IMUs
+With the help of the hidden state in LSTM, the input length     Recent studies [15, 17, 45, 50, 51] have explored the use of
+and computational cost of the Transformer are significantly     six IMUs, which track the signals of the user’s head, fore-
+reduced, making the model real-time runnable on HMDs.           arms, lower-legs, and pelvis respectively, for full-body mo-
+    Our contributions are concluded as follows: (1) To the      tion estimation. The pioneering work is the optimization-
+best of our knowledge, HMD-Poser is the first HMT so-           based approach SIP [45], which demonstrated the feasi-
+lution that designs a unified framework to handle scalable      bility of reconstructing accurate 3D full-body motion by
+sparse observations from HMD and wearable IMUs. Hence,          only six IMUs, albeit with limited speed. Subsequently,
+it could recover accurate full-body poses with fewer posi-      a few deep learning-based approaches [15, 35] used recur-
+tional drifts. (2) HMD-Poser builds a simple yet effective      rent neural networks (RNN) to improve real-time perfor-
+network by combining a set of standard components, such         mance but were unable to estimate the global translation.
+as LSTM [13], Transformer [44], etc. It achieves state-of-      TransPose [50] tried to estimate the global translation by
+                                                                                     ! "$#"
+                                     -!%:*+,4"
+
+
+
+
+                                                                                                                                               @&1A123%=A'.'&
+                        '                                     (
+
+              *>'4%?*;"%/;.1#'.1*2                6:? %6!')"%/;.1#'.1*2
+
+
+                                -"'.,&"%=33&"3'.1*2
+                                                                                                                                               !"!
+
+                                                                                                (&'2;<*&#"&50';"+%6)'.1'4%:*+,4"
+                  13!.$"13!.%("#)*&'456)'.1'4%-"'.,&"% "'&2123
+
+                                                                                           !"     !$"   !%"    "
+                                                                                                              !)!$    "
+                                                                                                                     !$$    "
+                                                                                                                           !%$ !$" &   !%" &
+         #"      #$"     #%"        "
+                                   #)!$    #$""          "
+                                                       #%"   #$" &   #%" &
+                                                                                 !%"#!&
+
+
+
+
+                                                                                                                                               ("#)*&'4%:*+,4"
+                                                                                                                      789
+                                                                                                                  789
+                                                                                                              789
+                                -"'.,&" /#0"++123                                                         789
+                                                                                                      789
+                                                                                 !$"#!            789
+                                                                                              789
+          "       "         "        "      "           "     "       "          !"#!     789
+                  $         %        )!$    $"          %"    $ &     % &
+
+
+
+
+Figure 2. Overview of HMD-Poser. At each time step t, each component in the input data xt (see Eq. 1) is firstly mapped to a higher-
+dimensional embedding feature f t via the feature embedding module. Then, a lightweight temporal-spatial feature learning network is
+adopted to generate representations with rich temporal and spatial correlation information. Next, two regression heads regress the local
+pose parameters θt and the shape parameters β t of SMPL, respectively. Finally, a forward-kinematics (FK) module is adopted to calculate
+the global poses and positions of all joints which are used to drive an Avatar in real-time.
+
+
+fusing a supporting-foot-based method with an RNN-based                      Framework. As illustrated in Fig. 2, HMD-Poser’s
+root translation regression model. Moreover, PIP [51] intro-                 pipeline consists of four components. (1) A feature embed-
+duced a physics-aware motion optimizer and TIP [17] pro-                     ding module maps the input data xt to a higher-dimensional
+posed a stationary-body-points predictor to further improve                  embedding space which serves as the input to subsequent
+the translation accuracy and physical plausibility. However,                 networks. (2) A lightweight TSFL network learns how each
+these methods are prone to positional drift due to the in-                   input component is related to each other and evolves over
+evitable accumulation errors of IMU sensors, making it dif-                  time, generating representations with rich temporal and spa-
+ficult to provide accurate joint positions.                                  tial correlation. (3) With the feature aggregated from TSFL,
+   HMD-Poser combines the HMD setting with scalable                          Two MLP-based (multi-layer perceptron) heads regress the
+IMUs. IMUs worn on the pelvis and lower legs improve the                     local pose parameters θt and the shape parameters β t of
+lower body pose estimation, and full-body joint positions                    SMPL, respectively. (4) Given θt , β t and the head position
+are derived from the reliable head position from HMD.                        provided by HMD, a forward-kinematics (FK) module cal-
+                                                                             culates all joint positions and concatenates them with θt to
+3. Method                                                                    generate the final output y t ∈ R(J×6) . Following previous
+                                                                             works [16, 50], we adopt the first 22 joints of the SMPL [30]
+3.1. Overview                                                                model, i.e., J = 22.
+Task. Our task is to estimate both the orientations and                      3.2. Scalable Input Processing
+positions of all body joints in real-time using HMD and
+a variable number of IMUs. Specifically, we consider                         Input representation. The input signal xt contains HMD’s
+three input scenarios as shown in Fig. 1. Intuitively, the                   head and hand 6DOF data and optionally the rotation and
+HMD scenario is the most convenient for users among                          acceleration measurements from IMUs. We follow Avatar-
+the three scenarios, but with the worst tracking accuracy.                   Poser [16] to use a concatenated vector of position, lin-
+While the HMD+3IMUs scenario is exactly the opposite.                        ear velocity, rotation, and angular velocity to obtain the
+The HMD+2IMUs scenario balances user-friendliness and                        representation for the head xth , the left hand xtlh , and the
+tracking accuracy, making it suitable for most applications.                 right hand xtrh . As for IMU data, we adopt a concate-
+It’s worth noting that our method can also be applied to                     nated vector of rotation, angular velocity, and accelera-
+other HMD/IMU configurations.                                                tion to obtain the representation for the pelvis xtpel , the
+left leg xtlf , and the right leg xtrf . We represent rotation                   introduces a lightweight TSFL network that combines the
+and angular velocity with a 6D vector due to its simplicity                      RNN model with the Transformer. As shown in Fig. 2, the
+and continuity [60], resulting in xth , xtlh , xtrh ∈ R1×18 and                  lightweight TSFL network is composed of a stack of N = 2
+xtpel , xtlf , xtrf ∈ R1×15 . All IMU rotation and acceleration                  identical blocks. And each block has two sub-blocks. The
+data are calibrated to a common body-centric frame before                        first is a set of long short-term memory (LSTM) modules
+feeding to the model. To better estimate the shape param-                        to independently learn the temporal representation of each
+eters and improve the joint position accuracy (see Sec. 4                        component in the input, and the second is a Transformer en-
+for more experimental results), we additionally calculate the                    coder to learn the spatial correlation among different com-
+hand representations relative to the head coordinate frame,                      ponents. The time complexity of the LSTM model is O(d2 ),
+xtlh/h ∈ R1×18 and xtrh/h ∈ R1×18 . Overall, the input data,                     which is negligible compared to that of the Transformer
+xt ∈ R1×135 , can be written as                                                  model. With the help of the hidden state in LSTM, the
+                                                                                 Transformer could focus on spatial feature learning within
+       xt = [xth , xtlh , xtrh , xtpel , xtlf , xtrf , xtlh/h , xtrh/h ]   (1)   each frame. It means that the sequential length M in our
+                                                                                 Transformer is reduced to the number of input components,
+    As described in Sec. 3.1, our model needs to be com-
+                                                                                 i.e., M = 8, which is much smaller than that in previous
+patible with scalable inputs. It means that the IMU data of
+                                                                                 methods (e.g., M = 40 in [16] and M = 45 in [59]). As
+the pelvis xtpel is missing in the second scenario, and all
+                                                                                 a result, our method is more than 5 times faster than previ-
+the IMU data (xtpel , xtlf and xtrf ) is missing in the first sce-
+                                                                                 ous Transformer-based methods [16, 59] in terms of a single
+nario. To make our model compatible with all scenarios in
+                                                                                 Transformer layer. Meanwhile, by introducing LSTM to re-
+a unified framework, the feature dimension of the input data
+                                                                                 tain complete historical information, our TSFL network can
+remains the same for all scenarios, and the missing obser-
+                                                                                 result in accuracy improvements for long-period motions.
+vations are filled with zero-padding.
+Feature embedding. A set of fully connected (FC) layers                          3.4. Position Estimation with Shape Head
+is adopted to project raw input data to a higher-dimensional
+                                                                                 Pose and shape estimation. Most previous methods [4, 9,
+embedding space. Note that eight components within
+                                                                                 16, 59] only considered the pose parameters and ignored
+the input stream, as shown in Eq. 1, are processed inde-
+                                                                                 the shape parameters. In other words, they used the same
+pendently, then generating the embedding representations
+                                                                                 default shape parameters to calculate joint positions. We
+        t
+[fht , flh    t
+           , frh    t
+                 , fpel    t
+                        , flf    t
+                              , frf    t
+                                    , flh/h    t
+                                            , frh/h ]. For each compo-
+                                                                                 argue that these methods are not optimal in practical appli-
+nent, since the range of values corresponding to the orienta-
+                                                                                 cations, because the shape parameters usually vary by dif-
+tions is different from those of the positions, we follow [4]
+                                                                                 ferent users. This would lead to problems such as pene-
+to decouple such information and embed them via separate
+                                                                                 tration, skating, and joint position errors, especially when
+FC layers and concatenate the results back together.
+                                                                                 the difference between the user’s shape parameters and the
+3.3. Lightweight TSFL Network                                                    default is significant. To solve this problem, HMD-Poser
+                                                                                 adopts two regression heads named pose head and shape
+After the embedding layer, components in the input are still
+                                                                                 head. As shown in Fig. 2, the pose head aims at regressing
+temporally isolated and spatially independent of each other.                     the local pose parameters θt of SMPL and the shape head is
+In other words, it lacks temporal and spatial correlation
+                                                                                 responsible for shape parameters β t of SMPL. Both regres-
+information, which is the key to tracking accurate human
+                                                                                 sion heads are designed as a 2-layer MLP.
+motions. To solve this problem, two representative mod-                          Forward-Kinematics. The FK module calculates all joint
+els, i.e., Transformer and RNN, are adopted for temporal
+                                                                                 positions given θt , β t , and the head position in xth . We
+and spatial feature learning in existing methods. Although
+                                                                                 use the differentiable SMPL model [30], M(θ, β, trans) ∈
+Transformer-based methods [16, 59] have achieved state-of-
+                                                                                 R(6890×3) , as the FK module. Using the estimated joint po-
+the-art results in HMT, their computational costs are much
+                                                                                 sitions and their corresponding ground-truth values can (1)
+higher than RNN-based methods [50, 51] as Transformer                            train the shape head and (2) assist in reducing the accumu-
+does not preserve the hidden state and needs to recompute
+                                                                                 lating error of pose estimation along the kinematic chain.
+the entire history in the video clip at each time step. There-
+fore, the current Transformer-based methods are not suit-                        3.5. Training HMD-Poser
+able for HMD deployment.
+                                                                                 We define the overall loss function L as a combination
+   For a sequence of length M , the time complexity of a
+                                                                                 of root orientation loss Lori , local pose loss Llrot , global
+standard Transformer block is O(M 2 d + M d2 ) where d is
+                                                                                 pose loss Lgrot , joint position loss Ljoint and smooth loss
+the dimension of the hidden state. It means that the Trans-
+                                                                                 Lsmooth :
+former has a quadratic time complexity with respect to the
+sequence length in attention layers. To achieve both ac-                                  L =αori Lori + αlrot Llrot + αgrot Lgrot
+                                                                                                                                           (2)
+curate and real-time human motion tracking, HMD-Poser                                          + αjoint Ljoint + αsmooth Lsmooth
+      Method                             MPJRE↓       MPJPE↓         MPJVE↓      Jitter↓   H-PE↓      U-PE↓      L-PE↓      R-PE↓
+      AvatarPoser [16]                     2.94         5.84          26.60      13.97      4.58       3.24       9.59       5.05
+      AGRoL [9]                            2.70         5.73          19.08      7.65       4.29       3.16       9.44       5.15
+      AvatarJLM [59]                       2.81         5.03          20.91      6.94       2.01       3.00       7.96       4.58
+      Transpose [50]                       3.05         4.57          22.41       7.98      3.83       3.05       6.76       4.62
+      PIP [51]                             2.45         4.54          19.02       8.13      4.54       3.15       6.53       4.54
+      HMD-Poser: HMD                       2.28         3.19          17.47       6.07      1.65       1.67       5.40       3.02
+      HMD-Poser: HMD+2IMUs                 1.83         2.27          13.28       5.96      1.39       1.51       3.35       2.74
+      HMD-Poser: HMD+3IMUs                 1.73         1.89          11.03       5.35      1.27       1.46       2.46       2.37
+
+Table 1. Comparison with state-of-the-art HMD-based and 6IMUs-based methods on protocol1. We retrain existing approaches with their
+public source code and training data on this protocol. Note that we also provide head and hand positions to Transpose and PIP for a fair
+comparison. The best results are in bold.
+
+
+      Method                             MPJRE↓       MPJPE↓         MPJVE↓      Jitter↓   H-PE↓      U-PE↓      L-PE↓      R-PE↓
+      AvatarPoser [16]                     4.68         6.62          33.16      10.79      3.93       2.97      11.89       5.30
+      AGRoL [9]                            4.38         6.74          24.14      6.33       3.53       3.02      12.11       5.86
+      AvatarJLM [59]                       4.45         5.96          27.50      6.91       2.30       2.97      10.28       5.22
+      Transpose [50]                       4.31         5.29          28.18       5.16      7.38       3.86       7.36       4.80
+      PIP [51]                             3.61         4.16          22.22       6.89      4.28       2.97       5.89       4.30
+      HMD-Poser: HMD                       4.27         5.44          30.15       5.62      2.56       2.44       9.77       4.83
+      HMD-Poser: HMD+2IMUs                 3.66         3.68          20.29       6.22      1.65       2.14       5.92       4.51
+      HMD-Poser: HMD+3IMUs                 3.49         3.13          16.17       4.93      1.81       2.17       4.51       3.88
+
+ Table 2. Comparison to baselines on protocol2. Similarly, we retrain existing approaches with their public source code on this protocol.
+
+
+where αori , αlrot , αgrot , αjoint , and αsmooth are the               Implementation details. We set αori , αlrot , αgrot , αjoint ,
+weights for the respective loss terms. The root orientation             and αsmooth in Eq. 2 to 1.0, 5.0, 1.0, 1.0, and 0.5, respec-
+loss Lori , local pose loss Llrot , global pose loss Lgrot , and        tively. The number of blocks in the TSFL network is set to
+joint position loss Ljoint are calculated as the mean of ab-            2. Further details about the model are presented in the sup-
+solute errors (L1 norm) between the predicted values and                plementary materials. The training data is clipped into short
+the ground-truth values. To further enhance the temporal                sequences in 40-frame lengths for more effective learning.
+smoothness, we define a smooth loss as follows.                         To train HMD-Poser, we use Adam solver [21] with a batch
+                                  T    3J
+                                    −1 X                                size of 256. The learning rate starts from 1 × 10−3 and de-
+                         1        X
+                                                                        cays by a factor of 0.1 after 300 epochs. The total number
+      Lsmooth =                           at − âti 1          (3)
+                   (T − 2) × (3J) t=1 i=0 i                             of epochs for training is set to 400.
+                                                                        Metrics. Following [9], we use a total of 9 metrics which
+where at and ât are the computed and the ground-truth ac-              can be divided into three categories. The first category
+celeration at time t, respectively, and T is the sequential             measures the tracking accuracy and includes the MPJRE
+length in the training and J is the number of joints.                   (Mean Per-Joint Rotation Error [degrees]), MPJPE (Mean
+                                                                        Per-Joint Position Error [cm]), H-PE (Hand), U-PE (Up-
+4. Experiments                                                          per), L-PE (Lower), and R-PE (Root). The second cate-
+In this section, we first compare our method with state-of-             gory reflects the smoothness of the generated motions and
+the-art methods and conduct ablation studies on the public              includes the MPJVE (Mean Per-Joint Velocity Error [cm/s])
+AMASS [31] dataset. Then, we present detailed quantita-                 and Jitter (102 m/s3 ). The third category measures the in-
+tive and qualitative results on real-captured data using PICO           ference speed with the FPS (Frames Per Second [Hz]).
+4 and PICO Motion Trackers. Note that our model can be
+                                                                        4.1. Experiments on AMASS Dataset
+also deployed to other commercial VR systems that provide
+the required orientation and position information, such as              We follow the recent common practice [3, 9, 16, 59] of
+Meta’s Quest2 HMD.                                                      using AMASS [31] dataset with two different protocols.
+                B!                    ABC%4                  A@'.'&=%9"&              A@'.'&G4*            D*?7=%9"&)ED*?F
+
+
+
+ 8"HI
+
+                                    $ (%&&"(.                $ (%&&"(.                $ (%&&"(.
+
+
+
+
+ 8"HJ
+
+                                         $ (%&&"(.           $ (%&&"(.                $ (%&&"(.
+
+
+
+
+ 8"HK
+
+                                         $ (%&&"(.               $ (%&&"(.                $ (%&&"(.
+
+
+
+
+ 8"HL
+
+                                     =" ".&'.#%                  =" ".&'.#%                $ (%&&"(.
+
+
+Figure 3. Qualitative comparisons between our method and state-of-the-art methods in HMD setting. When comparing with methods in
+this category, HMD-Poser uses the HMD input scenario for a fair comparison.
+
+
+The first protocol uses three subsets CMU [12], BMLr [43]           AGRoL [9] and AvatarJLM [59]. It shows that our model
+and HDM05 [34] in AMASS, and randomly splits the three              can obtain the best results using the same data. We attribute
+datasets into 90% training data and 10% testing data. The           this performance increase to our TSFL network generating
+second protocol includes more subsets in AMASS, using               rich temporal-spatial correlation information via combining
+twelve subsets as training data and HumanEva [39] and               LSTM with Transformer. We provide more comparison re-
+Transition [31] as testing data. Instead of using the same de-      sults in each scenario in the supplementary materials.
+fault shape for all motion sequences, which is widely used             In Fig. 3, we show the comparison results between our
+in previous work [4, 9, 16, 59], we utilize the ground-truth        HMD-Poser in the HMD scenario and previous HMD-based
+body shape parameters to calculate the joint positions.             approaches. In Fig. 4, we also provide the comparison re-
+                                                                    sults between our HMD-Poser in the HMD+3IMUs sce-
+4.1.1 Comparison                                                    nario and previous works using six IMUs. Obviously, our
+                                                                    model could achieve better tracking accuracy and reduce
+As described in Sec. 2, there are two mainstream HMT                abnormal issues such as floating and penetration.
+methods, which use 6DOFs from HMD with hand con-
+trollers or use 3DOFs from IMUs respectively. We com-               4.1.2 Ablation Studies
+pare our HMD-Poser with state-of-the-art methods in both
+categories. Tab. 1 and Tab. 2 show the detailed quantitative        We ablate our method in various settings to validate the ef-
+results in the first and second protocols respectively. It can      fect of the main components in HMD-Poser. All ablation
+be concluded from these two tables that: (1) HMD-Poser              studies are conducted on protocol1 with the HMD scenario.
+surpasses all existing methods in both tracking accuracy            Effect of input representation. As discussed in Sec. 3.1,
+(lower MPJRE and MPJPE) and motion smoothness (lower                HMD-Poser additionally introduces the hand representa-
+MPJVE and Jitter), introducing a new state-of-the-art on the        tions relative to the head coordinate frame to improve joint
+AMASS dataset. (2) By adding IMU sensors to the lower               tracking accuracy. Tab. 3 presents the results with and with-
+legs and pelvis, all metrics especially the L-PE are signif-        out these representations. As shown, adding these input fea-
+icantly improved, proving the effectiveness of combining            tures could improve both the accuracy and smoothness of
+HMD with IMUs. (3) HMD-Poser in the HMD scenario,                   the generated motion. In particular, it reduces the H-PE by
+surpasses all HMD-based methods, i.e., AvatarPoser [16],            a large margin, which proves its effectiveness in estimating
+                          !"                             #$#                              "%&'()*(+               ,-./#*(+%01,-.23$-4(5
+
+
+    6+78
+                                                               $' *%%+ ;                              $' *%%+ ;
+
+
+
+
+    6+79                                                                              $' *%%+ ;
+                                                             <=*&;>'?                             #+'+;%&;>*'
+
+
+                                          $' *%%+ ;                           $' *%%+ ;
+
+    6+73
+                                                                  $' *%%+ ;
+                                                                                                  #+'+;%&;>*'
+
+
+
+                                                                                             $' *%%+ ;
+
+    6+7:
+                                                         <=*&;>'?              <=*&;>'?
+
+
+
+Figure 4. Qualitative comparisons between our method and 6IMUs-based methods. For a fair comparison, we provide head and hand
+positions to the baselines and compare them with our method under the HMD+3IMUs input scenario.
+
+
+bone lengths on the chain from head to hands.                                 and it is unreasonable for previous methods to use the same
+                                                                              default body shape for joint position calculation.
+Method                     MPJRE       MPJPE          H-PE      Jitter           For more experiments on the effect of the model size and
+                                                                              each loss term, please refer to our supplementary materials.
+w/o {xtlh/h , xtrh/h }         2.45      3.43         2.36      6.25
+with {xtlh/h , xtrh/h }        2.28      3.19         1.65      6.07          4.2. Experiments on VR Devices
+
+Table 3. Evaluating the effect of adding hand representations rela-           Existing human motion capture datasets, such as AMASS,
+tive to the head coordinate frame to input representation.                    are built on optical markers and do not contain HMD and
+                                                                              IMU sensor data. So all existing methods used synthetic in-
+                                                                              put signals from ground-truth data. And they did not cover
+                                                                              some common issues in real VR applications, such as sensor
+Method                     MPJRE       MPJPE          H-PE      Jitter
+                                                                              measurement errors, calibration errors, etc. To investigate
+w/o ShapeHead                  2.32      5.08         4.25      6.11          the model’s performance gap between synthetic and real
+with ShapeHead                 2.28      3.19         1.65      6.07          data and evaluate our HMD-Poser’s performance running
+                                                                              on HMDs, we built an additional dataset of real-captured
+Table 4. Evaluating the effect of the shape regression head. The              data with HMD+2IMUs. It contains 74 free-dancing mo-
+default shape is used when there is no shape regression head.                 tions from 8 subjects (3 male and 5 female) wearing PICO
+                                                                              4 and 2 PICO motion trackers on the lower legs. Each mo-
+Effect of the shape head. Here, we compare the results                        tion sequence contains both the input HMD and IMU sensor
+with and without a shape regression head in Tab. 4. It can                    data and the ground-truth SMPL parameters obtained via
+be concluded that the shape regression head has a significant                 OptiTrack [1] and Mosh++ [29]. Meanwhile, a pre-trained
+contribution to reducing position errors (lower MPJPE and                     model using AMASS data is deployed to PICO 4 HMD,
+H-PE). This also indicates that joint position estimation is                  and the model output is stored for evaluation. Please refer
+sensitive to differences in shape parameters among users,                     to supplementary materials for further details.
+         Method                     MPJRE↓       MPJPE↓         MPJVE↓      Jitter↓   H-PE↓    U-PE↓      L-PE↓      R-PE↓
+         HMD-Poser (Online)            6.48         6.55         30.60      16.96     8.10       5.25      8.52       7.13
+         HMD-Poser (Offline)           6.45         6.53         30.56      16.95     8.01       5.20      8.46       6.98
+         HMD-Poser (Offline*)          4.77         4.75         22.30      15.25     2.09       3.35      6.77       6.06
+
+Table 5. Comparisons between our HMD-Poser method running offline and running on PICO 4 HMD. We choose the HMD+2IMUs input
+scenario for evaluation as it is suitable for most VR applications. * indicates results using synthetic input from ground-truth data.
+
+                                                                         Method                     FPS (GPU)↑       FPS (HMD)↑
+                                                                         AvatarPoser [16]               114.1              -
+                                                                         AGRoL [9]                      60.8               -
+                                                                         AvatarJLM [59]                  1.9               -
+                                                                         Transpose [50]                 123.0              -
+                                                                         PIP [51]                        62.5              -
+                                                                         HMD-Poser (Ours)               205.7             90.0
+
+                                                                      Table 6. Comparison with baselines in terms of inference speed.
+
+                                                                     the supplementary materials for more qualitative results.
+
+                                                                     4.3. Inference Speed
+                                                                     For a fair comparison, we calculate the FPS of all meth-
+                                                                     ods running on the same NVIDIA GeForce RTX 3080 de-
+                                                                     vice, and present the results in Tab. 6. Owing to our
+ Figure 5. Results of real-time Avatar-driving on PICO 4 HMD.
+                                                                     lightweight TSFL network, HMD-Poser achieves an infer-
+                                                                     ence frequency of 205.7Hz on GPU and outperforms all ex-
+4.2.1 Quantitative Results
+                                                                     isting methods by a large margin. Meanwhile, our HMD-
+First, we make a quantitative comparison between our                 Poser can reach a frequency of 90.0Hz on PICO 4 HMD,
+HMD-Poser method running offline and running on PICO                 which has not been demonstrated in previous methods.
+4 HMD. In this experiment, we all use real sensor data from
+HMD and IMUs. As shown in Tab. 5, the performance gap                5. Conclusion
+between offline and online is small and it demonstrates that
+our HMD-Poser could run in real-time on portable HMDs                In this paper, we present HMD-Poser, the first unified
+with limited computing resources and achieve similar track-          approach to recovering full-body motions with scalable
+ing performance as offline. Second, we compare the experi-           sparse observations from HMD and wearable IMUs. Mean-
+mental results using synthetic and real data. The results us-        while, HMD-Poser proposes a lightweight TSFL network,
+ing synthetic data are much better than those using real data,       making it deployable to consumer-level HMD devices and
+especially for the H-PE metric. The results are in line with         runnable in real-time. We experimentally demonstrate that
+expectations, as the connection between the user’s hand and          our method achieves superior results with respect to state-
+the hand controllers is not rigid all the time. When there are       of-the-art methods on the public AMASS dataset.In addi-
+relative motions between them, the transformation matrix             tion, we build an additional dataset of real-captured HMD
+from the hand controller to the hand would deviate from the          and IMU data to validate that HMD-Poser could run online
+calibration results, resulting in large H-PE.                        in portable HMDs and while maintaining similar tracking
+                                                                     accuracy. We believe that our method paves a new way for
+                                                                     human motion tracking on VR platforms.
+4.2.2 Qualitative Results
+                                                                     Limitation and future works. As a data-driven method,
+We qualitatively demonstrate our HMD-Poser’s on-device               our approach is also highly dependent on large-scale train-
+performance with a real-time Avatar-driving application on           ing data, and more real-captured training data can also con-
+PICO 4. As shown in Fig. 5, the Avatar’s motions are almost          tribute greatly to the task. Besides, due to the limitation of
+identical to those of the human. It demonstrates that our            IMU itself, our method may struggle to disambiguate lower-
+method could accurately reconstruct full-body motions in             body poses with similar measurements, such as slowly and
+real-time in most sequences. Please refer to the videos in           uniformly lifting one foot vertically.
+References                                                          [13] Sepp Hochreiter and Jürgen Schmidhuber. Long short-term
+                                                                         memory. Neural computation, 9(8):1735–1780, 1997. 2
+ [1] Optitrack motion systems. https://optitrack.com/.              [14] Buzhen Huang, Liang Pan, Yuan Yang, Jingyi Ju, and Yan-
+     7                                                                   gang Wang. Neural mocon: Neural motion control for phys-
+ [2] Hiroyasu Akada, Jian Wang, Soshi Shimada, Masaki Taka-              ically plausible human motion capture. In Proceedings of
+     hashi, Christian Theobalt, and Vladislav Golyanik. Un-              the IEEE/CVF Conference on Computer Vision and Pattern
+     realego: A new dataset for robust egocentric 3d human mo-           Recognition, pages 6417–6426, 2022. 2
+     tion capture. In Proceedings of the European Conference on     [15] Yinghao Huang, Manuel Kaufmann, Emre Aksan, Michael J
+     Computer Vision, pages 1–17. Springer, 2022. 2                      Black, Otmar Hilliges, and Gerard Pons-Moll. Deep iner-
+ [3] Sadegh Aliakbarian, Pashmina Cameron, Federica Bogo,                tial poser: Learning to reconstruct human pose from sparse
+     Andrew Fitzgibbon, and Thomas J Cashman. Flag: Flow-                inertial measurements in real time. ACM Transactions on
+     based 3d avatar generation from sparse observations. In Pro-        Graphics, 37(6):1–15, 2018. 2
+     ceedings of the IEEE/CVF Conference on Computer Vision         [16] Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa
+     and Pattern Recognition, pages 13253–13262, 2022. 2, 5              Laich, Patrick Snape, and Christian Holz. Avatarposer: Ar-
+ [4] Sadegh Aliakbarian, Fatemeh Saleh, David Collier, Pash-             ticulated full-body pose tracking from sparse motion sens-
+     mina Cameron, and Darren Cosker. Hmd-nemo: Online                   ing. In Proceedings of the European Conference on Com-
+     3d avatar motion generation from sparse observations. In            puter Vision, pages 443–460, 2022. 2, 3, 4, 5, 6, 8
+     Proceedings of the IEEE/CVF International Conference on        [17] Yifeng Jiang, Yuting Ye, Deepak Gopinath, Jungdam Won,
+     Computer Vision, pages 9622–9631, 2023. 2, 4, 6                     Alexander W Winkler, and C Karen Liu. Transformer inertial
+ [5] Renat Bashirov, Anastasia Ianina, Karim Iskakov, Yevgeniy           poser: Attention-based real-time human motion reconstruc-
+     Kononenko, Valeriya Strizhkova, Victor Lempitsky, and               tion from sparse imus. arXiv preprint arXiv:2203.15720,
+     Alexander Vakhitov. Real-time rgbd-based extended body              2022. 2, 3
+     pose estimation. In Proceedings of the IEEE/CVF Win-           [18] Hanbyul Joo, Natalia Neverova, and Andrea Vedaldi. Ex-
+     ter Conference on Applications of Computer Vision, pages            emplar fine-tuning for 3d human pose fitting towards
+     2807–2816, 2021. 2                                                  in-the-wild 3d human pose estimation. arXiv preprint
+ [6] Federica Bogo, Angjoo Kanazawa, Christoph Lassner, Peter            arXiv:2004.03686, 2020. 2
+     Gehler, Javier Romero, and Michael J Black. Keep it smpl:      [19] Angjoo Kanazawa, Michael J Black, David W Jacobs, and Ji-
+     Automatic estimation of 3d human pose and shape from a              tendra Malik. End-to-end recovery of human shape and pose.
+     single image. In Proceedings of the European Conference             In Proceedings of the IEEE/CVF Conference on Computer
+     on Computer Vision, pages 561–578. Springer, 2016. 2                Vision and Pattern Recognition, pages 7122–7131, 2018.
+ [7] Xin Chen, Zhuo Su, Lingbo Yang, Pei Cheng, Lan Xu,             [20] Angjoo Kanazawa, Jason Y. Zhang, Panna Felsen, and Jiten-
+     Bin Fu, and Gang Yu.          Learning variational motion           dra Malik. Learning 3d human dynamics from video. In
+     prior for video-based motion capture.       arXiv preprint          Proceedings of the IEEE/CVF Conference on Computer Vi-
+     arXiv:2210.15134, 2022. 2                                           sion and Pattern Recognition, 2019. 2
+                                                                    [21] Diederik P Kingma and Jimmy Ba. Adam: A method for
+ [8] Andrea Dittadi, Sebastian Dziadzio, Darren Cosker, Ben
+                                                                         stochastic optimization. arXiv preprint arXiv:1412.6980,
+     Lundell, Thomas J Cashman, and Jamie Shotton. Full-
+                                                                         2014. 5
+     body motion from a single head-mounted device: Generat-
+                                                                    [22] Muhammed Kocabas, Nikos Athanasiou, and Michael J.
+     ing smpl poses from partial observations. In Proceedings
+                                                                         Black. Vibe: Video inference for human body pose and
+     of the IEEE/CVF International Conference on Computer Vi-
+                                                                         shape estimation. In Proceedings of the IEEE/CVF Confer-
+     sion, pages 11687–11697, 2021. 2
+                                                                         ence on Computer Vision and Pattern Recognition, 2020. 2
+ [9] Yuming Du, Robin Kips, Albert Pumarola, Sebastian Starke,      [23] Muhammed Kocabas, Chun-Hao P. Huang, Otmar Hilliges,
+     Ali Thabet, and Artsiom Sanakoyeu. Avatars grow legs:               and Michael J. Black. Pare: Part attention regressor for 3d
+     Generating smooth human motion from sparse tracking in-             human body estimation. In Proceedings of the IEEE/CVF
+     puts with diffusion model. In Proceedings of the IEEE/CVF           International Conference on Computer Vision, pages 11127–
+     Conference on Computer Vision and Pattern Recognition,              11137, 2021. 2
+     pages 481–490, 2023. 2, 4, 5, 6, 8
+                                                                    [24] Sunmin Lee, Sebastian Starke, Yuting Ye, Jungdam Won,
+[10] Erik Gärtner, Mykhaylo Andriluka, Hongyi Xu, and Cristian          and Alexander Winkler. Questenvsim: Environment-aware
+     Sminchisescu. Trajectory optimization for physics-based re-         simulated motion tracking from sparse sensors. arXiv
+     construction of 3d human pose from monocular video. In              preprint arXiv:2306.05666, 2023. 2
+     Proceedings of the IEEE/CVF Conference on Computer Vi-         [25] Jiefeng Li, Siyuan Bian, Qi Liu, Jiasheng Tang, Fan Wang,
+     sion and Pattern Recognition, pages 13106–13115, 2022. 2            and Cewu Lu. Niki: Neural inverse kinematics with invert-
+[11] Nima Ghorbani and Michael J Black. Soma: Solving opti-              ible neural networks for 3d human pose and shape estima-
+     cal marker-based mocap automatically. In Proceedings of             tion. In Proceedings of the IEEE/CVF Conference on Com-
+     the IEEE/CVF International Conference on Computer Vi-               puter Vision and Pattern Recognition, pages 12933–12942,
+     sion, pages 11117–11126, 2021. 2                                    2023. 2
+[12] CMU graphics lab. Cmu graphics lab motion capture              [26] Jiaman Li, Karen Liu, and Jiajun Wu. Ego-body pose es-
+     database. http://mocap.cs.cmu.edu/, 2000. 6                         timation via ego-head pose estimation. In Proceedings of
+     the IEEE/CVF Conference on Computer Vision and Pattern            [39] Leonid Sigal, Alexandru O Balan, and Michael J Black. Hu-
+     Recognition, pages 17142–17151, 2023. 2                                maneva: Synchronized video and motion capture dataset and
+[27] Wenhao Li, Hong Liu, Hao Tang, Pichao Wang, and Luc                    baseline algorithm for evaluation of articulated human mo-
+     Van Gool. Mhformer: Multi-hypothesis transformer for 3d                tion. International Journal of Computer Vision, 87(1-2):4,
+     human pose estimation. In Proceedings of the IEEE/CVF                  2010. 6
+     Conference on Computer Vision and Pattern Recognition,            [40] Zhuo Su, Lan Xu, Zerong Zheng, Tao Yu, Yebin Liu, and Lu
+     pages 13147–13156, 2022. 2                                             Fang. Robustfusion: Human volumetric capture with data-
+[28] Zhongguo Li, Magnus Oskarsson, and Anders Heyden. 3d                   driven visual cues using a rgbd camera. In Proceedings of the
+     human pose and shape estimation through collaborative                  European Conference on Computer Vision, pages 246–264.
+     learning and multi-view model-fitting. In Proceedings of the           Springer, 2020. 2
+     IEEE/CVF Winter Conference on Applications of Computer            [41] Zhuo Su, Lan Xu, Dawei Zhong, Zhong Li, Fan Deng,
+     Vision, pages 1888–1897, 2021. 2                                       Shuxue Quan, and Lu Fang. Robustfusion: Robust volu-
+[29] Matthew Loper, Naureen Mahmood, and Michael J Black.                   metric performance reconstruction under human-object in-
+     Mosh: motion and shape capture from sparse markers. ACM                teractions from monocular rgbd stream. IEEE Transactions
+     Transactions on Graphics., 33(6):220–1, 2014. 2, 7                     on Pattern Analysis and Machine Intelligence, 45(5):6196–
+[30] Matthew Loper, Naureen Mahmood, Javier Romero, Gerard                  6213, 2022. 2
+     Pons-Moll, and Michael J Black. Smpl: A skinned multi-            [42] Shashank Tripathi, Lea Müller, Chun-Hao P Huang, Omid
+     person linear model. ACM Transactions on Graphics, 34(6):              Taheri, Michael J Black, and Dimitrios Tzionas. 3d hu-
+     1–16, 2015. 3, 4                                                       man pose estimation via intuitive physics. In Proceedings
+                                                                            of the IEEE/CVF Conference on Computer Vision and Pat-
+[31] Naureen Mahmood, Nima Ghorbani, Nikolaus F Troje, Ger-
+                                                                            tern Recognition, pages 4713–4725, 2023. 2
+     ard Pons-Moll, and Michael J Black. Amass: Archive of
+                                                                       [43] Nikolaus F Troje. Decomposing biological motion: A frame-
+     motion capture as surface shapes. In Proceedings of the
+                                                                            work for analysis and synthesis of human gait patterns. Jour-
+     IEEE/CVF International Conference on Computer Vision,
+                                                                            nal of Vision, 2(5):2–2, 2002. 6
+     pages 5442–5451, 2019. 2, 5, 6
+                                                                       [44] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszko-
+[32] Viktor Makoviychuk, Lukasz Wawrzyniak, Yunrong Guo,
+                                                                            reit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia
+     Michelle Lu, Kier Storey, Miles Macklin, David Hoeller,
+                                                                            Polosukhin. Attention is all you need. Advances in neural
+     Nikita Rudin, Arthur Allshire, Ankur Handa, et al. Isaac
+                                                                            information processing systems, 30, 2017. 2
+     gym: High performance gpu-based physics simulation for
+                                                                       [45] Timo Von Marcard, Bodo Rosenhahn, Michael J Black, and
+     robot learning. arXiv preprint arXiv:2108.10470, 2021. 2
+                                                                            Gerard Pons-Moll. Sparse inertial poser: Automatic 3d hu-
+[33] Rahul Mitra, Nitesh B Gundavarapu, Abhishek Sharma, and                man pose estimation from sparse imus. In Computer Graph-
+     Arjun Jain. Multiview-consistent semi-supervised learn-                ics Forum, pages 349–360. Wiley Online Library, 2017. 2
+     ing for 3d human pose estimation. In Proceedings of
+                                                                       [46] Jian Wang, Lingjie Liu, Weipeng Xu, Kripasindhu Sarkar,
+     the IEEE/CVF Conference on Computer Vision and Pattern
+                                                                            and Christian Theobalt. Estimating egocentric 3d human
+     Recognition, pages 6907–6916, 2020. 2
+                                                                            pose in global space. In Proceedings of the IEEE/CVF In-
+[34] Meinard Müller, Tido Röder, Michael Clausen, Bernhard                ternational Conference on Computer Vision, pages 11500–
+     Eberhardt, Björn Krüger, and Andreas Weber. Mocap                    11509, 2021. 2
+     database hdm05. Institut für Informatik II, Universität Bonn,   [47] Jian Wang, Diogo Luvizon, Weipeng Xu, Lingjie Liu, Kri-
+     2(7), 2007. 6                                                          pasindhu Sarkar, and Christian Theobalt. Scene-aware ego-
+[35] Deepak Nagaraj, Erik Schake, Patrick Leiner, and Dirk                  centric 3d human pose estimation. In Proceedings of the
+     Werth. An rnn-ensemble approach for real time human pose               IEEE/CVF Conference on Computer Vision and Pattern
+     estimation from sparse imus. In Proceedings of the 3rd Inter-          Recognition, pages 13031–13040, 2023. 2
+     national Conference on Applications of Intelligent Systems,       [48] Alexander Winkler, Jungdam Won, and Yuting Ye. Quest-
+     pages 1–6, 2020. 2                                                     sim: Human motion tracking from sparse sensors with sim-
+[36] Shaohua Pan, Qi Ma, Xinyu Yi, Weifeng Hu, Xiong Wang,                  ulated avatars. In SIGGRAPH Asia, pages 1–8, 2022. 2
+     Xingkang Zhou, Jijunnan Li, and Feng Xu. Fusing monoc-            [49] L. Xu, Z. Su, L. Han, T. Yu, Y. Liu, and L. FANG. Unstruc-
+     ular images and sparse imu signals for real-time human mo-             turedfusion: Realtime 4d geometry and texture reconstruc-
+     tion capture. arXiv preprint arXiv:2309.00310, 2023. 2                 tion using commercialrgbd cameras. IEEE Transactions on
+[37] Georgios Pavlakos, Vasileios Choutas, Nima Ghorbani,                   Pattern Analysis and Machine Intelligence, pages 1–1, 2019.
+     Timo Bolkart, Ahmed A. A. Osman, Dimitrios Tzionas, and                2
+     Michael J. Black. Expressive body capture: 3d hands, face,        [50] Xinyu Yi, Yuxiao Zhou, and Feng Xu. Transpose: Real-time
+     and body from a single image. In Proceedings IEEE/CVF                  3d human translation and pose estimation with six inertial
+     Conference on Computer Vision and Pattern Recognition,                 sensors. ACM Transactions on Graphics, 40(4):1–13, 2021.
+     pages 10975–10985, 2019. 2                                             2, 3, 4, 5, 8
+[38] Jose Luis Ponton, Haoran Yun, Andreas Aristidou, Carlos           [51] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada,
+     Andujar, and Nuria Pelechano. Sparseposer: Real-time full-             Vladislav Golyanik, Christian Theobalt, and Feng Xu. Phys-
+     body motion reconstruction from sparse data. ACM Trans-                ical inertial poser (pip): Physics-aware real-time human mo-
+     actions on Graphics, 43(1):1–14, 2023. 2                               tion tracking from sparse inertial sensors. In Proceedings of
+     the IEEE/CVF Conference on Computer Vision and Pattern
+     Recognition, pages 13167–13178, 2022. 2, 3, 4, 5, 8
+[52] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Vladislav
+     Golyanik, Shaohua Pan, Christian Theobalt, and Feng Xu.
+     Egolocate: Real-time motion capture, localization, and map-
+     ping with sparse body-mounted sensors. arXiv preprint
+     arXiv:2305.01599, 2023. 2
+[53] Tao Yu, Zerong Zheng, Kaiwen Guo, Jianhui Zhao, Qiong-
+     hai Dai, Hao Li, Gerard Pons-Moll, and Yebin Liu. Dou-
+     blefusion: Real-time capture of human performances with
+     inner body shapes from a single depth sensor. In Proceed-
+     ings of the IEEE Conference on Computer Vision and Pattern
+     Recognition, pages 7287–7296, 2018. 2
+[54] Mihai Zanfir, Andrei Zanfir, Eduard Gabriel Bazavan,
+     William T Freeman, Rahul Sukthankar, and Cristian Smin-
+     chisescu. Thundr: Transformer-based 3d human reconstruc-
+     tion with markers. In Proceedings of the IEEE/CVF Interna-
+     tional Conference on Computer Vision, pages 12971–12980,
+     2021. 2
+[55] Yu Zhan, Fenghai Li, Renliang Weng, and Wongun Choi.
+     Ray3d: ray-based 3d human pose estimation for monocular
+     absolute 3d localization. In Proceedings of the IEEE/CVF
+     Conference on Computer Vision and Pattern Recognition,
+     pages 13116–13125, 2022. 2
+[56] Jinlu Zhang, Zhigang Tu, Jianyu Yang, Yujin Chen, and Jun-
+     song Yuan. Mixste: Seq2seq mixed spatio-temporal encoder
+     for 3d human pose estimation in video. In Proceedings of
+     the IEEE/CVF Conference on Computer Vision and Pattern
+     Recognition, pages 13232–13242, 2022. 2
+[57] Yifu Zhang, Chunyu Wang, Xinggang Wang, Wenyu Liu,
+     and Wenjun Zeng. Voxeltrack: Multi-person 3d human pose
+     estimation and tracking in the wild. IEEE Transactions
+     on Pattern Analysis and Machine Intelligence, 45(2):2613–
+     2626, 2022. 2
+[58] Ce Zheng, Sijie Zhu, Matias Mendieta, Taojiannan Yang,
+     Chen Chen, and Zhengming Ding. 3d human pose estima-
+     tion with spatial and temporal transformers. In Proceedings
+     of the IEEE/CVF International Conference on Computer Vi-
+     sion, pages 11656–11665, 2021. 2
+[59] Xiaozheng Zheng, Zhuo Su, Chao Wen, Zhou Xue, and
+     Xiaojie Jin. Realistic full-body tracking from sparse ob-
+     servations via joint-level modeling. In Proceedings of the
+     IEEE/CVF International Conference on Computer Vision,
+     pages 14678–14688, 2023. 2, 4, 5, 6, 8
+[60] Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and
+     Hao Li. On the continuity of rotation representations in neu-
+     ral networks. In Proceedings of the IEEE/CVF Conference
+     on Computer Vision and Pattern Recognition, pages 5745–
+     5753, 2019. 4
+                                             HMD-Poser: On-Device Real-time Human Motion Tracking from Scalable
+                                                                    Sparse Observations
+                                                                 (Supplementary Materials)
+arXiv:2403.03561v1 [cs.CV] 6 Mar 2024
+
+
+
+
+                                        A. Implementation Details                                            method, we also train a variant of the existing approaches,
+                                                                                                             denoted as † in the following tables, by adding a shape re-
+                                        Feature embedding. This module comprises eight sub-                  gression head to their original model and introducing the
+                                        modules to process eight components of the input data in-            joint position loss in the model training. All the experi-
+                                        dependently. Each sub-module consists of a few shallow               ments are also conducted on the AMASS dataset [6] with
+                                        multilayer perceptions (MLPs) to process rotation, angu-             two different protocols.
+                                        lar velocity, position, linear velocity, and acceleration, re-
+                                        spectively. Each MLP is a single Linear layer followed by            B.1. HMD Scenario
+                                        LeakyReLU. The outputs of the MLPs within each sub-
+                                        module are concatenated to form a vector of size 256.                In this scenario, we can fairly compare our method with
+                                                                                                             state-of-the-art human motion tracking methods in the
+                                        Lightweight TSFL. This module consists of two identical
+                                                                                                             HMD setting, such as AvatarPoser [3], AGRoL [2], and
+                                        blocks, and each block has two sub-blocks: an LSTM-based
+                                                                                                             AvatarJLM [9]. We re-train these methods with their public
+                                        block to learn temporal information and a Transformer-
+                                                                                                             source code and the ground truth body shape parameters.
+                                        based block to encode spatial information. For each com-
+                                                                                                             As shown in Tab. A, HMD-Poser is not only more accurate
+                                        ponent of the input data, we use a separate unidirectional
+                                                                                                             (lower MPJRE and MPJPE) but also generates smoother
+                                        single-layer LSTM with a hidden size of 256 to encode
+                                                                                                             human motions (lower Jitter) than all previous methods
+                                        the historical information. The LSTM networks are or-
+                                                                                                             (without †) on both protocol1 and protocol2. It validates
+                                        thogonally initialized. To learn how different components
+                                                                                                             that HMD-Poser achieves a new state-of-the-art on the
+                                        are spatially correlated to each other, we adopt a 3-layer
+                                                                                                             AMASS dataset. By comparing HMD-Poser with the vari-
+                                        Transformer encoder with 8 attention heads and a feed-
+                                                                                                             ants of previous methods, HMD-Poser has similar tracking
+                                        forward hidden size of 256 to process the outputs of LSTMs
+                                                                                                             accuracy to AvatarJLM† [9] on protocol2 but is significantly
+                                        at each time step. The Transformer encoder itself can han-
+                                                                                                             better than other methods on all protocols. Meanwhile,
+                                        dle the scalable inputs via masks.
+                                                                                                             HMD-Poser is significantly better than AvatarJLM† [9] in
+                                        Regression heads. There are two regression heads that
+                                                                                                             inference speed, i.e., 205.7Hz vs 1.9Hz, as shown in the
+                                        regress the local pose parameters and the shape parameters
+                                                                                                             main paper.
+                                        of SMPL [5] respectively. Both are MLP networks, and
+                                        each MLP network consists of a Linear layer, LeakyReLU               B.2. HMD+2IMUs Scenario
+                                        activation, and another Linear layer. We represent the joint
+                                        orientations by the 6D reparametrization due to its simplic-         To the best of our knowledge, there is no available method
+                                        ity and continuity [10]. Therefore, the output feature di-           for comparison in this scenario. We make a minor adjust-
+                                        mension of the pose regression head is 22 × 6 = 132. The             ment to the existing methods [2, 3, 9] in the HMD setting
+                                        output feature dimension of the shape regression head is set         by adding the IMU tracking signals to their input data and
+                                        to 16. The intermediate dimension between the two Linear             extending the dimension of their feature embedding layer.
+                                        layers is set to 256.                                                Following [7, 8], we adopt synthesized IMU data on the
+                                                                                                             AMASS dataset. Detailed results are presented in Tab. B.
+                                        B. Additional Quantitative Comparisons                               Comparing the results in Tab. A and Tab. B, it can be con-
+                                                                                                             cluded that the tracking accuracy, especially for the lower
+                                        As mentioned in the main paper, we consider three in-                body, is significantly improved by adding the IMU signals
+                                        put scenarios in this paper, including (a) HMD, (b)                  from the lower legs. It demonstrates the effectiveness of
+                                        HMD+2IMUs, and (c) HMD+3IMUs. In this section,                       our method by combining HMD with IMUs. On protocol1,
+                                        we conduct extra experiments on each separate scenario.              HMD-Poser surpasses all existing methods including their
+                                        Meanwhile, to better demonstrate the superiority of our              variants in all metrics. On protocol2, HMD-Poser obtains
+
+                                                                                                         1
+   Dataset        Method                  MPJRE↓       MPJPE↓       MPJVE↓       Jitter↓   H-PE↓      U-PE↓      L-PE↓     R-PE↓
+                  AvatarPoser [3]           2.94         5.84          26.60     13.97       4.58      3.24      9.59       5.05
+                  AvatarPoser† [3]          2.94         5.17          27.17     14.45       3.64      2.71      8.73       4.39
+                  AGRoL [2]                 2.70         5.73          19.08     7.65        4.29      3.16      9.44       5.15
+   Protocol 1     AGRoL† [2]                3.32         6.58          23.81     11.45       4.32      3.38      11.20      5.77
+                  AvatarJLM [9]             2.81         5.03          20.91     6.94        2.01      3.00      7.96       4.58
+                  AvatarJLM† [9]            2.56         3.89          20.91     7.46        1.60      2.01      6.62       3.32
+                  HMD-Poser(Ours)           2.28         3.19          17.47     6.07        1.65      1.67      5.40       3.02
+                  AvatarPoser [3]           4.68         6.62          33.16     10.79       3.93      2.97      11.89      5.30
+                  AvatarPoser† [3]          4.64         6.63          33.54     10.77       3.30      2.81      12.14      5.42
+                  AGRoL [2]                 4.38         6.74          24.14     6.33        3.53      3.02      12.11      5.86
+   Protocol 2     AGRoL† [2]                4.82         8.17          33.82     15.75       5.69      3.75      14.56      6.63
+                  AvatarJLM [9]             4.45         5.96          27.50     6.91        2.30      2.97      10.28      5.22
+                  AvatarJLM† [9]            4.28         5.43          27.14     6.89        1.88      2.32      9.93       4.67
+                  HMD-Poser(Ours)           4.27         5.44          30.15      5.62       2.56      2.44      9.77       4.83
+
+Table A. Evaluation results in the HMD scenario. We retrain existing approaches with their public source code and the ground truth body
+shape parameters. † denotes a variation of the existing models by adding a shape regression head to their original model and introducing
+the joint position loss in the model training. The best results are in bold.
+
+
+   Dataset        Method                  MPJRE↓       MPJPE↓       MPJVE↓       Jitter↓   H-PE↓      U-PE↓      L-PE↓     R-PE↓
+                  AvatarPoser [3]           2.51         4.99          22.02     11.16       4.58      3.22       7.53      4.98
+                  AvatarPoser† [3]          2.52         4.24          23.17     12.09       3.69      2.68       6.49      4.23
+                  AGRoL [2]                 2.25         4.81          15.13     8.44        4.25      3.09       7.28      4.95
+   Protocol 1     AGRoL† [2]                2.76         5.25          16.17     7.98        5.20      3.48       7.82      5.39
+                  AvatarJLM [9]             2.38         4.24          18.72     7.39        2.00      2.90       6.16      4.34
+                  AvatarJLM† [9]            2.12         2.95          18.78     7.53        1.48      1.89       4.48      3.06
+                  HMD-Poser(Ours)           1.83         2.27          13.28     5.96        1.39      1.51       3.35      2.74
+                  AvatarPoser [3]           3.87         4.58          25.98     9.75        3.74      2.88       7.03      4.99
+                  AvatarPoser† [3]          3.90         4.70          26.76     10.08       3.10      2.77       7.49      5.29
+                  AGRoL [2]                 3.64         4.69          17.22     7.46        3.54      2.95       7.20      5.40
+   Protocol 2     AGRoL† [2]                4.00         5.63          23.37     14.53       3.95      3.32       8.98      6.78
+                  AvatarJLM [9]             3.89         4.49          22.64     6.34        2.21      2.89       6.41      4.84
+                  AvatarJLM† [9]            3.77         3.69          22.25     6.04        1.78      2.20       5.83      4.38
+                  HMD-Poser(Ours)           3.66         3.68          20.29     6.22        1.65      2.14       5.92      4.51
+
+Table B. Evaluation results in the HMD+2IMUs scenario. Note that all previous methods are modified in this scenario by adding the IMU
+tracking signals to their input data and extending the dimension of their feature embedding layer.
+
+
+the lowest position error and Jitter among all methods, but            in all metrics on both protocol1 and protocol2. Comparing
+slightly higher MPJRE and MPJVE than AGRoL [2].                        the results in Tab. B and Tab. C, the tracking accuracy of
+                                                                       HMD-Poser is further improved which validates the effec-
+B.3. HMD+3IMUs Scenario
+                                                                       tiveness of adding IMU to the pelvis.
+In this scenario, the input setting is closest to that of 6IMUs-
+based tracking methods. Therefore, we compare our HMD-                 C. Additional Ablation Studies
+Poser in the HMD+3IMUs scenario with state-of-the-art
+methods in this category, i.e., Transpose [7] and PIP [8].             Effect of the model size. The number of blocks N in the
+For a fair comparison, we add the global positions of the              lightweight TSFL network is a key hyper-parameter in our
+headset and hand controllers to the input data of the base-            HMD-Poser. As shown in Tab. D, we see a clear down-
+lines [7, 8]. The results are summarized in Tab. C. In this            ward tendency for both MPJPE and Jitter when increasing
+scenario, our HMD-Poser can surpass all previous methods               N from 1 to 2. However, this tendency becomes less pro-
+
+                                                                   2
+   Dataset        Method                 MPJRE↓           MPJPE↓   MPJVE↓        Jitter↓   H-PE↓      U-PE↓     L-PE↓      R-PE↓
+                  Transpose [7]             3.05            4.57       22.41      7.98      3.83       3.05       6.76      4.62
+                  TransPose† [7]            3.02            3.99       23.32      8.65      3.58       2.72       5.82      4.23
+   Protocol 1     PIP [8]                   2.45            4.54       19.02      8.13      4.54       3.15       6.53      4.54
+                  PIP† [8]                  2.31            2.84       17.43      6.99      3.00       2.16       3.82      2.86
+                  HMD-Poser(Ours)           1.73            1.89       11.03      5.35      1.27       1.46       2.46      2.37
+                  Transpose [7]             4.31            5.29       28.18      5.16      7.38       3.86       7.36      4.80
+                  Transpose† [7]            3.94            4.73       29.11      6.02      5.60       3.42       6.61      4.57
+   Protocol 2     PIP [8]                   3.61            4.16       22.22      6.89      4.28       2.97       5.89      4.30
+                  PIP† [8]                  3.80            4.21       26.55      7.54      4.97       3.04       5.90      4.28
+                  HMD-Poser(Ours)           3.49            3.13       16.17      4.93      1.81       2.17       4.51      3.88
+
+Table C. Evaluation results in the HMD+3IMUs scenario. For a fair comparison, we also add head and hand positions to the input data of
+all baseline methods.
+
+
+
+                                              A)<?"%&;B
+                                                                       D. Real-Captured Data
+                                               ;&C+%&(
+                                                                       To investigate the model’s performance gap between syn-
+                                                                       thetic data and real-captured sensor data and evaluate our
+                                         ?!?#$'*#,$-*%$                HMD-Poser’s performance running on HMDs, we built an
+                                       (,.;/%*.?0&<?*.                 additional dataset of real-captured data with HMD+2IMUs.
+                                                                       As shown in Fig. A, each subject wears PICO 4 (includ-
+                                                                       ing HMD and two hand controllers) and 2 PICO motion
+                                                                       trackers on his/her lower legs and dances freely with music.
+                                                                       Meanwhile, we use a synchronized marker-based motion
+                                                                       capture system, OptiTrack [1], to track body markers and
+                                                                       attain ground-truth SMPL parameters using Mosh++ [4].
+                                                                       A total of 74 free-dancing motions from 8 subjects are
+         123A$C*<?*.$<%&;B+%          123A$C*<?*.$<%&;B+%
+                                                                       recorded. The duration of each motion sequence is set to
+                                                                       120 seconds. We will release this dataset for research soon.
+                                                                       Calibration. Since the raw IMU measurements are in the
+                                                                       sensor-local coordinate system, we need to transform the
+                                                                       raw IMU data into the same coordinate frame, which is re-
+                                                                       ferred to as calibration. Although we have specified the
+                                                                       rough wear positions of IMU sensors, i.e., the pelvis, and
+  Figure A. Setup for real-data collection with HMD + 2IMUs.           the left and right lower legs, there could still be differences
+                                                                       in the precise wear position and orientation of each sub-
+                                                                       ject. Our calibration method could automatically compute
+nounced as N continues to increase. Hence, we use N = 2                the transition matrices for each IMU sensor by requiring the
+in our final configuration which could obtain satisfactory             subject to perform three specified actions: (1) stand straight
+results in both tracking accuracy and inference speed.                 for more than 5 seconds, (2) bend the knees forward and
+Effect of each loss term. As shown in the main paper,                  hold for 5 seconds, (3) lift the left and right legs in sequence.
+HMD-Poser is trained with five different loss terms. Among             Synchronization. Since we jointly capture ground-truth
+these loss terms, Lori , Llrot and Ljoint are essential terms          motions and the sensor data of HMD and IMUs with sep-
+for model training. We illustrate the contributions of the left        arate devices, our records must be accurately synchronized
+two loss terms, i.e., Lgrot and Lsmooth , in a leave-one-term-         in the absence of a genlock signal. To this end, we add a
+out manner. As shown in Tab. E, the smooth loss Lsmooth                rigid body on top of the HMD headset, as shown in Fig. A.
+has a positive impact on reducing the MPJVE and Jitter as              Subjects are asked to perform simple control movements at
+expected. The global pose loss Lgrot reduces the MPJPE                 the beginning of each capture motion, consisting of turn-
+and H-PE, which may be attributed to its role in reducing              ing their heads clockwise and counterclockwise, nodding,
+the accumulating error of pose estimation along the kine-              and shaking their heads. This enables matching the orienta-
+matic chain.                                                           tions measured by IMUs on the HMD device with the rigid
+
+                                                                   3
+          Method                     MPJRE↓         MPJPE↓        MPJVE↓        Jitter↓   H-PE↓     U-PE↓      L-PE↓      R-PE↓
+          N =1                          2.40           3.31         22.85       11.77       1.74     1.75       5.58       3.09
+          N =2                          2.28           3.19         17.47       6.07        1.65     1.67       5.40       3.02
+          N =3                          2.28           3.18         16.97       5.20        1.60     1.66       5.38       3.06
+
+                       Table D. Evaluating the effect of the number of blocks N in the lightweight TSFL network.
+
+
+          Method                     MPJRE↓         MPJPE↓        MPJVE↓        Jitter↓   H-PE↓     U-PE↓      L-PE↓      R-PE↓
+          w/o Lgrot                     2.29           3.25         17.76        6.06       1.86     1.74       5.41       3.08
+          w/o Lsmooth                   2.27           3.16         17.89        6.71       1.69     1.68       5.30       3.00
+          with all loss terms           2.28           3.19         17.47        6.07       1.65     1.67       5.40       3.02
+
+                                               Table E. Evaluating the effect of each loss term.
+
+
+body orientations measured by OptiTrack. The frame rates                   [8] Xinyu Yi, Yuxiao Zhou, Marc Habermann, Soshi Shimada,
+of OptiTrack (120Hz) and IMUs (500Hz) are sufficiently                         Vladislav Golyanik, Christian Theobalt, and Feng Xu. Phys-
+high and the synchronization error is negligible.                              ical inertial poser (pip): Physics-aware real-time human mo-
+Downsampling. Our HMD-Poser can reach a frequency of                           tion tracking from sparse inertial sensors. In Proceedings of
+90.0Hz on PICO 4 HMD. To align with the setup in training,                     the IEEE/CVF Conference on Computer Vision and Pattern
+                                                                               Recognition, pages 13167–13178, 2022. 1, 2, 3
+we set the FPS of our HMD-Poser to a fixed frequency of
+                                                                           [9] Xiaozheng Zheng, Zhuo Su, Chao Wen, Zhou Xue, and
+60Hz on HMD devices. Hence, we also downsample the
+                                                                               Xiaojie Jin. Realistic full-body tracking from sparse ob-
+ground-truth motions from 120Hz to 60Hz.                                       servations via joint-level modeling. In Proceedings of the
+                                                                               IEEE/CVF International Conference on Computer Vision,
+References                                                                     pages 14678–14688, 2023. 1, 2
+ [1] Optitrack motion systems. https://optitrack.com/.                    [10] Yi Zhou, Connelly Barnes, Jingwan Lu, Jimei Yang, and
+     3                                                                         Hao Li. On the continuity of rotation representations in neu-
+ [2] Yuming Du, Robin Kips, Albert Pumarola, Sebastian Starke,                 ral networks. In Proceedings of the IEEE/CVF Conference
+     Ali Thabet, and Artsiom Sanakoyeu. Avatars grow legs:                     on Computer Vision and Pattern Recognition, pages 5745–
+     Generating smooth human motion from sparse tracking in-                   5753, 2019. 1
+     puts with diffusion model. In Proceedings of the IEEE/CVF
+     Conference on Computer Vision and Pattern Recognition,
+     pages 481–490, 2023. 1, 2
+ [3] Jiaxi Jiang, Paul Streli, Huajian Qiu, Andreas Fender, Larissa
+     Laich, Patrick Snape, and Christian Holz. Avatarposer: Ar-
+     ticulated full-body pose tracking from sparse motion sens-
+     ing. In Proceedings of the European Conference on Com-
+     puter Vision, pages 443–460, 2022. 1, 2
+ [4] Matthew Loper, Naureen Mahmood, and Michael J Black.
+     Mosh: motion and shape capture from sparse markers. ACM
+     Transactions on Graphics., 33(6):220–1, 2014. 3
+ [5] Matthew Loper, Naureen Mahmood, Javier Romero, Gerard
+     Pons-Moll, and Michael J Black. Smpl: A skinned multi-
+     person linear model. ACM Transactions on Graphics, 34(6):
+     1–16, 2015. 1
+ [6] Naureen Mahmood, Nima Ghorbani, Nikolaus F Troje, Ger-
+     ard Pons-Moll, and Michael J Black. Amass: Archive of
+     motion capture as surface shapes. In Proceedings of the
+     IEEE/CVF International Conference on Computer Vision,
+     pages 5442–5451, 2019. 1
+ [7] Xinyu Yi, Yuxiao Zhou, and Feng Xu. Transpose: Real-time
+     3d human translation and pose estimation with six inertial
+     sensors. ACM Transactions on Graphics, 40(4):1–13, 2021.
+     1, 2, 3
+
+
+                                                                      4
+
