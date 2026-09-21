@@ -1,0 +1,6 @@
+Reading mvnx-dataset/P13_Day_2_1.mvnx
+{"member": "mvnx-dataset/P13_Day_2_1.mvnx", "frames": 35706, "candidate_counts": {"seated_like": 0, "strict_low_angular_speed": 1, "seated_like_and_strict": 0}, "max_seated_seconds": 0}
+Reading mvnx-dataset/P13_Day_2_2.mvnx
+{"member": "mvnx-dataset/P13_Day_2_2.mvnx", "frames": 157911, "candidate_counts": {"seated_like": 0, "strict_low_angular_speed": 25, "seated_like_and_strict": 0}, "max_seated_seconds": 0}
+Reading mvnx-dataset/P13_Day_2_3.mvnx
+{"member": "mvnx-dataset/P13_Day_2_3.mvnx", "frames": 15930, "candidate_counts": {"seated_like": 0, "strict_low_angular_speed": 0, "seated_like_and_strict": 0}, "max_seated_seconds": 0}

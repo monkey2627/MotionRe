@@ -1,0 +1,61 @@
+{
+  "verification_scope": "local_code_static_and_preprocessing_only",
+  "upstream_revision_verified": false,
+  "five_imu_benchmark_eligible": false,
+  "new_target_sensors": [
+    "pelvis",
+    "left_forearm",
+    "right_forearm",
+    "left_shank",
+    "right_shank"
+  ],
+  "method": "eventhold_b0",
+  "native_sensors": [
+    "pelvis",
+    "left_forearm",
+    "right_forearm",
+    "left_shank",
+    "right_shank"
+  ],
+  "entry": "CausalBaseline.forward(features,state)",
+  "shape": "B,T,66",
+  "feature_order": "5*(9_rotation+3_scaled_acc+1_mask)+dt",
+  "root_slot": 0,
+  "raw_DIP_indices": [
+    2,
+    7,
+    8,
+    11,
+    12
+  ],
+  "hz": 60,
+  "sampling_decision": "keep_original_60Hz_to_avoid_legacy_30Hz_assumptions",
+  "future_frames": 0,
+  "label_access_in_adapters": false,
+  "root_output": "measured_bone_calibrated_pelvis_rotation",
+  "output": "24_local_SMPL_rotations;no_translation",
+  "training_status": "pipeline_pilot_only",
+  "source_files": [
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/EventHold/eventhold/adapters.py",
+      "exists": true,
+      "sha256": "35e15a89cef2f0410411f002e155a143a9bdf9bcc401fe490294f38f168a32bd"
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/EventHold/eventhold/dip.py",
+      "exists": true,
+      "sha256": "701b942568020027dcb36e46dc920784adad658d2f5acc8ca42457351757d048"
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/EventHold/eventhold/baseline.py",
+      "exists": true,
+      "sha256": "a6383bdeeafdf64711c4cd25fa977025d373dec175614597231e497a14f37ce3"
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/EventHold/eventhold/train_baseline.py",
+      "exists": true,
+      "sha256": "00e473723f3b073cd7ad5b311bbed9ecdfb236f958335a2e47726512b6cf6982"
+    }
+  ],
+  "asset_files": []
+}

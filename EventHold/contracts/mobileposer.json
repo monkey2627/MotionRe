@@ -1,0 +1,52 @@
+{
+  "verification_scope": "local_code_static_and_preprocessing_only",
+  "upstream_revision_verified": false,
+  "five_imu_benchmark_eligible": false,
+  "new_target_sensors": [
+    "pelvis",
+    "left_forearm",
+    "right_forearm",
+    "left_shank",
+    "right_shank"
+  ],
+  "method": "mobileposer",
+  "entry": "pending_checkpoint_specific_audit",
+  "configured_hz": 30,
+  "configured_future_frames": 5,
+  "cached_sensor_roles": [
+    "left_forearm",
+    "right_forearm",
+    "left_thigh",
+    "right_thigh",
+    "head",
+    "pelvis"
+  ],
+  "five_imu_no_head_generator": "waist_joint3_plus_appended_root_joint0_in_joint_mode;downstream_usage_requires_trace",
+  "preprocessing_parity": "not_run",
+  "end_to_end_parity": "not_run",
+  "five_sensor_adaptation": "existing_layout_names_not_sufficient_to_certify_target",
+  "source_files": [
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/mobileposer/config.py",
+      "exists": true,
+      "sha256": "2df05be971a1d834fc27826c6d2b42c4d90fe00505509d291b3c7f0a91be6441"
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/mobileposer/process.py",
+      "exists": true,
+      "sha256": "a410f04bead480cfa7a29c3d482528e243b680d099253507c9465c9883e2d6f1"
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/mobileposer/no_head_layouts.py",
+      "exists": true,
+      "sha256": "4fd813c23ef93db2f638d065242ab7d5b0c60dd65d4b9671fc08532b6f6ae278"
+    }
+  ],
+  "asset_files": [
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/checkpoints/weights.pth",
+      "exists": true,
+      "sha256": "ef0256062b8593bdab87596a836a066939ac60e322f71b02db5d8dc980e9be0d"
+    }
+  ]
+}

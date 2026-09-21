@@ -1,0 +1,139 @@
+{
+  "status": "synthetic_five_imu_b0_contract_smoke_only",
+  "files": 8,
+  "rows": [
+    {
+      "file": "seq_00.npz",
+      "frames": 3041,
+      "valid_frames": 3039,
+      "feature_dim": 66,
+      "chunk_parity_max_abs": 0.0,
+      "root_copy_max_abs": 0.0,
+      "boundary_valid_first": false,
+      "boundary_valid_last": false,
+      "target_shape": [
+        3041,
+        24,
+        3,
+        3
+      ]
+    },
+    {
+      "file": "seq_01.npz",
+      "frames": 3546,
+      "valid_frames": 3544,
+      "feature_dim": 66,
+      "chunk_parity_max_abs": 0.0,
+      "root_copy_max_abs": 0.0,
+      "boundary_valid_first": false,
+      "boundary_valid_last": false,
+      "target_shape": [
+        3546,
+        24,
+        3,
+        3
+      ]
+    },
+    {
+      "file": "seq_02.npz",
+      "frames": 1800,
+      "valid_frames": 1798,
+      "feature_dim": 66,
+      "chunk_parity_max_abs": 0.0,
+      "root_copy_max_abs": 0.0,
+      "boundary_valid_first": false,
+      "boundary_valid_last": false,
+      "target_shape": [
+        1800,
+        24,
+        3,
+        3
+      ]
+    },
+    {
+      "file": "seq_03.npz",
+      "frames": 1800,
+      "valid_frames": 1798,
+      "feature_dim": 66,
+      "chunk_parity_max_abs": 0.0,
+      "root_copy_max_abs": 0.0,
+      "boundary_valid_first": false,
+      "boundary_valid_last": false,
+      "target_shape": [
+        1800,
+        24,
+        3,
+        3
+      ]
+    },
+    {
+      "file": "seq_04.npz",
+      "frames": 1800,
+      "valid_frames": 1798,
+      "feature_dim": 66,
+      "chunk_parity_max_abs": 0.0,
+      "root_copy_max_abs": 0.0,
+      "boundary_valid_first": false,
+      "boundary_valid_last": false,
+      "target_shape": [
+        1800,
+        24,
+        3,
+        3
+      ]
+    },
+    {
+      "file": "seq_05.npz",
+      "frames": 1800,
+      "valid_frames": 1798,
+      "feature_dim": 66,
+      "chunk_parity_max_abs": 0.0,
+      "root_copy_max_abs": 0.0,
+      "boundary_valid_first": false,
+      "boundary_valid_last": false,
+      "target_shape": [
+        1800,
+        24,
+        3,
+        3
+      ]
+    },
+    {
+      "file": "seq_06.npz",
+      "frames": 2043,
+      "valid_frames": 2041,
+      "feature_dim": 66,
+      "chunk_parity_max_abs": 0.0,
+      "root_copy_max_abs": 0.0,
+      "boundary_valid_first": false,
+      "boundary_valid_last": false,
+      "target_shape": [
+        2043,
+        24,
+        3,
+        3
+      ]
+    },
+    {
+      "file": "seq_07.npz",
+      "frames": 1992,
+      "valid_frames": 1990,
+      "feature_dim": 66,
+      "chunk_parity_max_abs": 0.0,
+      "root_copy_max_abs": 0.0,
+      "boundary_valid_first": false,
+      "boundary_valid_last": false,
+      "target_shape": [
+        1992,
+        24,
+        3,
+        3
+      ]
+    }
+  ],
+  "model": "random CausalBaseline hidden32 no optimization",
+  "head_input": false,
+  "input_manifest_sha256": "3b7ef4448701d97917a5d34dc3658f2614cdc3568e42af66ab255af7320ce90f",
+  "code_sha256": "0ac58829c7cf08cfc6df6f371b05ed9e934bcaec0b6a891ff76acc85255e462a",
+  "performance_claim": false
+}

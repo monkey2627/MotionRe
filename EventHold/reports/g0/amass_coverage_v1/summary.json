@@ -1,0 +1,136 @@
+{
+  "status": "sampled_raw_AMASS_exploration_not_training_admission",
+  "files_discovered": 9336,
+  "files_scanned": 9336,
+  "errors": [],
+  "datasets": {
+    "ACCAD": {
+      "sequences": 252,
+      "subject_keys": 20,
+      "hours": 0.4457245370370367,
+      "fps_counts": {
+        "120.0": 252
+      },
+      "seated_ge20s": 0,
+      "low_speed_seated_ge20s": 0,
+      "complete_transition_proxies_ge5s": 0
+    },
+    "BMLhandball": {
+      "sequences": 649,
+      "subject_keys": 10,
+      "hours": 1.6995879629629635,
+      "fps_counts": {
+        "120.0": 649
+      },
+      "seated_ge20s": 0,
+      "low_speed_seated_ge20s": 0,
+      "complete_transition_proxies_ge5s": 0
+    },
+    "BMLmovi": {
+      "sequences": 1801,
+      "subject_keys": 86,
+      "hours": 2.8164930555555587,
+      "fps_counts": {
+        "120.0": 1801
+      },
+      "seated_ge20s": 0,
+      "low_speed_seated_ge20s": 0,
+      "complete_transition_proxies_ge5s": 0
+    },
+    "BioMotionLab_NTroje": {
+      "sequences": 3061,
+      "subject_keys": 111,
+      "hours": 8.711497685185197,
+      "fps_counts": {
+        "120.0": 3061
+      },
+      "seated_ge20s": 0,
+      "low_speed_seated_ge20s": 0,
+      "complete_transition_proxies_ge5s": 0
+    },
+    "CMU": {
+      "sequences": 2082,
+      "subject_keys": 102,
+      "hours": 9.19209259259259,
+      "fps_counts": {
+        "120.0": 1587,
+        "60.0": 495
+      },
+      "seated_ge20s": 2,
+      "low_speed_seated_ge20s": 0,
+      "complete_transition_proxies_ge5s": 0
+    },
+    "DFaust_67": {
+      "sequences": 129,
+      "subject_keys": 10,
+      "hours": 0.19083333333333347,
+      "fps_counts": {
+        "60.0": 129
+      },
+      "seated_ge20s": 0,
+      "low_speed_seated_ge20s": 0,
+      "complete_transition_proxies_ge5s": 0
+    },
+    "DanceDB": {
+      "sequences": 153,
+      "subject_keys": 20,
+      "hours": 3.4909189814814816,
+      "fps_counts": {
+        "120.0": 153
+      },
+      "seated_ge20s": 0,
+      "low_speed_seated_ge20s": 0,
+      "complete_transition_proxies_ge5s": 0
+    },
+    "EKUT": {
+      "sequences": 349,
+      "subject_keys": 4,
+      "hours": 0.5123333333333329,
+      "fps_counts": {
+        "100.0": 349
+      },
+      "seated_ge20s": 0,
+      "low_speed_seated_ge20s": 0,
+      "complete_transition_proxies_ge5s": 0
+    },
+    "Eyes_Japan_Dataset": {
+      "sequences": 750,
+      "subject_keys": 12,
+      "hours": 6.060729907407406,
+      "fps_counts": {
+        "120.0": 693,
+        "250.0": 57
+      },
+      "seated_ge20s": 6,
+      "low_speed_seated_ge20s": 0,
+      "complete_transition_proxies_ge5s": 17
+    },
+    "Transitions_mocap": {
+      "sequences": 110,
+      "subject_keys": 1,
+      "hours": 0.25159259259259253,
+      "fps_counts": {
+        "120.0": 110
+      },
+      "seated_ge20s": 0,
+      "low_speed_seated_ge20s": 0,
+      "complete_transition_proxies_ge5s": 0
+    }
+  },
+  "fk_fixture_parity": {
+    "global_rotation_max_abs": 2.0502388919929615e-07,
+    "joint_position_max_abs_m": 1.8336318696743348e-07
+  },
+  "sensor_layout_generated": false,
+  "smpl_file": "../base_mobileposer/mobileposer/smpl/basicmodel_m.pkl",
+  "smpl_sha256": "0e8c0bbbbc635dcb166ed29c303fb4bef16ea5f623e5a89263495a9e403575bd",
+  "code_sha256": "f59860f2a1242ac8733ced04d690dab47e8665a8b0443687043b2ae84e5b3adf",
+  "sampling": "approximately10Hz, original rate retained, no 59Hz-to60Hz relabel",
+  "limitations": [
+    "sampled runs may hide brief transitions; native-rate confirmation required",
+    "geometry is not verified action labels",
+    "subject keys do not guarantee cross-dataset identity independence",
+    "no validation/test split chosen; sources now explored",
+    "SMPL model male only; model/AMASS shape provenance not independently certified"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "verification_scope": "local_code_static_and_preprocessing_only",
+  "upstream_revision_verified": false,
+  "five_imu_benchmark_eligible": false,
+  "new_target_sensors": [
+    "pelvis",
+    "left_forearm",
+    "right_forearm",
+    "left_shank",
+    "right_shank"
+  ],
+  "method": "probip",
+  "entry": null,
+  "code_availability": "not_yet_verified",
+  "native_paper_five_layout": "head_and_limbs_without_pelvis",
+  "target_five_layout_requires_retraining": true,
+  "preprocessing_parity": "not_run",
+  "source_files": [],
+  "asset_files": []
+}

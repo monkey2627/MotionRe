@@ -1,0 +1,170 @@
+{
+  "scope": "preprocessing_only_not_end_to_end_inference",
+  "checks": [
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_officalib.pt",
+      "sequence": "s1_acting1",
+      "feature": "world_linear_a",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_officalib.pt",
+      "sequence": "s1_acting1",
+      "feature": "world_angular_w",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_officalib.pt",
+      "sequence": "s1_acting1",
+      "feature": "bone_R",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_officalib.pt",
+      "sequence": "s1_acting2",
+      "feature": "world_linear_a",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_officalib.pt",
+      "sequence": "s1_acting2",
+      "feature": "world_angular_w",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_officalib.pt",
+      "sequence": "s1_acting2",
+      "feature": "bone_R",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_officalib.pt",
+      "sequence": "s1_acting3",
+      "feature": "world_linear_a",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_officalib.pt",
+      "sequence": "s1_acting3",
+      "feature": "world_angular_w",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_officalib.pt",
+      "sequence": "s1_acting3",
+      "feature": "bone_R",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_dipcalib.pt",
+      "sequence": "0",
+      "feature": "world_linear_a",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_dipcalib.pt",
+      "sequence": "0",
+      "feature": "world_angular_w",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_dipcalib.pt",
+      "sequence": "0",
+      "feature": "bone_R",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_dipcalib.pt",
+      "sequence": "1",
+      "feature": "world_linear_a",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_dipcalib.pt",
+      "sequence": "1",
+      "feature": "world_angular_w",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_dipcalib.pt",
+      "sequence": "1",
+      "feature": "bone_R",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_dipcalib.pt",
+      "sequence": "2",
+      "feature": "world_linear_a",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_dipcalib.pt",
+      "sequence": "2",
+      "feature": "world_angular_w",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "PNP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_dipcalib.pt",
+      "sequence": "2",
+      "feature": "bone_R",
+      "max_abs_difference": 0.0,
+      "passed": true
+    },
+    {
+      "method": "DynaIP",
+      "record": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_01/01.pkl",
+      "start_frame": 1,
+      "feature": "native_normalize_imu_Tx6x12",
+      "passed": true,
+      "max_abs_difference": 0.0
+    }
+  ],
+  "benchmark_eligible": false,
+  "source_hashes": {
+    "/home/duanyuhan/dyh/motion/MotionRe/PNP/test.py": "91f76e5c1f581ff5949a9e0ba9609842ab6e81fc24b829a610bfe2d6de9b76b3",
+    "/home/duanyuhan/dyh/motion/MotionRe/NoUse/DynaIP/utils/data.py": "ef558d326ec4667606acded5002b5f4e9a9b1921c83a2bb81f01d5f811cc7b3d"
+  },
+  "remaining": [
+    "upstream_version_audit",
+    "DynaIP_checkpoint_forward_parity",
+    "DynaIP_weights_and_body_model",
+    "five_sensor_architecture_and_retraining",
+    "deployment_initialization"
+  ],
+  "followup_pnp_forward_report": "pnp_forward_parity.json"
+}

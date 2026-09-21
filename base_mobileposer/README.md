@@ -7,6 +7,13 @@ Author's implementation of the paper [MobilePoser: Real-Time Full-Body Pose Esti
 </div>
 <br>
 
+## Android SMPL inference demo
+
+The [Android demo](android/README.md) runs the six no-head surface-IMU pose
+models locally using ONNX Runtime CPU, replays simulated five-IMU inputs, and
+exports SMPL parameters as JSONL. See [validation results](android/VALIDATION.md)
+for numerical checks and the remaining physical-device tests.
+
 ## Installation 
 We recommend configuring the project inside an Anaconda environment. We have tested everything using [Anaconda](https://docs.anaconda.com/anaconda/install/) version 23.9.0 and Python 3.9. The first step is to create a virtual environment, as shown below (named `mobileposer`).
 ```

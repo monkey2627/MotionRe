@@ -1,0 +1,26 @@
+{
+  "status": "frozen_explored_train_development_not_test",
+  "rule": "SHA256 eventhold-amass-v1 subject-group bucket <20 development, otherwise train",
+  "sources": 9336,
+  "unique_byte_hashes": 9336,
+  "counts": {
+    "train": {
+      "sequences": 7625,
+      "groups": 309
+    },
+    "development": {
+      "sequences": 1711,
+      "groups": 67
+    }
+  },
+  "manifest_sha256": "9216517eb490382069a93eceb3103026b4ea7bb58939976278d36d22f4be0cb0",
+  "source_inventory_sha256": "46c3a328fa64ff3c2c8400531b9759a1ad680bed5d80d22946574d2489ff1baf",
+  "code_sha256": "7b97fcb27862d135c5b053023d7c81d2ee8418bbf5f7724e666b8230b19302c3",
+  "DIP_split_changed": false,
+  "P5_training": false,
+  "limitations": [
+    "all sources previously screened",
+    "byte hash cannot detect alternate encodings of same motion",
+    "cross-dataset identity unresolved; not certified independent test"
+  ]
+}

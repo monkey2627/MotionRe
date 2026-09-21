@@ -1,0 +1,93 @@
+{
+  "status": "offline_privileged_segmentation_diagnostic_not_model_performance",
+  "test_accessed": false,
+  "alpha_not_tuned": 0.1,
+  "all_policies_use_gt_mined_episode_boundaries": true,
+  "oracle_uses_reference_for_decisions": true,
+  "initialization": "same_first_candidate_prediction_never_gt_pose",
+  "oracle_not_global_optimum_or_interpolation_upper_bound": true,
+  "cannot_establish": [
+    "novelty",
+    "learnability_of_gate",
+    "long_hold_benefit",
+    "exit_latency"
+  ],
+  "candidate_episodes": 12,
+  "skipped": [],
+  "regions": {
+    "lower_body": {
+      "fixed_so3_ema": {
+        "episodes": 8,
+        "subject_means": {
+          "s_07": 22.612729294820475,
+          "s_08": 19.00119051493822
+        },
+        "subject_balanced_mean_deg": 20.80695990487935
+      },
+      "gt_greedy_keep_write": {
+        "episodes": 8,
+        "subject_means": {
+          "s_07": 21.10060286402725,
+          "s_08": 18.748121846618357
+        },
+        "subject_balanced_mean_deg": 19.924362355322803
+      },
+      "keep_entry": {
+        "episodes": 8,
+        "subject_means": {
+          "s_07": 23.13885460974447,
+          "s_08": 18.756537367859398
+        },
+        "subject_balanced_mean_deg": 20.947695988801932
+      },
+      "write": {
+        "episodes": 8,
+        "subject_means": {
+          "s_07": 22.52212023172927,
+          "s_08": 19.025569702904804
+        },
+        "subject_balanced_mean_deg": 20.77384496731704
+      }
+    },
+    "trunk": {
+      "fixed_so3_ema": {
+        "episodes": 4,
+        "subject_means": {
+          "s_07": 4.815782809247093,
+          "s_08": 7.510816399373843
+        },
+        "subject_balanced_mean_deg": 6.163299604310468
+      },
+      "gt_greedy_keep_write": {
+        "episodes": 4,
+        "subject_means": {
+          "s_07": 4.722668063757126,
+          "s_08": 7.502659222882861
+        },
+        "subject_balanced_mean_deg": 6.112663643319994
+      },
+      "keep_entry": {
+        "episodes": 4,
+        "subject_means": {
+          "s_07": 5.115148124410008,
+          "s_08": 7.5172054003123545
+        },
+        "subject_balanced_mean_deg": 6.316176762361181
+      },
+      "write": {
+        "episodes": 4,
+        "subject_means": {
+          "s_07": 4.779710388566903,
+          "s_08": 7.50949274784292
+        },
+        "subject_balanced_mean_deg": 6.144601568204911
+      }
+    }
+  },
+  "prediction_hashes": {
+    "reports/b0_dip_full_train_seed0/validation_04.npz": "30fa2d524745ffb5c4bb92f358ee035e0ce9317b9396edea036119a7eb086228",
+    "reports/b0_dip_full_train_seed0/validation_10.npz": "477dc8f2e59c1a871a0158357250f3cc61f916de5496c1fbe8f61f3b10facec8"
+  },
+  "candidates_sha256": "956d17ff74f6fccf9ab7e06fbc213f3ab0bac048001ebefefcfdd85df5611443",
+  "script_sha256": "052f714b325fe814ef1d19d52c4b96ad7307df25ca4d867ad98bac1828c80a43"
+}

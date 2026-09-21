@@ -1,0 +1,92 @@
+{
+  "verification_scope": "local_code_static_and_preprocessing_only",
+  "upstream_revision_verified": false,
+  "five_imu_benchmark_eligible": false,
+  "new_target_sensors": [
+    "pelvis",
+    "left_forearm",
+    "right_forearm",
+    "left_shank",
+    "right_shank"
+  ],
+  "method": "pnp",
+  "native_sensors": [
+    "left_forearm",
+    "right_forearm",
+    "left_shank",
+    "right_shank",
+    "head",
+    "pelvis"
+  ],
+  "entry": "PNP.forward_frame(a,w,R)",
+  "a": "world_linear_acceleration_m_s2",
+  "w": "world_angular_velocity_rad_s",
+  "R": "calibrated_bone_to_world",
+  "hz": 60,
+  "native_root_slot": 5,
+  "internal_normalization": "performed_inside_forward_frame_do_not_repeat",
+  "native_test_initialization": "pose[0]_ground_truth",
+  "deployment_initialization": "T_pose_default;not_equivalent_to_native_test",
+  "raw_required": [
+    "aS",
+    "wS",
+    "RIS",
+    "RIM",
+    "RSB"
+  ],
+  "native_dip_gyro": "forward_SO3_difference_uses_next_frame",
+  "derived_gyro_profile": "separate_backward_world_SO3_difference_with_first_frame_invalid",
+  "preprocessing_parity": "passed_18_checks_on_native_TotalCapture_records",
+  "end_to_end_parity": "passed_two_native_TotalCapture_sequences_60_frames_each_Tpose_initialization",
+  "five_sensor_adaptation": "requires_explicit_network_and_training_changes",
+  "source_files": [
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/PNP/net.py",
+      "exists": true,
+      "sha256": "47ba74798082a36b0dccfb2ec85db17df8fa97b10331173b9d8cc090e07980c1"
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/PNP/test.py",
+      "exists": true,
+      "sha256": "91f76e5c1f581ff5949a9e0ba9609842ab6e81fc24b829a610bfe2d6de9b76b3"
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/PNP/process.py",
+      "exists": true,
+      "sha256": "40a77efea0ecb32c89aa7c73268d91b957cc8d7416a7fa75ca6f544b6423975c"
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/PNP/evaluate_dip.py",
+      "exists": true,
+      "sha256": "37c271dd3f3423eb3bccf6bec9002fa9b3680c7d1c92e8918bd141627ce72cef"
+    }
+  ],
+  "asset_files": [
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/weights/PNP/weights.pt",
+      "exists": true,
+      "sha256": "0cfac3296027a8b78e156bb57c06b69fc1790696365e7d6cf89f42f0c03be51a"
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/PNP/models/SMPL_male.pkl",
+      "exists": true,
+      "sha256": "0e8c0bbbbc635dcb166ed29c303fb4bef16ea5f623e5a89263495a9e403575bd"
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/test_datasets/totalcapture_officalib.pt",
+      "exists": true,
+      "sha256": "075de0371e7b0b567b1485282cb2bbfee523d64fb499e59e72251ae12b6f637a"
+    }
+  ],
+  "native_adapter_status": "native_adapter_parity_passed",
+  "runtime": {
+    "python": "/home/duanyuhan/SoftWare/miniconda3/envs/pip/bin/python",
+    "extra_pythonpath": "EventHold/runtime/pip37",
+    "added_packages": [
+      "numpy-quaternion==2021.11.4.15.26.3",
+      "quadprog==0.1.11"
+    ],
+    "existing_environments_modified": false,
+    "report": "reports/pnp_forward_parity.json"
+  }
+}

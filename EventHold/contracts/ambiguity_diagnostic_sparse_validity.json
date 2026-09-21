@@ -1,0 +1,60 @@
+{
+  "status": "posthoc_missingness_sensitivity_after_continuous_history_yielded_no_primary_matches",
+  "split": "validation",
+  "layout": [
+    "pelvis",
+    "left_forearm",
+    "right_forearm",
+    "left_shank",
+    "right_shank"
+  ],
+  "sampling_hz": 60,
+  "stride_frames": 30,
+  "past_offsets_frames": [
+    30,
+    60,
+    120
+  ],
+  "minimum_pair_separation_frames": 300,
+  "gallery": "same_subject_same_original_sequence_retrospective_not_online",
+  "require_all_measurements_valid_over_past_120_frames": false,
+  "rerank_top_k": 5,
+  "settings": [
+    {
+      "name": "primary",
+      "max_sensor_rotation_deg": 10.0,
+      "max_sensor_acc_difference_m_s2": 1.0
+    },
+    {
+      "name": "sensitivity_looser",
+      "max_sensor_rotation_deg": 20.0,
+      "max_sensor_acc_difference_m_s2": 2.0
+    }
+  ],
+  "score": "mean_per_sensor_squared_rotation_over_threshold_plus_squared_acc_norm_over_threshold",
+  "regions": {
+    "hip_knee": [
+      1,
+      2,
+      4,
+      5
+    ],
+    "spine": [
+      3,
+      6,
+      9
+    ]
+  },
+  "descriptive_pose_gap_deg": 20.0,
+  "history_shuffle_seed": 0,
+  "policies": [
+    "current",
+    "past_0_5s",
+    "past_2s",
+    "shuffled_past_2s"
+  ],
+  "thresholds_are_not_sensor_noise_calibration": true,
+  "ground_truth_only_for_post_selection_scoring": true,
+  "test_pose_access": false,
+  "require_all_measurements_valid_at_descriptor_offsets": true
+}

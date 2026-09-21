@@ -1,0 +1,62 @@
+{
+  "status": "native_measurement_archive_audited_model_input_adapter_not_approved",
+  "source_doi": "10.7294/2v3w-sb92",
+  "native_hz": 240,
+  "target_sensor_names": [
+    "Pelvis",
+    "LeftForeArm",
+    "RightForeArm",
+    "LeftLowerLeg",
+    "RightLowerLeg"
+  ],
+  "indices_observed_in_P5_and_P13": [
+    0,
+    9,
+    5,
+    15,
+    12
+  ],
+  "selection_rule": "by_unique_sensor_label_not_hardcoded_indices",
+  "fields_retained": [
+    "sensorOrientation",
+    "sensorFreeAcceleration"
+  ],
+  "quaternion_order": "wxyz; official MVN manual Revision Z",
+  "head_sensor_input": false,
+  "native_bone_orientation_is_reference_not_sensor_input": true,
+  "calibration_frames_observed": [
+    "identity",
+    "tpose",
+    "tpose-isb"
+  ],
+  "calibration_frame_fields": [
+    "orientation",
+    "position"
+  ],
+  "sensor_element_contents": "labels_only_no_installation_matrix_observed",
+  "reference_based_calibration_performed": true,
+  "existing_local_reader_risk": "PNP/articulate/utils/xsens/mvnx_reader.py uses first150 reference bone orientations to estimate sensor offsets",
+  "test_evaluation_eligible": false,
+  "approved_use": "exploration_and_explicit_reference_assisted_cross_domain_lower_rotation_B0_diagnostic",
+  "subjects_roles": {
+    "P5": "exploration_only",
+    "P13": "exploration_dynamic_control_only"
+  },
+  "unresolved": [
+    "reference-free_or_explicitly_provided_installation_calibration",
+    "Xsens_to_SMPL_pose_convention",
+    "reference_drift_and_independent_test_subjects",
+    "pretraining_source_overlap"
+  ],
+  "sensor_orientation_direction": "local_sensor_to_global",
+  "sensor_free_acceleration_frame": "global",
+  "sensor_free_acceleration_units": "m/s^2; gravity removed",
+  "reference_based_calibration_scope": "separate P5 first2.5s diagnostic only; raw reader/cache remain uncalibrated",
+  "calibration_source_status": "MVNA stores body dimensions; no independently verified installation matrices or commanded calibration pose for P5",
+  "manual_evidence": "reports/g0/natural_motion/manual_evidence.json",
+  "mounting_diagnostic": "reports/g0/natural_motion/P5_Day_1/mounting_diagnostic/summary.json",
+  "diagnostic_model_run_completed": true,
+  "diagnostic_model_report": "reports/g0/natural_motion/P5_Day_1/b0_reference_assisted_v1/summary.json",
+  "diagnostic_target_scope": "four hip/knee canonical-axis local rotations, not full SMPL retargeting",
+  "diagnostic_resampling": "causal65tap_FIR_240to60Hz_delay133.33ms"
+}

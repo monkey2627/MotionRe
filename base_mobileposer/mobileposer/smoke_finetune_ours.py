@@ -31,7 +31,7 @@ def make_targets(source, output):
     assert file_hash(capture/manifest['motionJsonFile']) == report['reference']['motion_json_sha256']
     package = json.loads(cache.read_text())
     avatar, ids, times = humanpose_reference(package)
-    first = next(e for e in report['layouts'].values() if e['status'] == 'inferred')
+    first = next(e for e in report['layouts'].values() if e['status'] in ('prepared', 'inferred'))
     inputs = torch.load(first['input'], map_location='cpu', weights_only=False)
     target_times = inputs['timestamps'].numpy()
     if target_times[0] < times[0] or target_times[-1] > times[-1]:

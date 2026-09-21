@@ -1,0 +1,433 @@
+{
+  "status": "exploratory_same_sequence_retrospective_retrieval_not_deployed_model",
+  "test_accessed": false,
+  "config": {
+    "status": "exploratory_parameters_fixed_before_first_run_not_preregistered",
+    "split": "validation",
+    "layout": [
+      "pelvis",
+      "left_forearm",
+      "right_forearm",
+      "left_shank",
+      "right_shank"
+    ],
+    "sampling_hz": 60,
+    "stride_frames": 30,
+    "past_offsets_frames": [
+      30,
+      60,
+      120
+    ],
+    "minimum_pair_separation_frames": 300,
+    "gallery": "same_subject_same_original_sequence_retrospective_not_online",
+    "require_all_measurements_valid_over_past_120_frames": true,
+    "rerank_top_k": 5,
+    "settings": [
+      {
+        "name": "primary",
+        "max_sensor_rotation_deg": 10.0,
+        "max_sensor_acc_difference_m_s2": 1.0
+      },
+      {
+        "name": "sensitivity_looser",
+        "max_sensor_rotation_deg": 20.0,
+        "max_sensor_acc_difference_m_s2": 2.0
+      }
+    ],
+    "score": "mean_per_sensor_squared_rotation_over_threshold_plus_squared_acc_norm_over_threshold",
+    "regions": {
+      "hip_knee": [
+        1,
+        2,
+        4,
+        5
+      ],
+      "spine": [
+        3,
+        6,
+        9
+      ]
+    },
+    "descriptive_pose_gap_deg": 20.0,
+    "history_shuffle_seed": 0,
+    "policies": [
+      "current",
+      "past_0_5s",
+      "past_2s",
+      "shuffled_past_2s"
+    ],
+    "thresholds_are_not_sensor_noise_calibration": true,
+    "ground_truth_only_for_post_selection_scoring": true,
+    "test_pose_access": false
+  },
+  "source_sha256": {
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl": "3e691eb54996c323eee24034fa5cddcc7dd8fd018a0b5e9f9ab73b62d5c353a4",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl": "bdcd58408d4f62baa4fc1c47a2d1e202ef8154051ea9b60e9c3722369e351c09",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/03.pkl": "ee7932e0a43e78c00846f95b5017b0ebf6f600c1142bb87ea74401c0c643f9b5",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/04.pkl": "2a91176e5ffd0f45b15a173265cce158ca228bf0018f5bb8ace2316163b7b873",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl": "bc759db35c42cbe933a7fdba82548df15840337981d28c5c85a3233c5b0618ea",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl": "7f471f37a241d0775f814c2be4c8d9e8ea2ba5356659fa7a24cd810b306c6f6f",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_b.pkl": "43e0f74d0bc4ac05049216219c6489476c1c1ea1e53a9bbc2bf8f012be3e82ab",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl": "4806592647d6fdafda1ab3a6ee38e0a285144ef1b86eed6212ff5bcebfa5d8f7",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/03.pkl": "b0bb1d221af2d9b2a076447f67e0ebcdda406d60d78af4cda694d8a5cb29c608",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/04.pkl": "77c147fa93106cb522bc2ef49195ccc7774bd64668b8999e89745e11026cf230",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl": "b8c4ddb4330cc32d2bf0cc0dc9048df7ca58325af3ff8b05e87e5009838139e4"
+  },
+  "code_sha256": "c55098304b78148fcb157bea61eacec937ce7576213f360089eba367727a6a81",
+  "config_sha256": "8ed8985d42504dff719ae520b3a0532ae6dbaf57855259031754b1b2e6878d5c",
+  "aggregates": [
+    {
+      "setting": "primary",
+      "region": "hip_knee",
+      "policy": "current",
+      "queries": 0,
+      "subjects": {},
+      "subject_balanced_mean_gap_deg": null,
+      "subject_balanced_large_gap_fraction": null
+    },
+    {
+      "setting": "primary",
+      "region": "hip_knee",
+      "policy": "past_0_5s",
+      "queries": 0,
+      "subjects": {},
+      "subject_balanced_mean_gap_deg": null,
+      "subject_balanced_large_gap_fraction": null
+    },
+    {
+      "setting": "primary",
+      "region": "hip_knee",
+      "policy": "past_2s",
+      "queries": 0,
+      "subjects": {},
+      "subject_balanced_mean_gap_deg": null,
+      "subject_balanced_large_gap_fraction": null
+    },
+    {
+      "setting": "primary",
+      "region": "hip_knee",
+      "policy": "shuffled_past_2s",
+      "queries": 0,
+      "subjects": {},
+      "subject_balanced_mean_gap_deg": null,
+      "subject_balanced_large_gap_fraction": null
+    },
+    {
+      "setting": "primary",
+      "region": "spine",
+      "policy": "current",
+      "queries": 0,
+      "subjects": {},
+      "subject_balanced_mean_gap_deg": null,
+      "subject_balanced_large_gap_fraction": null
+    },
+    {
+      "setting": "primary",
+      "region": "spine",
+      "policy": "past_0_5s",
+      "queries": 0,
+      "subjects": {},
+      "subject_balanced_mean_gap_deg": null,
+      "subject_balanced_large_gap_fraction": null
+    },
+    {
+      "setting": "primary",
+      "region": "spine",
+      "policy": "past_2s",
+      "queries": 0,
+      "subjects": {},
+      "subject_balanced_mean_gap_deg": null,
+      "subject_balanced_large_gap_fraction": null
+    },
+    {
+      "setting": "primary",
+      "region": "spine",
+      "policy": "shuffled_past_2s",
+      "queries": 0,
+      "subjects": {},
+      "subject_balanced_mean_gap_deg": null,
+      "subject_balanced_large_gap_fraction": null
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "hip_knee",
+      "policy": "current",
+      "queries": 11,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 1.1850241852920478,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 9,
+              "mean_gap_deg": 1.1850241852920478,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 12.817320857486258,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 2,
+              "mean_gap_deg": 12.817320857486258,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 7.001172521389153,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "hip_knee",
+      "policy": "past_0_5s",
+      "queries": 11,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 1.1856329031285167,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 9,
+              "mean_gap_deg": 1.1856329031285167,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 12.817320857486258,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 2,
+              "mean_gap_deg": 12.817320857486258,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 7.001476880307387,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "hip_knee",
+      "policy": "past_2s",
+      "queries": 11,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 1.1856329031285167,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 9,
+              "mean_gap_deg": 1.1856329031285167,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 12.817320857486258,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 2,
+              "mean_gap_deg": 12.817320857486258,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 7.001476880307387,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "hip_knee",
+      "policy": "shuffled_past_2s",
+      "queries": 11,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 1.3765037388645638,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 9,
+              "mean_gap_deg": 1.3765037388645638,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 12.817320857486258,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 2,
+              "mean_gap_deg": 12.817320857486258,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 7.096912298175411,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "spine",
+      "policy": "current",
+      "queries": 11,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 2.153270595256613,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 9,
+              "mean_gap_deg": 2.153270595256613,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 2.764660880803623,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 2,
+              "mean_gap_deg": 2.764660880803623,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 2.458965738030118,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "spine",
+      "policy": "past_0_5s",
+      "queries": 11,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 2.2993539889330954,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 9,
+              "mean_gap_deg": 2.2993539889330954,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 2.764660880803623,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 2,
+              "mean_gap_deg": 2.764660880803623,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 2.532007434868359,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "spine",
+      "policy": "past_2s",
+      "queries": 11,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 2.2993539889330954,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 9,
+              "mean_gap_deg": 2.2993539889330954,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 2.764660880803623,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 2,
+              "mean_gap_deg": 2.764660880803623,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 2.532007434868359,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "spine",
+      "policy": "shuffled_past_2s",
+      "queries": 11,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 2.6804991201481396,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 9,
+              "mean_gap_deg": 2.6804991201481396,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 2.764660880803623,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 2,
+              "mean_gap_deg": 2.764660880803623,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 2.7225800004758813,
+      "subject_balanced_large_gap_fraction": 0.0
+    }
+  ],
+  "primary_large_gap_unique_pairs": 0,
+  "limitations": [
+    "references_are_inertial_labels_not_independent_optical_truth",
+    "same_sequence_gallery_can_include_later_times",
+    "history_matching_is_not_a_trained_transition_decoder",
+    "no_matches_does_not_prove_observability",
+    "reference_gap_is_not_sitting_standing_semantics",
+    "queries_and_pairs_are_correlated_not_independent_trials"
+  ]
+}

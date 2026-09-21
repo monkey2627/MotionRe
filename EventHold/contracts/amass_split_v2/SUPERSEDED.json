@@ -1,0 +1,5 @@
+{
+  "active_version": "amass_split_v3",
+  "reason": "ACCAD action folders can represent the same person across splits",
+  "training_comparison_eligible": false
+}

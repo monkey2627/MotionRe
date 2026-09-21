@@ -1,0 +1,36 @@
+{
+  "status": "frozen_explored_train_development_not_test",
+  "rule": "within dataset and native-confirmed transition-presence strata, sort group SHA256(eventhold-amass-v2:group); first ceil20percent development, retain >=1 train; singleton train",
+  "reason_for_v2": "v1 had no complete transition candidate in development; changed before any training or performance selection",
+  "supersedes": "amass_split_v1",
+  "v1_manifest_sha256": "9216517eb490382069a93eceb3103026b4ea7bb58939976278d36d22f4be0cb0",
+  "manifest_sha256": "70899f4a1ae937e64c9976d9d4fbf82d0a9e1484e0dff436c98408948a517016",
+  "candidate_sha256": "8ed2015b99378876f9d90154d906ea4dbcc2a895b56f4252d3f2196da45653ae",
+  "counts": {
+    "train": {
+      "sequences": 7373,
+      "groups": 298,
+      "transition_subject_keys": [
+        "Eyes_Japan_Dataset/hamada",
+        "Eyes_Japan_Dataset/ichige",
+        "Eyes_Japan_Dataset/kanno",
+        "Eyes_Japan_Dataset/kawaguchi",
+        "Eyes_Japan_Dataset/kudo"
+      ]
+    },
+    "development": {
+      "sequences": 1963,
+      "groups": 78,
+      "transition_subject_keys": [
+        "Eyes_Japan_Dataset/aita",
+        "Eyes_Japan_Dataset/kaiwa"
+      ]
+    }
+  },
+  "limitations": [
+    "exploration-based stratification disclosed; not untouched test",
+    "cross-dataset identity and semantic duplicate motion unresolved"
+  ],
+  "DIP_split_changed": false,
+  "P5_training": false
+}

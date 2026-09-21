@@ -1,0 +1,88 @@
+{
+  "status": "matched_synthetic_control_not_real_performance",
+  "model": "m1",
+  "mode": "uniform",
+  "seed": 0,
+  "epochs": 6,
+  "hidden": 96,
+  "train_files": [
+    "seq_00.npz",
+    "seq_01.npz"
+  ],
+  "holdout_files": [
+    "seq_02.npz"
+  ],
+  "split_sha256": "f84a29db1fcc99a704be55e01d9c6a47584cad154c10dab95987075614c53f93",
+  "code_sha256": "655e26fdf0ee35ac65d8f28bf37b258683aaa6093e29bc55a86afe13a2190703",
+  "history": [
+    {
+      "epoch": 1,
+      "train_mean_deg": 134.59644991205562,
+      "holdout_mean_deg": 116.61270309655899,
+      "holdout": [
+        {
+          "file": "seq_02.npz",
+          "mean_deg": 116.61270309655899
+        }
+      ]
+    },
+    {
+      "epoch": 2,
+      "train_mean_deg": 124.30653467717839,
+      "holdout_mean_deg": 104.27260117445198,
+      "holdout": [
+        {
+          "file": "seq_02.npz",
+          "mean_deg": 104.27260117445198
+        }
+      ]
+    },
+    {
+      "epoch": 3,
+      "train_mean_deg": 106.49877235766122,
+      "holdout_mean_deg": 103.79118250797235,
+      "holdout": [
+        {
+          "file": "seq_02.npz",
+          "mean_deg": 103.79118250797235
+        }
+      ]
+    },
+    {
+      "epoch": 4,
+      "train_mean_deg": 101.4152194020528,
+      "holdout_mean_deg": 114.51199107603568,
+      "holdout": [
+        {
+          "file": "seq_02.npz",
+          "mean_deg": 114.51199107603568
+        }
+      ]
+    },
+    {
+      "epoch": 5,
+      "train_mean_deg": 91.39556121381528,
+      "holdout_mean_deg": 118.54153180065376,
+      "holdout": [
+        {
+          "file": "seq_02.npz",
+          "mean_deg": 118.54153180065376
+        }
+      ]
+    },
+    {
+      "epoch": 6,
+      "train_mean_deg": 87.10861053157602,
+      "holdout_mean_deg": 121.24408185725841,
+      "holdout": [
+        {
+          "file": "seq_02.npz",
+          "mean_deg": 121.24408185725841
+        }
+      ]
+    }
+  ],
+  "candidate_weighting": false,
+  "head_input": false,
+  "test_accessed": false
+}

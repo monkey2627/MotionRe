@@ -1,0 +1,53 @@
+{
+  "verification_scope": "local_code_static_and_preprocessing_only",
+  "upstream_revision_verified": false,
+  "five_imu_benchmark_eligible": false,
+  "new_target_sensors": [
+    "pelvis",
+    "left_forearm",
+    "right_forearm",
+    "left_shank",
+    "right_shank"
+  ],
+  "method": "globalpose",
+  "entry": "GPNet.forward_frame(a,w,R)",
+  "native_sensors": [
+    "left_forearm",
+    "right_forearm",
+    "left_shank",
+    "right_shank",
+    "head",
+    "pelvis"
+  ],
+  "native_root_slot": 5,
+  "channels": [
+    "world_linear_acceleration",
+    "world_angular_velocity",
+    "bone_orientation"
+  ],
+  "native_forward_and_training_forward_differ": true,
+  "native_initialization": "pose_and_velocity_optional_defaults;test_protocol_pending",
+  "output": "local_SMPL_rotations_and_translation",
+  "preprocessing_parity": "not_run",
+  "end_to_end_parity": "not_run",
+  "five_sensor_adaptation": "not_implemented",
+  "source_files": [
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/GlobalPose/net.py",
+      "exists": true,
+      "sha256": "8dcff08bab2800629c552430870520f5945e4d935e0a72e56a43db24cfaa8f74"
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/GlobalPose/test.py",
+      "exists": true,
+      "sha256": "96fd4369e0eb01649726b23c5754fbeef803588022a47d17b5929078cfc55fd2"
+    }
+  ],
+  "asset_files": [
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/GlobalPose/data",
+      "exists": false,
+      "sha256": null
+    }
+  ]
+}

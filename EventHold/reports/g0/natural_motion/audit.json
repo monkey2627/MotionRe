@@ -1,0 +1,56 @@
+{
+  "article_url": "https://data.lib.vt.edu/articles/dataset/Virginia_Tech_Natural_Motion_Dataset/14114054",
+  "doi": "10.7294/2v3w-sb92",
+  "license": {
+    "value": 119,
+    "name": "CC BY-NC 3.0 US",
+    "url": "https://creativecommons.org/licenses/by-nc/3.0/us/"
+  },
+  "description": "The Virginia Tech Natural Motion Dataset contains 40 hours of unscripted human motion (full body kinematics) collected in the open world using an XSens MVN Link system.  In total, there are data from 17 participants (13 participants on a college campus and 4 at a home improvement store).  Participants did a wide variety of activities, including: walking from one place to another; operating machinery; talking with others; manipulating objects; working at a desk; driving; eating; pushing/pulling carts and dollies; physical exercises such as jumping jacks, jogging, and pushups; sweeping; vacuuming; and emptying a dishwasher.  The code for analyzing the data is freely available with this dataset and also at: https://github.com/ARLab-VT/VT-Natural-Motion-Processing. The portion of the dataset involving workers was funded by Lowe's, Inc.",
+  "status": "bounded_P5_P13_motion_archives_read_long_candidates_found_model_input_not_approved",
+  "downloaded_files": [
+    {
+      "name": "figshare_metadata.json",
+      "bytes": 21718,
+      "sha256": "d52974d15be0704ad6d74c65a4d1ef9743350596ae551e01a8f4f216383d4e73"
+    },
+    {
+      "name": "README.rtf",
+      "bytes": 12966,
+      "sha256": "39415896c0a09741ddbe828ceb16b84683f44654d4fb5927166bb254a8d5acdc"
+    },
+    {
+      "name": "processing-code.zip",
+      "bytes": 84441,
+      "sha256": "c1d8a3aa93173129942800fc11b615bd6dcff2b4e791bf7a1dee9a2cf61f86c3"
+    }
+  ],
+  "observed_converter_fields": [
+    "sensorFreeAcceleration",
+    "sensorOrientation",
+    "orientation",
+    "position"
+  ],
+  "open_questions": [
+    "Physical sensor names and indices in actual MVNX",
+    "Sensor/world frames, quaternion order, calibration and gravity conventions",
+    "XSens reference quality and drift; not independent optical ground truth",
+    "Subject/source split and overlap with baseline pretraining",
+    "Actual duration and semantics of held postures"
+  ],
+  "next_candidate_archive": {
+    "id": 27442799,
+    "name": "compressed_mvnx_dataset_P13_Day_2.zip",
+    "size": 611014371,
+    "is_link_only": false,
+    "download_url": "https://ndownloader.figshare.com/files/27442799",
+    "supplied_md5": "2d8879be2da73a5c7c6d933e322126db",
+    "computed_md5": "2d8879be2da73a5c7c6d933e322126db",
+    "mimetype": "application/zip"
+  },
+  "followup_reports": [
+    "P5_Day_1/summary.json",
+    "P13_Day_2/summary.json",
+    "P5_Day_1/event_review.json"
+  ]
+}

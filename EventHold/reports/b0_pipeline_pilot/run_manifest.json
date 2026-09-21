@@ -1,0 +1,82 @@
+{
+  "status": "pipeline_pilot_not_research_result",
+  "input_hz": 60.0,
+  "future_frames": 0,
+  "root_from_measured_pelvis": true,
+  "gt_initial_pose": false,
+  "root_translation_estimated": false,
+  "event_memory_enabled": false,
+  "training_loss": "body_geodesic_only",
+  "AMASS_pretraining": false,
+  "sampling_note": "retain original 60Hz, no 30Hz legacy cache",
+  "config": {
+    "root": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU",
+    "output": "reports/b0_pipeline_pilot",
+    "epochs": 2,
+    "max_per_subject": 1,
+    "max_frames": 3600,
+    "hidden": 256,
+    "chunk": 240,
+    "device": "cuda:0",
+    "seed": 0
+  },
+  "sources": {
+    "train": [
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_01/01.pkl",
+        "subject": "s_01",
+        "sha256": "01954b4ae991606cec2f41da262a46eb1abca1dd881b076a425a1045321bccd7"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_02/01.pkl",
+        "subject": "s_02",
+        "sha256": "d3e2a43be4a21d6bbf2fcc893d9f12f68353e2f6d305806019a81ef43eeefbb8"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_03/01.pkl",
+        "subject": "s_03",
+        "sha256": "bd4300cc41e82b1351c5485d65efdacc3f8039e942260f374710bc294c2cbca3"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_04/01.pkl",
+        "subject": "s_04",
+        "sha256": "dbc272c80d1c672a3010209f2cc765166bba6c98b4b9ede8e229187d068bd993"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_05/01_a.pkl",
+        "subject": "s_05",
+        "sha256": "82d998136f9ad347890eb1a9c81846b1422574e705bf635346972ae32bc98ee5"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_06/01_a.pkl",
+        "subject": "s_06",
+        "sha256": "0072d95dad2608e44c73a5e6ec09976ea38297ded1c099ce144fef075465f508"
+      }
+    ],
+    "validation": [
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+        "subject": "s_07",
+        "sha256": "3e691eb54996c323eee24034fa5cddcc7dd8fd018a0b5e9f9ab73b62d5c353a4"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+        "subject": "s_08",
+        "sha256": "7f471f37a241d0775f814c2be4c8d9e8ea2ba5356659fa7a24cd810b306c6f6f"
+      }
+    ]
+  },
+  "code_hashes": {
+    "dip.py": "701b942568020027dcb36e46dc920784adad658d2f5acc8ca42457351757d048",
+    "adapters.py": "35e15a89cef2f0410411f002e155a143a9bdf9bcc401fe490294f38f168a32bd",
+    "audit.py": "5c8c62ca966b1b134399c3d8fc9219a0b27fcfec9f47c182404a3239687f25ab",
+    "records.py": "ef5cde3d5b444ad5143fafc8150077cd8215050e5ae83e3b69a964ba119e2547",
+    "baseline.py": "a6383bdeeafdf64711c4cd25fa977025d373dec175614597231e497a14f37ce3",
+    "holds.py": "8af81d3a34b27c5a27f40c8b235fd18eb2c498de51c0bbee73b1b9f818ea2b87",
+    "train_baseline.py": "00e473723f3b073cd7ad5b311bbed9ecdfb236f958335a2e47726512b6cf6982",
+    "verify_native.py": "0f01301f9644432db73857908af42d1c361002d41c7b7ca535396e44e6f7e53e",
+    "__init__.py": "79d0320918bb3f27d6b4f2ac56baf0e7fe3cd4963743e2081744afc6e7b953a6"
+  },
+  "torch": "2.1.2+cu121",
+  "test_accessed": false
+}

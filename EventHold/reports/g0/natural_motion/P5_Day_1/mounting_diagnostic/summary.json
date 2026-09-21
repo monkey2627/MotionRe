@@ -1,0 +1,57 @@
+{
+  "status": "reference_assisted_calibration_diagnostic_not_model_performance",
+  "test_pose_set_accessed": false,
+  "reference_prefix_used": true,
+  "reference_beyond_prefix_used_for_fitting": false,
+  "evaluation_reference_after_prefix_used_only_for_error": true,
+  "reference_pose_used_for_network_initialization": false,
+  "model_run": false,
+  "offset_is_effective_alignment_not_proven_physical_mounting": true,
+  "interpretation_limit": "Residual includes full-body estimator corrections, sensor filter disagreement, calibration error and motion effects; it is not an isolated drift measurement.",
+  "native_fps": 240.0,
+  "prefix_frames": 600,
+  "remainder_frames": 272131,
+  "sensors": [
+    {
+      "sensor": "Pelvis",
+      "prefix_mean_deg": 0.15498973695262538,
+      "remainder_median_deg": 1.2683305493545283,
+      "remainder_p95_deg": 3.177230962881553,
+      "remainder_max_deg": 9.516778212116218
+    },
+    {
+      "sensor": "LeftForeArm",
+      "prefix_mean_deg": 0.29077406926136284,
+      "remainder_median_deg": 0.21236795221912727,
+      "remainder_p95_deg": 1.2186305161744837,
+      "remainder_max_deg": 4.323179905088369
+    },
+    {
+      "sensor": "RightForeArm",
+      "prefix_mean_deg": 0.28592139060855404,
+      "remainder_median_deg": 0.27488676974590925,
+      "remainder_p95_deg": 1.2503947381353004,
+      "remainder_max_deg": 4.8803250664082265
+    },
+    {
+      "sensor": "LeftLowerLeg",
+      "prefix_mean_deg": 0.10005082097728879,
+      "remainder_median_deg": 1.6673514486953598,
+      "remainder_p95_deg": 5.208650621126418,
+      "remainder_max_deg": 18.946187936457584
+    },
+    {
+      "sensor": "RightLowerLeg",
+      "prefix_mean_deg": 0.21710783358708174,
+      "remainder_median_deg": 1.5024237161316927,
+      "remainder_p95_deg": 4.187045537861345,
+      "remainder_max_deg": 17.013856813316032
+    }
+  ],
+  "cache": "runtime/natural_motion/P5_Day_1/P5_Day_1_1.npz",
+  "cache_sha256": "41edcfaa5872fbf652ef3c89f7f6673b3a7a71cef00f45fe01095934d47c06d1",
+  "source_hashes": {
+    "audit_mounting.py": "6363215944c649c791afad48dc33799c1e21196bebcecaafe71fe82ffeffaa59",
+    "mounting.py": "46b6254f3ed78a8d18ec8a459765a77d8fa19d4a8ed16d50c8b679d4f013b23d"
+  }
+}

@@ -1,0 +1,2 @@
+file,subject_key,model,frames,all_early10s_deg,all_late10s_deg,all_late_minus_early_deg,lower_early10s_deg,lower_late10s_deg,lower_late_minus_early_deg,upper_early10s_deg,upper_late10s_deg,upper_late_minus_early_deg,lower_gate_mean,upper_gate_mean,lower_gate_late_minus_early,upper_gate_late_minus_early
+seq_00.npz,Eyes_Japan_Dataset/ichige,b0,1116,169.3564910888672,170.42996215820312,1.0734710693359375,171.46478271484375,171.85488891601562,0.390106201171875,166.45761108398438,168.470703125,2.013092041015625,,,,

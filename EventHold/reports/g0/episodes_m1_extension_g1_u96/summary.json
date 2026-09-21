@@ -1,0 +1,20 @@
+{
+  "status": "episode_initial_vs_late_synthetic_exploration",
+  "model": "m1",
+  "rows": [
+    {
+      "file": "seq_02.npz",
+      "duration_seconds": 14.95,
+      "frames": 897,
+      "early10s_deg": 140.36367797851562,
+      "late10s_deg": 140.57444763183594,
+      "late_minus_early_deg": 0.2107696533203125,
+      "full_deg": 140.54808044433594
+    }
+  ],
+  "mean_early_deg": 140.36367797851562,
+  "mean_late_deg": 140.57444763183594,
+  "mean_change_deg": 0.2107696533203125,
+  "run_sha256": "73035a33d3da9b22224db34d74f2862d8a1750ee8bd18b7c2140c99c4b45e6a0",
+  "test_accessed": false
+}

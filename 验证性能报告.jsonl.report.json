@@ -1,0 +1,43 @@
+{
+  "layout": "wrists_thighs_waist",
+  "frames": 180,
+  "elapsed_seconds": 6.0457238,
+  "actual_fps": 29.773110045152904,
+  "inference_p50_ms": 10.807969,
+  "inference_p95_ms": 18.31948,
+  "peak_sampled_pss_kb": 223324,
+  "intervals": [
+    {
+      "elapsed_seconds": 1.011986145,
+      "fps": 30.63283045243668,
+      "pss_kb": 220360
+    },
+    {
+      "elapsed_seconds": 2.021490937,
+      "fps": 29.71754095447622,
+      "pss_kb": 223324
+    },
+    {
+      "elapsed_seconds": 3.031112395,
+      "fps": 29.714106967801786,
+      "pss_kb": 169287
+    },
+    {
+      "elapsed_seconds": 4.041396717,
+      "fps": 29.69461105821258,
+      "pss_kb": 171487
+    },
+    {
+      "elapsed_seconds": 5.048778436,
+      "fps": 29.780171144836906,
+      "pss_kb": 173779
+    }
+  ],
+  "device": "24129PN74C",
+  "abis": "arm64-v8a",
+  "android_api": 35,
+  "runtime": "onnxruntime-android 1.19.2 CPU FP32, 2 threads",
+  "ten_minute_run_completed": false,
+  "paced_replay": true,
+  "error": null
+}

@@ -1,0 +1,13 @@
+{
+  "dataset": "existing_native_PNP_TotalCapture_official_calibration",
+  "file_sha256": "075de0371e7b0b567b1485282cb2bbfee523d64fb499e59e72251ae12b6f637a",
+  "sequences": 45,
+  "candidates": 12,
+  "ge_5s": 0,
+  "ge_20s": 0,
+  "ge_60s": 0,
+  "selection_scope": "exploration_only",
+  "final_split_and_AMASS_overlap": "unresolved",
+  "annotation_status": "not_human_reviewed",
+  "native_input_parity": "tested_separately_not_all_records"
+}

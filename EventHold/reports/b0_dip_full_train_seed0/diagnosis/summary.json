@@ -1,0 +1,17 @@
+{
+  "status": "exploratory_diagnosis_unreviewed_candidates",
+  "test_accessed": false,
+  "method": "DIP_only_initial_B0_not_external_strong_baseline",
+  "candidates_scored": 12,
+  "candidates_ge_5s": 0,
+  "candidates_ge_20s": 0,
+  "subjects": {
+    "s_07": 11.93661621135172,
+    "s_08": 10.668821777685139
+  },
+  "subject_balanced_mean_body_deg": 11.302718994518429,
+  "scoring_note": "subject_balanced_mean_of_sequence_means;root_neck_head_excluded",
+  "retention_gate": "not_established;need_reviewed_long_validation_holds_and_strong_baselines",
+  "censoring": [],
+  "false_standing_claim": false
+}

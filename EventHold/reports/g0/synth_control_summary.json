@@ -1,0 +1,9 @@
+{
+  "status": "tiny_matched_synthetic_controls_not_real_performance",
+  "uniform_run": "reports/g0/synth_control_uniform/run_manifest.json",
+  "candidate_weighted_run": "reports/g0/synth_control_weighted/run_manifest.json",
+  "uniform_final_holdout_mean_deg": 93.58,
+  "candidate_weighted_final_holdout_mean_deg": 93.61,
+  "interpretation": "nearly identical in two-train-file pilot; not evidence of equivalence or failure",
+  "next": "implement M1 region event write only after broader same-domain training and initial-state metrics"
+}

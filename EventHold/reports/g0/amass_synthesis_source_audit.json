@@ -1,0 +1,113 @@
+{
+  "status": "candidate_sites_not_real_hardware_mounting_validation",
+  "sites": [
+    {
+      "name": "pelvis",
+      "vertex": 3021,
+      "orientation_joint": 0,
+      "vertex_position_m": [
+        0.0014668609946966171,
+        0.09609004855155945,
+        -0.10971497744321823
+      ],
+      "top3_weight_joints": [
+        0,
+        3,
+        6
+      ],
+      "top3_weights": [
+        0.59180748462677,
+        0.3781348466873169,
+        0.016480449587106705
+      ],
+      "expected_joint_weight": 0.59180748462677
+    },
+    {
+      "name": "left_forearm",
+      "vertex": 1961,
+      "orientation_joint": 18,
+      "vertex_position_m": [
+        0.6856431365013123,
+        0.4982956051826477,
+        -0.06931997090578079
+      ],
+      "top3_weight_joints": [
+        18,
+        20,
+        22
+      ],
+      "top3_weights": [
+        0.8367573618888855,
+        0.15210919082164764,
+        0.008499999530613422
+      ],
+      "expected_joint_weight": 0.8367573618888855
+    },
+    {
+      "name": "right_forearm",
+      "vertex": 5424,
+      "orientation_joint": 19,
+      "vertex_position_m": [
+        -0.6787770390510559,
+        0.49623844027519226,
+        -0.07054860144853592
+      ],
+      "top3_weight_joints": [
+        19,
+        21,
+        17
+      ],
+      "top3_weights": [
+        0.8377345204353333,
+        0.15516676008701324,
+        0.005035296082496643
+      ],
+      "expected_joint_weight": 0.8377345204353333
+    },
+    {
+      "name": "left_shank",
+      "vertex": 1176,
+      "orientation_joint": 4,
+      "vertex_position_m": [
+        0.075847327709198,
+        -0.5678321123123169,
+        -0.0014166180044412613
+      ],
+      "top3_weight_joints": [
+        4,
+        1,
+        10
+      ],
+      "top3_weights": [
+        0.9321000576019287,
+        0.06458499282598495,
+        0.002197475405409932
+      ],
+      "expected_joint_weight": 0.9321000576019287
+    },
+    {
+      "name": "right_shank",
+      "vertex": 4662,
+      "orientation_joint": 5,
+      "vertex_position_m": [
+        -0.0770251601934433,
+        -0.5979131460189819,
+        -0.012778913602232933
+      ],
+      "top3_weight_joints": [
+        5,
+        2,
+        8
+      ],
+      "top3_weights": [
+        0.9596514701843262,
+        0.03804120421409607,
+        0.0012844017473980784
+      ],
+      "expected_joint_weight": 0.9596514701843262
+    }
+  ],
+  "source": "TransPose/preprocess.py native six-layout with head removed and pelvis reordered; no processed cache reused",
+  "acceleration_note": "offline synthetic second derivatives are label generation, not measured IMU; declare stencil support and boundary mask",
+  "legacy_mobileposer_cache_compatible": false
+}

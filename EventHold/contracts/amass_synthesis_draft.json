@@ -1,0 +1,59 @@
+{
+  "status": "six_sequence_mean_male_pilot_passed_not_full_training_approval",
+  "target_hz": 60,
+  "layout": [
+    "pelvis",
+    "left_forearm",
+    "right_forearm",
+    "left_shank",
+    "right_shank"
+  ],
+  "orientation_smpl_joints": [
+    0,
+    18,
+    19,
+    4,
+    5
+  ],
+  "surface_vertices": [
+    3021,
+    1961,
+    5424,
+    1176,
+    4662
+  ],
+  "sites_source": "local TransPose/preprocess.py native layout minus head and reordered",
+  "legacy_mobileposer_cache_compatible": false,
+  "raw_source_screen": "reports/g0/amass_coverage_v1/",
+  "native_confirmation": "reports/g0/amass_coverage_native_v1/",
+  "model_gender": "male",
+  "shape_policy": "pilot controlled male beta0; source gender saved; no original-shape fidelity claim",
+  "pose_mapping": "SMPLH indices0..22 plus37",
+  "frame_policy": "pilot exact60/120Hz only; offline centered FIR and acceleration support explicit",
+  "acceleration_policy": "declare finite-difference stencil/support and boundary validity; offline reference synthesis is not measured IMU",
+  "split_policy": "subject/source-level frozen split before training; all screened data disclosed as explored; check duplicate source hashes and external training overlap",
+  "training_controls": [
+    "same B0 architecture with same evaluation",
+    "match sequence sampling and optimization budget for generic versus transition-enriched pretraining",
+    "DIP train only for real-data finetuning; validation for selection; locked test untouched",
+    "P5 only exploratory transfer diagnostic; never train on P5 for claimed independent P5 evaluation"
+  ],
+  "pending": [
+    "expand training source coverage under v3",
+    "other fps resampling",
+    "shape and synthetic-to-real sensitivity",
+    "budget-matched training configurations"
+  ],
+  "source_hashes": {
+    "../TransPose/preprocess.py": "65fbbf2da3e104580f57ae0a0275ca90a3a20492bd036ba0852b53c105ad4359",
+    "../base_mobileposer/mobileposer/process.py": "a410f04bead480cfa7a29c3d482528e243b680d099253507c9465c9883e2d6f1",
+    "../base_mobileposer/mobileposer/articulate/model.py": "e66a12d0f2f41d99dd48e22579e98db53d290ce2c129b4906f4a8cf47c667d12"
+  },
+  "active_split": "contracts/amass_split_v3",
+  "pilot": "runtime/amass_pilot_v3",
+  "pilot_generated": true,
+  "pilot_manifest": "reports/g0/five_imu_synthetic_pilot/manifest.json",
+  "pilot_files": 8,
+  "pilot_target_hz": 60,
+  "pilot_status": "input_contract_validated_not_training_approved"
+}
