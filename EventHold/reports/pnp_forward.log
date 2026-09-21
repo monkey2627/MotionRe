@@ -1,0 +1,15 @@
+pybullet build time: Jan 29 2025 23:19:04
+s1_acting1 native completed 60 frames
+s1_acting1 adapter completed 60 frames
+s1_acting3 native completed 60 frames
+s1_acting3 adapter completed 60 frames
+PNP native six-IMU parity passed; five-IMU adaptation still required.
+/home/duanyuhan/dyh/motion/MotionRe/EventHold/runtime/pip37/quaternion/numba_wrapper.py:23: UserWarning: 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Could not import from numba, which means that some
+parts of this code may run MUCH more slowly.  You
+may wish to install numba.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  warnings.warn(warning_text)

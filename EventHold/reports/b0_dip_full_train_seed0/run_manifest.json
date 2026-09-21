@@ -1,0 +1,254 @@
+{
+  "status": "pipeline_pilot_not_research_result",
+  "input_hz": 60.0,
+  "future_frames": 0,
+  "root_from_measured_pelvis": true,
+  "gt_initial_pose": false,
+  "root_translation_estimated": false,
+  "event_memory_enabled": false,
+  "training_loss": "body_geodesic_only",
+  "AMASS_pretraining": false,
+  "sampling_note": "retain original 60Hz, no 30Hz legacy cache",
+  "config": {
+    "root": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU",
+    "output": "reports/b0_dip_full_train_seed0",
+    "epochs": 30,
+    "max_per_subject": 0,
+    "max_frames": 0,
+    "hidden": 256,
+    "chunk": 240,
+    "device": "cuda:0",
+    "seed": 0
+  },
+  "sources": {
+    "train": [
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_01/01.pkl",
+        "subject": "s_01",
+        "sha256": "01954b4ae991606cec2f41da262a46eb1abca1dd881b076a425a1045321bccd7"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_01/02.pkl",
+        "subject": "s_01",
+        "sha256": "9f2a1b994c23d2dc58aa3dcd276af66e19308137ad79694e2510cd7110807c43"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_01/03.pkl",
+        "subject": "s_01",
+        "sha256": "c2f235b17d72a76b04994b668061f014967a6621892e2cdb91d8ef797908dd8c"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_01/04.pkl",
+        "subject": "s_01",
+        "sha256": "f506fb8203754ba30b699793027a7f6db50e00bba470fba948b05686d1258831"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_01/05.pkl",
+        "subject": "s_01",
+        "sha256": "44688dd3e8d0d5f8b62e2581c182a8da961e9fd6c7ca08e97d61ec789a9a62dc"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_02/01.pkl",
+        "subject": "s_02",
+        "sha256": "d3e2a43be4a21d6bbf2fcc893d9f12f68353e2f6d305806019a81ef43eeefbb8"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_02/02.pkl",
+        "subject": "s_02",
+        "sha256": "f52e6e2f9cc46dbeed5c54d689b6595563d142540194448541d116b35d28d580"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_02/03.pkl",
+        "subject": "s_02",
+        "sha256": "06d07af990a77d1902b7bd34ac17a368c63dd9fd78d62a45ef7e84e79e183b9a"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_02/04.pkl",
+        "subject": "s_02",
+        "sha256": "aeb867ff39c1e40bcf54240e16936cef9c9248489a26bdc5ce93f72741788fc8"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_02/05.pkl",
+        "subject": "s_02",
+        "sha256": "ba347a6fce4b08a60b651acf247338d90dc436b2753c4ea0279068397205a00b"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_03/01.pkl",
+        "subject": "s_03",
+        "sha256": "bd4300cc41e82b1351c5485d65efdacc3f8039e942260f374710bc294c2cbca3"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_03/03.pkl",
+        "subject": "s_03",
+        "sha256": "e3d929ae777e17cff0471f432367f1baef597a98544a93193470cd727ad092a5"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_03/04.pkl",
+        "subject": "s_03",
+        "sha256": "c15463d31a7f626c843dac224f73a2ade13b1a1cd86d1a4fed3fa55390b38ac8"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_03/05.pkl",
+        "subject": "s_03",
+        "sha256": "67b90ee6e071a415ddf4a0cf20e56c53a085646078112536985e834195785ba7"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_04/01.pkl",
+        "subject": "s_04",
+        "sha256": "dbc272c80d1c672a3010209f2cc765166bba6c98b4b9ede8e229187d068bd993"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_04/02.pkl",
+        "subject": "s_04",
+        "sha256": "0621963b26a9af4f860931f6de3f0c3c3c55cf9762d96c380cd25d824270d621"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_04/03.pkl",
+        "subject": "s_04",
+        "sha256": "c2b1930d4284b084b0d20482ead2db95cefea769295c3b4101d596389e5592af"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_04/04.pkl",
+        "subject": "s_04",
+        "sha256": "2a2df73cf2c945a4924d26f607e421ae15490c0b29106beb3ea815958c70f647"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_04/05.pkl",
+        "subject": "s_04",
+        "sha256": "b349e6c3f6a75315d1d24d2d61ea45687c8cd863605583b495b1142351cb34af"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_05/01_a.pkl",
+        "subject": "s_05",
+        "sha256": "82d998136f9ad347890eb1a9c81846b1422574e705bf635346972ae32bc98ee5"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_05/01_b.pkl",
+        "subject": "s_05",
+        "sha256": "506601070c93b189980e9293bc5a74ad4a9759f3b2299d0ff31581d6e956455d"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_05/02.pkl",
+        "subject": "s_05",
+        "sha256": "3e2cc4f336a9e76aa4ec9d221bce92090fc429aa53304e33a523d22b4a2b2228"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_05/03.pkl",
+        "subject": "s_05",
+        "sha256": "75ba81550c1a4873071412ff74003f39c788e2ef7c4a9e820b9c805bb679b8c7"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_05/04.pkl",
+        "subject": "s_05",
+        "sha256": "e85e3395ed9fa0ee27a88fae3428a98d0d7c18d2fbdb2331b7f5f6c3fd5350ce"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_05/05.pkl",
+        "subject": "s_05",
+        "sha256": "ba959bb399cf78cbc5834e65864ffc92ccb740d01edfa7cdccb6058f7c597c7a"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_06/01_a.pkl",
+        "subject": "s_06",
+        "sha256": "0072d95dad2608e44c73a5e6ec09976ea38297ded1c099ce144fef075465f508"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_06/01_b.pkl",
+        "subject": "s_06",
+        "sha256": "5ebe0d1ede6fda7edb5c5c0dc0123459c2c99c5f43e3457eacf4777bd9660840"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_06/02.pkl",
+        "subject": "s_06",
+        "sha256": "1d86b1a5a51ffc79b0fd83b5f95f63ada77a826586e591565ef294cbfdd55cf3"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_06/03.pkl",
+        "subject": "s_06",
+        "sha256": "3a8bcbac360eac2bc4d97c1ab8bfcfa5a2de173c7278fa28245dbfac98ab1cc4"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_06/04.pkl",
+        "subject": "s_06",
+        "sha256": "339e529508c3a329501ee5420496afc10e03c59d60b594e1396179cad85340b3"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_06/05.pkl",
+        "subject": "s_06",
+        "sha256": "c728a2044604c7c5411d230b9c01a16c6c658cfcbb245a06aee90ec49eb62d2d"
+      }
+    ],
+    "validation": [
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+        "subject": "s_07",
+        "sha256": "3e691eb54996c323eee24034fa5cddcc7dd8fd018a0b5e9f9ab73b62d5c353a4"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+        "subject": "s_07",
+        "sha256": "bdcd58408d4f62baa4fc1c47a2d1e202ef8154051ea9b60e9c3722369e351c09"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/03.pkl",
+        "subject": "s_07",
+        "sha256": "ee7932e0a43e78c00846f95b5017b0ebf6f600c1142bb87ea74401c0c643f9b5"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/04.pkl",
+        "subject": "s_07",
+        "sha256": "2a91176e5ffd0f45b15a173265cce158ca228bf0018f5bb8ace2316163b7b873"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+        "subject": "s_07",
+        "sha256": "bc759db35c42cbe933a7fdba82548df15840337981d28c5c85a3233c5b0618ea"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+        "subject": "s_08",
+        "sha256": "7f471f37a241d0775f814c2be4c8d9e8ea2ba5356659fa7a24cd810b306c6f6f"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_b.pkl",
+        "subject": "s_08",
+        "sha256": "43e0f74d0bc4ac05049216219c6489476c1c1ea1e53a9bbc2bf8f012be3e82ab"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+        "subject": "s_08",
+        "sha256": "4806592647d6fdafda1ab3a6ee38e0a285144ef1b86eed6212ff5bcebfa5d8f7"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/03.pkl",
+        "subject": "s_08",
+        "sha256": "b0bb1d221af2d9b2a076447f67e0ebcdda406d60d78af4cda694d8a5cb29c608"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/04.pkl",
+        "subject": "s_08",
+        "sha256": "77c147fa93106cb522bc2ef49195ccc7774bd64668b8999e89745e11026cf230"
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+        "subject": "s_08",
+        "sha256": "b8c4ddb4330cc32d2bf0cc0dc9048df7ca58325af3ff8b05e87e5009838139e4"
+      }
+    ]
+  },
+  "code_hashes": {
+    "dip.py": "701b942568020027dcb36e46dc920784adad658d2f5acc8ca42457351757d048",
+    "metrics.py": "3b924f2623bce49ecacb33f07968857b0ca09a5e407ee812b5cb4a54452c8119",
+    "adapters.py": "35e15a89cef2f0410411f002e155a143a9bdf9bcc401fe490294f38f168a32bd",
+    "audit.py": "5c8c62ca966b1b134399c3d8fc9219a0b27fcfec9f47c182404a3239687f25ab",
+    "records.py": "ef5cde3d5b444ad5143fafc8150077cd8215050e5ae83e3b69a964ba119e2547",
+    "baseline.py": "a6383bdeeafdf64711c4cd25fa977025d373dec175614597231e497a14f37ce3",
+    "holds.py": "8af81d3a34b27c5a27f40c8b235fd18eb2c498de51c0bbee73b1b9f818ea2b87",
+    "train_baseline.py": "00e473723f3b073cd7ad5b311bbed9ecdfb236f958335a2e47726512b6cf6982",
+    "verify_pnp_forward.py": "580ec539f84cf8f437e3c2c33df3f2bcd9cf4b316346bf8d14d808781cd32ed7",
+    "verify_native.py": "0f01301f9644432db73857908af42d1c361002d41c7b7ca535396e44e6f7e53e",
+    "__init__.py": "79d0320918bb3f27d6b4f2ac56baf0e7fe3cd4963743e2081744afc6e7b953a6"
+  },
+  "torch": "2.1.2+cu121",
+  "test_accessed": false
+}

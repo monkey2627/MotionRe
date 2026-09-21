@@ -1,0 +1,400 @@
+{
+  "stage": "G0_source_inventory",
+  "data_kind": "original_DIP_real_IMU",
+  "target_layout": [
+    "pelvis",
+    "left_forearm",
+    "right_forearm",
+    "left_shank",
+    "right_shank"
+  ],
+  "raw_DIP_source_indices": [
+    2,
+    7,
+    8,
+    11,
+    12
+  ],
+  "sensor_mapping_verification": "cross_checked_local_PNP_process;upstream_provenance_pending",
+  "counts_by_split": {
+    "train": 31,
+    "validation": 11,
+    "test_locked": 19
+  },
+  "sequences": 61,
+  "errors": [],
+  "hold_candidates": 27,
+  "hold_candidates_ge_5s": 2,
+  "hold_candidates_ge_20s": 0,
+  "hold_candidates_ge_60s": 0,
+  "hold_candidates_are_not_verified_sitting_or_squatting": true,
+  "test_pose_not_used_for_mining_or_model_selection": true,
+  "local_capture_inventory": [
+    {
+      "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/ours/1/2_v1.raw-imu.json",
+      "frames": 826,
+      "sample_hz_declared": 29.986530303955078,
+      "duration_seconds_declared": 27.512351989746094,
+      "timestamps_strict": true,
+      "roles_first_frame": [
+        "LEFT_UPPER_LEG",
+        "LEFT_LOWER_ARM",
+        "LEFT_LOWER_LEG",
+        "LEFT_UPPER_ARM",
+        "CHEST",
+        "RIGHT_UPPER_ARM",
+        "RIGHT_LOWER_ARM",
+        "RIGHT_LOWER_LEG",
+        "WAIST",
+        "RIGHT_UPPER_LEG"
+      ],
+      "acceleration_kinds": [
+        "linear"
+      ],
+      "measured_gyro_declared": false,
+      "independent_pose_reference": "not_verified",
+      "benchmark_eligible": false
+    },
+    {
+      "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/ours/10_站立位伸展/1/10_v1.raw-imu.json",
+      "frames": 1527,
+      "sample_hz_declared": 30.002105712890625,
+      "duration_seconds_declared": 50.86309814453125,
+      "timestamps_strict": true,
+      "roles_first_frame": [
+        "RIGHT_LOWER_ARM",
+        "CHEST",
+        "HEAD",
+        "RIGHT_LOWER_LEG",
+        "RIGHT_UPPER_ARM",
+        "LEFT_LOWER_ARM",
+        "LEFT_UPPER_ARM",
+        "RIGHT_HAND",
+        "RIGHT_FOOT",
+        "LEFT_UPPER_LEG",
+        "RIGHT_UPPER_LEG",
+        "LEFT_FOOT",
+        "WAIST",
+        "LEFT_LOWER_LEG",
+        "LEFT_HAND",
+        "HIP",
+        "HEAD"
+      ],
+      "acceleration_kinds": [
+        "linear"
+      ],
+      "measured_gyro_declared": false,
+      "independent_pose_reference": "not_verified",
+      "benchmark_eligible": false
+    },
+    {
+      "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/ours/1_卧位猫/1/1_v1.raw-imu.json",
+      "frames": 2324,
+      "sample_hz_declared": 30.00013542175293,
+      "duration_seconds_declared": 77.4329833984375,
+      "timestamps_strict": true,
+      "roles_first_frame": [
+        "RIGHT_LOWER_ARM",
+        "CHEST",
+        "HEAD",
+        "RIGHT_LOWER_LEG",
+        "RIGHT_UPPER_ARM",
+        "LEFT_LOWER_ARM",
+        "LEFT_UPPER_ARM",
+        "RIGHT_HAND",
+        "RIGHT_FOOT",
+        "LEFT_UPPER_LEG",
+        "RIGHT_UPPER_LEG",
+        "LEFT_FOOT",
+        "WAIST",
+        "LEFT_LOWER_LEG",
+        "LEFT_HAND",
+        "HIP",
+        "HEAD"
+      ],
+      "acceleration_kinds": [
+        "linear"
+      ],
+      "measured_gyro_declared": false,
+      "independent_pose_reference": "not_verified",
+      "benchmark_eligible": false
+    },
+    {
+      "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/ours/2_坐位/1/2_v1.raw-imu.json",
+      "frames": 1763,
+      "sample_hz_declared": 29.99608612060547,
+      "duration_seconds_declared": 58.740997314453125,
+      "timestamps_strict": true,
+      "roles_first_frame": [
+        "RIGHT_LOWER_ARM",
+        "CHEST",
+        "HEAD",
+        "RIGHT_LOWER_LEG",
+        "RIGHT_UPPER_ARM",
+        "LEFT_LOWER_ARM",
+        "LEFT_UPPER_ARM",
+        "RIGHT_HAND",
+        "RIGHT_FOOT",
+        "LEFT_UPPER_LEG",
+        "RIGHT_UPPER_LEG",
+        "LEFT_FOOT",
+        "WAIST",
+        "LEFT_LOWER_LEG",
+        "LEFT_HAND",
+        "HIP",
+        "HEAD"
+      ],
+      "acceleration_kinds": [
+        "linear"
+      ],
+      "measured_gyro_declared": false,
+      "independent_pose_reference": "not_verified",
+      "benchmark_eligible": false
+    },
+    {
+      "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/ours/3_站位/1/3_v1.raw-imu.json",
+      "frames": 1863,
+      "sample_hz_declared": 30.00394630432129,
+      "duration_seconds_declared": 62.058502197265625,
+      "timestamps_strict": true,
+      "roles_first_frame": [
+        "RIGHT_LOWER_ARM",
+        "CHEST",
+        "HEAD",
+        "RIGHT_LOWER_LEG",
+        "RIGHT_UPPER_ARM",
+        "LEFT_LOWER_ARM",
+        "LEFT_UPPER_ARM",
+        "RIGHT_HAND",
+        "RIGHT_FOOT",
+        "LEFT_UPPER_LEG",
+        "RIGHT_UPPER_LEG",
+        "LEFT_FOOT",
+        "WAIST",
+        "LEFT_LOWER_LEG",
+        "LEFT_HAND",
+        "HIP",
+        "HEAD"
+      ],
+      "acceleration_kinds": [
+        "linear"
+      ],
+      "measured_gyro_declared": false,
+      "independent_pose_reference": "not_verified",
+      "benchmark_eligible": false
+    },
+    {
+      "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/ours/4_臀桥/1/4_v1.raw-imu.json",
+      "frames": 3110,
+      "sample_hz_declared": 30.000009536743164,
+      "duration_seconds_declared": 103.63330078125,
+      "timestamps_strict": true,
+      "roles_first_frame": [
+        "RIGHT_LOWER_ARM",
+        "CHEST",
+        "HEAD",
+        "RIGHT_LOWER_LEG",
+        "RIGHT_UPPER_ARM",
+        "LEFT_LOWER_ARM",
+        "LEFT_UPPER_ARM",
+        "RIGHT_HAND",
+        "RIGHT_FOOT",
+        "LEFT_UPPER_LEG",
+        "RIGHT_UPPER_LEG",
+        "LEFT_FOOT",
+        "WAIST",
+        "LEFT_LOWER_LEG",
+        "LEFT_HAND",
+        "HIP",
+        "HEAD"
+      ],
+      "acceleration_kinds": [
+        "linear"
+      ],
+      "measured_gyro_declared": false,
+      "independent_pose_reference": "not_verified",
+      "benchmark_eligible": false
+    },
+    {
+      "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/ours/5_侧桥/1/5_v1.raw-imu.json",
+      "frames": 1589,
+      "sample_hz_declared": 29.98987579345703,
+      "duration_seconds_declared": 52.951202392578125,
+      "timestamps_strict": true,
+      "roles_first_frame": [
+        "RIGHT_LOWER_ARM",
+        "CHEST",
+        "HEAD",
+        "RIGHT_LOWER_LEG",
+        "RIGHT_UPPER_ARM",
+        "LEFT_LOWER_ARM",
+        "LEFT_UPPER_ARM",
+        "RIGHT_HAND",
+        "RIGHT_FOOT",
+        "LEFT_UPPER_LEG",
+        "RIGHT_UPPER_LEG",
+        "LEFT_FOOT",
+        "WAIST",
+        "LEFT_LOWER_LEG",
+        "LEFT_HAND",
+        "HIP",
+        "HEAD"
+      ],
+      "acceleration_kinds": [
+        "linear"
+      ],
+      "measured_gyro_declared": false,
+      "independent_pose_reference": "not_verified",
+      "benchmark_eligible": false
+    },
+    {
+      "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/ours/6_卷腹/1/6_v1.raw-imu.json",
+      "frames": 2634,
+      "sample_hz_declared": 29.985654830932617,
+      "duration_seconds_declared": 87.80865478515625,
+      "timestamps_strict": true,
+      "roles_first_frame": [
+        "RIGHT_LOWER_ARM",
+        "CHEST",
+        "HEAD",
+        "RIGHT_LOWER_LEG",
+        "RIGHT_UPPER_ARM",
+        "LEFT_LOWER_ARM",
+        "LEFT_UPPER_ARM",
+        "RIGHT_HAND",
+        "RIGHT_FOOT",
+        "LEFT_UPPER_LEG",
+        "RIGHT_UPPER_LEG",
+        "LEFT_FOOT",
+        "WAIST",
+        "LEFT_LOWER_LEG",
+        "LEFT_HAND",
+        "HIP",
+        "HEAD"
+      ],
+      "acceleration_kinds": [
+        "linear"
+      ],
+      "measured_gyro_declared": false,
+      "independent_pose_reference": "not_verified",
+      "benchmark_eligible": false
+    },
+    {
+      "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/ours/7_死虫/1/7_v1.raw-imu.json",
+      "frames": 1783,
+      "sample_hz_declared": 29.99383544921875,
+      "duration_seconds_declared": 59.412208557128906,
+      "timestamps_strict": true,
+      "roles_first_frame": [
+        "RIGHT_LOWER_ARM",
+        "CHEST",
+        "HEAD",
+        "RIGHT_LOWER_LEG",
+        "RIGHT_UPPER_ARM",
+        "LEFT_LOWER_ARM",
+        "LEFT_UPPER_ARM",
+        "RIGHT_HAND",
+        "RIGHT_FOOT",
+        "LEFT_UPPER_LEG",
+        "RIGHT_UPPER_LEG",
+        "LEFT_FOOT",
+        "WAIST",
+        "LEFT_LOWER_LEG",
+        "LEFT_HAND",
+        "HIP",
+        "HEAD"
+      ],
+      "acceleration_kinds": [
+        "linear"
+      ],
+      "measured_gyro_declared": false,
+      "independent_pose_reference": "not_verified",
+      "benchmark_eligible": false
+    },
+    {
+      "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/ours/8_鸟狗/1/8_v1.raw-imu.json",
+      "frames": 1277,
+      "sample_hz_declared": 29.98946189880371,
+      "duration_seconds_declared": 42.54827880859375,
+      "timestamps_strict": true,
+      "roles_first_frame": [
+        "RIGHT_LOWER_ARM",
+        "CHEST",
+        "HEAD",
+        "RIGHT_LOWER_LEG",
+        "RIGHT_UPPER_ARM",
+        "LEFT_LOWER_ARM",
+        "LEFT_UPPER_ARM",
+        "RIGHT_HAND",
+        "RIGHT_FOOT",
+        "LEFT_UPPER_LEG",
+        "RIGHT_UPPER_LEG",
+        "LEFT_FOOT",
+        "WAIST",
+        "LEFT_LOWER_LEG",
+        "LEFT_HAND",
+        "HIP",
+        "HEAD"
+      ],
+      "acceleration_kinds": [
+        "linear"
+      ],
+      "measured_gyro_declared": false,
+      "independent_pose_reference": "not_verified",
+      "benchmark_eligible": false
+    },
+    {
+      "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/ours/9_屈膝/1/9_v1.raw-imu.json",
+      "frames": 2023,
+      "sample_hz_declared": 29.989044189453125,
+      "duration_seconds_declared": 67.42462158203125,
+      "timestamps_strict": true,
+      "roles_first_frame": [
+        "RIGHT_LOWER_ARM",
+        "CHEST",
+        "HEAD",
+        "RIGHT_LOWER_LEG",
+        "RIGHT_UPPER_ARM",
+        "LEFT_LOWER_ARM",
+        "LEFT_UPPER_ARM",
+        "RIGHT_HAND",
+        "RIGHT_FOOT",
+        "LEFT_UPPER_LEG",
+        "RIGHT_UPPER_LEG",
+        "LEFT_FOOT",
+        "WAIST",
+        "LEFT_LOWER_LEG",
+        "LEFT_HAND",
+        "HIP",
+        "HEAD"
+      ],
+      "acceleration_kinds": [
+        "linear"
+      ],
+      "measured_gyro_declared": false,
+      "independent_pose_reference": "not_verified",
+      "benchmark_eligible": false
+    }
+  ],
+  "local_source_sha256": {
+    "PNP/net.py": "47ba74798082a36b0dccfb2ec85db17df8fa97b10331173b9d8cc090e07980c1",
+    "PNP/test.py": "91f76e5c1f581ff5949a9e0ba9609842ab6e81fc24b829a610bfe2d6de9b76b3",
+    "PNP/process.py": "40a77efea0ecb32c89aa7c73268d91b957cc8d7416a7fa75ca6f544b6423975c",
+    "PNP/evaluate_dip.py": "37c271dd3f3423eb3bccf6bec9002fa9b3680c7d1c92e8918bd141627ce72cef",
+    "NoUse/DynaIP/utils/data.py": "ef558d326ec4667606acded5002b5f4e9a9b1921c83a2bb81f01d5f811cc7b3d",
+    "NoUse/DynaIP/model/model.py": "43d7ceec575244cdbb239393d206e348be7e76b51e2e326f28c8504616145c64",
+    "NoUse/DynaIP/eval.py": "31933e836f18c7153151fab6118853aa58aaf80e9144ff7edcf8588c3f05d80c",
+    "GlobalPose/net.py": "8dcff08bab2800629c552430870520f5945e4d935e0a72e56a43db24cfaa8f74",
+    "benchmarks/bridge_data.py": "b2c6ff4a687cf6a51b02ea7c913dd4bef8009107010496e8b1cbde7594e03fa4",
+    "base_mobileposer/mobileposer/process.py": "a410f04bead480cfa7a29c3d482528e243b680d099253507c9465c9883e2d6f1",
+    "base_mobileposer/mobileposer/no_head_layouts.py": "4fd813c23ef93db2f638d065242ab7d5b0c60dd65d4b9671fc08532b6f6ae278"
+  },
+  "torch": "2.1.2+cu121",
+  "cuda_available": true,
+  "not_certified": [
+    "external_model_inference",
+    "upstream_revision_parity",
+    "five_IMU_failure_hypothesis",
+    "local_capture_independent_ground_truth"
+  ]
+}

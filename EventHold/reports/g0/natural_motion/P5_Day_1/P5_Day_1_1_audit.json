@@ -1,0 +1,96 @@
+{
+  "sensor_names": [
+    "Pelvis",
+    "T8",
+    "Head",
+    "RightShoulder",
+    "RightUpperArm",
+    "RightForeArm",
+    "RightHand",
+    "LeftShoulder",
+    "LeftUpperArm",
+    "LeftForeArm",
+    "LeftHand",
+    "RightUpperLeg",
+    "RightLowerLeg",
+    "RightFoot",
+    "LeftUpperLeg",
+    "LeftLowerLeg",
+    "LeftFoot"
+  ],
+  "segment_names": [
+    "Pelvis",
+    "L5",
+    "L3",
+    "T12",
+    "T8",
+    "Neck",
+    "Head",
+    "RightShoulder",
+    "RightUpperArm",
+    "RightForeArm",
+    "RightHand",
+    "LeftShoulder",
+    "LeftUpperArm",
+    "LeftForeArm",
+    "LeftHand",
+    "RightUpperLeg",
+    "RightLowerLeg",
+    "RightFoot",
+    "RightToe",
+    "LeftUpperLeg",
+    "LeftLowerLeg",
+    "LeftFoot",
+    "LeftToe"
+  ],
+  "calibration_frame_types": [
+    "identity",
+    "tpose",
+    "tpose-isb"
+  ],
+  "frame_rate": 240.0,
+  "configuration": "FullBody",
+  "selected_sensor_names": [
+    "Pelvis",
+    "LeftForeArm",
+    "RightForeArm",
+    "LeftLowerLeg",
+    "RightLowerLeg"
+  ],
+  "selected_sensor_indices": [
+    0,
+    9,
+    5,
+    15,
+    12
+  ],
+  "normal_frames": 272731,
+  "duration_seconds": 1136.3791666666666,
+  "timestamp_delta_ms_min_max": [
+    4.0,
+    5.0
+  ],
+  "nonunit_frame_index_steps": 0,
+  "invalid_sensor_frames": 0,
+  "invalid_reference_quaternion_frames": 0,
+  "candidate_counts": {
+    "seated_like": 4,
+    "strict_low_angular_speed": 32,
+    "seated_like_and_strict": 17
+  },
+  "max_seated_like_seconds": 206.8625,
+  "complete_stand_seated_stand_proxies": 0,
+  "sensor_calibration_from_reference_performed": false,
+  "eligible_for_model_evaluation": false,
+  "reference_type": "Xsens_fullbody_inertial_solution_not_independent_optical_ground_truth",
+  "open_contract_items": [
+    "sensor_free_acceleration_frame",
+    "sensor_to_bone_installation_calibration_without_reference_leakage",
+    "Xsens_to_SMPL_mapping",
+    "reference_drift_manual_review",
+    "training_overlap_and_subject_split"
+  ],
+  "archive": "runtime/natural_motion/P5_Day_1.zip",
+  "member": "mvnx-dataset/P5_Day_1_1.mvnx",
+  "zip_crc32": 1312587616
+}

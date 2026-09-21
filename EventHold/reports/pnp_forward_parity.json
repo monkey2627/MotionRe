@@ -1,0 +1,37 @@
+{
+  "scope": "native_six_IMU_input_adapter_forward_parity",
+  "five_imu_benchmark_eligible": false,
+  "initialization": "default_T_pose_both_paths_no_test_pose_input",
+  "frames_per_sequence": 60,
+  "sequences": [
+    0,
+    2
+  ],
+  "tolerance_rotation_matrix_absolute": 0.001,
+  "tolerance_translation_m": 0.001,
+  "cpu": true,
+  "torch": "1.13.1+cu117",
+  "numpy": "1.21.6",
+  "results": [
+    {
+      "sequence": "s1_acting1",
+      "frames": 60,
+      "max_rotation_matrix_abs_diff": 0.0,
+      "max_translation_abs_diff_m": 0.0,
+      "passed": true
+    },
+    {
+      "sequence": "s1_acting3",
+      "frames": 60,
+      "max_rotation_matrix_abs_diff": 0.0,
+      "max_translation_abs_diff_m": 0.0,
+      "passed": true
+    }
+  ],
+  "source_hashes": {
+    "/home/duanyuhan/dyh/motion/MotionRe/PNP/test.py": "91f76e5c1f581ff5949a9e0ba9609842ab6e81fc24b829a610bfe2d6de9b76b3",
+    "/home/duanyuhan/dyh/motion/MotionRe/PNP/net.py": "47ba74798082a36b0dccfb2ec85db17df8fa97b10331173b9d8cc090e07980c1",
+    "/home/duanyuhan/dyh/motion/MotionRe/PNP/dynamics.py": "7f825fe2566201d4cd621ad94357cdbb2049a52ff9866ffe274556a09adf1ffa",
+    "/home/duanyuhan/dyh/motion/MotionRe/PNP/data/weights/PNP/weights.pt": "0cfac3296027a8b78e156bb57c06b69fc1790696365e7d6cf89f42f0c03be51a"
+  }
+}

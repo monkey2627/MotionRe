@@ -1,0 +1,20 @@
+{
+  "status": "AI_reference_plot_review_not_independent_video_confirmation",
+  "first_long_seated_proxy_start_frame": 69153,
+  "first_long_seated_proxy_start_seconds": 288.137,
+  "last_standing_proxy_before_entry": [
+    67405,
+    67920
+  ],
+  "standing_proxy_runs_after_entry": [],
+  "remaining_sequence_seconds": 848.2421666666668,
+  "four_proxy_spans_are_not_four_independent_sitting_events": true,
+  "exit_status": "not_observed_under_standing_proxy_right_censored",
+  "visual_review": "sampled_skeletons_support_standing_before_C1_and_seated_form_in_C1_after_C1_and_C4; full reference/video validation pending",
+  "post_entry_knee_bend_min_max_deg": [
+    49.48038864135742,
+    120.95819091796875
+  ],
+  "calibration_leakage_note": "Do not use PNP mvnx_reader first150 sensor-to-reference calibration as deployable protocol",
+  "calibration_reader_sha256": "19df068694119a3ff11e17e6fb9bffaf84e351db88235c7aba06850b61fee355"
+}

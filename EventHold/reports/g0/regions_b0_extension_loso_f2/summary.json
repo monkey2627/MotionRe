@@ -1,0 +1,50 @@
+{
+  "status": "regionwise_initial_vs_late_synthetic_exploration",
+  "model": "b0",
+  "rows": [
+    {
+      "file": "seq_02.npz",
+      "subject_key": "Eyes_Japan_Dataset/kawaguchi",
+      "model": "b0",
+      "frames": 897,
+      "all_early10s_deg": 138.34986877441406,
+      "all_late10s_deg": 138.54296875,
+      "all_late_minus_early_deg": 0.1930999755859375,
+      "lower_early10s_deg": 130.16864013671875,
+      "lower_late10s_deg": 130.0010223388672,
+      "lower_late_minus_early_deg": -0.1676177978515625,
+      "upper_early10s_deg": 149.59906005859375,
+      "upper_late10s_deg": 150.2881622314453,
+      "upper_late_minus_early_deg": 0.6891021728515625,
+      "lower_gate_mean": null,
+      "upper_gate_mean": null,
+      "lower_gate_late_minus_early": null,
+      "upper_gate_late_minus_early": null
+    }
+  ],
+  "means": {
+    "all": {
+      "early10s_deg": 138.34986877441406,
+      "late10s_deg": 138.54296875,
+      "late_minus_early_deg": 0.1930999755859375
+    },
+    "lower": {
+      "early10s_deg": 130.16864013671875,
+      "late10s_deg": 130.0010223388672,
+      "late_minus_early_deg": -0.1676177978515625
+    },
+    "upper": {
+      "early10s_deg": 149.59906005859375,
+      "late10s_deg": 150.2881622314453,
+      "late_minus_early_deg": 0.6891021728515625
+    }
+  },
+  "statistical_inference": {
+    "performed": false,
+    "reason": "One holdout sequence per LOSO fold; frames are not independent samples."
+  },
+  "head_input": false,
+  "test_accessed": false,
+  "run_sha256": "923df7a122dff489c80ce9d2a0cef6ecc1a765289a69441cf5968adb8281f3cf",
+  "code_sha256": "ff0f1b327397c3c19268b6b24465ccc225704bc038e1c2cea747194c5283153e"
+}

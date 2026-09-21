@@ -1,0 +1,287 @@
+{
+  "status": "frozen_exploration_split_not_final_benchmark",
+  "manifest_sha256": "3b7ef4448701d97917a5d34dc3658f2614cdc3568e42af66ab255af7320ce90f",
+  "candidate_csv_sha256": "8ed2015b99378876f9d90154d906ea4dbcc2a895b56f4252d3f2196da45653ae",
+  "group_rule": "subject_key",
+  "groups": 5,
+  "holdout_groups": [
+    "CMU/86",
+    "Eyes_Japan_Dataset/hamada",
+    "Eyes_Japan_Dataset/kanno"
+  ],
+  "rows": [
+    {
+      "id": "seq_00.npz",
+      "source": "../base_mobileposer/data/raw/AMASS/CMU/55/55_16_poses.npz",
+      "source_sha256": "6eaa2da76408e578dd752b90df1dae6c28a36f6a7d63b669f353d58c1b3863d2",
+      "frames": 3041,
+      "fps": 60.0,
+      "native_fps": 120.0,
+      "invalid_boundary_frames": 2,
+      "site_names": [
+        "pelvis",
+        "left_forearm",
+        "right_forearm",
+        "left_shank",
+        "right_shank"
+      ],
+      "site_joints": [
+        0,
+        18,
+        19,
+        4,
+        5
+      ],
+      "site_vertices": [
+        3021,
+        1961,
+        5424,
+        1176,
+        4662
+      ],
+      "synthetic_acceleration": "centered_second_difference_m_per_s2",
+      "candidate_duration_seconds": 50.68333333333333,
+      "subject_key": "CMU/55",
+      "split": "train_exploration"
+    },
+    {
+      "id": "seq_01.npz",
+      "source": "../base_mobileposer/data/raw/AMASS/CMU/86/86_15_poses.npz",
+      "source_sha256": "f6ec88b823b7cadcbe8d2f1d979924c9f415fd0f80cc3020f0483455f9495cdb",
+      "frames": 3546,
+      "fps": 60.0,
+      "native_fps": 120.0,
+      "invalid_boundary_frames": 2,
+      "site_names": [
+        "pelvis",
+        "left_forearm",
+        "right_forearm",
+        "left_shank",
+        "right_shank"
+      ],
+      "site_joints": [
+        0,
+        18,
+        19,
+        4,
+        5
+      ],
+      "site_vertices": [
+        3021,
+        1961,
+        5424,
+        1176,
+        4662
+      ],
+      "synthetic_acceleration": "centered_second_difference_m_per_s2",
+      "candidate_duration_seconds": 41.708333333333336,
+      "subject_key": "CMU/86",
+      "split": "holdout_exploration"
+    },
+    {
+      "id": "seq_02.npz",
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/aita/sitdown_standup-10-observe-aita_poses.npz",
+      "source_sha256": "93989603a2a77707c4c46f59d4994b52b82bd0b4dca6e65c9eb8b90b2cb9b0d8",
+      "frames": 1800,
+      "fps": 60.0,
+      "native_fps": 120.0,
+      "invalid_boundary_frames": 2,
+      "site_names": [
+        "pelvis",
+        "left_forearm",
+        "right_forearm",
+        "left_shank",
+        "right_shank"
+      ],
+      "site_joints": [
+        0,
+        18,
+        19,
+        4,
+        5
+      ],
+      "site_vertices": [
+        3021,
+        1961,
+        5424,
+        1176,
+        4662
+      ],
+      "synthetic_acceleration": "centered_second_difference_m_per_s2",
+      "candidate_duration_seconds": 20.566666666666666,
+      "subject_key": "Eyes_Japan_Dataset/aita",
+      "split": "train_exploration"
+    },
+    {
+      "id": "seq_03.npz",
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/hamada/sitdown_standup-10-observe-hamada_poses.npz",
+      "source_sha256": "7cbf3585f8b0cf89c7b042d9bb29fb6be978694812c0a2b848a4e874e031de5f",
+      "frames": 1800,
+      "fps": 60.0,
+      "native_fps": 120.0,
+      "invalid_boundary_frames": 2,
+      "site_names": [
+        "pelvis",
+        "left_forearm",
+        "right_forearm",
+        "left_shank",
+        "right_shank"
+      ],
+      "site_joints": [
+        0,
+        18,
+        19,
+        4,
+        5
+      ],
+      "site_vertices": [
+        3021,
+        1961,
+        5424,
+        1176,
+        4662
+      ],
+      "synthetic_acceleration": "centered_second_difference_m_per_s2",
+      "candidate_duration_seconds": 20.75,
+      "subject_key": "Eyes_Japan_Dataset/hamada",
+      "split": "holdout_exploration"
+    },
+    {
+      "id": "seq_04.npz",
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/hamada/sitdown_standup-13-applause-hamada_poses.npz",
+      "source_sha256": "72dac80acedceef4d44c4ebbeb1c73c1d3c3a878abc014b64b9070ae647f0363",
+      "frames": 1800,
+      "fps": 60.0,
+      "native_fps": 120.0,
+      "invalid_boundary_frames": 2,
+      "site_names": [
+        "pelvis",
+        "left_forearm",
+        "right_forearm",
+        "left_shank",
+        "right_shank"
+      ],
+      "site_joints": [
+        0,
+        18,
+        19,
+        4,
+        5
+      ],
+      "site_vertices": [
+        3021,
+        1961,
+        5424,
+        1176,
+        4662
+      ],
+      "synthetic_acceleration": "centered_second_difference_m_per_s2",
+      "candidate_duration_seconds": 20.391666666666666,
+      "subject_key": "Eyes_Japan_Dataset/hamada",
+      "split": "holdout_exploration"
+    },
+    {
+      "id": "seq_05.npz",
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/hamada/sitdown_standup-14-hold chair-hamada_poses.npz",
+      "source_sha256": "ab26cfded47b2f8716040a3f0731c010e2d4afe3881ce6464cd6ea6df3683b2e",
+      "frames": 1800,
+      "fps": 60.0,
+      "native_fps": 120.0,
+      "invalid_boundary_frames": 2,
+      "site_names": [
+        "pelvis",
+        "left_forearm",
+        "right_forearm",
+        "left_shank",
+        "right_shank"
+      ],
+      "site_joints": [
+        0,
+        18,
+        19,
+        4,
+        5
+      ],
+      "site_vertices": [
+        3021,
+        1961,
+        5424,
+        1176,
+        4662
+      ],
+      "synthetic_acceleration": "centered_second_difference_m_per_s2",
+      "candidate_duration_seconds": 21.258333333333333,
+      "subject_key": "Eyes_Japan_Dataset/hamada",
+      "split": "holdout_exploration"
+    },
+    {
+      "id": "seq_06.npz",
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/kanno/sitdown_standup-10-observe-kanno_poses.npz",
+      "source_sha256": "0f4a3505f0ef6b5b9db810e99232d8441f2fdc68ce5c185c00c947b47afcedca",
+      "frames": 2043,
+      "fps": 60.0,
+      "native_fps": 120.0,
+      "invalid_boundary_frames": 2,
+      "site_names": [
+        "pelvis",
+        "left_forearm",
+        "right_forearm",
+        "left_shank",
+        "right_shank"
+      ],
+      "site_joints": [
+        0,
+        18,
+        19,
+        4,
+        5
+      ],
+      "site_vertices": [
+        3021,
+        1961,
+        5424,
+        1176,
+        4662
+      ],
+      "synthetic_acceleration": "centered_second_difference_m_per_s2",
+      "candidate_duration_seconds": 23.125,
+      "subject_key": "Eyes_Japan_Dataset/kanno",
+      "split": "holdout_exploration"
+    },
+    {
+      "id": "seq_07.npz",
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/kanno/sitdown_standup-13-applause-kanno_poses.npz",
+      "source_sha256": "a448086836a9dd44e4c7696ca53c5d4df4dc001ca864c7c639764e4969eb4894",
+      "frames": 1992,
+      "fps": 60.0,
+      "native_fps": 120.0,
+      "invalid_boundary_frames": 2,
+      "site_names": [
+        "pelvis",
+        "left_forearm",
+        "right_forearm",
+        "left_shank",
+        "right_shank"
+      ],
+      "site_joints": [
+        0,
+        18,
+        19,
+        4,
+        5
+      ],
+      "site_vertices": [
+        3021,
+        1961,
+        5424,
+        1176,
+        4662
+      ],
+      "synthetic_acceleration": "centered_second_difference_m_per_s2",
+      "candidate_duration_seconds": 22.6,
+      "subject_key": "Eyes_Japan_Dataset/kanno",
+      "split": "holdout_exploration"
+    }
+  ],
+  "no_test_claim": true
+}

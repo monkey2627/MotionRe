@@ -1,0 +1,2 @@
+file,subject_key,model,frames,all_early10s_deg,all_late10s_deg,all_late_minus_early_deg,lower_early10s_deg,lower_late10s_deg,lower_late_minus_early_deg,upper_early10s_deg,upper_late10s_deg,upper_late_minus_early_deg,lower_gate_mean,upper_gate_mean,lower_gate_late_minus_early,upper_gate_late_minus_early
+seq_02.npz,Eyes_Japan_Dataset/kawaguchi,b0,897,138.34986877441406,138.54296875,0.1930999755859375,130.16864013671875,130.0010223388672,-0.1676177978515625,149.59906005859375,150.2881622314453,0.6891021728515625,,,,

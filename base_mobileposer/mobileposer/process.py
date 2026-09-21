@@ -1,4 +1,5 @@
 import os
+import json
 import numpy as np
 import pickle
 import torch
@@ -341,6 +342,99 @@ def process_imuposer(split: str="train"):
     torch.save(data, data_path)
 
 
+def process_ours():
+    """Preprocess local SlimeVR/Unity tracker captures for inference.
+
+    The raw captures contain real IMU signals but no SMPL ground-truth pose.
+    We therefore save identity poses as placeholders so existing inference and
+    visualization loaders can consume the same processed dataset structure.
+    """
+
+    role_to_slot = {
+        0: ("LEFT_HAND", "LEFT_LOWER_ARM"),
+        1: ("RIGHT_HAND", "RIGHT_LOWER_ARM"),
+        2: ("LEFT_UPPER_LEG", "LEFT_LOWER_LEG"),
+        3: ("RIGHT_UPPER_LEG", "RIGHT_LOWER_LEG"),
+        4: ("HEAD",),
+        5: ("WAIST",),
+    }
+    gravity = 9.80665
+
+    def _vec3(value):
+        return [float(value.get(axis, 0.0)) for axis in ("x", "y", "z")]
+
+    def _load_capture(raw_imu_path):
+        with open(raw_imu_path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+
+        sample_rate = float(raw.get("sampleRate", TARGET_FPS))
+        step = max(1, round(sample_rate / TARGET_FPS))
+        frames = raw.get("frames", [])[::step]
+        if not frames:
+            raise ValueError(f"No frames in {raw_imu_path}")
+
+        acc = torch.zeros(len(frames), 6, 3)
+        ori = torch.eye(3).repeat(len(frames), 6, 1, 1)
+
+        for frame_idx, frame in enumerate(frames):
+            by_role = {sensor.get("trackerRole"): sensor for sensor in frame.get("sensors", [])}
+            for slot, roles in role_to_slot.items():
+                sensor = next((by_role[role] for role in roles if role in by_role), None)
+                if sensor is None:
+                    continue
+
+                euler_deg = torch.tensor(_vec3(sensor.get("eulerAnglesDeg", {}))).view(1, 3)
+                rot = math.euler_angle_to_rotation_matrix(torch.deg2rad(euler_deg), seq="XYZ")[0]
+                local_acc = torch.tensor(_vec3(sensor.get("accelerationG", {}))) * gravity
+
+                ori[frame_idx, slot] = rot
+                acc[frame_idx, slot] = rot.matmul(local_acc)
+
+        pose = torch.eye(3).repeat(len(frames), 24, 1, 1)
+        tran = torch.zeros(len(frames), 3)
+        shape = torch.ones(10)
+        joint = torch.zeros(len(frames), 24, 3)
+        return acc.float(), ori.float(), pose.float(), tran.float(), shape.float(), joint.float()
+
+    raw_imu_files = sorted(paths.raw_ours.glob("*/*.raw-imu.json"))
+    if not raw_imu_files:
+        raw_imu_files = sorted(paths.raw_ours.glob("*.raw-imu.json"))
+    if not raw_imu_files:
+        raise FileNotFoundError(f"No *.raw-imu.json files found under {paths.raw_ours}")
+
+    accs, oris, poses, trans, shapes, joints, metadata = [], [], [], [], [], [], []
+    for raw_imu_path in tqdm(raw_imu_files):
+        try:
+            acc, ori, pose, tran, shape, joint = _load_capture(raw_imu_path)
+        except Exception as e:
+            print(f"Error processing {raw_imu_path}: {e}.")
+            continue
+
+        accs.append(acc)
+        oris.append(ori)
+        poses.append(pose)
+        trans.append(tran)
+        shapes.append(shape)
+        joints.append(joint)
+        metadata.append({"raw_imu": str(raw_imu_path.relative_to(paths.root_dir))})
+
+    if not accs:
+        raise RuntimeError(f"No usable ours captures found under {paths.raw_ours}")
+
+    data = {
+        "acc": accs,
+        "ori": oris,
+        "pose": poses,
+        "tran": trans,
+        "shape": shapes,
+        "joint": joints,
+        "metadata": metadata,
+    }
+    data_path = paths.eval_dir / "ours.pt"
+    torch.save(data, data_path)
+    print(f"Preprocessed ours dataset is saved at: {data_path}")
+
+
 def create_directories():
     paths.processed_datasets.mkdir(exist_ok=True, parents=True)
     paths.eval_dir.mkdir(exist_ok=True, parents=True)
@@ -365,5 +459,7 @@ if __name__ == "__main__":
     elif args.dataset == "dip":
         process_dipimu(split="train")
         process_dipimu(split="test")
+    elif args.dataset == "ours":
+        process_ours()
     else:
         raise ValueError(f"Dataset {args.dataset} not supported.")

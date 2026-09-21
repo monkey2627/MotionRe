@@ -1,0 +1,15 @@
+{
+  "source": {
+    "id": 27442799,
+    "name": "compressed_mvnx_dataset_P13_Day_2.zip",
+    "size": 611014371,
+    "is_link_only": false,
+    "download_url": "https://ndownloader.figshare.com/files/27442799",
+    "supplied_md5": "2d8879be2da73a5c7c6d933e322126db",
+    "computed_md5": "2d8879be2da73a5c7c6d933e322126db",
+    "mimetype": "application/zip"
+  },
+  "md5_verified_before_rename": true,
+  "sha256": "db8870a2185592af739d2e10451cb821c29c9148417f2f712d2bcaf160efe992",
+  "role": "exploration_dynamic_control_not_locked_test"
+}

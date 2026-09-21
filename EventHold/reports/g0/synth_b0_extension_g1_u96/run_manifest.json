@@ -1,0 +1,88 @@
+{
+  "status": "matched_synthetic_control_not_real_performance",
+  "model": "b0",
+  "mode": "uniform",
+  "seed": 0,
+  "epochs": 6,
+  "hidden": 96,
+  "train_files": [
+    "seq_00.npz",
+    "seq_01.npz"
+  ],
+  "holdout_files": [
+    "seq_02.npz"
+  ],
+  "split_sha256": "3f8115ed9d91f4b9792fc9601aa1b8bb3e2f86b27d335a7094eafde84e3db163",
+  "code_sha256": "655e26fdf0ee35ac65d8f28bf37b258683aaa6093e29bc55a86afe13a2190703",
+  "history": [
+    {
+      "epoch": 1,
+      "train_mean_deg": 134.47055489278873,
+      "holdout_mean_deg": 116.24183427307531,
+      "holdout": [
+        {
+          "file": "seq_02.npz",
+          "mean_deg": 116.24183427307531
+        }
+      ]
+    },
+    {
+      "epoch": 2,
+      "train_mean_deg": 121.79295407119255,
+      "holdout_mean_deg": 103.47336393791298,
+      "holdout": [
+        {
+          "file": "seq_02.npz",
+          "mean_deg": 103.47336393791298
+        }
+      ]
+    },
+    {
+      "epoch": 3,
+      "train_mean_deg": 105.81062309487609,
+      "holdout_mean_deg": 103.54943730785604,
+      "holdout": [
+        {
+          "file": "seq_02.npz",
+          "mean_deg": 103.54943730785604
+        }
+      ]
+    },
+    {
+      "epoch": 4,
+      "train_mean_deg": 101.07560519568742,
+      "holdout_mean_deg": 113.49661492183387,
+      "holdout": [
+        {
+          "file": "seq_02.npz",
+          "mean_deg": 113.49661492183387
+        }
+      ]
+    },
+    {
+      "epoch": 5,
+      "train_mean_deg": 92.06809771261842,
+      "holdout_mean_deg": 117.67296640263113,
+      "holdout": [
+        {
+          "file": "seq_02.npz",
+          "mean_deg": 117.67296640263113
+        }
+      ]
+    },
+    {
+      "epoch": 6,
+      "train_mean_deg": 88.04269060943787,
+      "holdout_mean_deg": 120.35100610288593,
+      "holdout": [
+        {
+          "file": "seq_02.npz",
+          "mean_deg": 120.35100610288593
+        }
+      ]
+    }
+  ],
+  "candidate_weighting": false,
+  "head_input": false,
+  "test_accessed": false
+}

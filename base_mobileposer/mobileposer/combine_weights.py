@@ -13,6 +13,7 @@ from argparse import ArgumentParser
 from mobileposer.models import MobilePoserNet, Poser, Joints, Velocity, FootContact
 from mobileposer.constants import MODULES
 from mobileposer.utils.file_utils import get_file_number, get_best_checkpoint
+from mobileposer.config import paths
 
 
 def load_module_weights(module_name, weight_path):
@@ -23,9 +24,9 @@ def load_module_weights(module_name, weight_path):
         return None
 
 
-def get_module_path(module_name, checkpoint, finetune=None):
-    module_path = Path("checkpoints") / str(checkpoint)
-    if args.finetune and module_name in ["poser", "joints"]:
+def get_module_path(module_name, checkpoint, finetune=None, checkpoint_path=None):
+    module_path = Path(checkpoint_path) if checkpoint_path else paths.checkpoint / str(checkpoint)
+    if finetune and module_name in ["poser", "joints"]:
         module_path = module_path / f"finetuned_{finetune}" / module_name
     else:
         module_path = module_path / module_name
@@ -37,11 +38,13 @@ if __name__ == "__main__":
     parser.add_argument("--weights", nargs="+", help="List of weight paths.")
     parser.add_argument("--finetune", type=str, default=None)
     parser.add_argument("--checkpoint", type=int, help="Checkpoint number.", default=1) 
+    parser.add_argument("--checkpoint-path", type=str, default=None,
+                        help="Explicit checkpoint directory containing poser/joints/foot_contact/velocity.")
     args = parser.parse_args()
 
     checkpoints = {}
     for module_name in MODULES.keys():
-        module_path = get_module_path(module_name, args.checkpoint, args.finetune)
+        module_path = get_module_path(module_name, args.checkpoint, args.finetune, args.checkpoint_path)
         best_ckpt = get_best_checkpoint(module_path)
         if best_ckpt:
             checkpoints[module_name] = load_module_weights(module_name, module_path / best_ckpt)
@@ -52,6 +55,6 @@ if __name__ == "__main__":
     # load combined model and save
     model_name = "base_model.pth" if not args.finetune else "model_finetuned.pth"
     model = MobilePoserNet(**checkpoints)
-    model_path = Path("checkpoints") / str(args.checkpoint) / model_name
+    model_path = (Path(args.checkpoint_path) if args.checkpoint_path else paths.checkpoint / str(args.checkpoint)) / model_name
     torch.save(model.state_dict(), model_path)
     print(f"Model written to {model_path}.")

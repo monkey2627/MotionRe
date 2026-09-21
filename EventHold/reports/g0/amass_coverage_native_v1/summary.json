@@ -1,0 +1,615 @@
+{
+  "status": "native_rate_confirmation_of_coarse_positive_files_only",
+  "files": 65,
+  "subject_keys": 39,
+  "counts": {
+    "seated_like": {
+      "ge5s": 72,
+      "ge20s": 8,
+      "max_seconds": 50.68333333333333,
+      "complete_transition_proxies": 17
+    },
+    "seated_like_low_speed": {
+      "ge5s": 3,
+      "ge20s": 0,
+      "max_seconds": 7.541666666666667,
+      "complete_transition_proxies": 2
+    }
+  },
+  "files_manifest": [
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BMLmovi/Subject_34_F_MoSh/Subject_34_F_12_poses.npz",
+      "dataset": "BMLmovi",
+      "subject_key": "BMLmovi/Subject_34_F_MoSh",
+      "sha256": "9402406d3e3139d9f579786e63bbba73d1504b2a1138e0cd9dd9425f341de67f",
+      "fps": 120.0,
+      "frames": 1189,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BMLmovi/Subject_39_F_MoSh/Subject_39_F_21_poses.npz",
+      "dataset": "BMLmovi",
+      "subject_key": "BMLmovi/Subject_39_F_MoSh",
+      "sha256": "98d3a0ab9a6b5bc12b14b201313b9b99789b8755bb90f5ef5d39d25e0001ee6f",
+      "fps": 120.0,
+      "frames": 1209,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BMLmovi/Subject_58_F_MoSh/Subject_58_F_16_poses.npz",
+      "dataset": "BMLmovi",
+      "subject_key": "BMLmovi/Subject_58_F_MoSh",
+      "sha256": "59ad4c8768e6d78befe6e509558cad16d4c374df51ed1654cb324cda19da8cdf",
+      "fps": 120.0,
+      "frames": 1325,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BMLmovi/Subject_6_F_MoSh/Subject_6_F_21_poses.npz",
+      "dataset": "BMLmovi",
+      "subject_key": "BMLmovi/Subject_6_F_MoSh",
+      "sha256": "f6a4c14978539d465928a305ee40d02220482f1c6bc9288a482d826e1db8f90f",
+      "fps": 120.0,
+      "frames": 989,
+      "confirmed_candidates": 0
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BMLmovi/Subject_71_F_MoSh/Subject_71_F_19_poses.npz",
+      "dataset": "BMLmovi",
+      "subject_key": "BMLmovi/Subject_71_F_MoSh",
+      "sha256": "a8903630041e6f6547415bcf16970d244ec4b7b8acca2b7e660c1db5391dc533",
+      "fps": 120.0,
+      "frames": 1161,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub011/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub011",
+      "sha256": "60e86cbe9590268bf8b8797ca90e88d0ff06678337b5ed8807b1ff22bf87aecb",
+      "fps": 120.0,
+      "frames": 1028,
+      "confirmed_candidates": 0
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub011/0016_sitting2_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub011",
+      "sha256": "863bdb1038ec8f45340e99d7be628ceecae1b706f2a2ff0eb207f1304fe97534",
+      "fps": 120.0,
+      "frames": 1209,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub012/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub012",
+      "sha256": "8ad364fdc8fc8ccd375daa60e5bb4fde14e89356004280ac12ffcdc320313fc8",
+      "fps": 120.0,
+      "frames": 1478,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub012/0016_sitting2_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub012",
+      "sha256": "6bbc08810bbbb437bef354150d76db206c1ad7b445516d74cba27b7d473d3f72",
+      "fps": 120.0,
+      "frames": 1533,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub015/0016_sitting2_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub015",
+      "sha256": "49e343ff17248925d5869e47ba551646528769255dd22862e0657b55192952c6",
+      "fps": 120.0,
+      "frames": 1459,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub021/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub021",
+      "sha256": "edfebd6911e39d80e5fda60bdbf129a3c86c312919659fa8316e05577bca1cc4",
+      "fps": 120.0,
+      "frames": 1517,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub021/0016_sitting2_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub021",
+      "sha256": "a1f1284adb295aa251e121a953d7513d4b127fdfb62dea52888704d27e310011",
+      "fps": 120.0,
+      "frames": 1837,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub023/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub023",
+      "sha256": "7f4346a58960443ad02886fbb8391264fbb8cad196e5d2001bb653dc614be421",
+      "fps": 120.0,
+      "frames": 1704,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub024/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub024",
+      "sha256": "b582c72c645d925ef9aff3db3dc3b55dc53b3d869006b0babd1ede265d8df8a5",
+      "fps": 120.0,
+      "frames": 1334,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub031/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub031",
+      "sha256": "6aefa23686b5f247b61e1613c2397518151ff490e2b4dcebc1ee61480ee09722",
+      "fps": 120.0,
+      "frames": 1496,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub033/0014_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub033",
+      "sha256": "08c311f1239d3912bd31cd8cfa63b4d8ec3803b5482b6c0d7227f67ee4f9cf33",
+      "fps": 120.0,
+      "frames": 1873,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub033/0015_sitting2_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub033",
+      "sha256": "6c4d2fda7f4ae73ff1a4787e4d1069249d82f83fd6f1ef6be82ce203841fffa3",
+      "fps": 120.0,
+      "frames": 1328,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub035/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub035",
+      "sha256": "12d6f68f3c6571ef20295c2898ee93417cea4f830426c2b99f3927bfb7f3d5cd",
+      "fps": 120.0,
+      "frames": 1466,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub037/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub037",
+      "sha256": "4a90da342a86994d360619f7894094f1b535bf5c0befb0ab09ca7f596efd2a2a",
+      "fps": 120.0,
+      "frames": 1314,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub038/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub038",
+      "sha256": "cb5212ad5b1fccbd1b982fed54dbb8b4a01a11abc6c7d28e4831691c03b995a5",
+      "fps": 120.0,
+      "frames": 1284,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub038/0016_sitting2_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub038",
+      "sha256": "fb7c17faa8c87c08566201bca054cb51fffd555c89f39d9b8f6fbcbe8d3caf9e",
+      "fps": 120.0,
+      "frames": 1772,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub039/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub039",
+      "sha256": "8a5701afc1b5c63293fcb67d3d37863fc57503e1ffe42123cbe49ae5366691ba",
+      "fps": 120.0,
+      "frames": 1209,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub041/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub041",
+      "sha256": "fcd9c47015538f59fc00fac15713104282919383f470323211b95da0e604f8b1",
+      "fps": 120.0,
+      "frames": 1255,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub041/0016_sitting2_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub041",
+      "sha256": "7b65036a0382082d63807c4d9d35026866f29aa98f1990a5927779f39ad34ad1",
+      "fps": 120.0,
+      "frames": 1275,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub044/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub044",
+      "sha256": "b65249ce17c91dad8cbb60155997961f92574f8ff327d81b17d93cb26e09d6b0",
+      "fps": 120.0,
+      "frames": 1266,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub044/0016_sitting2_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub044",
+      "sha256": "83499dc3e93ca06cfbfa8e66feaa9967077e0785d1849521b46a80989be4e9a8",
+      "fps": 120.0,
+      "frames": 1336,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub045/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub045",
+      "sha256": "e14a347d7b2be738ad07b1964c420877e753778ae53e0c90984a7ce6315ecaa1",
+      "fps": 120.0,
+      "frames": 1189,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub045/0016_sitting2_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub045",
+      "sha256": "42a28416adda73c87ef54c053fc2c3cc604a5be4f4c0e760f5f5439d37c05572",
+      "fps": 120.0,
+      "frames": 1523,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub048/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub048",
+      "sha256": "d2fca8d20e8fb6f07d97b76b43966100e88baed2687573c15c9b3518a14cd16a",
+      "fps": 120.0,
+      "frames": 1328,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub050/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub050",
+      "sha256": "2ae8cd3c059c7ea6d3aaf8b0f7b095896fe58bf99dc6c714328c6e01d037af8d",
+      "fps": 120.0,
+      "frames": 1226,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub050/0016_sitting2_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub050",
+      "sha256": "9a113fdb62b57bb1a866bee8d35dda82c710bf1075cdce80b0d7d4b4f7ba47c3",
+      "fps": 120.0,
+      "frames": 1416,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub091/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub091",
+      "sha256": "f1986ba969fc7f78a62526cd9072b02fdf6302f35067e7818fd09e4f0bc7cb14",
+      "fps": 120.0,
+      "frames": 1367,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub092/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub092",
+      "sha256": "067d960ad636e60405866035e5c5c9c285c94aac1868e831a5e144920748b248",
+      "fps": 120.0,
+      "frames": 1361,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub108/0016_sitting2_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub108",
+      "sha256": "8ccb79e5459c908d26708a6bc072ddb64709521843f2559e14ebad57dbbbae3e",
+      "fps": 120.0,
+      "frames": 1628,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/BioMotionLab_NTroje/rub114/0015_sitting1_poses.npz",
+      "dataset": "BioMotionLab_NTroje",
+      "subject_key": "BioMotionLab_NTroje/rub114",
+      "sha256": "a19f3a03257dca9d4867856b515d679a580427e3525c5c44c5f03e17398f1c30",
+      "fps": 120.0,
+      "frames": 1200,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/CMU/13/13_03_poses.npz",
+      "dataset": "CMU",
+      "subject_key": "CMU/13",
+      "sha256": "d2878664e22936441a4540e8f10986bda6d23a092c3b3a3c6cd27a1babc7491f",
+      "fps": 120.0,
+      "frames": 3715,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/CMU/13/13_04_poses.npz",
+      "dataset": "CMU",
+      "subject_key": "CMU/13",
+      "sha256": "84e8c5331f2b483b841d8adb85342fe75eb4bb090714678e5a8b7da0db106b5f",
+      "fps": 120.0,
+      "frames": 4759,
+      "confirmed_candidates": 2
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/CMU/13/13_05_poses.npz",
+      "dataset": "CMU",
+      "subject_key": "CMU/13",
+      "sha256": "d54df3ecccd32b95e1b2c4727eb16ac775e308714859ac7a335be297e8a4ff28",
+      "fps": 120.0,
+      "frames": 4403,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/CMU/13/13_06_poses.npz",
+      "dataset": "CMU",
+      "subject_key": "CMU/13",
+      "sha256": "b68cc7d533f4a2320bdf584f3c6ed33ab261340db5bb41432d9cbb28e20bda51",
+      "fps": 120.0,
+      "frames": 4413,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/CMU/18_19_rory/18_12_poses.npz",
+      "dataset": "CMU",
+      "subject_key": "CMU/18_19_rory",
+      "sha256": "621b5e9a0a7052e9ea702e5e20cf9c8690d2f0f83a52f0dbcefd5eabaf02e23b",
+      "fps": 120.0,
+      "frames": 1253,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/CMU/22_23_justin/22_03_poses.npz",
+      "dataset": "CMU",
+      "subject_key": "CMU/22_23_justin",
+      "sha256": "ae443a533406b4eb92f292c9b429e3f506eb699993be96da0d46ad8248c6ed50",
+      "fps": 120.0,
+      "frames": 812,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/CMU/55/55_16_poses.npz",
+      "dataset": "CMU",
+      "subject_key": "CMU/55",
+      "sha256": "6eaa2da76408e578dd752b90df1dae6c28a36f6a7d63b669f353d58c1b3863d2",
+      "fps": 120.0,
+      "frames": 6082,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/CMU/86/86_15_poses.npz",
+      "dataset": "CMU",
+      "subject_key": "CMU/86",
+      "sha256": "f6ec88b823b7cadcbe8d2f1d979924c9f415fd0f80cc3020f0483455f9495cdb",
+      "fps": 120.0,
+      "frames": 7092,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/aita/sitdown_standup-10-observe-aita_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/aita",
+      "sha256": "93989603a2a77707c4c46f59d4994b52b82bd0b4dca6e65c9eb8b90b2cb9b0d8",
+      "fps": 120.0,
+      "frames": 3600,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/aita/sitdown_standup-14-hold chair-aita_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/aita",
+      "sha256": "37af68c4760ee6b9734f1ee9c0abb810c315bb8ca46c2197fda5a83b71f20e53",
+      "fps": 120.0,
+      "frames": 3401,
+      "confirmed_candidates": 2
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/aita/sitdown_standup-15-move chair-aita_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/aita",
+      "sha256": "5fa0bc6c95f256e2922d1612c61295da48f758e434b285670ca1489f2240e2c3",
+      "fps": 120.0,
+      "frames": 3600,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/hamada/gesture_etc-06-jiggle knee-hamada_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/hamada",
+      "sha256": "0b9c505e131eae7220a687c391e0ab580d4e486d22c87cd866cee01e220b635d",
+      "fps": 120.0,
+      "frames": 3571,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/hamada/pose-06-hangon-hamada_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/hamada",
+      "sha256": "cef24af9c51ed89271279ff0debabf5c78adbbfdecdc663bb4a527d5fc82acf8",
+      "fps": 120.0,
+      "frames": 3571,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/hamada/sitdown_standup-02-chair-hamada_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/hamada",
+      "sha256": "6c68e2c6415757d8e6348386259811d6a1a212fc55b1a40b5f8df2070c55f7d6",
+      "fps": 120.0,
+      "frames": 3600,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/hamada/sitdown_standup-03-chair back-hamada_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/hamada",
+      "sha256": "2208d122b0975d1589242015fe99373d6a828a6eda094f783d7c92a891dcc455",
+      "fps": 120.0,
+      "frames": 3600,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/hamada/sitdown_standup-04-chair elbow-hamada_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/hamada",
+      "sha256": "a7962c9564edda34b72b945d6776e0d5cfdc0e4115ae0ddcad9064dd101ac904",
+      "fps": 120.0,
+      "frames": 3600,
+      "confirmed_candidates": 2
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/hamada/sitdown_standup-10-observe-hamada_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/hamada",
+      "sha256": "7cbf3585f8b0cf89c7b042d9bb29fb6be978694812c0a2b848a4e874e031de5f",
+      "fps": 120.0,
+      "frames": 3600,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/hamada/sitdown_standup-13-applause-hamada_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/hamada",
+      "sha256": "72dac80acedceef4d44c4ebbeb1c73c1d3c3a878abc014b64b9070ae647f0363",
+      "fps": 120.0,
+      "frames": 3600,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/hamada/sitdown_standup-14-hold chair-hamada_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/hamada",
+      "sha256": "ab26cfded47b2f8716040a3f0731c010e2d4afe3881ce6464cd6ea6df3683b2e",
+      "fps": 120.0,
+      "frames": 3600,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/hamada/sitdown_standup-16-reseat-hamada_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/hamada",
+      "sha256": "c3d936c05240f7575ff18248627d11824f3060f6c0c9712c777b6f49ccd73390",
+      "fps": 120.0,
+      "frames": 3600,
+      "confirmed_candidates": 2
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/ichige/gesture_etc-18-eat-ichige_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/ichige",
+      "sha256": "491fbe4ddac67983fe3e34e7d500a9c12a24440015c399bf00703de73890bb39",
+      "fps": 120.0,
+      "frames": 3600,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/kaiwa/sitdown_standup-03-chair back-kaiwa_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/kaiwa",
+      "sha256": "aa735f95ae665c948e44467a9ea1a87aa4e70b1550395e4c8ee2a5f6a1f3f204",
+      "fps": 120.0,
+      "frames": 3600,
+      "confirmed_candidates": 2
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/kanno/sitdown_standup-03-chair back-kanno_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/kanno",
+      "sha256": "38e96fafcf6cee7f96e9c6e661dd1e1b5684e6ffa5cdec99b1528f916b656a3d",
+      "fps": 120.0,
+      "frames": 3974,
+      "confirmed_candidates": 2
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/kanno/sitdown_standup-10-observe-kanno_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/kanno",
+      "sha256": "0f4a3505f0ef6b5b9db810e99232d8441f2fdc68ce5c185c00c947b47afcedca",
+      "fps": 120.0,
+      "frames": 4085,
+      "confirmed_candidates": 3
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/kanno/sitdown_standup-13-applause-kanno_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/kanno",
+      "sha256": "a448086836a9dd44e4c7696ca53c5d4df4dc001ca864c7c639764e4969eb4894",
+      "fps": 120.0,
+      "frames": 3983,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/kanno/sitdown_standup-14-hold chair-kanno_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/kanno",
+      "sha256": "e26b7f227e53f38a89c335eeba4edfe71d984e8a508b308f6930a03c50792fe1",
+      "fps": 120.0,
+      "frames": 4001,
+      "confirmed_candidates": 2
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/kawaguchi/sitdown_standup-10-observe-kawaguchi_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/kawaguchi",
+      "sha256": "d8f97d325238f140cbce9ec09934a15143cbd01bdd7074a1f3f27e024cfa79a7",
+      "fps": 120.0,
+      "frames": 2827,
+      "confirmed_candidates": 1
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/kudo/sitdown_standup-16-reseat-kudo_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/kudo",
+      "sha256": "cf764b60b5102265525549aefd1207bcdd7c811585235f28f4324e27e727e97e",
+      "fps": 250.0,
+      "frames": 8250,
+      "confirmed_candidates": 2
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/takiguchi/gesture_etc-20-swing chair-takiguchi_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/takiguchi",
+      "sha256": "bf3107cb8154edd56bb24ed7c22ce85bf471482e9579c3a7d95797226c6a1c6c",
+      "fps": 250.0,
+      "frames": 8182,
+      "confirmed_candidates": 2
+    },
+    {
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/takiguchi/sitdown_standup-16-reseat-takiguchi_poses.npz",
+      "dataset": "Eyes_Japan_Dataset",
+      "subject_key": "Eyes_Japan_Dataset/takiguchi",
+      "sha256": "8ca732e710d6a1abb4a40da1bac4cef778e504b1b2c9767acfc1d9b107adb3dd",
+      "fps": 250.0,
+      "frames": 8182,
+      "confirmed_candidates": 2
+    }
+  ],
+  "code_sha256": "5ac5f7fdb0ab228d5712bc987334d6008f038726a0e4dd1f50a0ab47239d90b8",
+  "screen_code_sha256": "f59860f2a1242ac8733ced04d690dab47e8665a8b0443687043b2ae84e5b3adf",
+  "coarse_candidates_sha256": "7a2b1d8a55a830dcd181af717a4233bf85c7548bee902972bd716b31494cd7c3",
+  "limitations": [
+    "sample-negative files not rechecked; missed candidates possible",
+    "geometry is not verified sitting action or independent events",
+    "long seated geometry is not necessarily motionless holding",
+    "all inspected sources are explored, not untouched test"
+  ]
+}

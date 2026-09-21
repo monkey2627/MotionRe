@@ -1,0 +1,88 @@
+{
+  "status": "matched_synthetic_control_not_real_performance",
+  "model": "m1",
+  "mode": "uniform",
+  "seed": 0,
+  "epochs": 6,
+  "hidden": 96,
+  "train_files": [
+    "seq_01.npz",
+    "seq_02.npz"
+  ],
+  "holdout_files": [
+    "seq_00.npz"
+  ],
+  "split_sha256": "d7afbc02b5d2087410e0379194e4e97e2321c0f88a6b79458270c4bf297f138a",
+  "code_sha256": "655e26fdf0ee35ac65d8f28bf37b258683aaa6093e29bc55a86afe13a2190703",
+  "history": [
+    {
+      "epoch": 1,
+      "train_mean_deg": 117.9637144505079,
+      "holdout_mean_deg": 150.4780550022336,
+      "holdout": [
+        {
+          "file": "seq_00.npz",
+          "mean_deg": 150.4780550022336
+        }
+      ]
+    },
+    {
+      "epoch": 2,
+      "train_mean_deg": 108.92116619330699,
+      "holdout_mean_deg": 149.1976867950553,
+      "holdout": [
+        {
+          "file": "seq_00.npz",
+          "mean_deg": 149.1976867950553
+        }
+      ]
+    },
+    {
+      "epoch": 3,
+      "train_mean_deg": 86.03785728500858,
+      "holdout_mean_deg": 155.23929013049764,
+      "holdout": [
+        {
+          "file": "seq_00.npz",
+          "mean_deg": 155.23929013049764
+        }
+      ]
+    },
+    {
+      "epoch": 4,
+      "train_mean_deg": 67.60529529640982,
+      "holdout_mean_deg": 155.51992019074817,
+      "holdout": [
+        {
+          "file": "seq_00.npz",
+          "mean_deg": 155.51992019074817
+        }
+      ]
+    },
+    {
+      "epoch": 5,
+      "train_mean_deg": 59.0939488073718,
+      "holdout_mean_deg": 152.59830812563746,
+      "holdout": [
+        {
+          "file": "seq_00.npz",
+          "mean_deg": 152.59830812563746
+        }
+      ]
+    },
+    {
+      "epoch": 6,
+      "train_mean_deg": 52.38630521383293,
+      "holdout_mean_deg": 134.32865422551046,
+      "holdout": [
+        {
+          "file": "seq_00.npz",
+          "mean_deg": 134.32865422551046
+        }
+      ]
+    }
+  ],
+  "candidate_weighting": false,
+  "head_input": false,
+  "test_accessed": false
+}

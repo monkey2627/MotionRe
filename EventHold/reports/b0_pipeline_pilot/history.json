@@ -1,0 +1,42 @@
+[
+  {
+    "epoch": 1,
+    "train_sequence_mean_deg": 12.41983547024545,
+    "validation_sequence_mean_deg": 13.021581258591784,
+    "validation": [
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+        "subject": "s_07",
+        "mean_angle_deg": 15.253216032275578,
+        "valid_frames": 3484
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+        "subject": "s_08",
+        "mean_angle_deg": 10.789946484907988,
+        "valid_frames": 3384
+      }
+    ],
+    "elapsed_seconds": 6.64354681968689
+  },
+  {
+    "epoch": 2,
+    "train_sequence_mean_deg": 9.773514406753865,
+    "validation_sequence_mean_deg": 11.657374985865694,
+    "validation": [
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+        "subject": "s_07",
+        "mean_angle_deg": 14.456873565074211,
+        "valid_frames": 3484
+      },
+      {
+        "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+        "subject": "s_08",
+        "mean_angle_deg": 8.857876406657175,
+        "valid_frames": 3384
+      }
+    ],
+    "elapsed_seconds": 7.930055141448975
+  }
+]

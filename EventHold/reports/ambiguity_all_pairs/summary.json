@@ -1,0 +1,1197 @@
+{
+  "status": "exploratory_same_sequence_retrospective_retrieval_not_deployed_model",
+  "test_accessed": false,
+  "config": {
+    "status": "posthoc_missingness_sensitivity_after_continuous_history_yielded_no_primary_matches",
+    "split": "validation",
+    "layout": [
+      "pelvis",
+      "left_forearm",
+      "right_forearm",
+      "left_shank",
+      "right_shank"
+    ],
+    "sampling_hz": 60,
+    "stride_frames": 30,
+    "past_offsets_frames": [
+      30,
+      60,
+      120
+    ],
+    "minimum_pair_separation_frames": 300,
+    "gallery": "same_subject_same_original_sequence_retrospective_not_online",
+    "require_all_measurements_valid_over_past_120_frames": false,
+    "rerank_top_k": 5,
+    "settings": [
+      {
+        "name": "primary",
+        "max_sensor_rotation_deg": 10.0,
+        "max_sensor_acc_difference_m_s2": 1.0
+      },
+      {
+        "name": "sensitivity_looser",
+        "max_sensor_rotation_deg": 20.0,
+        "max_sensor_acc_difference_m_s2": 2.0
+      }
+    ],
+    "score": "mean_per_sensor_squared_rotation_over_threshold_plus_squared_acc_norm_over_threshold",
+    "regions": {
+      "hip_knee": [
+        1,
+        2,
+        4,
+        5
+      ],
+      "spine": [
+        3,
+        6,
+        9
+      ]
+    },
+    "descriptive_pose_gap_deg": 20.0,
+    "history_shuffle_seed": 0,
+    "policies": [
+      "current",
+      "past_0_5s",
+      "past_2s",
+      "shuffled_past_2s"
+    ],
+    "thresholds_are_not_sensor_noise_calibration": true,
+    "ground_truth_only_for_post_selection_scoring": true,
+    "test_pose_access": false,
+    "require_all_measurements_valid_at_descriptor_offsets": true
+  },
+  "source_sha256": {
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl": "3e691eb54996c323eee24034fa5cddcc7dd8fd018a0b5e9f9ab73b62d5c353a4",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl": "bdcd58408d4f62baa4fc1c47a2d1e202ef8154051ea9b60e9c3722369e351c09",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/03.pkl": "ee7932e0a43e78c00846f95b5017b0ebf6f600c1142bb87ea74401c0c643f9b5",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/04.pkl": "2a91176e5ffd0f45b15a173265cce158ca228bf0018f5bb8ace2316163b7b873",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl": "bc759db35c42cbe933a7fdba82548df15840337981d28c5c85a3233c5b0618ea",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl": "7f471f37a241d0775f814c2be4c8d9e8ea2ba5356659fa7a24cd810b306c6f6f",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_b.pkl": "43e0f74d0bc4ac05049216219c6489476c1c1ea1e53a9bbc2bf8f012be3e82ab",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl": "4806592647d6fdafda1ab3a6ee38e0a285144ef1b86eed6212ff5bcebfa5d8f7",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/03.pkl": "b0bb1d221af2d9b2a076447f67e0ebcdda406d60d78af4cda694d8a5cb29c608",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/04.pkl": "77c147fa93106cb522bc2ef49195ccc7774bd64668b8999e89745e11026cf230",
+    "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl": "b8c4ddb4330cc32d2bf0cc0dc9048df7ca58325af3ff8b05e87e5009838139e4"
+  },
+  "code_sha256": "12d0223bc506aaf0360f8f39b3ddaeffb548647cd3319ef831b53600a1d7561f",
+  "config_sha256": "db0315b446e8deb4f854ee4c6354c124998d4713cddf2db56b33fb8b829311ba",
+  "aggregates": [
+    {
+      "setting": "primary",
+      "region": "hip_knee",
+      "policy": "current",
+      "queries": 112,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 2.08010944042848,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 24,
+              "mean_gap_deg": 2.384175091157338,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 40,
+              "mean_gap_deg": 2.9397815919207178,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 0.9163716382073844,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 1.637075059150611,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 2,
+              "mean_gap_deg": 0.21405617753461362,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 15,
+              "mean_gap_deg": 4.421082156625815,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 13,
+              "mean_gap_deg": 0.27608684329140454,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 1.8585922497895455,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "primary",
+      "region": "hip_knee",
+      "policy": "past_0_5s",
+      "queries": 112,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 2.0348306737490436,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 24,
+              "mean_gap_deg": 2.274036120322831,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 40,
+              "mean_gap_deg": 2.8712734850045214,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 0.9591824159197793,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 1.5986454180708007,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 2,
+              "mean_gap_deg": 0.21405617753461362,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 15,
+              "mean_gap_deg": 4.301348905120091,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 13,
+              "mean_gap_deg": 0.28053117155769763,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 1.816738045909922,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "primary",
+      "region": "hip_knee",
+      "policy": "past_2s",
+      "queries": 112,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 2.0684112741186937,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 24,
+              "mean_gap_deg": 2.2786058136605987,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 40,
+              "mean_gap_deg": 2.9845050601952243,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 0.9421229485002593,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 1.5867976051943353,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 2,
+              "mean_gap_deg": 0.21405617753461362,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 15,
+              "mean_gap_deg": 4.278359206875905,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 13,
+              "mean_gap_deg": 0.26797743117248735,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 1.8276044396565145,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "primary",
+      "region": "hip_knee",
+      "policy": "shuffled_past_2s",
+      "queries": 112,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 2.1305267173488316,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 24,
+              "mean_gap_deg": 2.312483977061214,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 40,
+              "mean_gap_deg": 3.122185324852484,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 0.9569108501327965,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 2.0803945214836284,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 2,
+              "mean_gap_deg": 0.21405617753461362,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 15,
+              "mean_gap_deg": 5.743626376530092,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 13,
+              "mean_gap_deg": 0.28350101038617836,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 2.10546061941623,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "primary",
+      "region": "spine",
+      "policy": "current",
+      "queries": 112,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 1.2949401526314501,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 24,
+              "mean_gap_deg": 1.2014201309376444,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 40,
+              "mean_gap_deg": 1.66225888061127,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 1.0211414463454362,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 1.0102942350317574,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 2,
+              "mean_gap_deg": 0.9969739079829559,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 15,
+              "mean_gap_deg": 1.7341880386612785,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 13,
+              "mean_gap_deg": 0.29972075845103774,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 1.1526171938316039,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "primary",
+      "region": "spine",
+      "policy": "past_0_5s",
+      "queries": 112,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 1.2528583558357422,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 24,
+              "mean_gap_deg": 1.1076102427072454,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 40,
+              "mean_gap_deg": 1.600773990911049,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 1.050190833888933,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 1.0268246591730836,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 2,
+              "mean_gap_deg": 0.9969739079829559,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 15,
+              "mean_gap_deg": 1.783119966043619,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 13,
+              "mean_gap_deg": 0.3003801034926759,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 1.1398415075044128,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "primary",
+      "region": "spine",
+      "policy": "past_2s",
+      "queries": 112,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 1.3897669463521989,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 24,
+              "mean_gap_deg": 1.1711817275985121,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 40,
+              "mean_gap_deg": 1.6616513816915206,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 1.3364677297665637,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 1.0206829089024396,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 2,
+              "mean_gap_deg": 0.9969739079829559,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 15,
+              "mean_gap_deg": 1.7571064589257306,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 13,
+              "mean_gap_deg": 0.30796835979863213,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 1.2052249276273193,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "primary",
+      "region": "spine",
+      "policy": "shuffled_past_2s",
+      "queries": 112,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 1.3157997682862426,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 24,
+              "mean_gap_deg": 1.0768990393836466,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 40,
+              "mean_gap_deg": 1.7662001897604185,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 1.1043000757146624,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 1.0378363638650139,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 2,
+              "mean_gap_deg": 0.9969739079829559,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 15,
+              "mean_gap_deg": 1.8012172261579216,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 13,
+              "mean_gap_deg": 0.315317957454164,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 1.1768180660756282,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "hip_knee",
+      "policy": "current",
+      "queries": 594,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 3.85103552400365,
+          "large_gap_fraction": 0.0014619883040935672,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 129,
+              "mean_gap_deg": 2.3286595604687634,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 171,
+              "mean_gap_deg": 5.710342372140943,
+              "large_gap_fraction": 0.005847953216374269
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/03.pkl",
+              "queries": 11,
+              "mean_gap_deg": 5.595424430543285,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 92,
+              "mean_gap_deg": 1.7697157328616089,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 3.6659620229797327,
+          "large_gap_fraction": 0.003883495145631068,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 58,
+              "mean_gap_deg": 0.8248759079570152,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_b.pkl",
+              "queries": 4,
+              "mean_gap_deg": 0.9365007271330297,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 103,
+              "mean_gap_deg": 7.145759052719371,
+              "large_gap_fraction": 0.019417475728155338
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/03.pkl",
+              "queries": 8,
+              "mean_gap_deg": 8.396203778861082,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 1.0264706482281654,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 3.7584987734916915,
+      "subject_balanced_large_gap_fraction": 0.0026727417248623175
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "hip_knee",
+      "policy": "past_0_5s",
+      "queries": 594,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 3.9010264728986046,
+          "large_gap_fraction": 0.0043859649122807015,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 129,
+              "mean_gap_deg": 2.342510229949409,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 171,
+              "mean_gap_deg": 5.905066615897145,
+              "large_gap_fraction": 0.017543859649122806
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/03.pkl",
+              "queries": 11,
+              "mean_gap_deg": 5.595424430543285,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 92,
+              "mean_gap_deg": 1.7611046152045804,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 3.710177072331043,
+          "large_gap_fraction": 0.003883495145631068,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 58,
+              "mean_gap_deg": 0.8006083945234204,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_b.pkl",
+              "queries": 4,
+              "mean_gap_deg": 0.9365007271330297,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 103,
+              "mean_gap_deg": 7.387892020272751,
+              "large_gap_fraction": 0.019417475728155338
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/03.pkl",
+              "queries": 8,
+              "mean_gap_deg": 8.396203778861082,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 1.0296804408649325,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 3.805601772614824,
+      "subject_balanced_large_gap_fraction": 0.004134730028955884
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "hip_knee",
+      "policy": "past_2s",
+      "queries": 594,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 3.889424966733542,
+          "large_gap_fraction": 0.0043859649122807015,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 129,
+              "mean_gap_deg": 2.3313114480630177,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 171,
+              "mean_gap_deg": 5.920576245601751,
+              "large_gap_fraction": 0.017543859649122806
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/03.pkl",
+              "queries": 11,
+              "mean_gap_deg": 5.595424430543285,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 92,
+              "mean_gap_deg": 1.7103877427261154,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 4.095737885192636,
+          "large_gap_fraction": 0.003883495145631068,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 58,
+              "mean_gap_deg": 0.8089317030967726,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_b.pkl",
+              "queries": 4,
+              "mean_gap_deg": 0.9365007271330297,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 103,
+              "mean_gap_deg": 7.452373455364763,
+              "large_gap_fraction": 0.019417475728155338
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/03.pkl",
+              "queries": 8,
+              "mean_gap_deg": 8.52297477833452,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 2.7579087620340985,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 3.992581425963089,
+      "subject_balanced_large_gap_fraction": 0.004134730028955884
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "hip_knee",
+      "policy": "shuffled_past_2s",
+      "queries": 594,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 4.36291118469926,
+          "large_gap_fraction": 0.0043859649122807015,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 129,
+              "mean_gap_deg": 2.6586010453372286,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 171,
+              "mean_gap_deg": 7.3986957034794045,
+              "large_gap_fraction": 0.017543859649122806
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/03.pkl",
+              "queries": 11,
+              "mean_gap_deg": 5.595424430543285,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 92,
+              "mean_gap_deg": 1.7989235594371216,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 4.369682973197045,
+          "large_gap_fraction": 0.007766990291262136,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 58,
+              "mean_gap_deg": 0.8436352458750376,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_b.pkl",
+              "queries": 4,
+              "mean_gap_deg": 0.9365007271330297,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 103,
+              "mean_gap_deg": 8.767420517564775,
+              "large_gap_fraction": 0.038834951456310676
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/03.pkl",
+              "queries": 8,
+              "mean_gap_deg": 8.396203778861082,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 2.9046545965512998,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 4.366297078948152,
+      "subject_balanced_large_gap_fraction": 0.0060764776017714186
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "spine",
+      "policy": "current",
+      "queries": 594,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 1.7870830311213588,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 129,
+              "mean_gap_deg": 1.5011337680882177,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 171,
+              "mean_gap_deg": 1.8445325372409385,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/03.pkl",
+              "queries": 11,
+              "mean_gap_deg": 2.3258406881256075,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 92,
+              "mean_gap_deg": 1.4768251310306717,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 2.233004941731213,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 58,
+              "mean_gap_deg": 1.2823963604672637,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_b.pkl",
+              "queries": 4,
+              "mean_gap_deg": 1.574682493751316,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 103,
+              "mean_gap_deg": 2.01081802965045,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/03.pkl",
+              "queries": 8,
+              "mean_gap_deg": 5.501210665915134,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 0.7959171588719001,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 2.010043986426286,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "spine",
+      "policy": "past_0_5s",
+      "queries": 594,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 1.7914524506902494,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 129,
+              "mean_gap_deg": 1.472680163299567,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 171,
+              "mean_gap_deg": 1.8887730253865973,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/03.pkl",
+              "queries": 11,
+              "mean_gap_deg": 2.3258406881256075,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 92,
+              "mean_gap_deg": 1.4785159259492253,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 2.2491748951415924,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 58,
+              "mean_gap_deg": 1.2963903723602634,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_b.pkl",
+              "queries": 4,
+              "mean_gap_deg": 1.574682493751316,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 103,
+              "mean_gap_deg": 2.077197591168164,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/03.pkl",
+              "queries": 8,
+              "mean_gap_deg": 5.501210665915134,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 0.7963933525130831,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 2.020313672915921,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "spine",
+      "policy": "past_2s",
+      "queries": 594,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 1.8379252481657593,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 129,
+              "mean_gap_deg": 1.4843440337244198,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 171,
+              "mean_gap_deg": 1.916707305648186,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/03.pkl",
+              "queries": 11,
+              "mean_gap_deg": 2.3258406881256075,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 92,
+              "mean_gap_deg": 1.624808965164824,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 2.3650298767121507,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 58,
+              "mean_gap_deg": 1.308235377348533,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_b.pkl",
+              "queries": 4,
+              "mean_gap_deg": 1.574682493751316,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 103,
+              "mean_gap_deg": 2.0569479820438885,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/03.pkl",
+              "queries": 8,
+              "mean_gap_deg": 5.528658747509535,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 1.3566247829074805,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 2.101477562438955,
+      "subject_balanced_large_gap_fraction": 0.0
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "spine",
+      "policy": "shuffled_past_2s",
+      "queries": 594,
+      "subjects": {
+        "s_07": {
+          "mean_gap_deg": 1.9094914745537044,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/01.pkl",
+              "queries": 129,
+              "mean_gap_deg": 1.6274525628912053,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/02.pkl",
+              "queries": 171,
+              "mean_gap_deg": 2.040449058857245,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/03.pkl",
+              "queries": 11,
+              "mean_gap_deg": 2.3258406881256075,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_07/05.pkl",
+              "queries": 92,
+              "mean_gap_deg": 1.6442235883407592,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        },
+        "s_08": {
+          "mean_gap_deg": 2.4557779739295293,
+          "large_gap_fraction": 0.0,
+          "sequences": [
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_a.pkl",
+              "queries": 58,
+              "mean_gap_deg": 1.4900796126481817,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/01_b.pkl",
+              "queries": 4,
+              "mean_gap_deg": 1.574682493751316,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/02.pkl",
+              "queries": 103,
+              "mean_gap_deg": 2.1033097065036253,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/03.pkl",
+              "queries": 8,
+              "mean_gap_deg": 5.501210665915134,
+              "large_gap_fraction": 0.0
+            },
+            {
+              "source": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/data/raw/DIP_IMU/s_08/05.pkl",
+              "queries": 18,
+              "mean_gap_deg": 1.6096073908293904,
+              "large_gap_fraction": 0.0
+            }
+          ]
+        }
+      },
+      "subject_balanced_mean_gap_deg": 2.182634724241617,
+      "subject_balanced_large_gap_fraction": 0.0
+    }
+  ],
+  "primary_large_gap_unique_pairs": 0,
+  "primary_large_gap_unique_pairs_scope": "current_nearest_neighbor_only",
+  "all_qualified_pair_summary": [
+    {
+      "setting": "primary",
+      "region": "hip_knee",
+      "unique_pairs": 120,
+      "large_gap_pairs": 0,
+      "max_gap_deg": 13.248703650958099,
+      "warning": "pair_count_not_independent_sample_size"
+    },
+    {
+      "setting": "primary",
+      "region": "spine",
+      "unique_pairs": 120,
+      "large_gap_pairs": 0,
+      "max_gap_deg": 3.569239954311905,
+      "warning": "pair_count_not_independent_sample_size"
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "hip_knee",
+      "unique_pairs": 1742,
+      "large_gap_pairs": 71,
+      "max_gap_deg": 35.97677789464299,
+      "warning": "pair_count_not_independent_sample_size"
+    },
+    {
+      "setting": "sensitivity_looser",
+      "region": "spine",
+      "unique_pairs": 1742,
+      "large_gap_pairs": 0,
+      "max_gap_deg": 7.952950397299933,
+      "warning": "pair_count_not_independent_sample_size"
+    }
+  ],
+  "limitations": [
+    "references_are_inertial_labels_not_independent_optical_truth",
+    "same_sequence_gallery_can_include_later_times",
+    "history_matching_is_not_a_trained_transition_decoder",
+    "no_matches_does_not_prove_observability",
+    "reference_gap_is_not_sitting_standing_semantics",
+    "queries_and_pairs_are_correlated_not_independent_trials"
+  ]
+}

@@ -593,11 +593,15 @@ def build_plans(spec: MethodSpec, suite: str, options: BenchmarkOptions) -> List
     if spec.name == "transpose":
         output = _output_dir(options, spec.name, suite)
         if suite in {"dip", "drift"}:
-            min_frames = 1 if suite == "drift" and options.action_manifest else options.effective_min_frames
+            min_frames = 1 if suite == "drift" and options.action_manifest else options.effective_min_frames * 2
             max_seqs = 0 if suite == "drift" and options.action_manifest else options.effective_max_seqs
+            raw_root = options.root / "base_mobileposer" / "data" / "raw"
+            if not raw_root.exists():
+                raw_root = options.root / "code" / "base_mobileposer" / "data" / "raw"
             args = [
                 "evaluate_bridge.py", "--suite", suite,
                 "--model", model or "data/weights.pt",
+                "--raw-root", str(raw_root),
                 "--min-frames", str(min_frames),
                 "--max-seconds", str(int(options.effective_max_seconds)),
                 "--out-dir", str(output),

@@ -1,0 +1,119 @@
+{
+  "status": "frozen_loso_exploration_split_not_final_benchmark",
+  "manifest_sha256": "5f58c089558199e3e7a109afbf52b685c9817b8b614c36920f02bdc097587d86",
+  "candidate_csv_sha256": "f51ab443d4296933bf79ef98f06c4ca947a31d0c709d13e3dd8aea2e0892400c",
+  "group_rule": "subject_key",
+  "held_out_group": "Eyes_Japan_Dataset/kaiwa",
+  "groups": 3,
+  "rows": [
+    {
+      "id": "seq_00.npz",
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/ichige/gesture_etc-18-eat-ichige_poses.npz",
+      "source_sha256": "491fbe4ddac67983fe3e34e7d500a9c12a24440015c399bf00703de73890bb39",
+      "subject_key": "Eyes_Japan_Dataset/ichige",
+      "frames": 1800,
+      "fps": 60.0,
+      "native_fps": 120.0,
+      "invalid_boundary_frames": 2,
+      "site_names": [
+        "pelvis",
+        "left_forearm",
+        "right_forearm",
+        "left_shank",
+        "right_shank"
+      ],
+      "site_joints": [
+        0,
+        18,
+        19,
+        4,
+        5
+      ],
+      "site_vertices": [
+        3021,
+        1961,
+        5424,
+        1176,
+        4662
+      ],
+      "synthetic_acceleration": "centered_second_difference_m_per_s2",
+      "candidate_start_seconds": 9.558333333333334,
+      "candidate_duration_seconds": 18.616666666666667,
+      "complete_transition_proxy": true,
+      "split": "train_exploration"
+    },
+    {
+      "id": "seq_01.npz",
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/kaiwa/sitdown_standup-03-chair back-kaiwa_poses.npz",
+      "source_sha256": "aa735f95ae665c948e44467a9ea1a87aa4e70b1550395e4c8ee2a5f6a1f3f204",
+      "subject_key": "Eyes_Japan_Dataset/kaiwa",
+      "frames": 1800,
+      "fps": 60.0,
+      "native_fps": 120.0,
+      "invalid_boundary_frames": 2,
+      "site_names": [
+        "pelvis",
+        "left_forearm",
+        "right_forearm",
+        "left_shank",
+        "right_shank"
+      ],
+      "site_joints": [
+        0,
+        18,
+        19,
+        4,
+        5
+      ],
+      "site_vertices": [
+        3021,
+        1961,
+        5424,
+        1176,
+        4662
+      ],
+      "synthetic_acceleration": "centered_second_difference_m_per_s2",
+      "candidate_start_seconds": 5.691666666666666,
+      "candidate_duration_seconds": 16.808333333333334,
+      "complete_transition_proxy": true,
+      "split": "holdout_exploration"
+    },
+    {
+      "id": "seq_02.npz",
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/kawaguchi/sitdown_standup-10-observe-kawaguchi_poses.npz",
+      "source_sha256": "d8f97d325238f140cbce9ec09934a15143cbd01bdd7074a1f3f27e024cfa79a7",
+      "subject_key": "Eyes_Japan_Dataset/kawaguchi",
+      "frames": 1414,
+      "fps": 60.0,
+      "native_fps": 120.0,
+      "invalid_boundary_frames": 2,
+      "site_names": [
+        "pelvis",
+        "left_forearm",
+        "right_forearm",
+        "left_shank",
+        "right_shank"
+      ],
+      "site_joints": [
+        0,
+        18,
+        19,
+        4,
+        5
+      ],
+      "site_vertices": [
+        3021,
+        1961,
+        5424,
+        1176,
+        4662
+      ],
+      "synthetic_acceleration": "centered_second_difference_m_per_s2",
+      "candidate_start_seconds": 4.383333333333334,
+      "candidate_duration_seconds": 14.95,
+      "complete_transition_proxy": true,
+      "split": "train_exploration"
+    }
+  ],
+  "no_test_claim": true
+}

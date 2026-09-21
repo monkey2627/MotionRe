@@ -1,0 +1,67 @@
+{
+  "verification_scope": "local_code_static_and_preprocessing_only",
+  "upstream_revision_verified": false,
+  "five_imu_benchmark_eligible": false,
+  "new_target_sensors": [
+    "pelvis",
+    "left_forearm",
+    "right_forearm",
+    "left_shank",
+    "right_shank"
+  ],
+  "method": "dynaip",
+  "native_sensors": [
+    "pelvis",
+    "left_shank",
+    "right_shank",
+    "head",
+    "left_forearm",
+    "right_forearm"
+  ],
+  "entry": "Poser.predict(x,v_init,p_init)",
+  "shape": "T,6,12",
+  "feature_order": "9_rotation_entries_then_3_acceleration",
+  "orientation": "root_global_others_root_relative",
+  "acceleration": "root_world_acc_rotated_to_root;others_root_subtracted_and_rotated",
+  "hz": 60,
+  "native_root_slot": 0,
+  "native_test_initialization": "ground_truth_velocity_and_pose_subset",
+  "output": "Xsens_and_SMPL_global_rotations",
+  "preprocessing_parity": "passed_normalize_imu_on_original_DIP_contiguous_valid_block",
+  "end_to_end_parity": "blocked_missing_weights_and_smpl_in_configured_locations",
+  "five_sensor_adaptation": "global_and_trunk_leg_branches_depend_on_head;restructure_and_retrain",
+  "source_files": [
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/NoUse/DynaIP/model/model.py",
+      "exists": true,
+      "sha256": "43d7ceec575244cdbb239393d206e348be7e76b51e2e326f28c8504616145c64"
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/NoUse/DynaIP/utils/data.py",
+      "exists": true,
+      "sha256": "ef558d326ec4667606acded5002b5f4e9a9b1921c83a2bb81f01d5f811cc7b3d"
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/NoUse/DynaIP/eval.py",
+      "exists": true,
+      "sha256": "31933e836f18c7153151fab6118853aa58aaf80e9144ff7edcf8588c3f05d80c"
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/NoUse/DynaIP/utils/config.py",
+      "exists": true,
+      "sha256": "e80ed4486e9afe2fe620a9dca1c3d92813e7ac384edba290a61db2b19bd598b5"
+    }
+  ],
+  "asset_files": [
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/NoUse/DynaIP/weights/DynaIP.pth",
+      "exists": false,
+      "sha256": null
+    },
+    {
+      "path": "/home/duanyuhan/dyh/motion/MotionRe/NoUse/DynaIP/smpl_models/smpl_male.pkl",
+      "exists": false,
+      "sha256": null
+    }
+  ]
+}

@@ -32,8 +32,14 @@ class DataLoader:
             file_path = os.path.join(paths.processed_datasets, 'eval', 'dip_test.pt')
         elif self.dataset == 'imuposer':
             file_path = os.path.join(paths.processed_datasets, 'eval', 'imuposer_test.pt')
+        elif self.dataset == 'ours':
+            file_path = os.path.join(paths.processed_datasets, 'eval', 'ours.pt')
+        elif self.dataset == 'ours_smpl':
+            file_path = os.path.join(paths.processed_datasets, 'eval', 'ours_smpl.pt')
         elif self.dataset == 'dev':
             file_path = os.path.join(paths.dev_data, f'dev.pt')
+        else:
+            raise ValueError(f"Dataset {self.dataset} not supported.")
         return self._get_sequence_data(file_path, seq_num)
 
     def _get_imu(self, glb_acc, glb_ori):

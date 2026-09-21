@@ -1,0 +1,138 @@
+{
+  "status": "bounded_five_imu_synthetic_extension_not_real_imu",
+  "files": 3,
+  "errors": [],
+  "manifest": [
+    {
+      "id": "seq_00.npz",
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/ichige/gesture_etc-18-eat-ichige_poses.npz",
+      "source_sha256": "491fbe4ddac67983fe3e34e7d500a9c12a24440015c399bf00703de73890bb39",
+      "subject_key": "Eyes_Japan_Dataset/ichige",
+      "frames": 1800,
+      "fps": 60.0,
+      "native_fps": 120.0,
+      "invalid_boundary_frames": 2,
+      "site_names": [
+        "pelvis",
+        "left_forearm",
+        "right_forearm",
+        "left_shank",
+        "right_shank"
+      ],
+      "site_joints": [
+        0,
+        18,
+        19,
+        4,
+        5
+      ],
+      "site_vertices": [
+        3021,
+        1961,
+        5424,
+        1176,
+        4662
+      ],
+      "synthetic_acceleration": "centered_second_difference_m_per_s2",
+      "candidate_start_seconds": 9.558333333333334,
+      "candidate_duration_seconds": 18.616666666666667,
+      "complete_transition_proxy": true
+    },
+    {
+      "id": "seq_01.npz",
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/kaiwa/sitdown_standup-03-chair back-kaiwa_poses.npz",
+      "source_sha256": "aa735f95ae665c948e44467a9ea1a87aa4e70b1550395e4c8ee2a5f6a1f3f204",
+      "subject_key": "Eyes_Japan_Dataset/kaiwa",
+      "frames": 1800,
+      "fps": 60.0,
+      "native_fps": 120.0,
+      "invalid_boundary_frames": 2,
+      "site_names": [
+        "pelvis",
+        "left_forearm",
+        "right_forearm",
+        "left_shank",
+        "right_shank"
+      ],
+      "site_joints": [
+        0,
+        18,
+        19,
+        4,
+        5
+      ],
+      "site_vertices": [
+        3021,
+        1961,
+        5424,
+        1176,
+        4662
+      ],
+      "synthetic_acceleration": "centered_second_difference_m_per_s2",
+      "candidate_start_seconds": 5.691666666666666,
+      "candidate_duration_seconds": 16.808333333333334,
+      "complete_transition_proxy": true
+    },
+    {
+      "id": "seq_02.npz",
+      "source": "../base_mobileposer/data/raw/AMASS/Eyes_Japan_Dataset/kawaguchi/sitdown_standup-10-observe-kawaguchi_poses.npz",
+      "source_sha256": "d8f97d325238f140cbce9ec09934a15143cbd01bdd7074a1f3f27e024cfa79a7",
+      "subject_key": "Eyes_Japan_Dataset/kawaguchi",
+      "frames": 1414,
+      "fps": 60.0,
+      "native_fps": 120.0,
+      "invalid_boundary_frames": 2,
+      "site_names": [
+        "pelvis",
+        "left_forearm",
+        "right_forearm",
+        "left_shank",
+        "right_shank"
+      ],
+      "site_joints": [
+        0,
+        18,
+        19,
+        4,
+        5
+      ],
+      "site_vertices": [
+        3021,
+        1961,
+        5424,
+        1176,
+        4662
+      ],
+      "synthetic_acceleration": "centered_second_difference_m_per_s2",
+      "candidate_start_seconds": 4.383333333333334,
+      "candidate_duration_seconds": 14.95,
+      "complete_transition_proxy": true
+    }
+  ],
+  "layout": [
+    "pelvis",
+    "left_forearm",
+    "right_forearm",
+    "left_shank",
+    "right_shank"
+  ],
+  "head_input": false,
+  "pilot_source_overlap": [],
+  "pilot_subject_overlap": [],
+  "selection": {
+    "native_confirmation": true,
+    "complete_transition_proxy": true,
+    "min_duration_seconds": 10.0,
+    "max_seconds": 30.0,
+    "excluded_native_rate_not_integer_downsample": true
+  },
+  "model_file": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/mobileposer/smpl/basicmodel_m.pkl",
+  "model_sha256": "0e8c0bbbbc635dcb166ed29c303fb4bef16ea5f623e5a89263495a9e403575bd",
+  "code_sha256": "c63e27ac38dac2bc59858992c651c16f82e78c63b894d6bac5bbcffbd1e3ec64",
+  "limitations": [
+    "AMASS fitted motion is not measured IMU",
+    "candidate semantics are geometry-confirmed proxies, not action annotations",
+    "centered acceleration labels are offline and boundary frames are invalid",
+    "only three new subject groups were available under the current rate and non-overlap rules"
+  ]
+}

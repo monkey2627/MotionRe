@@ -1,0 +1,36 @@
+{
+  "status": "exploratory_annotation_sensitivity_not_model_evaluation",
+  "test_inspected": false,
+  "main_rule_unchanged": "raw_5deg_s",
+  "future_reference_used_only_for_offline_sensitivity": true,
+  "settings": {
+    "raw_5": {
+      "candidates": 27,
+      "ge_5s": 2,
+      "ge_20s": 0,
+      "ge_60s": 0,
+      "max_duration_seconds": 9.483333333333333
+    },
+    "raw_10": {
+      "candidates": 88,
+      "ge_5s": 12,
+      "ge_20s": 0,
+      "ge_60s": 0,
+      "max_duration_seconds": 13.25
+    },
+    "raw_15": {
+      "candidates": 126,
+      "ge_5s": 30,
+      "ge_20s": 1,
+      "ge_60s": 0,
+      "max_duration_seconds": 26.033333333333335
+    },
+    "reference_smoothed_1s_5": {
+      "candidates": 149,
+      "ge_5s": 39,
+      "ge_20s": 5,
+      "ge_60s": 0,
+      "max_duration_seconds": 30.8
+    }
+  }
+}

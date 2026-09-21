@@ -1,0 +1,20 @@
+{
+  "layout": "wrists_thighs_waist",
+  "frames": 180,
+  "sparse": false,
+  "axis_angle_and_matrix_max_abs_error": 4.172325134277344e-07,
+  "passed": true,
+  "output_file": "/home/duanyuhan/dyh/motion/MotionRe/smpl.jsonl.json",
+  "reference_file": "/home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/android/assets_generated/wrists_thighs_waist.reference.json",
+  "sources": [
+    "bundled_synthetic_imu"
+  ],
+  "replay_cycles": [
+    0
+  ],
+  "input_time_max_abs_error": 0.0,
+  "orthogonality_max_abs_error": 6.933769557404545e-07,
+  "determinant_max_abs_error": 6.440784474648353e-07,
+  "axis_angle_vs_exported_matrix_max_abs_error": 3.4682151617282386e-07,
+  "identity_joint_max_abs_error": 0.0
+}

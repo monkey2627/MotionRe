@@ -1,0 +1,40 @@
+{
+  "status": "frozen_explored_train_development_not_test",
+  "version": "v3",
+  "rule": "dataset and transition-presence stratified hash ordering, ceil20percent dev; singleton train; all ACCAD aliases train-only",
+  "changes_before_training": [
+    "v1 lacks development transition candidates",
+    "v2 wrongly separates ACCAD same-person action folders; v3 conservatively groups all ACCAD"
+  ],
+  "counts": {
+    "train": {
+      "sequences": 7405,
+      "groups": 283,
+      "transition_subject_keys": [
+        "Eyes_Japan_Dataset/hamada",
+        "Eyes_Japan_Dataset/ichige",
+        "Eyes_Japan_Dataset/kanno",
+        "Eyes_Japan_Dataset/kawaguchi",
+        "Eyes_Japan_Dataset/kudo"
+      ]
+    },
+    "development": {
+      "sequences": 1931,
+      "groups": 74,
+      "transition_subject_keys": [
+        "Eyes_Japan_Dataset/aita",
+        "Eyes_Japan_Dataset/kaiwa"
+      ]
+    }
+  },
+  "manifest_sha256": "94fff81fdcc48bd57aca3782009a0e46ac8940007658136412651401ea194688",
+  "base_manifest_sha256": "9216517eb490382069a93eceb3103026b4ea7bb58939976278d36d22f4be0cb0",
+  "candidate_sha256": "8ed2015b99378876f9d90154d906ea4dbcc2a895b56f4252d3f2196da45653ae",
+  "code_sha256": "ab8e4f058fe5d41fb3e756ca01c6cc3ae9a8ec2fc57acd248e7ff6640e77de37",
+  "limitations": [
+    "all sources explored; not untouched test",
+    "unknown cross-dataset identities and semantic duplicates unresolved"
+  ],
+  "DIP_split_changed": false,
+  "P5_training": false
+}

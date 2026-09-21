@@ -1,0 +1,23 @@
+{
+  "source": {
+    "id": 27408479,
+    "name": "compressed_mvnx_dataset_P5_Day_1.zip",
+    "size": 823528013,
+    "is_link_only": false,
+    "download_url": "https://ndownloader.figshare.com/files/27408479",
+    "supplied_md5": "cb3fbe8b348cb722cc78e3396dee13e6",
+    "computed_md5": "cb3fbe8b348cb722cc78e3396dee13e6",
+    "mimetype": "application/zip"
+  },
+  "sha256": "daa23bbd48d5912506e7fae8013da25529ec1311818d0dd3e4021589cb650f56",
+  "verified_md5": "cb3fbe8b348cb722cc78e3396dee13e6",
+  "members": [
+    {
+      "name": "mvnx-dataset/P5_Day_1_1.mvnx",
+      "bytes": 2228468996,
+      "compressed_bytes": 823527807,
+      "crc32": 1312587616
+    }
+  ],
+  "role": "exploration_only_not_locked_test"
+}

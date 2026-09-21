@@ -1,3 +1,4 @@
+import os
 import torch
 from pathlib import Path
 from enum import Enum, auto
@@ -28,15 +29,16 @@ class paths:
     # base_mobileposer/ package root
     # Local: code/base_mobileposer/  |  Server: /home/duanyuhan/dyh/motion/MotionRe/base_mobileposer/
     root_dir = Path(__file__).resolve().parents[1]
-    checkpoint = root_dir / "checkpoints"
+    checkpoint = Path(os.environ.get("MOBILEPOSER_CHECKPOINT_DIR", root_dir / "checkpoints"))
     smpl_file = root_dir / "mobileposer/smpl/basicmodel_m.pkl"
     weights_file = root_dir / "checkpoints/weights.pth"
     raw_amass = root_dir / "data/raw/AMASS"
     amass_render_dir = root_dir / "data/rendered/AMASS"
     raw_dip = root_dir / "data/raw/DIP_IMU"
     raw_imuposer = root_dir / "data/raw/IMUPoser"
-    eval_dir = root_dir / "data/processed_datasets/eval"
-    processed_datasets = root_dir / "data/processed_datasets"
+    raw_ours = root_dir / "data/raw/ours"
+    processed_datasets = Path(os.environ.get("MOBILEPOSER_PROCESSED_DATASETS", root_dir / "data/processed_datasets"))
+    eval_dir = Path(os.environ.get("MOBILEPOSER_EVAL_DATASETS", processed_datasets / "eval"))
     raw_totalcapture_official = root_dir / "data/raw/TotalCapture/raw"
     calibrated_totalcapture = root_dir / "data/raw/TotalCapture/IMU"
 
@@ -74,6 +76,8 @@ class amass:
         'lp': [2],
         'rp': [3],
      }
+    if os.environ.get("MOBILEPOSER_TRAIN_COMBOS") == "all_5imu":
+        combos = {"all": [0, 1, 2, 3, 4]}
     acc_scale = 30
     vel_scale = 2
 
@@ -103,17 +107,24 @@ class datasets:
     imuposer_train = "imuposer_train.pt"
     imuposer_test = "imuposer_test.pt"
 
+    # Locally captured SlimeVR / Unity tracker dataset
+    ours = "ours.pt"
+    ours_smpl = "ours_smpl.pt"
+
     # Test datasets
     test_datasets = {
         'dip': dip_test,
         'totalcapture': totalcapture,
-        'imuposer': imuposer_test
+        'imuposer': imuposer_test,
+        'ours': ours,
+        'ours_smpl': ours_smpl
     }
 
     # Finetune datasets
     finetune_datasets = {
         'dip': dip_train,
-        'imuposer': imuposer_train
+        'imuposer': imuposer_train,
+        'ours_smpl': ours_smpl
     }
 
     # AMASS datasets (add more as they become available in AMASS!)

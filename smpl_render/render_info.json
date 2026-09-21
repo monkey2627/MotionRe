@@ -1,0 +1,20 @@
+{
+  "source": "/home/duanyuhan/dyh/motion/MotionRe/smpl.jsonl.json",
+  "frames": 180,
+  "fps": 30,
+  "duration_seconds": 6.0,
+  "resolution": [
+    1440,
+    800
+  ],
+  "views": [
+    "FRONT",
+    "SIDE",
+    "THREE-QUARTER"
+  ],
+  "model": "basicmodel_m.pkl",
+  "pose_blendshapes": true,
+  "display_floor_offset_m": 0.9951326847076416,
+  "pose_source": "global_orient + body_pose (axis-angle)",
+  "translation": "original exported values; fixed display offset only"
+}

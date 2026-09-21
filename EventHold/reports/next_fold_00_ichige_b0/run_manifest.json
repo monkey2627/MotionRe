@@ -1,0 +1,88 @@
+{
+  "status": "matched_synthetic_control_not_real_performance",
+  "model": "b0",
+  "mode": "uniform",
+  "seed": 0,
+  "epochs": 6,
+  "hidden": 96,
+  "train_files": [
+    "seq_01.npz",
+    "seq_02.npz"
+  ],
+  "holdout_files": [
+    "seq_00.npz"
+  ],
+  "split_sha256": "d7afbc02b5d2087410e0379194e4e97e2321c0f88a6b79458270c4bf297f138a",
+  "code_sha256": "655e26fdf0ee35ac65d8f28bf37b258683aaa6093e29bc55a86afe13a2190703",
+  "history": [
+    {
+      "epoch": 1,
+      "train_mean_deg": 117.89555777144429,
+      "holdout_mean_deg": 150.3529768705524,
+      "holdout": [
+        {
+          "file": "seq_00.npz",
+          "mean_deg": 150.3529768705524
+        }
+      ]
+    },
+    {
+      "epoch": 2,
+      "train_mean_deg": 105.68703686021085,
+      "holdout_mean_deg": 147.28786002379127,
+      "holdout": [
+        {
+          "file": "seq_00.npz",
+          "mean_deg": 147.28786002379127
+        }
+      ]
+    },
+    {
+      "epoch": 3,
+      "train_mean_deg": 81.03759625981856,
+      "holdout_mean_deg": 158.47497699509742,
+      "holdout": [
+        {
+          "file": "seq_00.npz",
+          "mean_deg": 158.47497699509742
+        }
+      ]
+    },
+    {
+      "epoch": 4,
+      "train_mean_deg": 67.52618217527709,
+      "holdout_mean_deg": 161.4884519591629,
+      "holdout": [
+        {
+          "file": "seq_00.npz",
+          "mean_deg": 161.4884519591629
+        }
+      ]
+    },
+    {
+      "epoch": 5,
+      "train_mean_deg": 64.57891661121376,
+      "holdout_mean_deg": 163.84739088274634,
+      "holdout": [
+        {
+          "file": "seq_00.npz",
+          "mean_deg": 163.84739088274634
+        }
+      ]
+    },
+    {
+      "epoch": 6,
+      "train_mean_deg": 63.19705265086702,
+      "holdout_mean_deg": 163.57019077787066,
+      "holdout": [
+        {
+          "file": "seq_00.npz",
+          "mean_deg": 163.57019077787066
+        }
+      ]
+    }
+  ],
+  "candidate_weighting": false,
+  "head_input": false,
+  "test_accessed": false
+}

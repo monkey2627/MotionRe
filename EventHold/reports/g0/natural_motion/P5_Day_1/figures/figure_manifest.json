@@ -1,0 +1,20 @@
+{
+  "purpose": "internal_reference_quality_review_not_publication_claim",
+  "cache": "runtime/natural_motion/P5_Day_1/P5_Day_1_1.npz",
+  "cache_sha256": "41edcfaa5872fbf652ef3c89f7f6673b3a7a71cef00f45fe01095934d47c06d1",
+  "code_sha256": "e910250d1d62dc500a76b0f5d7874816f99369fb44e6eec1d706c2587f7662d0",
+  "matplotlib_version": "3.8.2",
+  "transformations": [
+    "native 240Hz reference aggregated in half-open 1s bins, median and min/max",
+    "skeleton horizontal pelvis centering, no Z centering, fixed axes across snapshots"
+  ],
+  "missing": "nonfinite values excluded within bins and valid counts retained; empty bins NaN",
+  "alt_text": "Reference knee bend, trunk tilt and pelvis height over the complete P5 sequence; four hatched seated-like intervals. Separate XZ and YZ skeleton projections show selected reference frames, not model predictions.",
+  "journal_requirements": "not_applicable_internal_review",
+  "snapshot_frames": [
+    68433,
+    88217,
+    108001,
+    247907
+  ]
+}
