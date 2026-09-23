@@ -1,0 +1,59 @@
+import { useRef, useState } from 'react';
+
+export function useCountdown({
+  duration = 3,
+  onCountdownEnd = () => {
+    return;
+  },
+}: {
+  duration?: number;
+  onCountdownEnd: () => void;
+}) {
+  const [isCounting, setIsCounting] = useState(false);
+  const [timer, setDisplayTimer] = useState(0);
+  const countdownTimer = useRef<ReturnType<typeof setInterval>>();
+  const counter = useRef(0);
+
+  const startCountdown = () => {
+    setIsCounting(true);
+    setDisplayTimer(duration);
+    if (countdownTimer.current) {
+      clearTimer();
+    }
+
+    counter.current = 0;
+    countdownTimer.current = setInterval(
+      () => {
+        counter.current++;
+        setDisplayTimer(duration - counter.current);
+        if (counter.current >= duration) {
+          resetEnd();
+        }
+      },
+      duration > 1 ? 1000 : duration * 1000
+    );
+  };
+
+  const clearTimer = () => {
+    clearInterval(countdownTimer.current);
+    countdownTimer.current = undefined;
+  };
+
+  const resetEnd = () => {
+    setIsCounting(false);
+    clearTimer();
+    onCountdownEnd();
+  };
+
+  const abortCountdown = () => {
+    setIsCounting(false);
+    clearTimer();
+  };
+
+  return {
+    timer,
+    isCounting,
+    startCountdown,
+    abortCountdown,
+  };
+}
