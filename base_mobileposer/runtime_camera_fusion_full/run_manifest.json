@@ -1,0 +1,111 @@
+{
+  "status": "camera_fusion_translation_correction",
+  "checkpoint": "checkpoints/no_head_5imu_surface/wrists_shanks_waist/1/base_model.pth",
+  "data_root": "data\\no_head_5imu_surface_processed\\wrists_shanks_waist",
+  "holdout_subsets": [
+    "BMLhandball",
+    "BioMotionLab_NTroje"
+  ],
+  "slam_rms_m": 0.66,
+  "fusion_param_count": 4227,
+  "epochs": 15,
+  "hidden": 32,
+  "seed": 0,
+  "history": [
+    {
+      "epoch": 1,
+      "train_mse": 0.023212027104734752,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.27457657040479244
+    },
+    {
+      "epoch": 2,
+      "train_mse": 0.020809965262036937,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.2593952293592375
+    },
+    {
+      "epoch": 3,
+      "train_mse": 0.01973310095632694,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.2558025331024244
+    },
+    {
+      "epoch": 4,
+      "train_mse": 0.018448136248062273,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.24632632147885375
+    },
+    {
+      "epoch": 5,
+      "train_mse": 0.017522752773295368,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.23029415175443263
+    },
+    {
+      "epoch": 6,
+      "train_mse": 0.016869183455055645,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.22524600799440792
+    },
+    {
+      "epoch": 7,
+      "train_mse": 0.01627549663485575,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.21892038539722944
+    },
+    {
+      "epoch": 8,
+      "train_mse": 0.016200793179707372,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.21877767488030964
+    },
+    {
+      "epoch": 9,
+      "train_mse": 0.015632604600225506,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.21715211276598748
+    },
+    {
+      "epoch": 10,
+      "train_mse": 0.01565934553059426,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.21331437162444272
+    },
+    {
+      "epoch": 11,
+      "train_mse": 0.015959410412103414,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.211926298684032
+    },
+    {
+      "epoch": 12,
+      "train_mse": 0.015838569033297698,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.21928251335880977
+    },
+    {
+      "epoch": 13,
+      "train_mse": 0.015270856180179699,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.2197959525729124
+    },
+    {
+      "epoch": 14,
+      "train_mse": 0.015386443111021214,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.2170213612495053
+    },
+    {
+      "epoch": 15,
+      "train_mse": 0.015346781632144193,
+      "holdout_baseline_m": 0.3576430771098115,
+      "holdout_fused_m": 0.21883955494274457
+    }
+  ],
+  "limitations": [
+    "dataset-level (AMASS subset) holdout split, not subject-level -- no_head_layouts.py does not retain per-sequence source filenames",
+    "synthetic SLAM signal, not real camera/SLAM data -- calibrated to EgoLocate/EgoHDM reported error magnitudes on TotalCapture, not measured from this project's own hardware",
+    "no DIP-IMU real-IMU validation possible -- DIP-IMU has no translation ground truth (tran is always 0 in that dataset)"
+  ]
+}
