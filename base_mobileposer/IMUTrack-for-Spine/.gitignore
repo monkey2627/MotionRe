@@ -1,0 +1,53 @@
+# Unity-generated directories
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+/_MigrationBackup/
+
+# Player builds
+/[Bb]uild/
+/[Bb]uilds/
+
+# IMUTrack-generated recording and export files
+/Assets/Recordings/*
+!/Assets/Recordings/.gitkeep
+
+# IDE-generated files
+/.vs/
+/.idea/
+/.vscode/
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.opendb
+*.VC.db
+
+# Unity and managed build artifacts
+*.pdb
+*.mdb
+*.dll.mdb
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+*.tmp
+
+# Crash, diagnostic, and local licensing logs
+/access_*.log
+/error_*.log
+/sysinfo.txt
+/SafeNet Sentinel/
+crashlytics-build.properties
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+Desktop.ini

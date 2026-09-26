@@ -1,0 +1,27 @@
+{
+    "formatVersion": 1,
+    "actionId": "2",
+    "displayName": "坐位",
+    "version": 1,
+    "createdAtUtc": "2026-09-16T14:02:02.7888121Z",
+    "fbxFile": "2_v1.fbx",
+    "motionJsonFile": "2_v1.motion.json",
+    "trackerJsonFile": "2_v1.tracker.json",
+    "rawImuJsonFile": "2_v1.raw-imu.json",
+    "keyframesFile": "2_v1.keyframes.json",
+    "fbxSha256": "f1e51019b87a149ba35dcfb937752741ce94ee92b1337c24219a34c5ef5516ab",
+    "motionJsonSha256": "8a7a3bbd9f3927ad1bfbbbb6ce61b1af099e34dcedf5755424593ee04953e0eb",
+    "trackerJsonSha256": "21c3c9d54d10bbeb17c72a34495645ee236de7160f5c7ae7da663fe8fb10cdc8",
+    "rawImuJsonSha256": "a3b0272c0597a3cb0e02663d281675da3e6bfffa40929391347293df659cd020",
+    "keyframesSha256": "d8786a6a6a691f17125d42e26e98a4e06788b6f215e93d319fdb195665a27e3a",
+    "rawImuFrameCount": 816,
+    "rawImuSensorCount": 10,
+    "segments": [
+        {
+            "name": "2",
+            "firstFrame": 0,
+            "lastFrame": 816,
+            "durationSeconds": 27.183181762695314
+        }
+    ]
+}
