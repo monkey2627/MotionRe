@@ -1,0 +1,35 @@
+{
+    "formatVersion": 1,
+    "sourceClipAssetPath": "C:\\Users\\supermao\\AppData\\Local\\SpineFlow\\PoseRecordings\\2_坐位.pose.json",
+    "sourceClipName": "2_坐位",
+    "sourceClipLengthSeconds": 27.183181762695314,
+    "sourceFrameRate": 30.0,
+    "totalFrames": 816,
+    "actionId": "2",
+    "displayName": "坐位",
+    "sampleFps": 30,
+    "setCount": 1,
+    "savedAtUtc": "2026-09-16T14:02:02.5714813Z",
+    "keyframes": [
+        {
+            "name": "start",
+            "frame": 0,
+            "bodyParts": [
+                "whole_body"
+            ],
+            "holdSeconds": 0.0,
+            "followingSegmentName": "2",
+            "followingSegmentDurationSeconds": 27.183181762695314
+        },
+        {
+            "name": "end",
+            "frame": 816,
+            "bodyParts": [
+                "whole_body"
+            ],
+            "holdSeconds": 0.0,
+            "followingSegmentName": "",
+            "followingSegmentDurationSeconds": 0.0
+        }
+    ]
+}

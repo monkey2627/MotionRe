@@ -1,0 +1,27 @@
+{
+    "formatVersion": 1,
+    "actionId": "1",
+    "displayName": "3",
+    "version": 1,
+    "createdAtUtc": "2026-09-16T14:01:44.9383654Z",
+    "fbxFile": "1_v1.fbx",
+    "motionJsonFile": "1_v1.motion.json",
+    "trackerJsonFile": "1_v1.tracker.json",
+    "rawImuJsonFile": "",
+    "keyframesFile": "1_v1.keyframes.json",
+    "fbxSha256": "218ece59a1fbe386522197f140d48147f4514731c10647bcd590c5c30c67fc4e",
+    "motionJsonSha256": "db35d2363ef447d78c7e668c29db7158a869f3a035a5d40c70f474ac8cc9d887",
+    "trackerJsonSha256": "38f204ffd65841cf320cf82b43f287fc4f62cfab34ee18acc0dd5279489a8c24",
+    "rawImuJsonSha256": "",
+    "keyframesSha256": "afd143dfc4ce52491e0085de9e992234f4db3fb26621e81ff1974ec1953612af",
+    "rawImuFrameCount": 0,
+    "rawImuSensorCount": 0,
+    "segments": [
+        {
+            "name": "1",
+            "firstFrame": 0,
+            "lastFrame": 324,
+            "durationSeconds": 10.795772552490235
+        }
+    ]
+}

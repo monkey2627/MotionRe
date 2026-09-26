@@ -1,0 +1,35 @@
+{
+    "formatVersion": 1,
+    "sourceClipAssetPath": "C:\\Users\\supermao\\AppData\\Local\\SpineFlow\\PoseRecordings\\1_new test.pose.json",
+    "sourceClipName": "1_new test",
+    "sourceClipLengthSeconds": 19.154067993164064,
+    "sourceFrameRate": 30.0,
+    "totalFrames": 575,
+    "actionId": "1",
+    "displayName": "new test",
+    "sampleFps": 30,
+    "setCount": 1,
+    "savedAtUtc": "2026-09-17T11:14:34.6677815Z",
+    "keyframes": [
+        {
+            "name": "start",
+            "frame": 0,
+            "bodyParts": [
+                "whole_body"
+            ],
+            "holdSeconds": 0.0,
+            "followingSegmentName": "1",
+            "followingSegmentDurationSeconds": 19.154067993164064
+        },
+        {
+            "name": "end",
+            "frame": 575,
+            "bodyParts": [
+                "whole_body"
+            ],
+            "holdSeconds": 0.0,
+            "followingSegmentName": "",
+            "followingSegmentDurationSeconds": 0.0
+        }
+    ]
+}
