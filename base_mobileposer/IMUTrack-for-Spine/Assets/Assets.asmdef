@@ -1,0 +1,21 @@
+{
+    "name": "Assets",
+    "rootNamespace": "",
+    "references": [
+        "uOSC.Runtime",
+        "Autodesk.Fbx",
+        "UniGLTF",
+        "VRM",
+        "VRM10",
+        "VRMShaders.GLTF.IO.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
