@@ -4,18 +4,19 @@ OrientationFusionGRU) re-evaluated under the SAME correlated-failure synthetic
 SLAM signal (synthetic_slam.synthesize_slam_joint), for a fair apples-to-apples
 test of the "shared tracking-quality state helps" hypothesis.
 
-Requires the two per-axis caches already built this session:
-    /tmp/tran_cache.pt   (from evaluate_sliding_mode_fusion.py / train_camera_fusion.py)
-    /tmp/ori_cache.pt    (from train_orientation_fusion.py)
-and the two trained independent-baseline checkpoints:
+Requires the two per-axis caches (rebuild via --cache-file on train_camera_fusion.py /
+train_orientation_fusion.py if not present -- the original /tmp caches from this session
+were cleaned up as temporary artifacts) and the two trained independent-baseline checkpoints:
     runtime_camera_fusion_v2/last.pt
-    runtime_orientation_fusion_v1/last.pt
+    runtime_orientation_fusion_dr/last.pt   (domain-randomized, robust version -- see
+                                              orientation_fusion.py's robustness fix;
+                                              supersedes the old fixed-noise checkpoint)
 
 Run from base_mobileposer/:
     python -m mobileposer.train_joint_anchor_fusion \
         --tran-cache /tmp/tran_cache.pt --ori-cache /tmp/ori_cache.pt \
         --camera-fusion-ckpt runtime_camera_fusion_v2/last.pt \
-        --orientation-fusion-ckpt runtime_orientation_fusion_v1/last.pt \
+        --orientation-fusion-ckpt runtime_orientation_fusion_dr/last.pt \
         --output runtime_joint_anchor_fusion
 """
 import argparse

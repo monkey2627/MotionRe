@@ -1,18 +1,22 @@
-"""Noise-level robustness sweep: evaluate the ALREADY-TRAINED independent
-fusion networks (camera_fusion_v2, orientation_fusion_v1 -- trained at ONE
-calibrated noise level) across a RANGE of test-time SLAM noise levels, using
-their existing cached (tran_pred/tran_gt, ori_pred/ori_gt) data.
+"""Noise-level robustness sweep: evaluate an ALREADY-TRAINED independent
+fusion network (e.g. camera_fusion_v2 -- trained at ONE calibrated noise
+level) across a RANGE of test-time SLAM noise levels, using cached
+(tran_pred/tran_gt, ori_pred/ori_gt) data (rebuild via --cache-file on
+train_camera_fusion.py / train_orientation_fusion.py if not present).
 
 This is a deployment-realistic check: in practice you train/ship one model,
 not one per session, so what matters is whether it still helps (vs pure IMU)
 across the plausible range of real-world camera-SLAM quality, not just at the
-one point it happened to be calibrated on.
+one point it happened to be calibrated on. This sweep is what revealed that a
+fixed-noise-trained orientation model can actively hurt outside its training
+band -- see train_orientation_fusion.py's --rms-deg-range domain-randomization
+fix (runtime_orientation_fusion_dr/) for the robust replacement.
 
 Run from base_mobileposer/:
     python -m mobileposer.robustness_sweep \
         --tran-cache /tmp/tran_cache.pt --ori-cache /tmp/ori_cache.pt \
         --camera-fusion-ckpt runtime_camera_fusion_v2/last.pt \
-        --orientation-fusion-ckpt runtime_orientation_fusion_v1/last.pt \
+        --orientation-fusion-ckpt runtime_orientation_fusion_dr/last.pt \
         --output robustness_sweep_results
 """
 import argparse
